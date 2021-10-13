@@ -3,7 +3,7 @@ project(uLayFS)
 
 set(CMAKE_CXX_STANDARD 17)
 
-add_library(ulayfs SHARED lib.cpp)
+add_library(ulayfs SHARED src/lib.cpp)
 
-add_executable(test test.c)
-target_link_libraries(test ulayfs)
+add_executable(basic_test test/basic.c)
+target_link_libraries(basic_test ulayfs)
