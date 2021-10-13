@@ -30,7 +30,7 @@ ssize_t write(int fd, const void *buf, size_t count) {
 
 ssize_t read(int fd, void *buf, size_t count) {
   printf("read:count:%lu\n", count);
-  return posix::write(fd, buf, count);
+  return posix::read(fd, buf, count);
 }
 }
 }  // namespace ulayfs
