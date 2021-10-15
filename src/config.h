@@ -19,19 +19,23 @@
 #define DEBUG true
 #endif
 
-inline constexpr struct BuildOptions {
+namespace ulayfs {
+
+struct BuildOptions {
   constexpr static bool mem_protect = MEM_PROTECT;
   constexpr static bool relaxed = RELAXED;
   constexpr static bool debug = DEBUG;
-} build_options;
+};
 
-inline constexpr struct LayoutOptions {
+struct LayoutOptions {
   // preallocate 2 MB
   constexpr static uint32_t prealloc_size = (2 << 20);
-} layout_options;
+};
 
-inline struct RuntimeOptions {
+struct RuntimeOptions {
   RuntimeOptions(){
       // load options from environment variables
   };
-} runtime_options;
+};
+
+}  // namespace ulayfs
