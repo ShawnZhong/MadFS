@@ -109,7 +109,7 @@ class MetaBlock {
 
       // hint to find log tail; not necessarily up-to-date
       BlockIdx log_tail;
-    };  // all fields modificaton above requires futex acquired
+    };  // modification to any field above requires futex acquired
 
     // padding avoid cache line contention
     char padding1[CACHELINE_SIZE];
