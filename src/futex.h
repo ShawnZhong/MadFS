@@ -28,7 +28,9 @@ class Futex {
   void acquire() {
     while (true) {
       uint32_t one = 1;
-      if (std::atomic_compare_exchange_strong(&val, &one, 0)) return;
+      if (val.compare_exchange_strong(one, 0, std::memory_order_acq_rel,
+                                      std::memory_order_acquire))
+        return;
 
       long rc = futex(&val, FUTEX_TRYLOCK_PI, 0, nullptr, nullptr, 0);
       if (rc == -1 && errno != EAGAIN) {
@@ -39,12 +41,10 @@ class Futex {
   }
 
   void release() {
-    uint32_t zero = 0;
-    if (std::atomic_compare_exchange_strong(&val, &zero, 1)) {
-      long rc = futex(&val, FUTEX_WAKE, 1, nullptr, nullptr, 0);
-      if (rc == -1) {
-        perror("futex-release");
-      }
+    val = 0;
+    long rc = futex(&val, FUTEX_WAKE, 1, nullptr, nullptr, 0);
+    if (rc == -1) {
+      perror("futex-release");
     }
   }
 };
