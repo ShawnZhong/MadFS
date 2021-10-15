@@ -112,7 +112,7 @@ class MetaBlock {
     };  // all fields modificaton above requires futex acquired
 
     // padding avoid cache line contention
-    char cache_line_1[CACHELINE_SIZE];
+    char padding1[CACHELINE_SIZE];
   };
 
   union {
@@ -121,7 +121,7 @@ class MetaBlock {
 
     // set futex to another cacheline to avoid futex's contention affect reading
     // the metadata above
-    char cache_line_2[CACHELINE_SIZE];
+    char padding2[CACHELINE_SIZE];
   };
 
   // for the rest of 62 cache lines:
@@ -130,6 +130,12 @@ class MetaBlock {
 
   // 60 cache lines for tx log (~480 txs)
   TxEntry inline_tx_entries[NUM_INLINE_TX_ENTRY];
+
+  static_assert(sizeof(inline_bitmaps) == 2 * CACHELINE_SIZE,
+                "inline_bitmaps must be 2 cache lines");
+
+  static_assert(sizeof(inline_tx_entries) == 60 * CACHELINE_SIZE,
+                "inline_tx_entries must be 60 cache lines");
 
  public:
   // only called if a new file is created
