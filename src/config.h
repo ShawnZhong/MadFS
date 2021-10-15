@@ -30,3 +30,5 @@ inline struct RuntimeOptions {
   };
 
 } runtime_options;
+
+constexpr static int BLOCK_SIZE = 4096;
