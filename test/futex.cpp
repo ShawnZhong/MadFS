@@ -1,6 +1,7 @@
-#include <sys/mman.h>
-
 #include "../src/futex.h"
+
+#include <sys/mman.h>
+#include <sys/wait.h>
 
 using namespace ulayfs;
 
@@ -12,11 +13,26 @@ int main() {
 
   int rc = fork();
   if (rc == 0) {  // child
+    printf("child acquire start\n");
     futex->acquire();
-    exit(0);
+    printf("child acquire end\n");
+
+    sleep(2);
+
+    exit(0);  // note this exit
+    printf("child release\n");
+    futex->release();
   } else {  // parent
     sleep(1);
+
+    printf("parent acquire start\n");
     futex->acquire();
+    printf("parent acquire end\n");
+
+    printf("parent release\n");
+    futex->release();
+
+    wait(NULL);
     exit(0);
   }
 }

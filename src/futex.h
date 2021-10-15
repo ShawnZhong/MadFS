@@ -28,24 +28,20 @@ class Futex {
   void acquire() {
     while (true) {
       uint32_t one = 1;
-      if (val.compare_exchange_strong(one, 0, std::memory_order_acq_rel,
-                                      std::memory_order_acquire))
-        return;
+      val.compare_exchange_strong(one, 0, std::memory_order_acq_rel,
+                                  std::memory_order_acquire);
 
       long rc = futex(&val, FUTEX_TRYLOCK_PI, 0, nullptr, nullptr, 0);
-      if (rc == -1 && errno != EAGAIN) {
-        perror("futex-acquire");
-        return;
-      }
+      if (errno == EAGAIN) continue;
+      if (rc == -1) perror("futex-acquire");
+      return;
     }
   }
 
   void release() {
     val = 0;
     long rc = futex(&val, FUTEX_WAKE, 1, nullptr, nullptr, 0);
-    if (rc == -1) {
-      perror("futex-release");
-    }
+    if (rc == -1) perror("futex-release");
   }
 };
 
