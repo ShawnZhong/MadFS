@@ -5,6 +5,7 @@
 #include <cstdint>
 
 #include "config.h"
+#include "futex.h"
 
 namespace ulayfs::pmem {
 
@@ -88,23 +89,31 @@ constexpr static uint32_t NUM_INLINE_TX_ENTRY =
  */
 
 class MetaBlock {
-  // file size in bytes
-  uint64_t file_size;
+  // contents in the first cache line
+  union {
+    struct {
+      // file signature
+      char signature[16] = "ULAYFS";
 
-  // address for futex to lock
-  uint32_t meta_lock;
+      // file size in bytes
+      uint64_t file_size;
 
-  // number of blocks following the meta block that are bitmap blocks
-  uint32_t num_bitmap_blocks;
+      // address for futex to lock, 4 bytes in size
+      Futex meta_lock;
 
-  // if inline_tx_entries is used up, this points to the next log block
-  BlockIdx log_head;
+      // number of blocks following the meta block that are bitmap blocks
+      uint32_t num_bitmap_blocks;
 
-  // hint to find log tail; not necessarily up-to-date
-  BlockIdx log_tail;
+      // if inline_tx_entries is used up, this points to the next log block
+      BlockIdx log_head;
 
-  // padding avoid cache line contention
-  char padding[40];
+      // hint to find log tail; not necessarily up-to-date
+      BlockIdx log_tail;
+    };
+
+    // padding avoid cache line contention
+    char first_cache_line[64];
+  };
 
   // for the rest of 63 cache lines:
   // 3 cache lines for bitmaps (~1536 blocks)
