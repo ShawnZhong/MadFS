@@ -1,6 +1,7 @@
 #include <cstdio>
 
 #include "config.h"
+#include "layout.h"
 #include "posix.h"
 
 namespace ulayfs {

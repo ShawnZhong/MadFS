@@ -11,12 +11,14 @@ namespace ulayfs::posix {
   auto name = reinterpret_cast<decltype(&::name)>(dlsym(RTLD_NEXT, #name))
 
 REGISTER_FN(stat);
+REGISTER_FN(fstat);
 REGISTER_FN(write);
 REGISTER_FN(read);
 REGISTER_FN(open);
 REGISTER_FN(close);
 REGISTER_FN(mmap);
 REGISTER_FN(munmap);
+REGISTER_FN(ftruncate);
 
 #undef REGISTER_FN
 }  // namespace ulayfs::posix

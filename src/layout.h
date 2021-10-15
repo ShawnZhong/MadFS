@@ -9,7 +9,39 @@
 namespace ulayfs::pmem {
 
 using BlockIdx = uint32_t;
-using Bitmap = uint64_t;
+
+// All member functions are thread-safe and require no locks
+class Bitmap {
+  uint64_t bitmap;
+
+ public:
+  constexpr static uint64_t BITMAP_ALL_USED = 0xffffffffffffffff;
+
+  // return the index of the bit; -1 if fail
+  int alloc_one() {
+  retry:
+    uint64_t b = __atomic_load_n(&bitmap, __ATOMIC_ACQUIRE);
+    if (b == BITMAP_ALL_USED) return -1;
+    uint64_t allocated = (~b) & (b + 1);  // which bit is allocated
+    // if bitmap is exactly the same as we saw previously, set it allocated
+    if (!__atomic_compare_exchange_n(&bitmap, &b, b & allocated, true,
+                                     __ATOMIC_ACQ_REL, __ATOMIC_ACQUIRE))
+      goto retry;
+    return std::countr_zero(b);
+  }
+
+  // allocate all blocks in this bit; return 0 if succeeds, -1 otherwise
+  int alloc_all() {
+    uint64_t expected = 0;
+    if (__atomic_load_n(&bitmap, __ATOMIC_ACQUIRE) != 0) return -1;
+    if (!__atomic_compare_exchange_n(&bitmap, &expected, BITMAP_ALL_USED, false,
+                                     __ATOMIC_ACQ_REL, __ATOMIC_ACQUIRE))
+      return -1;
+    return 0;
+  }
+
+  void set_allocated(uint32_t idx) { bitmap |= (1 << idx); }
+};
 
 class LogEntry;
 
@@ -33,12 +65,19 @@ class LogEntry {
   uint32_t size;
 };
 
-constexpr static int NUM_BITMAP = BLOCK_SIZE / sizeof(Bitmap);
-constexpr static int NUM_TX_ENTRY =
+constexpr static uint32_t BLOCK_SIZE = 4096;
+constexpr static uint32_t CACHELINE_SIZE = 64;
+constexpr static uint32_t NUM_BITMAP = BLOCK_SIZE / sizeof(Bitmap);
+constexpr static uint32_t NUM_TX_ENTRY =
     (BLOCK_SIZE - 2 * sizeof(BlockIdx)) / sizeof(TxEntry);
-constexpr static int NUM_LOG_ENTRY = BLOCK_SIZE / sizeof(LogEntry);
-constexpr static int NUM_INLINE_BITMAP = 24;
-constexpr static int NUM_INLINE_TX_ENTRY = 480;
+constexpr static uint32_t NUM_LOG_ENTRY = BLOCK_SIZE / sizeof(LogEntry);
+constexpr static uint32_t NUM_CL_BITMAP_IN_META = 3;
+constexpr static uint32_t NUM_CL_TX_ENTRY_IN_META =
+    ((BLOCK_SIZE / CACHELINE_SIZE) - 1) - NUM_CL_BITMAP_IN_META;
+constexpr static uint32_t NUM_INLINE_BITMAP =
+    NUM_CL_BITMAP_IN_META * (CACHELINE_SIZE / sizeof(Bitmap));
+constexpr static uint32_t NUM_INLINE_TX_ENTRY =
+    NUM_CL_TX_ENTRY_IN_META * (CACHELINE_SIZE / sizeof(TxEntry));
 
 /*
  * Idx: 0          1          2
@@ -73,42 +112,73 @@ class MetaBlock {
 
   // 60 cache lines for tx log (~480 txs)
   TxEntry inline_tx_entries[NUM_INLINE_TX_ENTRY];
-};
 
-class BitmapBlock {
-  constexpr static uint64_t BITMAP_ALL_USED = 0xffffffffffffffff;
-
-  Bitmap bitmaps[NUM_BITMAP];
+ public:
+  // only called if a new file is created
+  void init() {
+    // the first block is always used (by MetaBlock itself)
+    inline_bitmaps[0].set_allocated(0);
+  }
 
   // allocate one block; return the index of allocated block
   // accept a hint for which bit to start searching
   // usually hint can just be the last idx return by this function
-  int alloc(int hint = 0) {
-    for (int idx = (hint >> 6); idx < NUM_BITMAP; ++idx) {
-    retry:
-      Bitmap b = __atomic_load_n(&bitmaps[idx], __ATOMIC_ACQUIRE);
-      if (b == BITMAP_ALL_USED) continue;
-      Bitmap allocated = ~b & (b + 1);
-      if (!__atomic_compare_exchange_n(&bitmaps[idx], &b, b & allocated, true,
-                                       __ATOMIC_ACQ_REL, __ATOMIC_ACQUIRE))
-        goto retry;
-      return (idx << 6) + std::countr_zero(b);
+  int inline_alloc_one(int hint = 0) {
+    int ret;
+    for (int idx = (hint >> 6); idx < NUM_INLINE_BITMAP; ++idx) {
+      ret = inline_bitmaps[idx].alloc_one();
+      if (ret < 0) continue;
+      return (idx << 6) + ret;
     }
     return -1;
   }
 
-  // 64 blocks are considered one batch; return the index of the first block
-  int alloc_batch(int hint = 0) {
-    for (int idx = (hint >> 6); idx < NUM_BITMAP; ++idx) {
-      uint64_t expected = 0;
-      if (__atomic_load_n(&bitmaps[idx], __ATOMIC_ACQUIRE) != 0) continue;
-      if (!__atomic_compare_exchange_n(&bitmaps[idx], &expected,
-                                       BITMAP_ALL_USED, false, __ATOMIC_ACQ_REL,
-                                       __ATOMIC_ACQUIRE))
-        continue;
+  // 64 blocks are considered as one batch; return the index of the first block
+  int inline_alloc_batch(int hint = 0) {
+    int ret = 0;
+    for (int idx = (hint >> 6); idx < NUM_INLINE_TX_ENTRY; ++idx) {
+      ret = inline_bitmaps[idx].alloc_all();
+      if (ret < 0) continue;
       return (idx << 6);
     }
     return -1;
+  }
+};
+
+class BitmapBlock {
+  Bitmap bitmaps[NUM_BITMAP];
+
+ public:
+  // allocate one block; return the index of allocated block
+  // accept a hint for which bit to start searching
+  // usually hint can just be the last idx return by this function
+  int alloc_one(int hint = 0) {
+    int ret;
+    for (int idx = (hint >> 6); idx < NUM_BITMAP; ++idx) {
+      ret = bitmaps[idx].alloc_one();
+      if (ret < 0) continue;
+      return (idx << 6) + ret;
+    }
+    return -1;
+  }
+
+  // 64 blocks are considered as one batch; return the index of the first block
+  int alloc_batch(int hint = 0) {
+    int ret = 0;
+    for (int idx = (hint >> 6); idx < NUM_BITMAP; ++idx) {
+      ret = bitmaps[idx].alloc_all();
+      if (ret < 0) continue;
+      return (idx << 6);
+    }
+    return -1;
+  }
+
+  // map `in_bitmap_idx` from alloc_one/all to the actual BlockIdx
+  // bitmap_block_idx = 0 if from inline_bitmap_block in MetaBlock
+  static BlockIdx get_block_idx(BlockIdx bitmap_block_idx, int in_bitmap_idx) {
+    if (bitmap_block_idx == 0) return in_bitmap_idx;
+    return ((NUM_INLINE_BITMAP + (bitmap_block_idx - 1) * NUM_BITMAP) << 6) +
+           in_bitmap_idx;
   }
 };
 
@@ -151,6 +221,16 @@ union Block {
 static_assert(sizeof(Bitmap) == 8, "Bitmap must of 64 bits");
 static_assert(sizeof(TxEntry) == 8, "TxEntry must be 64 bits");
 static_assert(sizeof(LogEntry) == 16, "LogEntry must of size 16 bytes");
+static_assert(sizeof(MetaBlock) == BLOCK_SIZE,
+              "MetaBlock must be of size BLOCK_SIZE");
+static_assert(sizeof(BitmapBlock) == BLOCK_SIZE,
+              "BitmapBlock must be of size BLOCK_SIZE");
+static_assert(sizeof(TxLogBlock) == BLOCK_SIZE,
+              "TxLogBlock must be of size BLOCK_SIZE");
+static_assert(sizeof(LogEntryBlock) == BLOCK_SIZE,
+              "LogEntryBlock must be of size BLOCK_SIZE");
+static_assert(sizeof(DataBlock) == BLOCK_SIZE,
+              "DataBlock must be of size BLOCK_SIZE");
 static_assert(sizeof(Block) == BLOCK_SIZE, "Block must be of size BLOCK_SIZE");
 
 };  // namespace ulayfs::pmem
