@@ -113,6 +113,12 @@ class MetaBlock {
   // 60 cache lines for tx log (~480 txs)
   TxEntry inline_tx_entries[NUM_INLINE_TX_ENTRY];
 
+  static_assert(sizeof(inline_bitmaps) == 3 * CACHELINE_SIZE,
+                "inline_bitmaps must be 3 cache lines");
+
+  static_assert(sizeof(inline_tx_entries) == 60 * CACHELINE_SIZE,
+                "inline_tx_entries must be 60 cache lines");
+
  public:
   // only called if a new file is created
   void init() {

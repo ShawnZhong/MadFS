@@ -1,5 +1,6 @@
 #pragma once
 
+#include <cstdint>
 #ifdef MEM_PROTECT
 #define MEM_PROTECT true
 #else
@@ -33,5 +34,4 @@ inline struct RuntimeOptions {
   RuntimeOptions(){
       // load options from environment variables
   };
-
 } runtime_options;
