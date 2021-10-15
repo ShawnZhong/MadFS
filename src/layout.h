@@ -5,6 +5,7 @@
 #include <cstdint>
 
 #include "config.h"
+#include "futex.h"
 
 namespace ulayfs::pmem {
 
@@ -52,8 +53,8 @@ class MetaBlock {
   // file size in bytes
   uint64_t file_size;
 
-  // address for futex to lock
-  uint32_t meta_lock;
+  // address for futex to lock, 4 bytes in size
+  Futex meta_lock;
 
   // number of blocks following the meta block that are bitmap blocks
   uint32_t num_bitmap_blocks;
