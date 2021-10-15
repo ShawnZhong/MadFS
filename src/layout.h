@@ -45,8 +45,6 @@ class Bitmap {
   void set_allocated(uint32_t idx) { bitmap |= (1 << idx); }
 };
 
-class LogEntry;
-
 class TxEntry {
  public:
   uint64_t entry;
@@ -74,9 +72,9 @@ constexpr static uint32_t NUM_BITMAP = BLOCK_SIZE / sizeof(Bitmap);
 constexpr static uint32_t NUM_TX_ENTRY =
     (BLOCK_SIZE - 2 * sizeof(BlockIdx)) / sizeof(TxEntry);
 constexpr static uint32_t NUM_LOG_ENTRY = BLOCK_SIZE / sizeof(LogEntry);
-constexpr static uint32_t NUM_CL_BITMAP_IN_META = 3;
+constexpr static uint32_t NUM_CL_BITMAP_IN_META = 2;
 constexpr static uint32_t NUM_CL_TX_ENTRY_IN_META =
-    ((BLOCK_SIZE / CACHELINE_SIZE) - 1) - NUM_CL_BITMAP_IN_META;
+    ((BLOCK_SIZE / CACHELINE_SIZE) - 2) - NUM_CL_BITMAP_IN_META;
 constexpr static uint32_t NUM_INLINE_BITMAP =
     NUM_CL_BITMAP_IN_META * (CACHELINE_SIZE / sizeof(Bitmap));
 constexpr static uint32_t NUM_INLINE_TX_ENTRY =
@@ -97,11 +95,11 @@ class MetaBlock {
       // file signature
       char signature[16];
 
-      // file size in bytes
+      // file size in bytes (logical size to users)
       uint64_t file_size;
 
-      // address for futex to lock, 4 bytes in size
-      Futex meta_lock;
+      // total number of blocks actually in this file (including unused ones)
+      uint32_t num_blocks;
 
       // number of blocks following the meta block that are bitmap blocks
       uint32_t num_bitmap_blocks;
@@ -111,24 +109,27 @@ class MetaBlock {
 
       // hint to find log tail; not necessarily up-to-date
       BlockIdx log_tail;
-    };
+    };  // all fields modificaton above requires futex acquired
 
     // padding avoid cache line contention
-    char first_cache_line[64];
+    char cache_line_1[CACHELINE_SIZE];
   };
 
-  // for the rest of 63 cache lines:
-  // 3 cache lines for bitmaps (~1536 blocks)
+  union {
+    // address for futex to lock, 4 bytes in size
+    Futex meta_lock;
+
+    // set futex to another cacheline to avoid futex's contention affect reading
+    // the metadata above
+    char cache_line_2[CACHELINE_SIZE];
+  };
+
+  // for the rest of 62 cache lines:
+  // 2 cache lines for bitmaps (~1024 blocks = 4M)
   Bitmap inline_bitmaps[NUM_INLINE_BITMAP];
 
   // 60 cache lines for tx log (~480 txs)
   TxEntry inline_tx_entries[NUM_INLINE_TX_ENTRY];
-
-  static_assert(sizeof(inline_bitmaps) == 3 * CACHELINE_SIZE,
-                "inline_bitmaps must be 3 cache lines");
-
-  static_assert(sizeof(inline_tx_entries) == 60 * CACHELINE_SIZE,
-                "inline_tx_entries must be 60 cache lines");
 
  public:
   // only called if a new file is created
