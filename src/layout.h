@@ -9,13 +9,13 @@
 namespace ulayfs::pmem {
 
 using BlockIdx = uint32_t;
-using Bitmap = uint64_t;
+using Bitmap = std::atomic_uint64_t;
 
 class LogEntry;
 
 class TxEntry {
  public:
-  uint64_t entry;
+  std::atomic_uint64_t entry;
 };
 
 class TxBeginEntry : public TxEntry {};
@@ -86,11 +86,12 @@ class BitmapBlock {
   int alloc(int hint = 0) {
     for (int idx = (hint >> 6); idx < NUM_BITMAP; ++idx) {
     retry:
-      Bitmap b = __atomic_load_n(&bitmaps[idx], __ATOMIC_ACQUIRE);
+      uint64_t b = bitmaps[idx].load(std::memory_order_acquire);
       if (b == BITMAP_ALL_USED) continue;
-      Bitmap allocated = ~b & (b + 1);
-      if (!__atomic_compare_exchange_n(&bitmaps[idx], &b, b & allocated, true,
-                                       __ATOMIC_ACQ_REL, __ATOMIC_ACQUIRE))
+      uint64_t allocated = ~b & (b + 1);
+      if (!bitmaps[idx].compare_exchange_weak(b, b & allocated,
+                                              std::memory_order_acq_rel,
+                                              std::memory_order_acquire))
         goto retry;
       return (idx << 6) + std::countr_zero(b);
     }
@@ -101,10 +102,10 @@ class BitmapBlock {
   int alloc_batch(int hint = 0) {
     for (int idx = (hint >> 6); idx < NUM_BITMAP; ++idx) {
       uint64_t expected = 0;
-      if (__atomic_load_n(&bitmaps[idx], __ATOMIC_ACQUIRE) != 0) continue;
-      if (!__atomic_compare_exchange_n(&bitmaps[idx], &expected,
-                                       BITMAP_ALL_USED, false, __ATOMIC_ACQ_REL,
-                                       __ATOMIC_ACQUIRE))
+      if (bitmaps[idx].load(std::memory_order_acquire) != 0) continue;
+      if (!bitmaps[idx].compare_exchange_strong(expected, BITMAP_ALL_USED,
+                                                std::memory_order_acq_rel,
+                                                std::memory_order_acquire))
         continue;
       return (idx << 6);
     }
@@ -118,13 +119,13 @@ class TxLogBlock {
   TxEntry tx_entries[NUM_TX_ENTRY];
 
  public:
-  int try_commit(TxCommitEntry commit_entry, uint32_t hint_tail = 0) {
+  uint32_t try_commit(TxCommitEntry commit_entry, uint32_t hint_tail = 0) {
     for (auto idx = hint_tail; idx < NUM_LOG_ENTRY; ++idx) {
       uint64_t expected = 0;
-      if (__atomic_load_n(&tx_entries[idx].entry, __ATOMIC_ACQUIRE)) continue;
-      if (__atomic_compare_exchange_n(&tx_entries[idx].entry, &expected,
-                                      commit_entry.entry, false,
-                                      __ATOMIC_RELEASE, __ATOMIC_ACQUIRE))
+      if (tx_entries[idx].entry.load(std::memory_order_acquire)) continue;
+      if (tx_entries[idx].entry.compare_exchange_strong(
+              expected, commit_entry.entry, std::memory_order_release,
+              std::memory_order_acquire))
         return idx;
     }
     return -1;
