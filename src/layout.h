@@ -3,6 +3,7 @@
 #include <atomic>
 #include <bit>
 #include <cstdint>
+#include <cstring>
 
 #include "config.h"
 #include "futex.h"
@@ -66,6 +67,7 @@ class LogEntry {
   uint32_t size;
 };
 
+constexpr static char FILE_SIGNATURE[] = "ULAYFS";
 constexpr static uint32_t BLOCK_SIZE = 4096;
 constexpr static uint32_t CACHELINE_SIZE = 64;
 constexpr static uint32_t NUM_BITMAP = BLOCK_SIZE / sizeof(Bitmap);
@@ -93,7 +95,7 @@ class MetaBlock {
   union {
     struct {
       // file signature
-      char signature[16] = "ULAYFS";
+      char signature[16];
 
       // file size in bytes
       uint64_t file_size;
@@ -133,6 +135,14 @@ class MetaBlock {
   void init() {
     // the first block is always used (by MetaBlock itself)
     inline_bitmaps[0].set_allocated(0);
+
+    strncpy(signature, FILE_SIGNATURE, sizeof(signature));
+    meta_lock.init();
+  }
+
+  // check whether the meta block is valid
+  bool is_valid() {
+    return std::strncmp(signature, FILE_SIGNATURE, sizeof(signature)) == 0;
   }
 
   // allocate one block; return the index of allocated block
