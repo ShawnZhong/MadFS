@@ -148,9 +148,7 @@ class MetaBlock {
   }
 
   // check whether the meta block is valid
-  bool is_valid() {
-    return std::strncmp(signature, FILE_SIGNATURE, sizeof(signature)) == 0;
-  }
+  bool is_valid() { return std::strcmp(signature, FILE_SIGNATURE) == 0; }
 
   // allocate one block; return the index of allocated block
   // accept a hint for which bit to start searching
