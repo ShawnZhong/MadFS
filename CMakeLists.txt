@@ -3,7 +3,15 @@ project(uLayFS)
 
 set(CMAKE_CXX_STANDARD 20)
 
-add_library(ulayfs SHARED src/config.h src/file.cpp src/file.h src/futex.h src/layout.h src/lib.cpp src/posix.h)
+add_library(ulayfs SHARED
+    src/alloc.h src/alloc.cpp
+    src/config.h
+    src/file.h src/file.cpp
+    src/futex.h
+    src/layout.h
+    src/lib.cpp
+    src/posix.h
+    )
 target_link_libraries(ulayfs dl)
 
 add_executable(test_basic test/basic.c)
