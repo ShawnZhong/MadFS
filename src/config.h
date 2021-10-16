@@ -29,7 +29,10 @@ constexpr static bool debug = DEBUG;
 
 namespace LayoutOptions {
 // preallocate 2 MB
-constexpr static uint32_t prealloc_size = (2 << 20);
+constexpr static uint32_t prealloc_shift = 20;
+constexpr static uint32_t prealloc_size = 2 << prealloc_shift;
+constexpr static uint32_t grow_unit_shift = 20;
+constexpr static uint32_t grow_unit_size = 2 << grow_unit_shift;
 };  // namespace LayoutOptions
 
 struct RuntimeOptions {

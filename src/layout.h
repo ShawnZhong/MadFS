@@ -68,8 +68,10 @@ class LogEntry {
 };
 
 constexpr static char FILE_SIGNATURE[] = "ULAYFS";
-constexpr static uint32_t BLOCK_SIZE = 4096;
-constexpr static uint32_t CACHELINE_SIZE = 64;
+constexpr static uint32_t BLOCK_SHIFT = 12;
+constexpr static uint32_t BLOCK_SIZE = 1 << BLOCK_SHIFT;
+constexpr static uint32_t CACHELINE_SHIFT = 6;
+constexpr static uint32_t CACHELINE_SIZE = 1 << CACHELINE_SHIFT;
 constexpr static uint32_t NUM_BITMAP = BLOCK_SIZE / sizeof(Bitmap);
 constexpr static uint32_t NUM_TX_ENTRY =
     (BLOCK_SIZE - 2 * sizeof(BlockIdx)) / sizeof(TxEntry);
@@ -91,6 +93,7 @@ constexpr static uint32_t NUM_INLINE_TX_ENTRY =
  */
 
 class MetaBlock {
+ public:
   // contents in the first cache line
   union {
     struct {
