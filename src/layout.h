@@ -10,7 +10,10 @@
 
 namespace ulayfs::pmem {
 
+// globally index to locate a block
 using BlockIdx = uint32_t;
+// local index within a block; this can be -1 to indicate an error
+using BlockLocalIdx = int32_t;
 
 // All member functions are thread-safe and require no locks
 class Bitmap {
@@ -20,7 +23,7 @@ class Bitmap {
   constexpr static uint64_t BITMAP_ALL_USED = 0xffffffffffffffff;
 
   // return the index of the bit; -1 if fail
-  int alloc_one() {
+  BlockLocalIdx alloc_one() {
   retry:
     uint64_t b = __atomic_load_n(&bitmap, __ATOMIC_ACQUIRE);
     if (b == BITMAP_ALL_USED) return -1;
@@ -33,7 +36,7 @@ class Bitmap {
   }
 
   // allocate all blocks in this bit; return 0 if succeeds, -1 otherwise
-  int alloc_all() {
+  BlockLocalIdx alloc_all() {
     uint64_t expected = 0;
     if (__atomic_load_n(&bitmap, __ATOMIC_ACQUIRE) != 0) return -1;
     if (!__atomic_compare_exchange_n(&bitmap, &expected, BITMAP_ALL_USED, false,
@@ -164,10 +167,14 @@ class MetaBlock {
   // check whether the meta block is valid
   bool is_valid() { return std::strcmp(signature, FILE_SIGNATURE) == 0; }
 
+  // acquire/release meta lock (usually only during allocation)
+  void lock() { meta_lock.acquire(); }
+  void unlock() { meta_lock.release(); }
+
   // allocate one block; return the index of allocated block
   // accept a hint for which bit to start searching
   // usually hint can just be the last idx return by this function
-  int inline_alloc_one(int hint = 0) {
+  BlockLocalIdx inline_alloc_one(int hint = 0) {
     int ret;
     for (int idx = (hint >> 6); idx < NUM_INLINE_BITMAP; ++idx) {
       ret = inline_bitmaps[idx].alloc_one();
@@ -178,7 +185,7 @@ class MetaBlock {
   }
 
   // 64 blocks are considered as one batch; return the index of the first block
-  int inline_alloc_batch(int hint = 0) {
+  BlockLocalIdx inline_alloc_batch(int hint = 0) {
     int ret = 0;
     for (int idx = (hint >> 6); idx < NUM_INLINE_TX_ENTRY; ++idx) {
       ret = inline_bitmaps[idx].alloc_all();
@@ -196,9 +203,9 @@ class BitmapBlock {
   // allocate one block; return the index of allocated block
   // accept a hint for which bit to start searching
   // usually hint can just be the last idx return by this function
-  int alloc_one(int hint = 0) {
+  BlockLocalIdx alloc_one(BlockLocalIdx hint = 0) {
     int ret;
-    for (int idx = (hint >> 6); idx < NUM_BITMAP; ++idx) {
+    for (BlockLocalIdx idx = (hint >> 6); idx < NUM_BITMAP; ++idx) {
       ret = bitmaps[idx].alloc_one();
       if (ret < 0) continue;
       return (idx << 6) + ret;
@@ -207,9 +214,9 @@ class BitmapBlock {
   }
 
   // 64 blocks are considered as one batch; return the index of the first block
-  int alloc_batch(int hint = 0) {
+  BlockLocalIdx alloc_batch(BlockLocalIdx hint = 0) {
     int ret = 0;
-    for (int idx = (hint >> 6); idx < NUM_BITMAP; ++idx) {
+    for (BlockLocalIdx idx = (hint >> 6); idx < NUM_BITMAP; ++idx) {
       ret = bitmaps[idx].alloc_all();
       if (ret < 0) continue;
       return (idx << 6);
@@ -219,10 +226,11 @@ class BitmapBlock {
 
   // map `in_bitmap_idx` from alloc_one/all to the actual BlockIdx
   // bitmap_block_idx = 0 if from inline_bitmap_block in MetaBlock
-  static BlockIdx get_block_idx(BlockIdx bitmap_block_idx, int in_bitmap_idx) {
-    if (bitmap_block_idx == 0) return in_bitmap_idx;
+  static BlockIdx get_block_idx(BlockIdx bitmap_block_idx,
+                                BlockLocalIdx bitmap_local_idx) {
+    if (bitmap_block_idx == 0) return bitmap_local_idx;
     return ((NUM_INLINE_BITMAP + (bitmap_block_idx - 1) * NUM_BITMAP) << 6) +
-           in_bitmap_idx;
+           bitmap_local_idx;
   }
 };
 
@@ -232,8 +240,9 @@ class TxLogBlock {
   TxEntry tx_entries[NUM_TX_ENTRY];
 
  public:
-  int try_commit(TxCommitEntry commit_entry, uint32_t hint_tail = 0) {
-    for (auto idx = hint_tail; idx < NUM_LOG_ENTRY; ++idx) {
+  BlockLocalIdx try_commit(TxCommitEntry commit_entry,
+                           BlockLocalIdx hint_tail = 0) {
+    for (BlockLocalIdx idx = hint_tail; idx < NUM_LOG_ENTRY; ++idx) {
       uint64_t expected = 0;
       if (__atomic_load_n(&tx_entries[idx].entry, __ATOMIC_ACQUIRE)) continue;
       if (__atomic_compare_exchange_n(&tx_entries[idx].entry, &expected,
