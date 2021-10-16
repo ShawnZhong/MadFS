@@ -14,7 +14,7 @@
 namespace ulayfs {
 
 class Futex {
-  std::atomic_uint32_t val = 1;
+  std::atomic_uint32_t val;
 
   inline static long futex(std::atomic_uint32_t *uaddr, int futex_op,
                            uint32_t val, const struct timespec *timeout,

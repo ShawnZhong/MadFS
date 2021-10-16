@@ -21,16 +21,16 @@
 
 namespace ulayfs {
 
-struct BuildOptions {
-  constexpr static bool mem_protect = MEM_PROTECT;
-  constexpr static bool relaxed = RELAXED;
-  constexpr static bool debug = DEBUG;
-};
+namespace BuildOptions {
+constexpr static bool mem_protect = MEM_PROTECT;
+constexpr static bool relaxed = RELAXED;
+constexpr static bool debug = DEBUG;
+};  // namespace BuildOptions
 
-struct LayoutOptions {
-  // preallocate 2 MB
-  constexpr static uint32_t prealloc_size = (2 << 20);
-};
+namespace LayoutOptions {
+// preallocate 2 MB
+constexpr static uint32_t prealloc_size = (2 << 20);
+};  // namespace LayoutOptions
 
 struct RuntimeOptions {
   RuntimeOptions(){
