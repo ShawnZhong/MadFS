@@ -65,6 +65,7 @@ class LogEntry {
   uint32_t size;
 };
 
+constexpr static char FILE_SIGNATURE[] = "ULAYFS";
 constexpr static uint32_t BLOCK_SIZE = 4096;
 constexpr static uint32_t CACHELINE_SIZE = 64;
 constexpr static uint32_t NUM_BITMAP = BLOCK_SIZE / sizeof(Bitmap);
@@ -108,10 +109,10 @@ class MetaBlock {
 
       // hint to find log tail; not necessarily up-to-date
       BlockIdx log_tail;
-    };  // all fields modificaton above requires futex acquired
+    };  // modification to any field above requires futex acquired
 
     // padding avoid cache line contention
-    char padding[CACHELINE_SIZE];
+    char padding1[CACHELINE_SIZE];
   };
 
   union {
@@ -120,7 +121,7 @@ class MetaBlock {
 
     // set futex to another cacheline to avoid futex's contention affect reading
     // the metadata above
-    char padding[CACHELINE_SIZE];
+    char padding2[CACHELINE_SIZE];
   };
 
   // for the rest of 62 cache lines:
@@ -130,12 +131,25 @@ class MetaBlock {
   // 60 cache lines for tx log (~480 txs)
   TxEntry inline_tx_entries[NUM_INLINE_TX_ENTRY];
 
+  static_assert(sizeof(inline_bitmaps) == 2 * CACHELINE_SIZE,
+                "inline_bitmaps must be 2 cache lines");
+
+  static_assert(sizeof(inline_tx_entries) == 60 * CACHELINE_SIZE,
+                "inline_tx_entries must be 60 cache lines");
+
  public:
   // only called if a new file is created
   void init() {
     // the first block is always used (by MetaBlock itself)
     inline_bitmaps[0].set_allocated(0);
-    strcpy(signature, "ULAYFS");
+
+    strncpy(signature, FILE_SIGNATURE, sizeof(signature));
+    meta_lock.init();
+  }
+
+  // check whether the meta block is valid
+  bool is_valid() {
+    return std::strncmp(signature, FILE_SIGNATURE, sizeof(signature)) == 0;
   }
 
   // allocate one block; return the index of allocated block
