@@ -7,8 +7,8 @@
 #include <unistd.h>
 
 namespace ulayfs::posix {
-#define REGISTER_FN(name) \
-  auto name = reinterpret_cast<decltype(&::name)>(dlsym(RTLD_NEXT, #name))
+#define REGISTER_FN(fn) \
+  static auto fn = reinterpret_cast<decltype(&::fn)>(dlsym(RTLD_NEXT, #fn))
 
 REGISTER_FN(stat);
 REGISTER_FN(fstat);
