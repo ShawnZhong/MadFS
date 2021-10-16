@@ -143,7 +143,7 @@ class MetaBlock {
     // the first block is always used (by MetaBlock itself)
     inline_bitmaps[0].set_allocated(0);
 
-    strncpy(signature, FILE_SIGNATURE, sizeof(signature));
+    strcpy(signature, FILE_SIGNATURE);
     meta_lock.init();
   }
 
