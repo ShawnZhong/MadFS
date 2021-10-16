@@ -15,7 +15,7 @@ int File::open(const char* pathname, int flags, mode_t mode) {
     struct stat stat_buf;
     ret = posix::fstat(fd, &stat_buf);
     if (ret) throw std::runtime_error("Fail to fstat!");
-    bool is_create = stat_buf.st_size == 0;
+    is_create = stat_buf.st_size == 0;
   }
 
   if (is_create) {
