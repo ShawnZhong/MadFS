@@ -75,7 +75,8 @@ constexpr static uint32_t BLOCK_SHIFT = 12;
 constexpr static uint32_t BLOCK_SIZE = 1 << BLOCK_SHIFT;
 constexpr static uint32_t CACHELINE_SHIFT = 6;
 constexpr static uint32_t CACHELINE_SIZE = 1 << CACHELINE_SHIFT;
-constexpr static uint32_t NUM_BITMAP = BLOCK_SIZE / sizeof(Bitmap);
+constexpr static uint32_t NUM_BITMAP =
+    (BLOCK_SIZE - 2 * sizeof(BlockIdx)) / sizeof(Bitmap);
 constexpr static uint32_t NUM_TX_ENTRY =
     (BLOCK_SIZE - 2 * sizeof(BlockIdx)) / sizeof(TxEntry);
 constexpr static uint32_t NUM_LOG_ENTRY = BLOCK_SIZE / sizeof(LogEntry);
@@ -88,13 +89,8 @@ constexpr static uint32_t NUM_INLINE_TX_ENTRY =
     NUM_CL_TX_ENTRY_IN_META * (CACHELINE_SIZE / sizeof(TxEntry));
 
 /*
- * Idx: 0          1          2
- * +----------+----------+----------+----------+----------+----------+----------
- * |   Meta   | Bitmap 1 | Bitmap 2 |   ...    |   ...    | Data/Log |   ...
- * +----------+----------+----------+----------+----------+----------+----------
- * Note: The first few blocks following the meta block is always bitmap blocks
+ * BlockIdx 0 -> MetaBlock; other blocks can be any type of blocks
  */
-
 class MetaBlock {
  public:
   // contents in the first cache line
@@ -109,15 +105,15 @@ class MetaBlock {
       // total number of blocks actually in this file (including unused ones)
       uint32_t num_blocks;
 
-      // number of blocks following the meta block that are bitmap blocks
-      uint32_t num_bitmap_blocks;
+      // if inline_bitmaps is used up, this points to the next bitmap block
+      BlockIdx bitmap_head;
 
       // if inline_tx_entries is used up, this points to the next log block
       BlockIdx log_head;
 
       // hint to find log tail; not necessarily up-to-date
       BlockIdx log_tail;
-    };  // modification to any field above requires futex acquired
+    };
 
     // padding avoid cache line contention
     char padding1[CACHELINE_SIZE];
@@ -125,6 +121,7 @@ class MetaBlock {
 
   union {
     // address for futex to lock, 4 bytes in size
+    // this lock is ONLY used for ftruncate
     Futex meta_lock;
 
     // set futex to another cacheline to avoid futex's contention affect reading
@@ -197,6 +194,8 @@ class MetaBlock {
 };
 
 class BitmapBlock {
+  BlockIdx prev;
+  BlockIdx next;
   Bitmap bitmaps[NUM_BITMAP];
 
  public:

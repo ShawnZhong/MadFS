@@ -23,15 +23,15 @@ int File::open(const char* pathname, int flags, mode_t mode) {
     if (ret) throw std::runtime_error("Fail to ftruncate!");
   }
 
-  meta_block = static_cast<pmem::MetaBlock*>(
+  meta = static_cast<pmem::MetaBlock*>(
       posix::mmap(nullptr, LayoutOptions::prealloc_size, PROT_READ | PROT_WRITE,
                   MAP_SHARED | MAP_HUGETLB | MAP_HUGE_2MB, fd, 0));
-  if (!meta_block) throw std::runtime_error("Fail to mmap!");
+  if (!meta) throw std::runtime_error("Fail to mmap!");
 
   if (is_create)
-    meta_block->init();
+    meta->init();
   else
-    meta_block->verify_ready();
+    meta->verify_ready();
   return fd;
 }
 
