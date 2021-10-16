@@ -152,6 +152,8 @@ class MetaBlock {
   // process sees file size is non-zero and thinks it is ready
   // to prevent race condition, quick check if this bit is set.
   void verify_ready() {
+    // FIXME: it could be the case that a process create and die before
+    // finishing initialization; maybe we still need a flock...
     while (!(inline_bitmaps[0].get() & 0x1))
       ;
   }
