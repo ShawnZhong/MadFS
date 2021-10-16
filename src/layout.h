@@ -43,6 +43,8 @@ class Bitmap {
   }
 
   void set_allocated(uint32_t idx) { bitmap |= (1 << idx); }
+
+  uint64_t get() { return bitmap; }
 };
 
 class TxEntry {
@@ -134,8 +136,16 @@ class MetaBlock {
   // only called if a new file is created
   void init() {
     // the first block is always used (by MetaBlock itself)
-    inline_bitmaps[0].set_allocated(0);
     strcpy(signature, "ULAYFS");
+    inline_bitmaps[0].set_allocated(0);
+  }
+
+  // in a concern case, a process may try to initialize the file but another
+  // process sees file size is non-zero and thinks it is ready
+  // to prevent race condition, quick check if this bit is set.
+  void verify_ready() {
+    while (!(inline_bitmaps[0].get() & 0x1))
+      ;
   }
 
   // allocate one block; return the index of allocated block

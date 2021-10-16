@@ -1,4 +1,7 @@
 #pragma once
+#include <sys/errno.h>
+#include <sys/fcntl.h>
+
 #include <stdexcept>
 
 #include "layout.h"
@@ -25,19 +28,22 @@ class File {
 
     ret = posix::fstat(fd, &stat_buf);
     if (ret) throw std::runtime_error("Fail to fstat!");
-    if (stat_buf.st_size == 0) {
-      // this is a newly created file; do layout initialization
+    bool is_create = stat_buf.st_size == 0;
+
+    if (is_create) {
       ret = posix::ftruncate(fd, layout_options.prealloc_size);
       if (ret) throw std::runtime_error("Fail to ftruncate!");
+    }
 
-      // TODO: acquire futex here
-      meta_block = static_cast<pmem::MetaBlock*>(posix::mmap(
-          nullptr, layout_options.prealloc_size, PROT_READ | PROT_WRITE,
-          MAP_SHARED | MAP_HUGETLB | MAP_HUGE_2MB, fd, 0));
-      if (!meta_block) throw std::runtime_error("Fail to mmap!");
+    meta_block = static_cast<pmem::MetaBlock*>(posix::mmap(
+        nullptr, layout_options.prealloc_size, PROT_READ | PROT_WRITE,
+        MAP_SHARED | MAP_HUGETLB | MAP_HUGE_2MB, fd, 0));
+    if (!meta_block) throw std::runtime_error("Fail to mmap!");
+
+    if (is_create)
       meta_block->init();
-    } else if (stat_buf.st_size & (pmem::BLOCK_SIZE - 1))
-      throw std::runtime_error("Invalid layout!");
+    else
+      meta_block->verify_ready();
     return fd;
   }
 };
