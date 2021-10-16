@@ -1,5 +1,7 @@
 #include "file.h"
 
+#include <linux/mman.h>
+
 namespace ulayfs::dram {
 
 int File::open(const char* pathname, int flags, mode_t mode) {
