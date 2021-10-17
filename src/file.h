@@ -2,8 +2,10 @@
 
 #include <stdexcept>
 
+#include "alloc.h"
 #include "config.h"
 #include "layout.h"
+#include "map.h"
 #include "posix.h"
 
 // data structure under this namespace must be in volatile memory (DRAM)
@@ -13,6 +15,8 @@ class File {
   int fd;
   int open_flags;
   pmem::MetaBlock* meta;
+  IdxMap idx_map;
+  Allocator allocator;
 
  public:
   File() : fd(-1), meta(nullptr) {}

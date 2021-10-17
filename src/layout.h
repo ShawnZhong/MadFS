@@ -194,6 +194,7 @@ class MetaBlock {
 };
 
 class BitmapBlock {
+ public:
   BlockIdx prev;
   BlockIdx next;
   Bitmap bitmaps[NUM_BITMAP];
@@ -224,11 +225,13 @@ class BitmapBlock {
   }
 
   // map `in_bitmap_idx` from alloc_one/all to the actual BlockIdx
-  // bitmap_block_idx = 0 if from inline_bitmap_block in MetaBlock
-  static BlockIdx get_block_idx(BlockIdx bitmap_block_idx,
+  // bitmap_block_id = 0 if from inline_bitmap_block in MetaBlock
+  // bitmap_block_id is NOT BlockIdx: e.g. the second bitmap block may not have
+  // BlockIdx 2; We call "second" as its id to distinguish
+  static BlockIdx get_block_idx(uint32_t bitmap_block_id,
                                 BlockLocalIdx bitmap_local_idx) {
-    if (bitmap_block_idx == 0) return bitmap_local_idx;
-    return ((NUM_INLINE_BITMAP + (bitmap_block_idx - 1) * NUM_BITMAP) << 6) +
+    if (bitmap_block_id == 0) return bitmap_local_idx;
+    return ((NUM_INLINE_BITMAP + (bitmap_block_id - 1) * NUM_BITMAP) << 6) +
            bitmap_local_idx;
   }
 };

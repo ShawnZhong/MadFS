@@ -1,7 +1,5 @@
 #include "file.h"
 
-#include <linux/mman.h>
-
 namespace ulayfs::dram {
 
 int File::open(const char* pathname, int flags, mode_t mode) {
@@ -23,10 +21,8 @@ int File::open(const char* pathname, int flags, mode_t mode) {
     if (ret) throw std::runtime_error("Fail to ftruncate!");
   }
 
-  meta = static_cast<pmem::MetaBlock*>(
-      posix::mmap(nullptr, LayoutOptions::prealloc_size, PROT_READ | PROT_WRITE,
-                  MAP_SHARED | MAP_HUGETLB | MAP_HUGE_2MB, fd, 0));
-  if (!meta) throw std::runtime_error("Fail to mmap!");
+  meta = idx_map.init(fd);
+  allocator.init(fd, meta, &idx_map);
 
   if (is_create)
     meta->init();
