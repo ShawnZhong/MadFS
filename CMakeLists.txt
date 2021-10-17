@@ -10,6 +10,7 @@ add_library(ulayfs SHARED
     src/futex.h
     src/layout.h
     src/lib.cpp
+    src/map.h src/map.cpp
     src/posix.h
     )
 target_link_libraries(ulayfs dl)
