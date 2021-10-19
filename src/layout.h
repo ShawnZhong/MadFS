@@ -4,14 +4,15 @@
 #include <bit>
 #include <cstdint>
 #include <cstring>
+#include <iostream>
 
 #include "config.h"
 #include "futex.h"
 
 namespace ulayfs::pmem {
 
-// globally index to locate a block (aka LogicalBlockIdx)
-using BlockIdx = uint32_t;
+// block index within a file; the meta block has a LogicalBlockIdx of 0
+using LogicalBlockIdx = uint32_t;
 // block index seen by applications
 using VirtualBlockIdx = uint32_t;
 // local index within a block; this can be -1 to indicate an error
@@ -52,7 +53,7 @@ class Bitmap {
   void set_allocated(uint32_t idx) { bitmap |= (1 << idx); }
 
   // get a read-only snapshot of bitmap
-  uint64_t get() { return bitmap; }
+  [[nodiscard]] uint64_t get() const { return bitmap; }
 };
 
 class TxEntry {
@@ -78,15 +79,16 @@ class LogEntry {
   uint8_t num_blocks;
   uint8_t next_entry_offset;
   uint8_t padding;
-  BlockIdx next_entry_block_idx;
-  BlockIdx file_offset;
-  BlockIdx block_offset;
+  LogicalBlockIdx next_entry_block_idx;
+  LogicalBlockIdx file_offset;
+  LogicalBlockIdx block_offset;
 };
 
 static_assert(sizeof(LogEntry) == 16, "LogEntry must of size 16 bytes");
 
 // signature
-constexpr static char FILE_SIGNATURE[] = "ULAYFS";
+constexpr static int SIGNATURE_LEN = 16;
+constexpr static char FILE_SIGNATURE[SIGNATURE_LEN] = "ULAYFS";
 
 // hardware configuration
 constexpr static uint32_t BLOCK_SHIFT = 12;
@@ -102,7 +104,7 @@ constexpr static uint32_t BITMAP_CAPACITY = 1 << BITMAP_CAPACITY_SHIFT;
 // number of various data structures in blocks
 constexpr static uint32_t NUM_BITMAP = BLOCK_SIZE / sizeof(Bitmap);
 constexpr static uint32_t NUM_TX_ENTRY =
-    (BLOCK_SIZE - 2 * sizeof(BlockIdx)) / sizeof(TxEntry);
+    (BLOCK_SIZE - 2 * sizeof(LogicalBlockIdx)) / sizeof(TxEntry);
 constexpr static uint32_t NUM_LOG_ENTRY = BLOCK_SIZE / sizeof(LogEntry);
 
 // inline data structure count in meta block
@@ -125,7 +127,7 @@ constexpr static uint32_t INLINE_BITMAP_CAPACITY =
     NUM_INLINE_BITMAP * BITMAP_CAPACITY;
 
 /*
- * BlockIdx 0 -> MetaBlock; other blocks can be any type of blocks
+ * LogicalBlockIdx 0 -> MetaBlock; other blocks can be any type of blocks
  */
 class MetaBlock {
  public:
@@ -133,7 +135,7 @@ class MetaBlock {
   union {
     struct {
       // file signature
-      char signature[16];
+      char signature[SIGNATURE_LEN];
 
       // file size in bytes (logical size to users)
       uint64_t file_size;
@@ -142,13 +144,13 @@ class MetaBlock {
       uint32_t num_blocks;
 
       // if inline_bitmaps is used up, this points to the next bitmap block
-      BlockIdx bitmap_head;
+      LogicalBlockIdx bitmap_head;
 
       // if inline_tx_entries is used up, this points to the next log block
-      BlockIdx log_head;
+      LogicalBlockIdx log_head;
 
       // hint to find log tail; not necessarily up-to-date
-      BlockIdx log_tail;
+      LogicalBlockIdx log_tail;
     };
 
     // padding avoid cache line contention
@@ -182,12 +184,14 @@ class MetaBlock {
   // only called if a new file is created
   void init() {
     // the first block is always used (by MetaBlock itself)
-    strcpy(signature, FILE_SIGNATURE);
     meta_lock.init();
+    memcpy(signature, FILE_SIGNATURE, SIGNATURE_LEN);
   }
 
   // check whether the meta block is valid
-  bool is_valid() { return std::strcmp(signature, FILE_SIGNATURE) == 0; }
+  bool is_valid() {
+    return std::memcmp(signature, FILE_SIGNATURE, SIGNATURE_LEN) == 0;
+  }
 
   // acquire/release meta lock (usually only during allocation)
   void lock() { meta_lock.acquire(); }
@@ -196,38 +200,12 @@ class MetaBlock {
   // allocate one block; return the index of allocated block
   // accept a hint for which bit to start searching
   // usually hint can just be the last idx return by this function
-  BlockLocalIdx inline_alloc_one(BlockLocalIdx hint = 0) {
-    int ret;
-    BlockLocalIdx idx = hint >> BITMAP_CAPACITY_SHIFT;
-    // the first block's first bit is reserved (used by bitmap block itself)
-    // if anyone allocates it, it must retry
-    if (idx == 0) {
-      ret = inline_bitmaps[0].alloc_one();
-      if (ret == 0) ret = inline_bitmaps[0].alloc_one();
-      if (ret > 0) return ret;
-      ++idx;
-    }
-    for (; idx < NUM_INLINE_BITMAP; ++idx) {
-      ret = inline_bitmaps[idx].alloc_one();
-      if (ret < 0) continue;
-      return (idx << BITMAP_CAPACITY_SHIFT) + ret;
-    }
-    return -1;
-  }
+  BlockLocalIdx inline_alloc_one(BlockLocalIdx hint = 0);
 
   // 64 blocks are considered as one batch; return the index of the first block
-  BlockLocalIdx inline_alloc_batch(BlockLocalIdx hint = 0) {
-    int ret = 0;
-    BlockLocalIdx idx = hint >> BITMAP_CAPACITY_SHIFT;
-    // we cannot allocate a whole batch from the first bitmap
-    if (idx == 0) ++idx;
-    for (; idx < NUM_INLINE_TX_ENTRY; ++idx) {
-      ret = inline_bitmaps[idx].alloc_all();
-      if (ret < 0) continue;
-      return (idx << BITMAP_CAPACITY_SHIFT);
-    }
-    return -1;
-  }
+  BlockLocalIdx inline_alloc_batch(BlockLocalIdx hint = 0);
+
+  friend std::ostream& operator<<(std::ostream& out, const MetaBlock& block);
 };
 
 /*
@@ -235,8 +213,8 @@ class MetaBlock {
  * blocks (64MB in total); after that, every 32k blocks (128MB) will have its
  * first block as the bitmap block that manages its allocation.
  * We assign "bitmap_block_id" to these bitmap blocks, where id=0 is the inline
- * one in the meta block (BlockIdx=0); bitmap block id=1 is the block with
- * BlockIdx 16384; id=2 is the one with BlockIdx 32768, etc.
+ * one in the meta block (LogicalBlockIdx=0); bitmap block id=1 is the block
+ * with LogicalBlockIdx 16384; id=2 is the one with LogicalBlockIdx 32768, etc.
  */
 class BitmapBlock {
  public:
@@ -249,57 +227,32 @@ class BitmapBlock {
   // allocate one block; return the index of allocated block
   // accept a hint for which bit to start searching
   // usually hint can just be the last idx return by this function
-  BlockLocalIdx alloc_one(BlockLocalIdx hint = 0) {
-    int ret;
-    BlockLocalIdx idx = hint >> BITMAP_CAPACITY_SHIFT;
-    if (idx == 0) {
-      ret = bitmaps[0].alloc_one();
-      if (ret == 0) ret = bitmaps[0].alloc_one();
-      if (ret > 0) return ret;
-      ++idx;
-    }
-    for (; idx < NUM_BITMAP; ++idx) {
-      ret = bitmaps[idx].alloc_one();
-      if (ret < 0) continue;
-      return (idx << BITMAP_CAPACITY_SHIFT) + ret;
-    }
-    return -1;
-  }
+  BlockLocalIdx alloc_one(BlockLocalIdx hint = 0);
 
   // 64 blocks are considered as one batch; return the index of the first block
-  BlockLocalIdx alloc_batch(BlockLocalIdx hint = 0) {
-    int ret = 0;
-    BlockLocalIdx idx = hint >> BITMAP_CAPACITY_SHIFT;
-    if (idx == 0) ++idx;
-    for (; idx < NUM_BITMAP; ++idx) {
-      ret = bitmaps[idx].alloc_all();
-      if (ret < 0) continue;
-      return (idx << BITMAP_CAPACITY_SHIFT);
-    }
-    return -1;
-  }
+  BlockLocalIdx alloc_batch(BlockLocalIdx hint = 0);
 
-  // map `bitmap_local_idx` from alloc_one/all to the actual BlockIdx
-  static BlockIdx get_block_idx(BitmapBlockId bitmap_block_id,
-                                BlockLocalIdx bitmap_local_idx) {
+  // map `bitmap_local_idx` from alloc_one/all to the LogicalBlockIdx
+  static LogicalBlockIdx get_block_idx(BitmapBlockId bitmap_block_id,
+                                       BlockLocalIdx bitmap_local_idx) {
     return (bitmap_block_id << BITMAP_BLOCK_CAPACITY_SHIFT) +
            INLINE_BITMAP_CAPACITY + bitmap_local_idx;
   }
 
   // make bitmap id to its block idx
-  static BlockIdx get_bitmap_block_idx(BitmapBlockId bitmap_block_id) {
+  static LogicalBlockIdx get_bitmap_block_idx(BitmapBlockId bitmap_block_id) {
     return get_block_idx(bitmap_block_id, 0);
   }
 
   // reverse mapping of get_bitmap_block_idx
-  static BitmapBlockId get_bitmap_block_id(BlockIdx idx) {
+  static BitmapBlockId get_bitmap_block_id(LogicalBlockIdx idx) {
     return (idx - INLINE_BITMAP_CAPACITY) >> BITMAP_BLOCK_CAPACITY_SHIFT;
   }
 };
 
 class TxLogBlock {
-  BlockIdx prev;
-  BlockIdx next;
+  LogicalBlockIdx prev;
+  LogicalBlockIdx next;
   TxEntry tx_entries[NUM_TX_ENTRY];
 
  public:

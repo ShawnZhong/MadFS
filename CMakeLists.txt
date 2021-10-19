@@ -9,14 +9,16 @@ add_library(ulayfs SHARED
     src/config.h
     src/file.h src/file.cpp
     src/futex.h
-    src/layout.h
-    src/lib.cpp
+    src/layout.h src/layout.cpp
+    src/lib.h src/lib.cpp
     src/mtable.h
-    src/posix.h
-    )
+    src/posix.h)
 target_link_libraries(ulayfs dl)
 
 add_executable(test_basic test/basic.c)
 target_link_libraries(test_basic ulayfs)
 
 add_executable(test_futex test/futex.cpp)
+
+add_executable(test_alloc test/alloc.cpp)
+target_link_libraries(test_alloc ulayfs)
