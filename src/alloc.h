@@ -18,7 +18,11 @@ class Allocator {
 
   // this local free_list maintains blocks allocated from the global free_list
   // and not used yet; pair: <size, idx>
-  // sorted in the increasing order (least size first)
+  // sorted in the increasing order (the smallest size first)
+  //
+  // Note: we choose to use a vector instead of a balanced tree because we limit
+  // the maximum number of blocks per allocation to be 64 blocks (256 KB), so
+  // the fragmentation should be low, resulting in a small free_list
   std::vector<std::pair<uint32_t, pmem::LogicalBlockIdx>> free_list;
 
   // used as a hint for search; recent is defined to be "the next one to search"
