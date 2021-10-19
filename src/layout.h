@@ -87,7 +87,8 @@ class LogEntry {
 static_assert(sizeof(LogEntry) == 16, "LogEntry must of size 16 bytes");
 
 // signature
-constexpr static char FILE_SIGNATURE[] = "ULAYFS";
+constexpr static int SIGNATURE_LEN = 16;
+constexpr static char FILE_SIGNATURE[SIGNATURE_LEN] = "ULAYFS";
 
 // hardware configuration
 constexpr static uint32_t BLOCK_SHIFT = 12;
@@ -134,7 +135,7 @@ class MetaBlock {
   union {
     struct {
       // file signature
-      char signature[16];
+      char signature[SIGNATURE_LEN];
 
       // file size in bytes (logical size to users)
       uint64_t file_size;
@@ -183,12 +184,14 @@ class MetaBlock {
   // only called if a new file is created
   void init() {
     // the first block is always used (by MetaBlock itself)
-    strcpy(signature, FILE_SIGNATURE);
+    memcpy(signature, FILE_SIGNATURE, SIGNATURE_LEN);
     meta_lock.init();
   }
 
   // check whether the meta block is valid
-  bool is_valid() { return std::strcmp(signature, FILE_SIGNATURE) == 0; }
+  bool is_valid() {
+    return std::memcmp(signature, FILE_SIGNATURE, SIGNATURE_LEN) == 0;
+  }
 
   // acquire/release meta lock (usually only during allocation)
   void lock() { meta_lock.acquire(); }
