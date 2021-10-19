@@ -5,7 +5,7 @@
 
 #include "config.h"
 #include "layout.h"
-#include "map.h"
+#include "mtable.h"
 #include "posix.h"
 
 namespace ulayfs::dram {
@@ -13,7 +13,7 @@ namespace ulayfs::dram {
 // per-thread data structure
 class Allocator {
   pmem::MetaBlock* meta;
-  IdxMap* idx_map;
+  MemTable* mtable;
   int fd;
 
   // this local free_list maintains blocks allocated from the global free_list
@@ -34,11 +34,11 @@ class Allocator {
         recent_bitmap_block_id(0),
         recent_bitmap_local_idx(0) {}
 
-  void init(int fd, pmem::MetaBlock* meta, IdxMap* idx_map) {
+  void init(int fd, pmem::MetaBlock* meta, MemTable* mtable) {
     this->fd = fd;
     this->meta = meta;
     this->free_list.reserve(64);
-    this->idx_map = idx_map;
+    this->mtable = mtable;
   }
 
   // allocate contiguous blocks (num_blocks must <= 64)

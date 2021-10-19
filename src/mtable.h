@@ -26,7 +26,7 @@ constexpr static uint32_t GROW_UNIT_IN_BLOCK_MASK =
 //   the addr
 // - if this block is not even allocated from kernel filesystem, grow
 //   it, map it, and return the address
-class IdxMap {
+class MemTable {
   pmem::MetaBlock* meta;
   int fd;
 
@@ -34,7 +34,7 @@ class IdxMap {
   // may be out-of-date; must re-read global one if necessary
   uint32_t num_blocks_local_copy;
 
-  std::unordered_map<pmem::BlockIdx, pmem::Block*> map;
+  std::unordered_map<pmem::BlockIdx, pmem::Block*> table;
 
  private:
   // called by other public functions with lock held
@@ -50,7 +50,7 @@ class IdxMap {
   }
 
  public:
-  IdxMap() : fd(-1), num_blocks_local_copy(0), map(){};
+  MemTable() : fd(-1), num_blocks_local_copy(0), table(){};
 
   pmem::MetaBlock* init(int fd, size_t file_size) {
     this->fd = fd;
@@ -70,7 +70,7 @@ class IdxMap {
     constexpr uint32_t num_blocks_per_grow =
         LayoutOptions::grow_unit_size / pmem::BLOCK_SIZE;
     for (pmem::BlockIdx idx = 0; idx < num_blocks; idx += num_blocks_per_grow)
-      map.emplace(idx, blocks + idx);
+      table.emplace(idx, blocks + idx);
     this->num_blocks_local_copy = meta->num_blocks;
     return this->meta;
   }
@@ -97,8 +97,8 @@ class IdxMap {
   pmem::Block* get_addr(pmem::BlockIdx idx) {
     pmem::BlockIdx hugepage_idx = idx & ~GROW_UNIT_IN_BLOCK_MASK;
     auto offset = ((idx & GROW_UNIT_IN_BLOCK_MASK) << pmem::BLOCK_SHIFT);
-    auto it = map.find(hugepage_idx);
-    if (it != map.end()) return it->second + offset;
+    auto it = table.find(hugepage_idx);
+    if (it != table.end()) return it->second + offset;
 
     // validate if this idx has real blocks allocated; do allocation if not
     validate(idx);
@@ -108,7 +108,7 @@ class IdxMap {
         MAP_SHARED | MAP_HUGETLB | MAP_HUGE_2MB, fd,
         hugepage_idx << pmem::BLOCK_SHIFT));
     if (!hugepage_blocks) throw std::runtime_error("Fail to mmap!");
-    map.emplace(hugepage_idx, hugepage_blocks);
+    table.emplace(hugepage_idx, hugepage_blocks);
     return hugepage_blocks + offset;
   }
 };

@@ -10,11 +10,13 @@
 
 namespace ulayfs::pmem {
 
-// globally index to locate a block
+// globally index to locate a block (aka LogicalBlockIdx)
 using BlockIdx = uint32_t;
+// block index seen by applications
+using VirtualBlockIdx = uint32_t;
 // local index within a block; this can be -1 to indicate an error
 using BlockLocalIdx = int32_t;
-// logical index of bitmap blocks; checkout BitmapBlock's doc to see more
+// identifier of bitmap blocks; checkout BitmapBlock's doc to see more
 using BitmapBlockId = uint32_t;
 
 // All member functions are thread-safe and require no locks

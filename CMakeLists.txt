@@ -5,12 +5,13 @@ set(CMAKE_CXX_STANDARD 20)
 
 add_library(ulayfs SHARED
     src/alloc.h src/alloc.cpp
+    src/btable.h
     src/config.h
     src/file.h src/file.cpp
     src/futex.h
     src/layout.h
     src/lib.cpp
-    src/map.h
+    src/mtable.h
     src/posix.h
     )
 target_link_libraries(ulayfs dl)

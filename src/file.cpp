@@ -19,8 +19,8 @@ int File::open(const char* pathname, int flags, mode_t mode) {
     if (ret) throw std::runtime_error("Fail to ftruncate!");
   }
 
-  meta = idx_map.init(fd, stat_buf.st_size);
-  allocator.init(fd, meta, &idx_map);
+  meta = mtable.init(fd, stat_buf.st_size);
+  allocator.init(fd, meta, &mtable);
 
   if (is_create) meta->init();
   return fd;
