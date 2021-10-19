@@ -30,7 +30,7 @@ static bool is_grow_size_aligned(size_t file_size) {
 // map index into address
 // this is a more low-level data structure than Allocator
 // it should maintain the virtualization of infinite large of file
-// everytime it gets a BlockIdx:
+// everytime it gets a LogicalBlockIdx:
 // - if this block is already mapped; return addr
 // - if this block is allocated from kernel filesystem, mmap and return
 //   the addr
@@ -44,11 +44,11 @@ class MemTable {
   // may be out-of-date; must re-read global one if necessary
   uint32_t num_blocks_local_copy;
 
-  std::unordered_map<pmem::BlockIdx, pmem::Block*> table;
+  std::unordered_map<pmem::LogicalBlockIdx, pmem::Block*> table;
 
  private:
   // called by other public functions with lock held
-  void grow_no_lock(pmem::BlockIdx idx) {
+  void grow_no_lock(pmem::LogicalBlockIdx idx) {
     // we need to revalidate under after acquiring lock
     if (idx < meta->num_blocks) return;
     uint32_t new_num_blocks = ((idx >> LayoutOptions::grow_unit_shift) + 1)
@@ -87,7 +87,8 @@ class MemTable {
 
     // initialize the mapping
     uint32_t num_blocks = file_size >> pmem::BLOCK_SHIFT;
-    for (pmem::BlockIdx idx = 0; idx < num_blocks; idx += NUM_BLOCKS_PER_GROW)
+    for (pmem::LogicalBlockIdx idx = 0; idx < num_blocks;
+         idx += NUM_BLOCKS_PER_GROW)
       table.emplace(idx, blocks + idx);
 
     this->meta->num_blocks = num_blocks;
@@ -97,7 +98,7 @@ class MemTable {
   }
 
   // ask more blocks for the kernel filesystem, so that idx is valid
-  void validate(pmem::BlockIdx idx) {
+  void validate(pmem::LogicalBlockIdx idx) {
     // fast path: if smaller than local copy; return
     if (idx < num_blocks_local_copy) return;
 
@@ -115,8 +116,8 @@ class MemTable {
   // filesystem block
   // get_addr will then check if it has been mapped into the address space; if
   // not, it does mapping first
-  pmem::Block* get_addr(pmem::BlockIdx idx) {
-    pmem::BlockIdx hugepage_idx = idx & ~GROW_UNIT_IN_BLOCK_MASK;
+  pmem::Block* get_addr(pmem::LogicalBlockIdx idx) {
+    pmem::LogicalBlockIdx hugepage_idx = idx & ~GROW_UNIT_IN_BLOCK_MASK;
     auto offset = ((idx & GROW_UNIT_IN_BLOCK_MASK) << pmem::BLOCK_SHIFT);
     auto it = table.find(hugepage_idx);
     if (it != table.end()) return it->second + offset;

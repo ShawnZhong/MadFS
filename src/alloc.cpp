@@ -9,8 +9,8 @@
 
 namespace ulayfs::dram {
 
-pmem::BlockIdx Allocator::alloc(uint32_t num_blocks) {
-  pmem::BlockIdx bitmap_block_idx;
+pmem::LogicalBlockIdx Allocator::alloc(uint32_t num_blocks) {
+  pmem::LogicalBlockIdx bitmap_block_idx;
   pmem::BitmapBlock* bitmap_block;
   assert(num_blocks <= pmem::BITMAP_CAPACITY);
 
@@ -55,7 +55,7 @@ pmem::BlockIdx Allocator::alloc(uint32_t num_blocks) {
 add_to_free_list:
   assert(recent_bitmap_local_idx >= 0);
   // push in decreasing order so pop will in increasing order
-  pmem::BlockIdx allocated = pmem::BitmapBlock::get_block_idx(
+  pmem::LogicalBlockIdx allocated = pmem::BitmapBlock::get_block_idx(
       recent_bitmap_block_id, recent_bitmap_local_idx);
   if (num_blocks < pmem::BITMAP_CAPACITY) {
     free_list.emplace_back(pmem::BITMAP_CAPACITY - num_blocks,

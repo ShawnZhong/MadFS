@@ -11,8 +11,8 @@
 
 namespace ulayfs::pmem {
 
-// globally index to locate a block (aka LogicalBlockIdx)
-using BlockIdx = uint32_t;
+// block index with in a file; the meta block has a LogicalBlockIdx of 0
+using LogicalBlockIdx = uint32_t;
 // block index seen by applications
 using VirtualBlockIdx = uint32_t;
 // local index within a block; this can be -1 to indicate an error
@@ -79,9 +79,9 @@ class LogEntry {
   uint8_t num_blocks;
   uint8_t next_entry_offset;
   uint8_t padding;
-  BlockIdx next_entry_block_idx;
-  BlockIdx file_offset;
-  BlockIdx block_offset;
+  LogicalBlockIdx next_entry_block_idx;
+  LogicalBlockIdx file_offset;
+  LogicalBlockIdx block_offset;
 };
 
 static_assert(sizeof(LogEntry) == 16, "LogEntry must of size 16 bytes");
@@ -103,7 +103,7 @@ constexpr static uint32_t BITMAP_CAPACITY = 1 << BITMAP_CAPACITY_SHIFT;
 // number of various data structures in blocks
 constexpr static uint32_t NUM_BITMAP = BLOCK_SIZE / sizeof(Bitmap);
 constexpr static uint32_t NUM_TX_ENTRY =
-    (BLOCK_SIZE - 2 * sizeof(BlockIdx)) / sizeof(TxEntry);
+    (BLOCK_SIZE - 2 * sizeof(LogicalBlockIdx)) / sizeof(TxEntry);
 constexpr static uint32_t NUM_LOG_ENTRY = BLOCK_SIZE / sizeof(LogEntry);
 
 // inline data structure count in meta block
@@ -126,7 +126,7 @@ constexpr static uint32_t INLINE_BITMAP_CAPACITY =
     NUM_INLINE_BITMAP * BITMAP_CAPACITY;
 
 /*
- * BlockIdx 0 -> MetaBlock; other blocks can be any type of blocks
+ * LogicalBlockIdx 0 -> MetaBlock; other blocks can be any type of blocks
  */
 class MetaBlock {
  public:
@@ -143,13 +143,13 @@ class MetaBlock {
       uint32_t num_blocks;
 
       // if inline_bitmaps is used up, this points to the next bitmap block
-      BlockIdx bitmap_head;
+      LogicalBlockIdx bitmap_head;
 
       // if inline_tx_entries is used up, this points to the next log block
-      BlockIdx log_head;
+      LogicalBlockIdx log_head;
 
       // hint to find log tail; not necessarily up-to-date
-      BlockIdx log_tail;
+      LogicalBlockIdx log_tail;
     };
 
     // padding avoid cache line contention
@@ -210,8 +210,8 @@ class MetaBlock {
  * blocks (64MB in total); after that, every 32k blocks (128MB) will have its
  * first block as the bitmap block that manages its allocation.
  * We assign "bitmap_block_id" to these bitmap blocks, where id=0 is the inline
- * one in the meta block (BlockIdx=0); bitmap block id=1 is the block with
- * BlockIdx 16384; id=2 is the one with BlockIdx 32768, etc.
+ * one in the meta block (LogicalBlockIdx=0); bitmap block id=1 is the block
+ * with LogicalBlockIdx 16384; id=2 is the one with LogicalBlockIdx 32768, etc.
  */
 class BitmapBlock {
  public:
@@ -229,27 +229,27 @@ class BitmapBlock {
   // 64 blocks are considered as one batch; return the index of the first block
   BlockLocalIdx alloc_batch(BlockLocalIdx hint = 0);
 
-  // map `bitmap_local_idx` from alloc_one/all to the actual BlockIdx
-  static BlockIdx get_block_idx(BitmapBlockId bitmap_block_id,
-                                BlockLocalIdx bitmap_local_idx) {
+  // map `bitmap_local_idx` from alloc_one/all to the LogicalBlockIdx
+  static LogicalBlockIdx get_block_idx(BitmapBlockId bitmap_block_id,
+                                       BlockLocalIdx bitmap_local_idx) {
     return (bitmap_block_id << BITMAP_BLOCK_CAPACITY_SHIFT) +
            INLINE_BITMAP_CAPACITY + bitmap_local_idx;
   }
 
   // make bitmap id to its block idx
-  static BlockIdx get_bitmap_block_idx(BitmapBlockId bitmap_block_id) {
+  static LogicalBlockIdx get_bitmap_block_idx(BitmapBlockId bitmap_block_id) {
     return get_block_idx(bitmap_block_id, 0);
   }
 
   // reverse mapping of get_bitmap_block_idx
-  static BitmapBlockId get_bitmap_block_id(BlockIdx idx) {
+  static BitmapBlockId get_bitmap_block_id(LogicalBlockIdx idx) {
     return (idx - INLINE_BITMAP_CAPACITY) >> BITMAP_BLOCK_CAPACITY_SHIFT;
   }
 };
 
 class TxLogBlock {
-  BlockIdx prev;
-  BlockIdx next;
+  LogicalBlockIdx prev;
+  LogicalBlockIdx next;
   TxEntry tx_entries[NUM_TX_ENTRY];
 
  public:
