@@ -19,14 +19,6 @@ constexpr static uint32_t GROW_UNIT_IN_BLOCK_MASK =
 constexpr uint32_t NUM_BLOCKS_PER_GROW =
     LayoutOptions::grow_unit_size / pmem::BLOCK_SIZE;
 
-static bool is_block_aligned(size_t file_size) {
-  return (file_size & (pmem::BLOCK_SIZE - 1)) == 0;
-}
-
-static bool is_grow_size_aligned(size_t file_size) {
-  return (file_size & (LayoutOptions::grow_unit_size - 1)) == 0;
-}
-
 // map index into address
 // this is a more low-level data structure than Allocator
 // it should maintain the virtualization of infinite large of file
@@ -65,11 +57,13 @@ class MemTable {
   pmem::MetaBlock* init(int fd, off_t file_size) {
     this->fd = fd;
     // file size should be block-aligned
-    if (!is_block_aligned(file_size))
+    if ((file_size & (pmem::BLOCK_SIZE - 1)) != 0)
       throw std::runtime_error("Invalid layout: non-block-aligned file size!");
 
-    // grow to multiple of grow_unit
-    if (file_size == 0 || !is_grow_size_aligned(file_size)) {
+    // grow to multiple of grow_unit_size if the file is empty or the file size
+    // is not grow_unit aligned
+    if (file_size == 0 ||
+        (file_size & (LayoutOptions::grow_unit_size - 1)) != 0) {
       file_size = file_size == 0
                       ? LayoutOptions::prealloc_size
                       : ((file_size >> LayoutOptions::grow_unit_shift) + 1)
