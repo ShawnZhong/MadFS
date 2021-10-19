@@ -184,8 +184,8 @@ class MetaBlock {
   // only called if a new file is created
   void init() {
     // the first block is always used (by MetaBlock itself)
-    memcpy(signature, FILE_SIGNATURE, SIGNATURE_LEN);
     meta_lock.init();
+    memcpy(signature, FILE_SIGNATURE, SIGNATURE_LEN);
   }
 
   // check whether the meta block is valid
