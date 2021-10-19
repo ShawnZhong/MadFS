@@ -4,6 +4,7 @@
 #include <bit>
 #include <cstdint>
 #include <cstring>
+#include <iostream>
 
 #include "config.h"
 #include "futex.h"
@@ -52,7 +53,7 @@ class Bitmap {
   void set_allocated(uint32_t idx) { bitmap |= (1 << idx); }
 
   // get a read-only snapshot of bitmap
-  uint64_t get() { return bitmap; }
+  [[nodiscard]] uint64_t get() const { return bitmap; }
 };
 
 class TxEntry {
@@ -196,38 +197,12 @@ class MetaBlock {
   // allocate one block; return the index of allocated block
   // accept a hint for which bit to start searching
   // usually hint can just be the last idx return by this function
-  BlockLocalIdx inline_alloc_one(BlockLocalIdx hint = 0) {
-    int ret;
-    BlockLocalIdx idx = hint >> BITMAP_CAPACITY_SHIFT;
-    // the first block's first bit is reserved (used by bitmap block itself)
-    // if anyone allocates it, it must retry
-    if (idx == 0) {
-      ret = inline_bitmaps[0].alloc_one();
-      if (ret == 0) ret = inline_bitmaps[0].alloc_one();
-      if (ret > 0) return ret;
-      ++idx;
-    }
-    for (; idx < NUM_INLINE_BITMAP; ++idx) {
-      ret = inline_bitmaps[idx].alloc_one();
-      if (ret < 0) continue;
-      return (idx << BITMAP_CAPACITY_SHIFT) + ret;
-    }
-    return -1;
-  }
+  BlockLocalIdx inline_alloc_one(BlockLocalIdx hint = 0);
 
   // 64 blocks are considered as one batch; return the index of the first block
-  BlockLocalIdx inline_alloc_batch(BlockLocalIdx hint = 0) {
-    int ret = 0;
-    BlockLocalIdx idx = hint >> BITMAP_CAPACITY_SHIFT;
-    // we cannot allocate a whole batch from the first bitmap
-    if (idx == 0) ++idx;
-    for (; idx < NUM_INLINE_TX_ENTRY; ++idx) {
-      ret = inline_bitmaps[idx].alloc_all();
-      if (ret < 0) continue;
-      return (idx << BITMAP_CAPACITY_SHIFT);
-    }
-    return -1;
-  }
+  BlockLocalIdx inline_alloc_batch(BlockLocalIdx hint = 0);
+
+  friend std::ostream& operator<<(std::ostream& out, const MetaBlock& block);
 };
 
 /*
@@ -249,35 +224,10 @@ class BitmapBlock {
   // allocate one block; return the index of allocated block
   // accept a hint for which bit to start searching
   // usually hint can just be the last idx return by this function
-  BlockLocalIdx alloc_one(BlockLocalIdx hint = 0) {
-    int ret;
-    BlockLocalIdx idx = hint >> BITMAP_CAPACITY_SHIFT;
-    if (idx == 0) {
-      ret = bitmaps[0].alloc_one();
-      if (ret == 0) ret = bitmaps[0].alloc_one();
-      if (ret > 0) return ret;
-      ++idx;
-    }
-    for (; idx < NUM_BITMAP; ++idx) {
-      ret = bitmaps[idx].alloc_one();
-      if (ret < 0) continue;
-      return (idx << BITMAP_CAPACITY_SHIFT) + ret;
-    }
-    return -1;
-  }
+  BlockLocalIdx alloc_one(BlockLocalIdx hint = 0);
 
   // 64 blocks are considered as one batch; return the index of the first block
-  BlockLocalIdx alloc_batch(BlockLocalIdx hint = 0) {
-    int ret = 0;
-    BlockLocalIdx idx = hint >> BITMAP_CAPACITY_SHIFT;
-    if (idx == 0) ++idx;
-    for (; idx < NUM_BITMAP; ++idx) {
-      ret = bitmaps[idx].alloc_all();
-      if (ret < 0) continue;
-      return (idx << BITMAP_CAPACITY_SHIFT);
-    }
-    return -1;
-  }
+  BlockLocalIdx alloc_batch(BlockLocalIdx hint = 0);
 
   // map `bitmap_local_idx` from alloc_one/all to the actual BlockIdx
   static BlockIdx get_block_idx(BitmapBlockId bitmap_block_id,
