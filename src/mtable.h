@@ -60,11 +60,14 @@ class MemTable {
       file_size = ((file_size >> LayoutOptions::grow_unit_shift) + 1)
                   << LayoutOptions::grow_unit_shift;
       int ret = posix::ftruncate(fd, file_size);
+      if (ret) throw std::runtime_error("Fail to ftruncate!");
     }
-    pmem::Block* blocks = static_cast<pmem::Block*>(
-        posix::mmap(nullptr, file_size, PROT_READ | PROT_WRITE,
-                    MAP_SHARED | MAP_HUGETLB | MAP_HUGE_2MB, fd, 0));
-    if (!blocks) throw std::runtime_error("Fail to mmap!");
+    // TODO: add the MAP_HUGETLB | MAP_HUGE_2MB flags back
+    void* addr = posix::mmap(nullptr, file_size, PROT_READ | PROT_WRITE,
+                             MAP_SHARED, fd, 0);
+    if (addr == (void*)-1) throw std::runtime_error("Fail to mmap!");
+    auto blocks = static_cast<pmem::Block*>(addr);
+
     this->meta = &(blocks->meta_block);
     uint32_t num_blocks = file_size >> pmem::BLOCK_SHIFT;
     constexpr uint32_t num_blocks_per_grow =
@@ -103,11 +106,12 @@ class MemTable {
     // validate if this idx has real blocks allocated; do allocation if not
     validate(idx);
 
-    pmem::Block* hugepage_blocks = static_cast<pmem::Block*>(posix::mmap(
-        nullptr, LayoutOptions::prealloc_size, PROT_READ | PROT_WRITE,
-        MAP_SHARED | MAP_HUGETLB | MAP_HUGE_2MB, fd,
-        hugepage_idx << pmem::BLOCK_SHIFT));
-    if (!hugepage_blocks) throw std::runtime_error("Fail to mmap!");
+    // TODO: add the MAP_HUGETLB | MAP_HUGE_2MB flags back
+    void* addr = posix::mmap(nullptr, LayoutOptions::prealloc_size,
+                             PROT_READ | PROT_WRITE, MAP_SHARED, fd,
+                             hugepage_idx << pmem::BLOCK_SHIFT);
+    if (addr == (void*)-1) throw std::runtime_error("Fail to mmap!");
+    auto hugepage_blocks = static_cast<pmem::Block*>(addr);
     table.emplace(hugepage_idx, hugepage_blocks);
     return hugepage_blocks + offset;
   }
