@@ -1,35 +1,43 @@
 #pragma once
 
 #include <cstdint>
-#ifdef MEM_PROTECT
-#define MEM_PROTECT true
-#else
-#define MEM_PROTECT false
-#endif
-
-#ifdef RELAXED
-#define RELAXED true
-#else
-#define RELAXED false
-#endif
-
-#ifdef NDEBUG
-#define DEBUG false
-#else
-#define DEBUG true
-#endif
 
 namespace ulayfs {
 
 namespace BuildOptions {
-constexpr static bool mem_protect = MEM_PROTECT;
-constexpr static bool relaxed = RELAXED;
-constexpr static bool debug = DEBUG;
+#ifdef MEM_PROTECT
+constexpr static bool mem_protect = true;
+#else
+constexpr static bool mem_protect = false;
+#endif
+
+#ifdef RELAXED
+constexpr static bool relaxed = true;
+#else
+constexpr static bool relaxed = false;
+#endif
+
+#ifdef NDEBUG
+constexpr static bool debug = false;
+#else
+constexpr static bool debug = true;
+#endif
+
+#ifdef USE_HUGEPAGE
+constexpr static bool use_hugepage = true;
+#else
+constexpr static bool use_hugepage = false;
+#endif
+
 };  // namespace BuildOptions
 
 namespace LayoutOptions {
-// preallocate 2 MB
-constexpr static uint32_t prealloc_size = (2 << 20);
+// grow in the unit of 2 MB
+constexpr static uint32_t grow_unit_shift = 20;
+constexpr static uint32_t grow_unit_size = 2 << grow_unit_shift;
+// preallocate must be multiple of grow_unit
+constexpr static uint32_t prealloc_shift = 1 * grow_unit_shift;
+constexpr static uint32_t prealloc_size = 1 * grow_unit_size;
 };  // namespace LayoutOptions
 
 struct RuntimeOptions {
