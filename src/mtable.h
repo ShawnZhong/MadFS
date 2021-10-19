@@ -72,9 +72,12 @@ class MemTable {
       if (ret) throw std::runtime_error("Fail to ftruncate!");
     }
 
-    // TODO: add the MAP_HUGETLB | MAP_HUGE_2MB flags back
+    int mmap_flags = MAP_SHARED;
+    if constexpr (BuildOptions::use_hugepage) {
+      mmap_flags |= MAP_HUGETLB | MAP_HUGE_2MB;
+    }
     void* addr = posix::mmap(nullptr, file_size, PROT_READ | PROT_WRITE,
-                             MAP_SHARED, fd, 0);
+                             mmap_flags, fd, 0);
     if (addr == (void*)-1) throw std::runtime_error("Fail to mmap!");
     auto blocks = static_cast<pmem::Block*>(addr);
     this->meta = &blocks->meta_block;
@@ -120,10 +123,13 @@ class MemTable {
     validate(idx);
 
     off_t hugepage_size = static_cast<off_t>(hugepage_idx) << pmem::BLOCK_SHIFT;
-    // TODO: add the MAP_HUGETLB | MAP_HUGE_2MB flags back
+    int mmap_flags = MAP_SHARED;
+    if constexpr (BuildOptions::use_hugepage) {
+      mmap_flags |= MAP_HUGETLB | MAP_HUGE_2MB;
+    }
     void* addr =
         posix::mmap(nullptr, LayoutOptions::prealloc_size,
-                    PROT_READ | PROT_WRITE, MAP_SHARED, fd, hugepage_size);
+                    PROT_READ | PROT_WRITE, mmap_flags, fd, hugepage_size);
     if (addr == (void*)-1) throw std::runtime_error("Fail to mmap!");
     auto hugepage_blocks = static_cast<pmem::Block*>(addr);
     table.emplace(hugepage_idx, hugepage_blocks);

@@ -19,12 +19,19 @@
 #define DEBUG true
 #endif
 
+#ifdef USE_HUGEPAGE
+#define USE_HUGEPAGE true
+#else
+#define USE_HUGEPAGE false
+#endif
+
 namespace ulayfs {
 
 namespace BuildOptions {
 constexpr static bool mem_protect = MEM_PROTECT;
 constexpr static bool relaxed = RELAXED;
 constexpr static bool debug = DEBUG;
+constexpr static bool use_hugepage = USE_HUGEPAGE;
 };  // namespace BuildOptions
 
 namespace LayoutOptions {
