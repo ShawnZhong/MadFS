@@ -13,12 +13,17 @@ pmem::BlockIdx Allocator::alloc(uint32_t num_blocks) {
   pmem::BlockIdx bitmap_block_idx;
   pmem::BitmapBlock* bitmap_block;
   assert(num_blocks <= pmem::BITMAP_CAPACITY);
+
+  // we first try to allocate from the free list
   for (auto it = free_list.begin(); it != free_list.end(); ++it) {
+    // exact match
     if (it->first == num_blocks) {
       auto idx = it->second;
       free_list.erase(it);
       return idx;
     }
+
+    // split a free list element
     if (it->first > num_blocks) {
       auto idx = it->second;
       it->first -= num_blocks;
@@ -28,6 +33,7 @@ pmem::BlockIdx Allocator::alloc(uint32_t num_blocks) {
       return idx;
     }
   }
+
   // then we have to allocate from global bitmaps
   if (recent_bitmap_block_id == 0) {
     recent_bitmap_local_idx = meta->inline_alloc_batch(recent_bitmap_local_idx);
