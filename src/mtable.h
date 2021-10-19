@@ -133,6 +133,17 @@ class MemTable {
     table.emplace(hugepage_idx, hugepage_blocks);
     return hugepage_blocks + offset;
   }
+
+  friend std::ostream& operator<<(std::ostream& out, const MemTable& m) {
+    out << "MemTable:\n";
+    out << "\tnum_blocks_local_copy: " << m.num_blocks_local_copy << "\n";
+    out << "\ttable: \n";
+    for (const auto& [blk_idx, mem_addr] : m.table) {
+      out << "\t\t"
+          << "blk_idx: " << blk_idx << ", mem_addr: " << mem_addr;
+    }
+    return out;
+  }
 };
 
 };  // namespace ulayfs::dram

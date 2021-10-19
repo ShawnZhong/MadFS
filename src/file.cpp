@@ -22,6 +22,7 @@ int File::open(const char* pathname, int flags, mode_t mode) {
 std::ostream& operator<<(std::ostream& out, const File& f) {
   out << "fd: " << f.fd << "\n";
   out << *f.meta;
+  out << f.mtable;
   return out;
 }
 
