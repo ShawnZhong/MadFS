@@ -1,5 +1,7 @@
 #include "alloc.h"
 
+#include <algorithm>
+#include <cassert>
 #include <cstdlib>
 
 #include "file.h"
@@ -7,51 +9,54 @@
 
 namespace ulayfs::dram {
 
-pmem::BlockIdx Allocator::alloc_one() {
-  if (free_list.empty()) {
-    uint32_t bitmap_block_id = recent_bitmap_block_id;
-    pmem::BlockIdx bitmap_block_idx = recent_bitmap_block;
-    pmem::BlockLocalIdx batch_idx = 0;
-
-    if (!bitmap_block_id) {  // allocate from meta
-      batch_idx = meta->inline_alloc_batch();
-      if (batch_idx >= 0) goto add_to_free_list;
-      // fail to do inline_alloc; must allocate from other bitmap
-      if (!meta->bitmap_head) {
-        // TODO: allocate a bitmap block and CAS into meta->bitmap_head
-      }
-      bitmap_block_idx = meta->bitmap_head;
-      ++bitmap_block_id;
+pmem::BlockIdx Allocator::alloc(uint32_t num_blocks) {
+  pmem::BlockIdx bitmap_block_idx;
+  pmem::BitmapBlock* bitmap_block;
+  assert(num_blocks <= pmem::BITMAP_CAPACITY);
+  for (auto it = free_list.begin(); it != free_list.end(); ++it) {
+    if (it->first == num_blocks) {
+      auto idx = it->second;
+      free_list.erase(it);
+      return idx;
     }
-
-    // now try to allocate from a normal BitmapBlock
-    while (true) {
-      pmem::BitmapBlock* bitmap_block =
-          &(idx_map->get_addr(bitmap_block_idx)->bitmap_block);
-      batch_idx = bitmap_block->alloc_batch();
-      if (batch_idx >= 0) goto add_to_free_list;
-      // we have to move to the next bitmap block to search
-      bitmap_block_idx = bitmap_block->next;
-      if (bitmap_block_idx) {
-        // TODO: allocate a bitmap block and update bitmap_block_idx
-      }
-      ++bitmap_block_id;
+    if (it->first > num_blocks) {
+      auto idx = it->second;
+      it->first -= num_blocks;
+      it->second += num_blocks;
+      // re-sort these elements
+      std::sort(free_list.begin(), it + 1);
+      return idx;
     }
-
-  add_to_free_list:
-    // push in decreasing order so pop will in increaseing order
-    pmem::BlockIdx batch_allocated =
-        pmem::BitmapBlock::get_block_idx(bitmap_block_id, batch_idx);
-    for (auto offset = 63; offset >= 0; offset--)
-      free_list.push_back(batch_allocated + offset);
-    recent_bitmap_block_id = bitmap_block_id;
-    recent_bitmap_block = bitmap_block_idx;
+  }
+  // then we have to allocate from global bitmaps
+  if (recent_bitmap_block_id == 0) {
+    recent_bitmap_local_idx = meta->inline_alloc_batch(recent_bitmap_local_idx);
+    if (recent_bitmap_local_idx >= 0) goto add_to_free_list;
+    recent_bitmap_block_id++;
+    recent_bitmap_local_idx = 0;
   }
 
-  pmem::BlockIdx block_idx = free_list.back();
-  grow(block_idx);  // ensure this block is valid (backed by a kernel fs block)
-  free_list.pop_back();
-  return block_idx;
+  while (true) {
+    bitmap_block_idx =
+        pmem::BitmapBlock::get_bitmap_block_idx(recent_bitmap_block_id);
+    bitmap_block = &(idx_map->get_addr(bitmap_block_idx)->bitmap_block);
+    recent_bitmap_local_idx = bitmap_block->alloc_batch();
+    if (recent_bitmap_local_idx >= 0) goto add_to_free_list;
+    recent_bitmap_block_id++;
+    recent_bitmap_local_idx = 0;
+  }
+
+add_to_free_list:
+  assert(recent_bitmap_local_idx >= 0);
+  // push in decreasing order so pop will in increaseing order
+  pmem::BlockIdx allocated = pmem::BitmapBlock::get_block_idx(
+      recent_bitmap_block_id, recent_bitmap_local_idx);
+  free_list.push_back(
+      {pmem::BITMAP_CAPACITY - num_blocks, allocated + num_blocks});
+  std::sort(free_list.begin(), free_list.end());
+  // this recent is not useful because we have taken all bits; move on
+  recent_bitmap_local_idx++;
+  return allocated;
 }
 
 };  // namespace ulayfs::dram
