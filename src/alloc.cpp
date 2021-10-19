@@ -48,12 +48,12 @@ pmem::BlockIdx Allocator::alloc(uint32_t num_blocks) {
 
 add_to_free_list:
   assert(recent_bitmap_local_idx >= 0);
-  // push in decreasing order so pop will in increaseing order
+  // push in decreasing order so pop will in increasing order
   pmem::BlockIdx allocated = pmem::BitmapBlock::get_block_idx(
       recent_bitmap_block_id, recent_bitmap_local_idx);
   if (num_blocks < pmem::BITMAP_CAPACITY) {
-    free_list.push_back(
-        {pmem::BITMAP_CAPACITY - num_blocks, allocated + num_blocks});
+    free_list.emplace_back(pmem::BITMAP_CAPACITY - num_blocks,
+                           allocated + num_blocks);
     std::sort(free_list.begin(), free_list.end());
   }
   // this recent is not useful because we have taken all bits; move on
