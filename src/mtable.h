@@ -62,7 +62,7 @@ class MemTable {
  public:
   MemTable() : fd(-1), num_blocks_local_copy(0), table(){};
 
-  pmem::MetaBlock* init(int fd, size_t file_size) {
+  pmem::MetaBlock* init(int fd, off_t file_size) {
     this->fd = fd;
     // file size should be block-aligned
     if (!is_block_aligned(file_size))
@@ -125,10 +125,11 @@ class MemTable {
     // validate if this idx has real blocks allocated; do allocation if not
     validate(idx);
 
+    off_t hugepage_size = static_cast<off_t>(hugepage_idx) << pmem::BLOCK_SHIFT;
     // TODO: add the MAP_HUGETLB | MAP_HUGE_2MB flags back
-    void* addr = posix::mmap(nullptr, LayoutOptions::prealloc_size,
-                             PROT_READ | PROT_WRITE, MAP_SHARED, fd,
-                             hugepage_idx << pmem::BLOCK_SHIFT);
+    void* addr =
+        posix::mmap(nullptr, LayoutOptions::prealloc_size,
+                    PROT_READ | PROT_WRITE, MAP_SHARED, fd, hugepage_size);
     if (addr == (void*)-1) throw std::runtime_error("Fail to mmap!");
     auto hugepage_blocks = static_cast<pmem::Block*>(addr);
     table.emplace(hugepage_idx, hugepage_blocks);
