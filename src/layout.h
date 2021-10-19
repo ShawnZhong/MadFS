@@ -143,9 +143,6 @@ class MetaBlock {
       // total number of blocks actually in this file (including unused ones)
       uint32_t num_blocks;
 
-      // if inline_bitmaps is used up, this points to the next bitmap block
-      LogicalBlockIdx bitmap_head;
-
       // if inline_tx_entries is used up, this points to the next log block
       LogicalBlockIdx log_head;
 
