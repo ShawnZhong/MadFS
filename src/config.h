@@ -1,37 +1,34 @@
 #pragma once
 
 #include <cstdint>
-#ifdef MEM_PROTECT
-#define MEM_PROTECT true
-#else
-#define MEM_PROTECT false
-#endif
-
-#ifdef RELAXED
-#define RELAXED true
-#else
-#define RELAXED false
-#endif
-
-#ifdef NDEBUG
-#define DEBUG false
-#else
-#define DEBUG true
-#endif
-
-#ifdef USE_HUGEPAGE
-#define USE_HUGEPAGE true
-#else
-#define USE_HUGEPAGE false
-#endif
 
 namespace ulayfs {
 
 namespace BuildOptions {
-constexpr static bool mem_protect = MEM_PROTECT;
-constexpr static bool relaxed = RELAXED;
-constexpr static bool debug = DEBUG;
-constexpr static bool use_hugepage = USE_HUGEPAGE;
+#ifdef MEM_PROTECT
+constexpr static bool mem_protect = true;
+#else
+constexpr static bool mem_protect = false;
+#endif
+
+#ifdef RELAXED
+constexpr static bool relaxed = true;
+#else
+constexpr static bool relaxed = false;
+#endif
+
+#ifdef NDEBUG
+constexpr static bool debug = false;
+#else
+constexpr static bool debug = true;
+#endif
+
+#ifdef USE_HUGEPAGE
+constexpr static bool use_hugepage = true;
+#else
+constexpr static bool use_hugepage = false;
+#endif
+
 };  // namespace BuildOptions
 
 namespace LayoutOptions {
