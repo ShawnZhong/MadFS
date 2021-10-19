@@ -140,8 +140,7 @@ class MemTable {
     out << "\tnum_blocks_local_copy: " << m.num_blocks_local_copy << "\n";
     out << "\ttable: \n";
     for (const auto& [blk_idx, mem_addr] : m.table) {
-      out << "\t\t"
-          << "blk_idx: " << blk_idx << ", mem_addr: " << mem_addr;
+      out << "\t\tblk_idx: " << blk_idx << ", mem_addr: " << mem_addr;
     }
     return out;
   }
