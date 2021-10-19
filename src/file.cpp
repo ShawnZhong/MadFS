@@ -12,21 +12,17 @@ int File::open(const char* pathname, int flags, mode_t mode) {
   ret = posix::fstat(fd, &stat_buf);
   if (ret) throw std::runtime_error("Fail to fstat!");
 
-  bool should_create = stat_buf.st_size == 0;
-  if (should_create) {
-    ret = posix::ftruncate(fd, LayoutOptions::prealloc_size);
-    if (ret) throw std::runtime_error("Fail to ftruncate!");
-
-    // call fstat again to get the latest file size
-    ret = posix::fstat(fd, &stat_buf);
-    if (ret) throw std::runtime_error("Fail to fstat!");
-  }
-
   meta = mtable.init(fd, stat_buf.st_size);
   allocator.init(fd, meta, &mtable);
 
-  if (should_create) meta->init();
+  if (stat_buf.st_size == 0) meta->init();
   return fd;
+}
+
+std::ostream& operator<<(std::ostream& out, const File& f) {
+  out << "fd: " << f.fd << "\n";
+  out << *f.meta;
+  return out;
 }
 
 };  // namespace ulayfs::dram

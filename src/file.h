@@ -1,5 +1,6 @@
 #pragma once
 
+#include <iostream>
 #include <stdexcept>
 
 #include "alloc.h"
@@ -30,6 +31,8 @@ class File {
   int get_fd() const { return fd; }
 
   int open(const char* pathname, int flags, mode_t mode);
+
+  friend std::ostream& operator<<(std::ostream& out, const File& f);
 };
 
 }  // namespace ulayfs::dram

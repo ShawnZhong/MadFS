@@ -16,6 +16,16 @@ constexpr static uint32_t GROW_UNIT_IN_BLOCK_SHIFT =
     LayoutOptions::grow_unit_shift - pmem::BLOCK_SHIFT;
 constexpr static uint32_t GROW_UNIT_IN_BLOCK_MASK =
     (1 << GROW_UNIT_IN_BLOCK_SHIFT) - 1;
+constexpr uint32_t NUM_BLOCKS_PER_GROW =
+    LayoutOptions::grow_unit_size / pmem::BLOCK_SIZE;
+
+static bool is_block_aligned(size_t file_size) {
+  return (file_size & (pmem::BLOCK_SIZE - 1)) == 0;
+}
+
+static bool is_grow_size_aligned(size_t file_size) {
+  return (file_size & (LayoutOptions::grow_unit_size - 1)) == 0;
+}
 
 // map index into address
 // this is a more low-level data structure than Allocator
@@ -54,27 +64,35 @@ class MemTable {
 
   pmem::MetaBlock* init(int fd, size_t file_size) {
     this->fd = fd;
-    if ((file_size & (pmem::BLOCK_SIZE - 1)) != 0)
+    // file size should be block-aligned
+    if (!is_block_aligned(file_size))
       throw std::runtime_error("Invalid layout: non-block-aligned file size!");
-    if ((file_size & (LayoutOptions::grow_unit_size - 1)) != 0) {
-      file_size = ((file_size >> LayoutOptions::grow_unit_shift) + 1)
-                  << LayoutOptions::grow_unit_shift;
+
+    // grow to multiple of grow_unit
+    if (file_size == 0 || !is_grow_size_aligned(file_size)) {
+      file_size = file_size == 0
+                      ? LayoutOptions::prealloc_size
+                      : ((file_size >> LayoutOptions::grow_unit_shift) + 1)
+                            << LayoutOptions::grow_unit_shift;
       int ret = posix::ftruncate(fd, file_size);
       if (ret) throw std::runtime_error("Fail to ftruncate!");
     }
+
     // TODO: add the MAP_HUGETLB | MAP_HUGE_2MB flags back
     void* addr = posix::mmap(nullptr, file_size, PROT_READ | PROT_WRITE,
                              MAP_SHARED, fd, 0);
     if (addr == (void*)-1) throw std::runtime_error("Fail to mmap!");
     auto blocks = static_cast<pmem::Block*>(addr);
+    this->meta = &blocks->meta_block;
 
-    this->meta = &(blocks->meta_block);
+    // initialize the mapping
     uint32_t num_blocks = file_size >> pmem::BLOCK_SHIFT;
-    constexpr uint32_t num_blocks_per_grow =
-        LayoutOptions::grow_unit_size / pmem::BLOCK_SIZE;
-    for (pmem::BlockIdx idx = 0; idx < num_blocks; idx += num_blocks_per_grow)
+    for (pmem::BlockIdx idx = 0; idx < num_blocks; idx += NUM_BLOCKS_PER_GROW)
       table.emplace(idx, blocks + idx);
-    this->num_blocks_local_copy = meta->num_blocks;
+
+    this->meta->num_blocks = num_blocks;
+    this->num_blocks_local_copy = num_blocks;
+
     return this->meta;
   }
 
