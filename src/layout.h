@@ -11,7 +11,7 @@
 
 namespace ulayfs::pmem {
 
-// block index with in a file; the meta block has a LogicalBlockIdx of 0
+// block index within a file; the meta block has a LogicalBlockIdx of 0
 using LogicalBlockIdx = uint32_t;
 // block index seen by applications
 using VirtualBlockIdx = uint32_t;
