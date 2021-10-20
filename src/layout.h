@@ -24,6 +24,7 @@ using BitmapBlockId = uint32_t;
 
 // All member functions are thread-safe and require no locks
 class Bitmap {
+ private:
   uint64_t bitmap;
 
  public:
@@ -131,7 +132,7 @@ constexpr static uint32_t INLINE_BITMAP_CAPACITY =
  * LogicalBlockIdx 0 -> MetaBlock; other blocks can be any type of blocks
  */
 class MetaBlock {
- public:
+ private:
   // contents in the first cache line
   union {
     struct {
@@ -205,6 +206,14 @@ class MetaBlock {
     persist_cl_fenced(&meta_lock);
   }
 
+  // called by other public functions with lock held
+  void set_num_blocks_no_lock(uint32_t num_blocks) {
+    this->num_blocks = num_blocks;
+    persist_cl_fenced(&num_blocks);
+  }
+
+  [[nodiscard]] uint32_t get_num_blocks() const { return num_blocks; }
+
   // allocate one block; return the index of allocated block
   // accept a hint for which bit to start searching
   // usually hint can just be the last idx return by this function
@@ -225,7 +234,7 @@ class MetaBlock {
  * with LogicalBlockIdx 16384; id=2 is the one with LogicalBlockIdx 32768, etc.
  */
 class BitmapBlock {
- public:
+ private:
   Bitmap bitmaps[NUM_BITMAP];
 
  public:

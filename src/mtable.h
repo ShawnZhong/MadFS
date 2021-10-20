@@ -43,13 +43,13 @@ class MemTable {
   // called by other public functions with lock held
   void grow_no_lock(pmem::LogicalBlockIdx idx) {
     // we need to revalidate under after acquiring lock
-    if (idx < meta->num_blocks) return;
+    if (idx < meta->get_num_blocks()) return;
     uint32_t new_num_blocks = ((idx >> LayoutParams::grow_unit_shift) + 1)
                               << LayoutParams::grow_unit_shift;
     int ret =
         posix::ftruncate(fd, static_cast<long>(new_num_blocks) << BLOCK_SHIFT);
     if (ret) throw std::runtime_error("Fail to ftruncate!");
-    meta->num_blocks = new_num_blocks;
+    meta->set_num_blocks_no_lock(new_num_blocks);
   }
 
  public:
@@ -89,7 +89,7 @@ class MemTable {
          idx += NUM_BLOCKS_PER_GROW)
       table.emplace(idx, blocks + idx);
 
-    this->meta->num_blocks = num_blocks;
+    this->meta->set_num_blocks_no_lock(num_blocks);
     this->num_blocks_local_copy = num_blocks;
 
     return this->meta;
@@ -101,7 +101,7 @@ class MemTable {
     if (idx < num_blocks_local_copy) return;
 
     // medium path: update local copy and retry
-    num_blocks_local_copy = meta->num_blocks;
+    num_blocks_local_copy = meta->get_num_blocks();
     if (idx < num_blocks_local_copy) return;
 
     // slow path: acquire lock to verify and grow if necessary
