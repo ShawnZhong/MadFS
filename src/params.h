@@ -1,5 +1,7 @@
 #pragma once
 
+#include <cstdint>
+
 namespace ulayfs {
 // hardware parameters
 constexpr static uint32_t BLOCK_SHIFT = 12;

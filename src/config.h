@@ -38,7 +38,7 @@ constexpr static bool support_clflushopt = true;
 #else
 constexpr static bool support_clflushopt = false;
 #endif
-};  // namespace BuildOptions
+}  // namespace BuildOptions
 
 struct RuntimeOptions {
   RuntimeOptions(){
