@@ -63,8 +63,9 @@ class MemTable {
 
     // grow to multiple of grow_unit_size if the file is empty or the file size
     // is not grow_unit aligned
-    if (file_size == 0 ||
-        !IS_ALIGNED(file_size, LayoutParams::grow_unit_size)) {
+    bool should_grow =
+        file_size == 0 || !IS_ALIGNED(file_size, LayoutParams::grow_unit_size);
+    if (should_grow) {
       file_size = file_size == 0
                       ? LayoutParams::prealloc_size
                       : ((file_size >> LayoutParams::grow_unit_shift) + 1)
@@ -83,14 +84,14 @@ class MemTable {
     auto blocks = static_cast<pmem::Block*>(addr);
     this->meta = &blocks->meta_block;
 
+    // compute number of blocks and update the mata block if necessary
+    this->num_blocks_local_copy = file_size >> BLOCK_SHIFT;
+    if (should_grow) this->meta->set_num_blocks_no_lock(num_blocks_local_copy);
+
     // initialize the mapping
-    uint32_t num_blocks = file_size >> BLOCK_SHIFT;
-    for (pmem::LogicalBlockIdx idx = 0; idx < num_blocks;
+    for (pmem::LogicalBlockIdx idx = 0; idx < num_blocks_local_copy;
          idx += NUM_BLOCKS_PER_GROW)
       table.emplace(idx, blocks + idx);
-
-    this->meta->set_num_blocks_no_lock(num_blocks);
-    this->num_blocks_local_copy = num_blocks;
 
     return this->meta;
   }
