@@ -17,7 +17,7 @@ constexpr static uint32_t GROW_UNIT_IN_BLOCK_SHIFT =
     LayoutParams::grow_unit_shift - BLOCK_SHIFT;
 constexpr static uint32_t GROW_UNIT_IN_BLOCK_MASK =
     (1 << GROW_UNIT_IN_BLOCK_SHIFT) - 1;
-constexpr uint32_t NUM_BLOCKS_PER_GROW =
+constexpr static uint32_t NUM_BLOCKS_PER_GROW =
     LayoutParams::grow_unit_size / BLOCK_SIZE;
 
 // map index into address

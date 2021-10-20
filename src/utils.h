@@ -1,9 +1,6 @@
 #pragma once
 
-#include <cpuid.h>
 #include <immintrin.h>
-
-#include <cstdint>
 
 #include "config.h"
 #include "params.h"

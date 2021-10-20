@@ -14,9 +14,10 @@ add_library(ulayfs SHARED
     src/layout.h src/layout.cpp
     src/lib.h src/lib.cpp
     src/mtable.h
+    src/params.h
     src/posix.h
     src/utils.h
-    src/params.h)
+    )
 target_link_libraries(ulayfs dl)
 
 add_executable(test_basic test/basic.c)
