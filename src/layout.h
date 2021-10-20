@@ -186,9 +186,7 @@ class MetaBlock {
     meta_lock.init();
     memcpy(signature, FILE_SIGNATURE, SIGNATURE_LEN);
 
-    persist_cl_unfenced(&cl1);
-    persist_cl_unfenced(&cl2);
-    _mm_sfence();
+    persist_cl_fenced(&cl1);
   }
 
   // check whether the meta block is valid
@@ -197,14 +195,9 @@ class MetaBlock {
   }
 
   // acquire/release meta lock (usually only during allocation)
-  void lock() {
-    meta_lock.acquire();
-    persist_cl_fenced(&meta_lock);
-  }
-  void unlock() {
-    meta_lock.release();
-    persist_cl_fenced(&meta_lock);
-  }
+  // we don't need to call persistence since futex is robust to crash
+  void lock() { meta_lock.acquire(); }
+  void unlock() { meta_lock.release(); }
 
   // called by other public functions with lock held
   void set_num_blocks_no_lock(uint32_t num_blocks) {
