@@ -9,6 +9,7 @@
 #include "config.h"
 #include "layout.h"
 #include "posix.h"
+#include "util.h"
 
 namespace ulayfs::dram {
 
@@ -57,13 +58,13 @@ class MemTable {
   pmem::MetaBlock* init(int fd, off_t file_size) {
     this->fd = fd;
     // file size should be block-aligned
-    if ((file_size & (pmem::BLOCK_SIZE - 1)) != 0)
+    if (!IS_ALIGNED(file_size, pmem::BLOCK_SIZE))
       throw std::runtime_error("Invalid layout: non-block-aligned file size!");
 
     // grow to multiple of grow_unit_size if the file is empty or the file size
     // is not grow_unit aligned
     if (file_size == 0 ||
-        (file_size & (LayoutOptions::grow_unit_size - 1)) != 0) {
+        !IS_ALIGNED(file_size, LayoutOptions::grow_unit_size)) {
       file_size = file_size == 0
                       ? LayoutOptions::prealloc_size
                       : ((file_size >> LayoutOptions::grow_unit_shift) + 1)
