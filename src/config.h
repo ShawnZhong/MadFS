@@ -42,15 +42,6 @@ constexpr static bool support_clflushopt = false;
 #endif
 };  // namespace BuildOptions
 
-namespace LayoutOptions {
-// grow in the unit of 2 MB
-constexpr static uint32_t grow_unit_shift = 20;
-constexpr static uint32_t grow_unit_size = 2 << grow_unit_shift;
-// preallocate must be multiple of grow_unit
-constexpr static uint32_t prealloc_shift = 1 * grow_unit_shift;
-constexpr static uint32_t prealloc_size = 1 * grow_unit_size;
-};  // namespace LayoutOptions
-
 struct RuntimeOptions {
   RuntimeOptions(){
       // load options from environment variables

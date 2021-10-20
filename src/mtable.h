@@ -9,16 +9,16 @@
 #include "config.h"
 #include "layout.h"
 #include "posix.h"
-#include "util.h"
+#include "utils.h"
 
 namespace ulayfs::dram {
 
 constexpr static uint32_t GROW_UNIT_IN_BLOCK_SHIFT =
-    LayoutOptions::grow_unit_shift - pmem::BLOCK_SHIFT;
+    LayoutParams::grow_unit_shift - BLOCK_SHIFT;
 constexpr static uint32_t GROW_UNIT_IN_BLOCK_MASK =
     (1 << GROW_UNIT_IN_BLOCK_SHIFT) - 1;
 constexpr uint32_t NUM_BLOCKS_PER_GROW =
-    LayoutOptions::grow_unit_size / pmem::BLOCK_SIZE;
+    LayoutParams::grow_unit_size / BLOCK_SIZE;
 
 // map index into address
 // this is a more low-level data structure than Allocator
@@ -44,10 +44,10 @@ class MemTable {
   void grow_no_lock(pmem::LogicalBlockIdx idx) {
     // we need to revalidate under after acquiring lock
     if (idx < meta->num_blocks) return;
-    uint32_t new_num_blocks = ((idx >> LayoutOptions::grow_unit_shift) + 1)
-                              << LayoutOptions::grow_unit_shift;
-    int ret = posix::ftruncate(fd, static_cast<long>(new_num_blocks)
-                                       << pmem::BLOCK_SHIFT);
+    uint32_t new_num_blocks = ((idx >> LayoutParams::grow_unit_shift) + 1)
+                              << LayoutParams::grow_unit_shift;
+    int ret =
+        posix::ftruncate(fd, static_cast<long>(new_num_blocks) << BLOCK_SHIFT);
     if (ret) throw std::runtime_error("Fail to ftruncate!");
     meta->num_blocks = new_num_blocks;
   }
@@ -58,17 +58,17 @@ class MemTable {
   pmem::MetaBlock* init(int fd, off_t file_size) {
     this->fd = fd;
     // file size should be block-aligned
-    if (!IS_ALIGNED(file_size, pmem::BLOCK_SIZE))
+    if (!IS_ALIGNED(file_size, BLOCK_SIZE))
       throw std::runtime_error("Invalid layout: non-block-aligned file size!");
 
     // grow to multiple of grow_unit_size if the file is empty or the file size
     // is not grow_unit aligned
     if (file_size == 0 ||
-        !IS_ALIGNED(file_size, LayoutOptions::grow_unit_size)) {
+        !IS_ALIGNED(file_size, LayoutParams::grow_unit_size)) {
       file_size = file_size == 0
-                      ? LayoutOptions::prealloc_size
-                      : ((file_size >> LayoutOptions::grow_unit_shift) + 1)
-                            << LayoutOptions::grow_unit_shift;
+                      ? LayoutParams::prealloc_size
+                      : ((file_size >> LayoutParams::grow_unit_shift) + 1)
+                            << LayoutParams::grow_unit_shift;
       int ret = posix::ftruncate(fd, file_size);
       if (ret) throw std::runtime_error("Fail to ftruncate!");
     }
@@ -84,7 +84,7 @@ class MemTable {
     this->meta = &blocks->meta_block;
 
     // initialize the mapping
-    uint32_t num_blocks = file_size >> pmem::BLOCK_SHIFT;
+    uint32_t num_blocks = file_size >> BLOCK_SHIFT;
     for (pmem::LogicalBlockIdx idx = 0; idx < num_blocks;
          idx += NUM_BLOCKS_PER_GROW)
       table.emplace(idx, blocks + idx);
@@ -116,20 +116,20 @@ class MemTable {
   // not, it does mapping first
   pmem::Block* get_addr(pmem::LogicalBlockIdx idx) {
     pmem::LogicalBlockIdx hugepage_idx = idx & ~GROW_UNIT_IN_BLOCK_MASK;
-    auto offset = ((idx & GROW_UNIT_IN_BLOCK_MASK) << pmem::BLOCK_SHIFT);
+    auto offset = ((idx & GROW_UNIT_IN_BLOCK_MASK) << BLOCK_SHIFT);
     auto it = table.find(hugepage_idx);
     if (it != table.end()) return it->second + offset;
 
     // validate if this idx has real blocks allocated; do allocation if not
     validate(idx);
 
-    off_t hugepage_size = static_cast<off_t>(hugepage_idx) << pmem::BLOCK_SHIFT;
+    off_t hugepage_size = static_cast<off_t>(hugepage_idx) << BLOCK_SHIFT;
     int mmap_flags = MAP_SHARED;
     if constexpr (BuildOptions::use_hugepage) {
       mmap_flags |= MAP_HUGETLB | MAP_HUGE_2MB;
     }
     void* addr =
-        posix::mmap(nullptr, LayoutOptions::prealloc_size,
+        posix::mmap(nullptr, LayoutParams::prealloc_size,
                     PROT_READ | PROT_WRITE, mmap_flags, fd, hugepage_size);
     if (addr == (void*)-1) throw std::runtime_error("Fail to mmap!");
     auto hugepage_blocks = static_cast<pmem::Block*>(addr);
