@@ -61,7 +61,7 @@ constexpr static struct BuildOptions {
     out << "\tsupport_clflushopt: " << support_clflushopt << "\n";
     return out;
   }
-} build_options;  // namespace BuildOptions
+} build_options;
 
 struct RuntimeOptions {
   RuntimeOptions(){
