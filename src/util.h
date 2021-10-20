@@ -1,20 +1,11 @@
 #include <cpuid.h>
+#include <immintrin.h>
 
 #include <cstdint>
 
 namespace ulayfs::pmem {
 
 #define CACHELINE_SIZE (64)
-#define CACHELINE_MASK (~(CACHELINE_SIZE - 1))
-#define CACHELINE_ALIGN(addr) (((addr) + CACHELINE_SIZE - 1) & CACHELINE_MASK)
-
-#define _mm_clflush(addr) \
-  asm volatile("clflush %0" : "+m"(*(volatile char *)(addr)))
-#define _mm_clflushopt(addr) \
-  asm volatile(".byte 0x66; clflush %0" : "+m"(*(volatile char *)(addr)))
-#define _mm_clwb(addr) \
-  asm volatile(".byte 0x66; xsaveopt %0" : "+m"(*(volatile char *)(addr)))
-#define _mm_sfence() asm volatile("sfence\n" : :)
 
 int support_clflushopt = 0;
 int support_clwb = 0;
@@ -37,7 +28,6 @@ static inline int is_cpu_feature_present(unsigned func, unsigned reg,
 
 static inline int is_cpu_clflushopt_present(void) {
   return is_cpu_feature_present(0x7, 1, bit_CLFLUSHOPT);
-  ;
 }
 
 static inline int is_cpu_clwb_present(void) {
