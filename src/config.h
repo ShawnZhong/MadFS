@@ -29,6 +29,8 @@ constexpr static bool use_hugepage = true;
 constexpr static bool use_hugepage = false;
 #endif
 
+constexpr static bool support_clwb = true;
+constexpr static bool support_clflushopt = true;
 };  // namespace BuildOptions
 
 namespace LayoutOptions {
