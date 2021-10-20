@@ -35,7 +35,8 @@ static inline void persist_cl_fenced(void *p) {
  * persist the range [buf, buf + len) with possibly reordering
  */
 static inline void persist_unfenced(void *buf, uint32_t len) {
-  if (!IS_ALIGNED(buf, CACHELINE_SIZE)) len++;
+  // adjust for cacheline alignment
+  len += (uint64_t)buf & (CACHELINE_SIZE - 1);
   for (uint32_t i = 0; i < len; i += CACHELINE_SIZE)
     persist_cl_unfenced((char *)buf + i);
 }
