@@ -5,6 +5,14 @@
 #include "config.h"
 #include "params.h"
 
+#define ASSERT(expr, msg)                                \
+  do {                                                   \
+    if (!(expr)) {                                       \
+      printf("[%s:%d] %s: %m", __FILE__, __LINE__, msg); \
+      exit(1);                                           \
+    }                                                    \
+  } while (0)
+
 // adopted from `include/linux/align.h`
 #define ALIGN_MASK(x, mask) ((x + mask) & ~mask)
 #define ALIGN_UP(x, a) ALIGN_MASK(x, a - 1)
@@ -12,8 +20,8 @@
 
 namespace ulayfs::pmem {
 /**
- * persist the cache line that contains p from any level of the cache hierarchy
- * using the appropriate instruction
+ * persist the cache line that contains p from any level of the cache
+ * hierarchy using the appropriate instruction
  *
  * Note that the this instruction might be reordered
  */

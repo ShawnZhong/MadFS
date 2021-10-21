@@ -69,7 +69,7 @@ class MemTable {
 
     void* addr =
         posix::mmap(nullptr, length, PROT_READ | PROT_WRITE, flags, fd, offset);
-    if (addr == (void*)-1) throw std::runtime_error("Fail to mmap!");
+    ASSERT(addr != (void*)-1, "mmap failed");
     return static_cast<pmem::Block*>(addr);
   }
 
