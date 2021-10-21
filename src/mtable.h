@@ -13,12 +13,13 @@
 
 namespace ulayfs::dram {
 
+using namespace LayoutParams;
+
 constexpr static uint32_t GROW_UNIT_IN_BLOCK_SHIFT =
-    LayoutParams::grow_unit_shift - BLOCK_SHIFT;
+    GROW_UNIT_SHIFT - BLOCK_SHIFT;
 constexpr static uint32_t GROW_UNIT_IN_BLOCK_MASK =
     (1 << GROW_UNIT_IN_BLOCK_SHIFT) - 1;
-constexpr static uint32_t NUM_BLOCKS_PER_GROW =
-    LayoutParams::grow_unit_size / BLOCK_SIZE;
+constexpr static uint32_t NUM_BLOCKS_PER_GROW = GROW_UNIT_SIZE / BLOCK_SIZE;
 
 // map index into address
 // this is a more low-level data structure than Allocator
@@ -46,8 +47,7 @@ class MemTable {
     if (idx < meta->get_num_blocks()) return;
 
     // the new file size should be a multiple of grow unit
-    uint32_t file_size =
-        ALIGN_UP(idx * BLOCK_SIZE, LayoutParams::grow_unit_size);
+    uint32_t file_size = ALIGN_UP(idx * BLOCK_SIZE, GROW_UNIT_SIZE);
 
     int ret = posix::ftruncate(fd, file_size);
     if (ret) throw std::runtime_error("Fail to ftruncate!");
@@ -80,12 +80,10 @@ class MemTable {
 
     // grow to multiple of grow_unit_size if the file is empty or the file size
     // is not grow_unit aligned
-    bool should_grow =
-        file_size == 0 || !IS_ALIGNED(file_size, LayoutParams::grow_unit_size);
+    bool should_grow = file_size == 0 || !IS_ALIGNED(file_size, GROW_UNIT_SIZE);
     if (should_grow) {
-      file_size = file_size == 0
-                      ? LayoutParams::prealloc_size
-                      : ALIGN_UP(file_size, LayoutParams::grow_unit_size);
+      file_size =
+          file_size == 0 ? PREALLOC_SIZE : ALIGN_UP(file_size, GROW_UNIT_SIZE);
       int ret = posix::ftruncate(fd, file_size);
       if (ret) throw std::runtime_error("Fail to ftruncate!");
     }
@@ -134,8 +132,7 @@ class MemTable {
     validate(idx);
 
     off_t hugepage_size = static_cast<off_t>(hugepage_idx) << BLOCK_SHIFT;
-    pmem::Block* hugepage_blocks =
-        mmap_file(LayoutParams::prealloc_size, hugepage_size);
+    pmem::Block* hugepage_blocks = mmap_file(PREALLOC_SIZE, hugepage_size);
     table.emplace(hugepage_idx, hugepage_blocks);
     return hugepage_blocks + offset;
   }
