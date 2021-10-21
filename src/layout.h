@@ -8,6 +8,8 @@
 
 #include "config.h"
 #include "futex.h"
+#include "params.h"
+#include "utils.h"
 
 namespace ulayfs::pmem {
 
@@ -22,6 +24,7 @@ using BitmapBlockId = uint32_t;
 
 // All member functions are thread-safe and require no locks
 class Bitmap {
+ private:
   uint64_t bitmap;
 
  public:
@@ -37,6 +40,7 @@ class Bitmap {
     if (!__atomic_compare_exchange_n(&bitmap, &b, b & allocated, true,
                                      __ATOMIC_ACQ_REL, __ATOMIC_ACQUIRE))
       goto retry;
+    persist_cl_fenced(&bitmap);
     return std::countr_zero(b);
   }
 
@@ -47,10 +51,14 @@ class Bitmap {
     if (!__atomic_compare_exchange_n(&bitmap, &expected, BITMAP_ALL_USED, false,
                                      __ATOMIC_ACQ_REL, __ATOMIC_ACQUIRE))
       return -1;
+    persist_cl_fenced(&bitmap);
     return 0;
   }
 
-  void set_allocated(uint32_t idx) { bitmap |= (1 << idx); }
+  void set_allocated(uint32_t idx) {
+    bitmap |= (1 << idx);
+    persist_cl_fenced(&bitmap);
+  }
 
   // get a read-only snapshot of bitmap
   [[nodiscard]] uint64_t get() const { return bitmap; }
@@ -90,12 +98,6 @@ static_assert(sizeof(LogEntry) == 16, "LogEntry must of size 16 bytes");
 constexpr static int SIGNATURE_LEN = 16;
 constexpr static char FILE_SIGNATURE[SIGNATURE_LEN] = "ULAYFS";
 
-// hardware configuration
-constexpr static uint32_t BLOCK_SHIFT = 12;
-constexpr static uint32_t BLOCK_SIZE = 1 << BLOCK_SHIFT;
-constexpr static uint32_t CACHELINE_SHIFT = 6;
-constexpr static uint32_t CACHELINE_SIZE = 1 << CACHELINE_SHIFT;
-
 // how many blocks a bitmap can manage
 // (that's why call it "capacity" instead of "size")
 constexpr static uint32_t BITMAP_CAPACITY_SHIFT = 6;
@@ -130,7 +132,7 @@ constexpr static uint32_t INLINE_BITMAP_CAPACITY =
  * LogicalBlockIdx 0 -> MetaBlock; other blocks can be any type of blocks
  */
 class MetaBlock {
- public:
+ private:
   // contents in the first cache line
   union {
     struct {
@@ -151,7 +153,7 @@ class MetaBlock {
     };
 
     // padding avoid cache line contention
-    char padding1[CACHELINE_SIZE];
+    char cl1[CACHELINE_SIZE];
   };
 
   union {
@@ -161,7 +163,7 @@ class MetaBlock {
 
     // set futex to another cacheline to avoid futex's contention affect reading
     // the metadata above
-    char padding2[CACHELINE_SIZE];
+    char cl2[CACHELINE_SIZE];
   };
 
   // for the rest of 62 cache lines:
@@ -183,6 +185,8 @@ class MetaBlock {
     // the first block is always used (by MetaBlock itself)
     meta_lock.init();
     memcpy(signature, FILE_SIGNATURE, SIGNATURE_LEN);
+
+    persist_cl_fenced(&cl1);
   }
 
   // check whether the meta block is valid
@@ -191,8 +195,17 @@ class MetaBlock {
   }
 
   // acquire/release meta lock (usually only during allocation)
+  // we don't need to call persistence since futex is robust to crash
   void lock() { meta_lock.acquire(); }
   void unlock() { meta_lock.release(); }
+
+  // called by other public functions with lock held
+  void set_num_blocks_no_lock(uint32_t num_blocks) {
+    this->num_blocks = num_blocks;
+    persist_cl_fenced(&num_blocks);
+  }
+
+  [[nodiscard]] uint32_t get_num_blocks() const { return num_blocks; }
 
   // allocate one block; return the index of allocated block
   // accept a hint for which bit to start searching
@@ -214,7 +227,7 @@ class MetaBlock {
  * with LogicalBlockIdx 16384; id=2 is the one with LogicalBlockIdx 32768, etc.
  */
 class BitmapBlock {
- public:
+ private:
   Bitmap bitmaps[NUM_BITMAP];
 
  public:

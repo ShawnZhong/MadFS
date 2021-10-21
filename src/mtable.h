@@ -9,15 +9,17 @@
 #include "config.h"
 #include "layout.h"
 #include "posix.h"
+#include "utils.h"
 
 namespace ulayfs::dram {
 
+using namespace LayoutParams;
+
 constexpr static uint32_t GROW_UNIT_IN_BLOCK_SHIFT =
-    LayoutOptions::grow_unit_shift - pmem::BLOCK_SHIFT;
+    GROW_UNIT_SHIFT - BLOCK_SHIFT;
 constexpr static uint32_t GROW_UNIT_IN_BLOCK_MASK =
     (1 << GROW_UNIT_IN_BLOCK_SHIFT) - 1;
-constexpr uint32_t NUM_BLOCKS_PER_GROW =
-    LayoutOptions::grow_unit_size / pmem::BLOCK_SIZE;
+constexpr static uint32_t NUM_BLOCKS_PER_GROW = GROW_UNIT_SIZE / BLOCK_SIZE;
 
 // map index into address
 // this is a more low-level data structure than Allocator
@@ -42,13 +44,29 @@ class MemTable {
   // called by other public functions with lock held
   void grow_no_lock(pmem::LogicalBlockIdx idx) {
     // we need to revalidate under after acquiring lock
-    if (idx < meta->num_blocks) return;
-    uint32_t new_num_blocks = ((idx >> LayoutOptions::grow_unit_shift) + 1)
-                              << LayoutOptions::grow_unit_shift;
-    int ret = posix::ftruncate(fd, static_cast<long>(new_num_blocks)
-                                       << pmem::BLOCK_SHIFT);
+    if (idx < meta->get_num_blocks()) return;
+
+    // the new file size should be a multiple of grow unit
+    uint32_t file_size = ALIGN_UP(idx * BLOCK_SIZE, GROW_UNIT_SIZE);
+
+    int ret = posix::ftruncate(fd, file_size);
     if (ret) throw std::runtime_error("Fail to ftruncate!");
-    meta->num_blocks = new_num_blocks;
+    meta->set_num_blocks_no_lock(file_size >> BLOCK_SHIFT);
+  }
+
+  /**
+   * a private helper function that calls mmap internally
+   * @return the pointer to the first block on the persistent memory
+   */
+  pmem::Block* mmap_file(size_t length, off_t offset) const {
+    int mmap_flags = MAP_SHARED;
+    if constexpr (BuildOptions::use_hugepage) {
+      mmap_flags |= MAP_HUGETLB | MAP_HUGE_2MB;
+    }
+    void* addr = posix::mmap(nullptr, length, PROT_READ | PROT_WRITE,
+                             mmap_flags, fd, offset);
+    if (addr == (void*)-1) throw std::runtime_error("Fail to mmap!");
+    return static_cast<pmem::Block*>(addr);
   }
 
  public:
@@ -57,39 +75,30 @@ class MemTable {
   pmem::MetaBlock* init(int fd, off_t file_size) {
     this->fd = fd;
     // file size should be block-aligned
-    if ((file_size & (pmem::BLOCK_SIZE - 1)) != 0)
+    if (!IS_ALIGNED(file_size, BLOCK_SIZE))
       throw std::runtime_error("Invalid layout: non-block-aligned file size!");
 
     // grow to multiple of grow_unit_size if the file is empty or the file size
     // is not grow_unit aligned
-    if (file_size == 0 ||
-        (file_size & (LayoutOptions::grow_unit_size - 1)) != 0) {
-      file_size = file_size == 0
-                      ? LayoutOptions::prealloc_size
-                      : ((file_size >> LayoutOptions::grow_unit_shift) + 1)
-                            << LayoutOptions::grow_unit_shift;
+    bool should_grow = file_size == 0 || !IS_ALIGNED(file_size, GROW_UNIT_SIZE);
+    if (should_grow) {
+      file_size =
+          file_size == 0 ? PREALLOC_SIZE : ALIGN_UP(file_size, GROW_UNIT_SIZE);
       int ret = posix::ftruncate(fd, file_size);
       if (ret) throw std::runtime_error("Fail to ftruncate!");
     }
 
-    int mmap_flags = MAP_SHARED;
-    if constexpr (BuildOptions::use_hugepage) {
-      mmap_flags |= MAP_HUGETLB | MAP_HUGE_2MB;
-    }
-    void* addr = posix::mmap(nullptr, file_size, PROT_READ | PROT_WRITE,
-                             mmap_flags, fd, 0);
-    if (addr == (void*)-1) throw std::runtime_error("Fail to mmap!");
-    auto blocks = static_cast<pmem::Block*>(addr);
+    pmem::Block* blocks = mmap_file(file_size, 0);
     this->meta = &blocks->meta_block;
 
+    // compute number of blocks and update the mata block if necessary
+    this->num_blocks_local_copy = file_size >> BLOCK_SHIFT;
+    if (should_grow) this->meta->set_num_blocks_no_lock(num_blocks_local_copy);
+
     // initialize the mapping
-    uint32_t num_blocks = file_size >> pmem::BLOCK_SHIFT;
-    for (pmem::LogicalBlockIdx idx = 0; idx < num_blocks;
+    for (pmem::LogicalBlockIdx idx = 0; idx < num_blocks_local_copy;
          idx += NUM_BLOCKS_PER_GROW)
       table.emplace(idx, blocks + idx);
-
-    this->meta->num_blocks = num_blocks;
-    this->num_blocks_local_copy = num_blocks;
 
     return this->meta;
   }
@@ -100,7 +109,7 @@ class MemTable {
     if (idx < num_blocks_local_copy) return;
 
     // medium path: update local copy and retry
-    num_blocks_local_copy = meta->num_blocks;
+    num_blocks_local_copy = meta->get_num_blocks();
     if (idx < num_blocks_local_copy) return;
 
     // slow path: acquire lock to verify and grow if necessary
@@ -115,23 +124,15 @@ class MemTable {
   // not, it does mapping first
   pmem::Block* get_addr(pmem::LogicalBlockIdx idx) {
     pmem::LogicalBlockIdx hugepage_idx = idx & ~GROW_UNIT_IN_BLOCK_MASK;
-    auto offset = ((idx & GROW_UNIT_IN_BLOCK_MASK) << pmem::BLOCK_SHIFT);
+    auto offset = ((idx & GROW_UNIT_IN_BLOCK_MASK) << BLOCK_SHIFT);
     auto it = table.find(hugepage_idx);
     if (it != table.end()) return it->second + offset;
 
     // validate if this idx has real blocks allocated; do allocation if not
     validate(idx);
 
-    off_t hugepage_size = static_cast<off_t>(hugepage_idx) << pmem::BLOCK_SHIFT;
-    int mmap_flags = MAP_SHARED;
-    if constexpr (BuildOptions::use_hugepage) {
-      mmap_flags |= MAP_HUGETLB | MAP_HUGE_2MB;
-    }
-    void* addr =
-        posix::mmap(nullptr, LayoutOptions::prealloc_size,
-                    PROT_READ | PROT_WRITE, mmap_flags, fd, hugepage_size);
-    if (addr == (void*)-1) throw std::runtime_error("Fail to mmap!");
-    auto hugepage_blocks = static_cast<pmem::Block*>(addr);
+    off_t hugepage_size = static_cast<off_t>(hugepage_idx) << BLOCK_SHIFT;
+    pmem::Block* hugepage_blocks = mmap_file(PREALLOC_SIZE, hugepage_size);
     table.emplace(hugepage_idx, hugepage_blocks);
     return hugepage_blocks + offset;
   }

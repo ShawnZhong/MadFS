@@ -18,6 +18,8 @@ REGISTER_FN(mmap);
 REGISTER_FN(munmap);
 REGISTER_FN(ftruncate);
 
+#undef REGISTER_FN
+
 // [lf]stat are wrappers to internal functions in glibc, so we need to hook the
 // actual functions instead
 static int stat(const char *filename, struct stat *buf) {
@@ -30,5 +32,4 @@ static int fstat(int fd, struct stat *buf) {
   return __fxstat(_STAT_VER, fd, buf);
 }
 
-#undef REGISTER_FN
 }  // namespace ulayfs::posix
