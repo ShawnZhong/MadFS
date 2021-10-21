@@ -1,0 +1,53 @@
+#pragma once
+
+// see https://cmake.org/cmake/help/latest/command/configure_file.html
+#cmakedefine01 MEM_PROTECT
+#cmakedefine01 RELAXED
+#cmakedefine01 USE_HUGE_PAGE
+#cmakedefine01 USE_MAP_SYNC
+#cmakedefine01 USE_MAP_POPULATE
+
+#cmakedefine GIT_BRANCH "@GIT_BRANCH@"
+#cmakedefine GIT_COMMIT_HASH "@GIT_COMMIT_HASH@"
+#cmakedefine CMAKE_BUILD_TYPE "@CMAKE_BUILD_TYPE@"
+
+#include <ostream>
+namespace ulayfs {
+
+constexpr static struct BuildOptions {
+  constexpr static const char* build_type = CMAKE_BUILD_TYPE;
+  constexpr static const char* git_branch = GIT_BRANCH;
+  constexpr static const char* git_commit_hash = GIT_COMMIT_HASH;
+
+  constexpr static bool mem_protect = MEM_PROTECT;
+  constexpr static bool relaxed = RELAXED;
+  constexpr static bool use_huge_page = USE_HUGE_PAGE;
+  constexpr static bool use_map_sync = USE_MAP_SYNC;
+  constexpr static bool use_map_populate = USE_MAP_POPULATE;
+  constexpr static bool support_clwb = __CLWB__;
+  constexpr static bool support_clflushopt = __CLFLUSHOPT__;
+
+  friend std::ostream& operator<<(std::ostream& out, const BuildOptions& _) {
+    out << "BuildOptions: \n";
+    out << "\tbuild_type: " << build_type << "\n";
+    out << "\tgit_branch: " << git_branch << "\n";
+    out << "\tgit_commit_hash: " << git_commit_hash << "\n";
+    out << "\tmem_protect: " << mem_protect << "\n";
+    out << "\trelaxed: " << relaxed << "\n";
+    out << "\tuse_huge_page: " << use_huge_page << "\n";
+    out << "\tuse_map_sync: " << use_map_sync << "\n";
+    out << "\tuse_map_populate: " << use_map_populate << "\n";
+    out << "\tsupport_clwb: " << support_clwb << "\n";
+    out << "\tsupport_clflushopt: " << support_clflushopt << "\n";
+    return out;
+  }
+} build_options;
+
+static struct RuntimeOptions {
+  bool show_config;
+  void init() {
+    show_config = std::getenv("ULAYFS_NO_SHOW_CONFIG") == nullptr;
+  };
+} runtime_options;
+
+}  // namespace ulayfs

@@ -60,9 +60,12 @@ class MemTable {
    */
   pmem::Block* mmap_file(size_t length, off_t offset) const {
     int mmap_flags = MAP_SHARED;
-    if constexpr (BuildOptions::use_hugepage) {
+    if constexpr (BuildOptions::use_map_sync)
+      mmap_flags = MAP_SHARED_VALIDATE | MAP_SYNC;
+    if constexpr (BuildOptions::use_map_populate) mmap_flags |= MAP_POPULATE;
+    if constexpr (BuildOptions::use_huge_page)
       mmap_flags |= MAP_HUGETLB | MAP_HUGE_2MB;
-    }
+
     void* addr = posix::mmap(nullptr, length, PROT_READ | PROT_WRITE,
                              mmap_flags, fd, offset);
     if (addr == (void*)-1) throw std::runtime_error("Fail to mmap!");

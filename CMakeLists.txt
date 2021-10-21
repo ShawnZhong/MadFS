@@ -8,7 +8,6 @@ set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -march=native")
 add_library(ulayfs SHARED
     src/alloc.h src/alloc.cpp
     src/btable.h
-    src/config.h
     src/file.h src/file.cpp
     src/futex.h
     src/layout.h src/layout.cpp
@@ -31,6 +30,12 @@ target_link_libraries(test_alloc ulayfs)
 add_executable(test_utils test/utils.cpp)
 target_link_libraries(test_utils ulayfs)
 
+# build options
+option(MEM_PROTECT "Avoid stray writes" OFF)
+option(RELAXED "Relaxed" OFF)
+option(USE_HUGE_PAGE "Use huge page for mmap" OFF)
+option(USE_MAP_SYNC "Use MAP_SYNC for mmap" ON)
+option(USE_MAP_POPULATE "Use MAP_POPULATE for mmap" ON)
 
 # Get the current working branch
 execute_process(
@@ -46,5 +51,6 @@ execute_process(
     OUTPUT_VARIABLE GIT_COMMIT_HASH
     OUTPUT_STRIP_TRAILING_WHITESPACE)
 
-add_definitions(-DGIT_BRANCH="${GIT_BRANCH}")
-add_definitions(-DGIT_COMMIT_HASH="${GIT_COMMIT_HASH}")
+configure_file("src/config.h.in" "config.h")
+
+include_directories(${CMAKE_CURRENT_BINARY_DIR})
