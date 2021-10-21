@@ -6,8 +6,8 @@
 #include "params.h"
 
 // adopted from `include/linux/align.h`
-#define ALIGN_MASK(x, mask) ((x + mask) & ~mask)
-#define ALIGN_UP(x, a) ALIGN_MASK(x, a - 1)
+#define ALIGN_MASK(x, mask) (((x) + (mask)) & ~(mask))
+#define ALIGN_UP(x, a) ALIGN_MASK((x), (a - 1))
 #define IS_ALIGNED(x, a) (((uint64_t)x & (a - 1)) == 0)
 
 namespace ulayfs::pmem {

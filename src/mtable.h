@@ -47,9 +47,12 @@ class MemTable {
     if (idx < meta->get_num_blocks()) return;
 
     // the new file size should be a multiple of grow unit
-    uint32_t file_size = ALIGN_UP(idx * BLOCK_SIZE, GROW_UNIT_SIZE);
+    // we have `idx + 1` since we want to grow the file when idx is a multiple
+    // of the number of blocks in a grow unit (e.g., 512 for 2 MB grow)
+    size_t file_size =
+        ALIGN_UP(static_cast<size_t>(idx + 1) << BLOCK_SHIFT, GROW_UNIT_SIZE);
 
-    int ret = posix::ftruncate(fd, file_size);
+    int ret = posix::ftruncate(fd, static_cast<off_t>(file_size));
     if (ret) throw std::runtime_error("Fail to ftruncate!");
     meta->set_num_blocks_no_lock(file_size >> BLOCK_SHIFT);
   }

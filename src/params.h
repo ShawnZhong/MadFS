@@ -12,8 +12,8 @@ constexpr static uint32_t CACHELINE_SIZE = 1 << CACHELINE_SHIFT;
 // parameters related to the file layout
 namespace LayoutParams {
 // grow in the unit of 2 MB
-constexpr static uint32_t GROW_UNIT_SHIFT = 20;
-constexpr static uint32_t GROW_UNIT_SIZE = 2 << GROW_UNIT_SHIFT;
+constexpr static uint32_t GROW_UNIT_SHIFT = 21;
+constexpr static uint32_t GROW_UNIT_SIZE = 1 << GROW_UNIT_SHIFT;
 
 // preallocate must be multiple of grow_unit
 constexpr static uint32_t PREALLOC_SHIFT = 1 * GROW_UNIT_SHIFT;
