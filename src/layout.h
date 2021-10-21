@@ -73,23 +73,24 @@ class TxBeginEntry : public TxEntry {};
 
 class TxCommitEntry : public TxEntry {};
 
-enum LogOp : uint8_t {
+enum LogOp {
   LOG_OVERWRITE,
 };
 
 // Since allocator can only guarantee to allocate 64 contiguous blocks (by
-// single CAS), log entry must organize as an linked list in case of a large
-// size transcation.
+// single CAS), log entry must organize as a linked list in case of a large
+// size transaction.
 // next_entry_block_idx and next_entry_offset points to the location of the next
 // entry.
 class LogEntry {
-  enum LogOp op;
+  // bitfield to merge `op` and `last_remaining` into a single uint16_t
+  enum LogOp op : 4;
+  uint16_t last_remaining : 12;
   uint8_t num_blocks;
   uint8_t next_entry_offset;
-  uint8_t padding;
   LogicalBlockIdx next_entry_block_idx;
-  LogicalBlockIdx file_offset;
-  LogicalBlockIdx block_offset;
+  VirtualBlockIdx virtual_idx;
+  LogicalBlockIdx logical_idx;
 };
 
 static_assert(sizeof(LogEntry) == 16, "LogEntry must of size 16 bytes");
@@ -313,5 +314,4 @@ static_assert(sizeof(LogEntryBlock) == BLOCK_SIZE,
 static_assert(sizeof(DataBlock) == BLOCK_SIZE,
               "DataBlock must be of size BLOCK_SIZE");
 static_assert(sizeof(Block) == BLOCK_SIZE, "Block must be of size BLOCK_SIZE");
-
 };  // namespace ulayfs::pmem
