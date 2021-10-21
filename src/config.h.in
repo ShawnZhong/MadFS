@@ -24,14 +24,31 @@ constexpr static struct BuildOptions {
   constexpr static bool use_huge_page = USE_HUGE_PAGE;
   constexpr static bool use_map_sync = USE_MAP_SYNC;
   constexpr static bool force_map_populate = FORCE_MAP_POPULATE;
-  constexpr static bool support_clwb = __CLWB__;
-  constexpr static bool support_clflushopt = __CLFLUSHOPT__;
+
+#ifdef NDEBUG
+  constexpr static bool debug = false;
+#else
+  constexpr static bool debug = true;
+#endif
+
+#ifdef __CLWB__
+  constexpr static bool support_clwb = true;
+#else
+  constexpr static bool support_clwb = false;
+#endif
+
+#ifdef __CLFLUSHOPT__
+  constexpr static bool support_clflushopt = true;
+#else
+  constexpr static bool support_clflushopt = false;
+#endif
 
   friend std::ostream& operator<<(std::ostream& out, const BuildOptions& _) {
     out << "BuildOptions: \n";
     out << "\tbuild_type: " << build_type << "\n";
     out << "\tgit_branch: " << git_branch << "\n";
     out << "\tgit_commit_hash: " << git_commit_hash << "\n";
+    out << "\tdebug: " << debug << "\n";
     out << "\tmem_protect: " << mem_protect << "\n";
     out << "\trelaxed: " << relaxed << "\n";
     out << "\tuse_huge_page: " << use_huge_page << "\n";

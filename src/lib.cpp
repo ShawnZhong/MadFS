@@ -26,10 +26,16 @@ int open(const char* pathname, int flags, ...) {
 }
 
 ssize_t write(int fd, const void* buf, size_t count) {
+  if constexpr (BuildOptions::debug) {
+    printf("write:count:%lu\n", count);
+  }
   return posix::write(fd, buf, count);
 }
 
 ssize_t read(int fd, void* buf, size_t count) {
+  if constexpr (BuildOptions::debug) {
+    printf("read:count:%lu\n", count);
+  }
   return posix::read(fd, buf, count);
 }
 
