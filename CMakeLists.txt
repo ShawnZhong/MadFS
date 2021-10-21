@@ -35,7 +35,7 @@ option(MEM_PROTECT "Avoid stray writes" OFF)
 option(RELAXED "Relaxed" OFF)
 option(USE_HUGE_PAGE "Use huge page for mmap" OFF)
 option(USE_MAP_SYNC "Use MAP_SYNC for mmap" ON)
-option(USE_MAP_POPULATE "Use MAP_POPULATE for mmap" ON)
+option(FORCE_MAP_POPULATE "Always use MAP_POPULATE for mmap" OFF)
 
 # Get the current working branch
 execute_process(

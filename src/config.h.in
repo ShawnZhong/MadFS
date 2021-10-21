@@ -5,7 +5,7 @@
 #cmakedefine01 RELAXED
 #cmakedefine01 USE_HUGE_PAGE
 #cmakedefine01 USE_MAP_SYNC
-#cmakedefine01 USE_MAP_POPULATE
+#cmakedefine01 FORCE_MAP_POPULATE
 
 #cmakedefine GIT_BRANCH "@GIT_BRANCH@"
 #cmakedefine GIT_COMMIT_HASH "@GIT_COMMIT_HASH@"
@@ -23,7 +23,7 @@ constexpr static struct BuildOptions {
   constexpr static bool relaxed = RELAXED;
   constexpr static bool use_huge_page = USE_HUGE_PAGE;
   constexpr static bool use_map_sync = USE_MAP_SYNC;
-  constexpr static bool use_map_populate = USE_MAP_POPULATE;
+  constexpr static bool force_map_populate = FORCE_MAP_POPULATE;
   constexpr static bool support_clwb = __CLWB__;
   constexpr static bool support_clflushopt = __CLFLUSHOPT__;
 
@@ -36,7 +36,7 @@ constexpr static struct BuildOptions {
     out << "\trelaxed: " << relaxed << "\n";
     out << "\tuse_huge_page: " << use_huge_page << "\n";
     out << "\tuse_map_sync: " << use_map_sync << "\n";
-    out << "\tuse_map_populate: " << use_map_populate << "\n";
+    out << "\tforce_map_populate: " << force_map_populate << "\n";
     out << "\tsupport_clwb: " << support_clwb << "\n";
     out << "\tsupport_clflushopt: " << support_clflushopt << "\n";
     return out;

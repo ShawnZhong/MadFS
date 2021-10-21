@@ -58,16 +58,17 @@ class MemTable {
    * a private helper function that calls mmap internally
    * @return the pointer to the first block on the persistent memory
    */
-  pmem::Block* mmap_file(size_t length, off_t offset) const {
-    int mmap_flags = MAP_SHARED;
+  pmem::Block* mmap_file(size_t length, off_t offset, int flags = 0) const {
     if constexpr (BuildOptions::use_map_sync)
-      mmap_flags = MAP_SHARED_VALIDATE | MAP_SYNC;
-    if constexpr (BuildOptions::use_map_populate) mmap_flags |= MAP_POPULATE;
+      flags |= MAP_SHARED_VALIDATE | MAP_SYNC;
+    else
+      flags |= MAP_SHARED;
+    if constexpr (BuildOptions::force_map_populate) flags |= MAP_POPULATE;
     if constexpr (BuildOptions::use_huge_page)
-      mmap_flags |= MAP_HUGETLB | MAP_HUGE_2MB;
+      flags |= MAP_HUGETLB | MAP_HUGE_2MB;
 
-    void* addr = posix::mmap(nullptr, length, PROT_READ | PROT_WRITE,
-                             mmap_flags, fd, offset);
+    void* addr =
+        posix::mmap(nullptr, length, PROT_READ | PROT_WRITE, flags, fd, offset);
     if (addr == (void*)-1) throw std::runtime_error("Fail to mmap!");
     return static_cast<pmem::Block*>(addr);
   }
@@ -135,7 +136,8 @@ class MemTable {
     validate(idx);
 
     off_t hugepage_size = static_cast<off_t>(hugepage_idx) << BLOCK_SHIFT;
-    pmem::Block* hugepage_blocks = mmap_file(PREALLOC_SIZE, hugepage_size);
+    pmem::Block* hugepage_blocks =
+        mmap_file(PREALLOC_SIZE, hugepage_size, MAP_POPULATE);
     table.emplace(hugepage_idx, hugepage_blocks);
     return hugepage_blocks + offset;
   }
