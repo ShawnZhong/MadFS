@@ -44,15 +44,17 @@ class MemTable {
   void grow_no_lock(pmem::LogicalBlockIdx idx) {
     // we need to revalidate under after acquiring lock
     if (idx < meta->get_num_blocks()) return;
-    uint32_t new_num_blocks = ((idx >> LayoutParams::grow_unit_shift) + 1)
-                              << LayoutParams::grow_unit_shift;
-    int ret =
-        posix::ftruncate(fd, static_cast<long>(new_num_blocks) << BLOCK_SHIFT);
+
+    // the new file size should be a multiple of grow unit
+    uint32_t file_size =
+        ALIGN_UP(idx * BLOCK_SIZE, LayoutParams::grow_unit_size);
+
+    int ret = posix::ftruncate(fd, file_size);
     if (ret) throw std::runtime_error("Fail to ftruncate!");
-    meta->set_num_blocks_no_lock(new_num_blocks);
+    meta->set_num_blocks_no_lock(file_size >> BLOCK_SHIFT);
   }
 
-  pmem::Block* mmap_file(size_t length, off_t offset) {
+  pmem::Block* mmap_file(size_t length, off_t offset) const {
     int mmap_flags = MAP_SHARED;
     if constexpr (BuildOptions::use_hugepage) {
       mmap_flags |= MAP_HUGETLB | MAP_HUGE_2MB;
@@ -79,8 +81,7 @@ class MemTable {
     if (should_grow) {
       file_size = file_size == 0
                       ? LayoutParams::prealloc_size
-                      : ((file_size >> LayoutParams::grow_unit_shift) + 1)
-                            << LayoutParams::grow_unit_shift;
+                      : ALIGN_UP(file_size, LayoutParams::grow_unit_size);
       int ret = posix::ftruncate(fd, file_size);
       if (ret) throw std::runtime_error("Fail to ftruncate!");
     }
