@@ -43,7 +43,8 @@ ssize_t read(int fd, void* buf, size_t count) {
  * Called when the shared library is loaded
  */
 void __attribute__((constructor)) ulayfs_ctor() {
-  if constexpr (BuildOptions::show_config) {
+  runtime_options.init();
+  if (runtime_options.show_config) {
     std::cout << build_options << std::endl;
   }
 }

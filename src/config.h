@@ -25,12 +25,6 @@ constexpr static struct BuildOptions {
   constexpr static bool debug = true;
 #endif
 
-#ifdef NO_SHOW_CONFIG
-  constexpr static bool show_config = false;
-#else
-  constexpr static bool show_config = true;
-#endif
-
 #ifdef USE_HUGEPAGE
   constexpr static bool use_hugepage = true;
 #else
@@ -63,10 +57,11 @@ constexpr static struct BuildOptions {
   }
 } build_options;
 
-struct RuntimeOptions {
-  RuntimeOptions(){
-      // load options from environment variables
+static struct RuntimeOptions {
+  bool show_config;
+  void init() {
+    show_config = std::getenv("ULAYFS_NO_SHOW_CONFIG") == nullptr;
   };
-};
+} runtime_options;
 
 }  // namespace ulayfs
