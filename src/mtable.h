@@ -47,7 +47,8 @@ class MemTable {
     if (idx < meta->get_num_blocks()) return;
 
     // the new file size should be a multiple of grow unit
-    // we translate the 0-based index into 1-based file size
+    // we have `idx + 1` since we want to grow the file when idx is a multiple
+    // of the number of blocks in a grow unit (e.g., 512 for 2 MB grow)
     size_t file_size =
         ALIGN_UP(static_cast<size_t>(idx + 1) << BLOCK_SHIFT, GROW_UNIT_SIZE);
 
