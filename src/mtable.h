@@ -54,6 +54,10 @@ class MemTable {
     meta->set_num_blocks_no_lock(file_size >> BLOCK_SHIFT);
   }
 
+  /**
+   * a private helper function that calls mmap internally
+   * @return the pointer to the first block on the persistent memory
+   */
   pmem::Block* mmap_file(size_t length, off_t offset) const {
     int mmap_flags = MAP_SHARED;
     if constexpr (BuildOptions::use_hugepage) {

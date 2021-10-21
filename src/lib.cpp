@@ -40,7 +40,10 @@ ssize_t read(int fd, void* buf, size_t count) {
 }
 
 /**
- * Called when the shared library is loaded
+ * Called when the shared library is first loaded
+ *
+ * Note that the global variables may not be initialized at this point
+ * e.g., all the functions in the ulayfs::posix namespace
  */
 void __attribute__((constructor)) ulayfs_ctor() {
   runtime_options.init();
