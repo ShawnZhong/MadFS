@@ -34,7 +34,7 @@ target_link_libraries(test_utils ulayfs)
 option(MEM_PROTECT "Avoid stray writes" OFF)
 option(RELAXED "Relaxed" OFF)
 option(USE_HUGE_PAGE "Use huge page for mmap" OFF)
-option(USE_MAP_SYNC "Use MAP_SYNC for mmap" ON)
+option(USE_MAP_SYNC "Use MAP_SYNC for mmap" OFF)
 option(FORCE_MAP_POPULATE "Always use MAP_POPULATE for mmap" OFF)
 
 # Get the current working branch
