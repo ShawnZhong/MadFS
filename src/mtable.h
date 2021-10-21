@@ -138,9 +138,9 @@ class MemTable {
     // validate if this idx has real blocks allocated; do allocation if not
     validate(idx);
 
-    off_t hugepage_size = static_cast<off_t>(hugepage_idx) << BLOCK_SHIFT;
+    off_t hugepage_size = static_cast<size_t>(hugepage_idx) << BLOCK_SHIFT;
     pmem::Block* hugepage_blocks =
-        mmap_file(PREALLOC_SIZE, hugepage_size, MAP_POPULATE);
+        mmap_file(GROW_UNIT_SIZE, hugepage_size, MAP_POPULATE);
     table.emplace(hugepage_idx, hugepage_blocks);
     return hugepage_blocks + offset;
   }
