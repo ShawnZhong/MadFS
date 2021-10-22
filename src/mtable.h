@@ -54,7 +54,7 @@ class MemTable {
         ALIGN_UP(static_cast<size_t>(idx + 1) << BLOCK_SHIFT, GROW_UNIT_SIZE);
 
     int ret = posix::ftruncate(fd, static_cast<off_t>(file_size));
-    throw_if(ret, "ftruncate failed");
+    panic_if(ret, "ftruncate failed");
     meta->set_num_blocks_no_lock(file_size >> BLOCK_SHIFT);
   }
 
@@ -73,7 +73,7 @@ class MemTable {
 
     void* addr =
         posix::mmap(nullptr, length, PROT_READ | PROT_WRITE, flags, fd, offset);
-    throw_if(addr == (void*)-1, "mmap failed");
+    panic_if(addr == (void*)-1, "mmap failed");
     return static_cast<pmem::Block*>(addr);
   }
 
@@ -83,7 +83,7 @@ class MemTable {
   pmem::MetaBlock* init(int fd, off_t file_size) {
     this->fd = fd;
     // file size should be block-aligned
-    throw_if(!IS_ALIGNED(file_size, BLOCK_SIZE),
+    panic_if(!IS_ALIGNED(file_size, BLOCK_SIZE),
              "Invalid layout: file size not block-aligned");
 
     // grow to multiple of grow_unit_size if the file is empty or the file size
@@ -93,7 +93,7 @@ class MemTable {
       file_size =
           file_size == 0 ? PREALLOC_SIZE : ALIGN_UP(file_size, GROW_UNIT_SIZE);
       int ret = posix::ftruncate(fd, file_size);
-      throw_if(ret, "ftruncate failed");
+      panic_if(ret, "ftruncate failed");
     }
 
     pmem::Block* blocks = mmap_file(file_size, 0);

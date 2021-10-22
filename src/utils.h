@@ -5,7 +5,7 @@
 #include "config.h"
 #include "params.h"
 
-#define throw_if(expr, msg)                              \
+#define panic_if(expr, msg)                              \
   do {                                                   \
     if (expr) {                                          \
       printf("[%s:%d] %s: %m", __FILE__, __LINE__, msg); \
