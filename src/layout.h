@@ -33,7 +33,7 @@ class Bitmap {
   constexpr static uint64_t BITMAP_ALL_USED = 0xffffffffffffffff;
 
   // return the index of the bit (0-63); -1 if fail
-  BitmapLocalIdx alloc_one() {
+  inline BitmapLocalIdx alloc_one() {
   retry:
     uint64_t b = __atomic_load_n(&bitmap, __ATOMIC_ACQUIRE);
     if (b == BITMAP_ALL_USED) return -1;
@@ -47,7 +47,7 @@ class Bitmap {
   }
 
   // allocate all blocks in this bit; return 0 if succeeds, -1 otherwise
-  BitmapLocalIdx alloc_all() {
+  inline BitmapLocalIdx alloc_all() {
     uint64_t expected = 0;
     if (__atomic_load_n(&bitmap, __ATOMIC_ACQUIRE) != 0) return -1;
     if (!__atomic_compare_exchange_n(&bitmap, &expected, BITMAP_ALL_USED, false,
@@ -57,7 +57,7 @@ class Bitmap {
     return 0;
   }
 
-  void set_allocated(uint32_t idx) {
+  inline void set_allocated(uint32_t idx) {
     bitmap |= (1 << idx);
     persist_cl_fenced(&bitmap);
   }
@@ -82,7 +82,7 @@ class TxBeginEntry {
       uint64_t range_end : 31;
     };
 
-    TxEntry entry;
+    TxEntry data;
   };
 };
 
@@ -95,7 +95,7 @@ class TxCommitEntry {
       LogicalBlockIdx log_entry_block_idx;
     };
 
-    TxEntry entry;
+    TxEntry data;
   };
 };
 
@@ -259,10 +259,15 @@ class MetaBlock {
   // allocate one block; return the index of allocated block
   // accept a hint for which bit to start searching
   // usually hint can just be the last idx return by this function
-  BitmapLocalIdx inline_alloc_one(BitmapLocalIdx hint = 0);
+  inline BitmapLocalIdx inline_alloc_one(BitmapLocalIdx hint = 0);
 
   // 64 blocks are considered as one batch; return the index of the first block
-  BitmapLocalIdx inline_alloc_batch(BitmapLocalIdx hint = 0);
+  inline BitmapLocalIdx inline_alloc_batch(BitmapLocalIdx hint = 0);
+
+  inline TxLocalIdx inline_try_begin(TxBeginEntry begin_entry,
+                                     TxLocalIdx hint_tail = 0);
+  inline TxLocalIdx inline_try_commit(TxCommitEntry commit_entry,
+                                      TxLocalIdx hint_tail = 0);
 
   friend std::ostream& operator<<(std::ostream& out, const MetaBlock& block);
 };
@@ -286,10 +291,10 @@ class BitmapBlock {
   // allocate one block; return the index of allocated block
   // accept a hint for which bit to start searching
   // usually hint can just be the last idx return by this function
-  BitmapLocalIdx alloc_one(BitmapLocalIdx hint = 0);
+  inline BitmapLocalIdx alloc_one(BitmapLocalIdx hint = 0);
 
   // 64 blocks are considered as one batch; return the index of the first block
-  BitmapLocalIdx alloc_batch(BitmapLocalIdx hint = 0);
+  inline BitmapLocalIdx alloc_batch(BitmapLocalIdx hint = 0);
 
   // map `bitmap_local_idx` from alloc_one/all to the LogicalBlockIdx
   static LogicalBlockIdx get_block_idx(BitmapBlockId bitmap_block_id,
@@ -329,7 +334,8 @@ class LogEntryBlock {
    * @param hint_tail a hint for which log local idx to start searching
    * @return the log local idx on success or -1 on failure
    */
-  BitmapLocalIdx try_append(LogEntry log_entry, LogLocalIdx hint_tail = 0);
+  inline BitmapLocalIdx try_append(LogEntry log_entry,
+                                   LogLocalIdx hint_tail = 0);
 };
 
 class DataBlock {
