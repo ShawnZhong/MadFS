@@ -74,32 +74,44 @@ class TxBeginEntry : public TxEntry {};
 class TxCommitEntry : public TxEntry {};
 
 enum LogOp {
-  LOG_OVERWRITE,
+  // we start the enum from 1 so that a LogOp with value 0 is invalid
+  LOG_OVERWRITE = 1,
 };
 
 // Since allocator can only guarantee to allocate 64 contiguous blocks (by
 // single CAS), log entry must organize as a linked list in case of a large
 // size transaction.
 class LogEntry {
-  // we use bitfield to pack `op` and `last_remaining` into 16 bits
-  enum LogOp op : 4;
+ public:
+  union {
+    struct {
+      // we use bitfield to pack `op` and `last_remaining` into 16 bits
+      enum LogOp op : 4;
 
-  // the remaining number of bytes that are not used in this log entry
-  // only the last log entry for a tx can have non-zero value for this field
-  // the maximum number of remaining bytes is BLOCK_SIZE - 1
-  uint16_t last_remaining : 12;
+      // the remaining number of bytes that are not used in this log entry
+      // only the last log entry for a tx can have non-zero value for this field
+      // the maximum number of remaining bytes is BLOCK_SIZE - 1
+      uint16_t last_remaining : 12;
 
-  // the number of blocks within a log entry is at most 64
-  uint8_t num_blocks;
+      // the number of blocks within a log entry is at most 64
+      uint8_t num_blocks;
 
-  // the following two fields determine the location of the next log entry
-  uint8_t next_entry_offset;
-  LogicalBlockIdx next_entry_block_idx;
+      // the following two fields determine the location of the next log entry
+      uint8_t next_entry_offset;
+      LogicalBlockIdx next_entry_block_idx;
+    };
+    uint64_t word1;
+  };
 
-  // we map the range of logical blocks [logical_idx, logical_idx + num_blocks)
-  // to the virtual blocks [virtual_idx, virtual_idx + num_blocks)
-  VirtualBlockIdx virtual_idx;
-  LogicalBlockIdx logical_idx;
+  union {
+    struct {
+      // we map the logical blocks [logical_idx, logical_idx + num_blocks)
+      // to the virtual blocks [virtual_idx, virtual_idx + num_blocks)
+      VirtualBlockIdx virtual_idx;
+      LogicalBlockIdx logical_idx;
+    };
+    uint64_t word2;
+  };
 };
 
 static_assert(sizeof(LogEntry) == 16, "LogEntry must of size 16 bytes");
@@ -280,7 +292,7 @@ class TxLogBlock {
   // new transcation overlap with our range
   BlockLocalIdx try_commit(TxCommitEntry commit_entry,
                            BlockLocalIdx hint_tail = 0) {
-    for (BlockLocalIdx idx = hint_tail; idx < NUM_LOG_ENTRY; ++idx) {
+    for (BlockLocalIdx idx = hint_tail; idx < NUM_TX_ENTRY; ++idx) {
       uint64_t expected = 0;
       if (__atomic_load_n(&tx_entries[idx].entry, __ATOMIC_ACQUIRE)) continue;
       if (__atomic_compare_exchange_n(&tx_entries[idx].entry, &expected,
@@ -294,6 +306,24 @@ class TxLogBlock {
 
 class LogEntryBlock {
   LogEntry log_entries[NUM_LOG_ENTRY];
+
+  BlockLocalIdx try_append(LogEntry log_entry, BlockLocalIdx hint_tail = 0) {
+    for (BlockLocalIdx idx = hint_tail; idx < NUM_LOG_ENTRY; ++idx) {
+      // we use the first word if a log entry is valid or not
+      if (__atomic_load_n(&log_entries[idx].word1, __ATOMIC_ACQUIRE)) continue;
+
+      // try to write the 1st word using CAS and write the 2nd word normally
+      uint64_t expected = 0;
+      if (__atomic_compare_exchange_n(&log_entries[idx].word1, &expected,
+                                      log_entry.word1, false, __ATOMIC_RELEASE,
+                                      __ATOMIC_ACQUIRE)) {
+        log_entries[idx].word2 = log_entry.word2;
+        persist_cl_fenced(&log_entries[idx]);
+        return idx;
+      }
+    }
+    return -1;
+  }
 };
 
 class DataBlock {
