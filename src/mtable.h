@@ -22,7 +22,7 @@ constexpr static uint32_t GROW_UNIT_IN_BLOCK_MASK =
     (1 << GROW_UNIT_IN_BLOCK_SHIFT) - 1;
 constexpr static uint32_t NUM_BLOCKS_PER_GROW = GROW_UNIT_SIZE / BLOCK_SIZE;
 
-// map index into address
+// map LogicalBlockIdx into memory address
 // this is a more low-level data structure than Allocator
 // it should maintain the virtualization of infinite large of file
 // everytime it gets a LogicalBlockIdx:
