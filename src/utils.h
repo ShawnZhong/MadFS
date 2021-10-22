@@ -5,12 +5,12 @@
 #include "config.h"
 #include "params.h"
 
-#define panic_if(expr, msg)                              \
-  do {                                                   \
-    if (expr) {                                          \
-      printf("[%s:%d] %s: %m", __FILE__, __LINE__, msg); \
-      exit(1);                                           \
-    }                                                    \
+#define panic_if(expr, msg)                                       \
+  do {                                                            \
+    if (expr) {                                                   \
+      fprintf(stderr, "[%s:%d] %s: %m", __FILE__, __LINE__, msg); \
+      exit(1);                                                    \
+    }                                                             \
   } while (0)
 
 // adopted from `include/linux/align.h`
