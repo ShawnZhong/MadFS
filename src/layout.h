@@ -80,15 +80,24 @@ enum LogOp {
 // Since allocator can only guarantee to allocate 64 contiguous blocks (by
 // single CAS), log entry must organize as a linked list in case of a large
 // size transaction.
-// next_entry_block_idx and next_entry_offset points to the location of the next
-// entry.
 class LogEntry {
-  // bitfield to merge `op` and `last_remaining` into a single uint16_t
+  // we use bitfield to pack `op` and `last_remaining` into 16 bits
   enum LogOp op : 4;
+
+  // the remaining number of bytes that are not used in this log entry
+  // only the last log entry for a tx can have non-zero value for this field
+  // the maximum number of remaining bytes is BLOCK_SIZE - 1
   uint16_t last_remaining : 12;
+
+  // the number of blocks within a log entry is at most 64
   uint8_t num_blocks;
+
+  // the following two fields determine the location of the next log entry
   uint8_t next_entry_offset;
   LogicalBlockIdx next_entry_block_idx;
+
+  // we map the range of logical blocks [logical_idx, logical_idx + num_blocks)
+  // to the virtual blocks [virtual_idx, virtual_idx + num_blocks)
   VirtualBlockIdx virtual_idx;
   LogicalBlockIdx logical_idx;
 };
