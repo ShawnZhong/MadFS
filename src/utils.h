@@ -5,9 +5,9 @@
 #include "config.h"
 #include "params.h"
 
-#define ASSERT(expr, msg)                                \
+#define throw_if(expr, msg)                              \
   do {                                                   \
-    if (!(expr)) {                                       \
+    if (expr) {                                          \
       printf("[%s:%d] %s: %m", __FILE__, __LINE__, msg); \
       exit(1);                                           \
     }                                                    \

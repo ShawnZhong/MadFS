@@ -10,7 +10,7 @@ int File::open(const char* pathname, int flags, mode_t mode) {
 
   struct stat stat_buf;
   ret = posix::fstat(fd, &stat_buf);
-  if (ret) throw std::runtime_error("Fail to fstat!");
+  throw_if(ret, "fstat failed");
 
   meta = mtable.init(fd, stat_buf.st_size);
   allocator.init(fd, meta, &mtable);
