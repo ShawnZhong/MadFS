@@ -2,9 +2,16 @@
 
 namespace ulayfs::pmem {
 
-template <uint32_t NUM_ENTRY, typename Entry, typename LocalIdx>
-inline LocalIdx try_append(Entry entries[], Entry entry, LocalIdx hint_tail) {
-  for (LocalIdx idx = hint_tail; idx < NUM_ENTRY; ++idx) {
+/**
+ * @param entries a pointer to an array of tx entries
+ * @param num_entries the total number of entries in the array
+ * @param entry the target entry to be appended
+ * @param hint hint to the tail of the log
+ * @return
+ */
+inline TxLocalIdx try_append(TxEntry entries[], uint32_t num_entries,
+                             TxEntry entry, TxLocalIdx hint) {
+  for (TxLocalIdx idx = hint; idx < num_entries; ++idx) {
     uint64_t expected = 0;
     if (__atomic_load_n(&entry, __ATOMIC_ACQUIRE)) continue;
     if (__atomic_compare_exchange_n(&entries[idx], &expected, entry, false,
@@ -20,17 +27,13 @@ inline LocalIdx try_append(Entry entries[], Entry entry, LocalIdx hint_tail) {
  *  MetaBlock
  */
 
-TxLocalIdx MetaBlock::inline_try_begin(TxBeginEntry entry,
-                                       TxLocalIdx hint_tail) {
-  return try_append<NUM_INLINE_TX_ENTRY>(inline_tx_entries, entry.data,
-                                         hint_tail);
+TxLocalIdx MetaBlock::inline_try_begin(TxBeginEntry entry, TxLocalIdx hint) {
+  return try_append(inline_tx_entries, NUM_INLINE_TX_ENTRY, entry.data, hint);
 }
 
-TxLocalIdx MetaBlock::inline_try_commit(TxCommitEntry entry,
-                                        TxLocalIdx hint_tail) {
+TxLocalIdx MetaBlock::inline_try_commit(TxCommitEntry entry, TxLocalIdx hint) {
   // TODO: OCC
-  return try_append<NUM_INLINE_TX_ENTRY>(inline_tx_entries, entry.data,
-                                         hint_tail);
+  return try_append(inline_tx_entries, NUM_INLINE_TX_ENTRY, entry.data, hint);
 }
 
 BitmapLocalIdx MetaBlock::inline_alloc_one(BitmapLocalIdx hint) {
@@ -77,16 +80,14 @@ std::ostream& operator<<(std::ostream& out, const MetaBlock& b) {
  *  TxLogBlock
  */
 
-TxLocalIdx TxLogBlock::try_begin(TxBeginEntry begin_entry,
-                                 TxLocalIdx hint_tail) {
-  return try_append<NUM_TX_ENTRY>(tx_entries, begin_entry.data, hint_tail);
+TxLocalIdx TxLogBlock::try_begin(TxBeginEntry begin_entry, TxLocalIdx hint) {
+  return try_append(tx_entries, NUM_TX_ENTRY, begin_entry.data, hint);
 }
 
-TxLocalIdx TxLogBlock::try_commit(TxCommitEntry commit_entry,
-                                  TxLocalIdx hint_tail) {
+TxLocalIdx TxLogBlock::try_commit(TxCommitEntry commit_entry, TxLocalIdx hint) {
   // FIXME: this one is actually wrong. In OCC, we have to verify there is no
   // new transcation overlap with our range
-  return try_append<NUM_TX_ENTRY>(tx_entries, commit_entry.data, hint_tail);
+  return try_append(tx_entries, NUM_TX_ENTRY, commit_entry.data, hint);
 }
 
 /*
