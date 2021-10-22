@@ -3,6 +3,38 @@
 namespace ulayfs::pmem {
 
 /*
+ *  Bitmap
+ */
+
+BlockLocalIdx Bitmap::alloc_one() {
+retry:
+  uint64_t b = __atomic_load_n(&bitmap, __ATOMIC_ACQUIRE);
+  if (b == BITMAP_ALL_USED) return -1;
+  uint64_t allocated = (~b) & (b + 1);  // which bit is allocated
+  // if bitmap is exactly the same as we saw previously, set it allocated
+  if (!__atomic_compare_exchange_n(&bitmap, &b, b & allocated, true,
+                                   __ATOMIC_ACQ_REL, __ATOMIC_ACQUIRE))
+    goto retry;
+  persist_cl_fenced(&bitmap);
+  return std::countr_zero(b);
+}
+
+BlockLocalIdx Bitmap::alloc_all() {
+  uint64_t expected = 0;
+  if (__atomic_load_n(&bitmap, __ATOMIC_ACQUIRE) != 0) return -1;
+  if (!__atomic_compare_exchange_n(&bitmap, &expected, BITMAP_ALL_USED, false,
+                                   __ATOMIC_ACQ_REL, __ATOMIC_ACQUIRE))
+    return -1;
+  persist_cl_fenced(&bitmap);
+  return 0;
+}
+
+void Bitmap::set_allocated(uint32_t idx) {
+  bitmap |= (1 << idx);
+  persist_cl_fenced(&bitmap);
+}
+
+/*
  *  MetaBlock
  */
 
