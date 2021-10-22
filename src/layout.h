@@ -18,7 +18,9 @@ using LogicalBlockIdx = uint32_t;
 // block index seen by applications
 using VirtualBlockIdx = uint32_t;
 // local index within a block; this can be -1 to indicate an error
-using BlockLocalIdx = int32_t;
+using BitmapLocalIdx = int32_t;
+using TxLocalIdx = int32_t;
+using LogLocalIdx = int32_t;
 // identifier of bitmap blocks; checkout BitmapBlock's doc to see more
 using BitmapBlockId = uint32_t;
 
@@ -31,7 +33,7 @@ class Bitmap {
   constexpr static uint64_t BITMAP_ALL_USED = 0xffffffffffffffff;
 
   // return the index of the bit (0-63); -1 if fail
-  BlockLocalIdx alloc_one() {
+  BitmapLocalIdx alloc_one() {
   retry:
     uint64_t b = __atomic_load_n(&bitmap, __ATOMIC_ACQUIRE);
     if (b == BITMAP_ALL_USED) return -1;
@@ -45,7 +47,7 @@ class Bitmap {
   }
 
   // allocate all blocks in this bit; return 0 if succeeds, -1 otherwise
-  BlockLocalIdx alloc_all() {
+  BitmapLocalIdx alloc_all() {
     uint64_t expected = 0;
     if (__atomic_load_n(&bitmap, __ATOMIC_ACQUIRE) != 0) return -1;
     if (!__atomic_compare_exchange_n(&bitmap, &expected, BITMAP_ALL_USED, false,
@@ -64,14 +66,38 @@ class Bitmap {
   [[nodiscard]] uint64_t get() const { return bitmap; }
 };
 
-class TxEntry {
- public:
-  uint64_t entry;
+enum TxEntryType : bool {
+  TX_BEGIN = false,
+  TX_COMMIT = true,
 };
 
-class TxBeginEntry : public TxEntry {};
+using TxEntry = uint64_t;
 
-class TxCommitEntry : public TxEntry {};
+class TxBeginEntry {
+ public:
+  union {
+    struct {
+      enum TxEntryType type : 1;
+      uint64_t range_start : 31;
+      uint64_t range_end : 31;
+    };
+
+    TxEntry entry;
+  };
+};
+
+class TxCommitEntry {
+ public:
+  union {
+    struct {
+      enum TxEntryType type : 1;
+      uint8_t log_entry_offset;
+      LogicalBlockIdx log_entry_block_idx;
+    };
+
+    TxEntry entry;
+  };
+};
 
 enum LogOp {
   // we start the enum from 1 so that a LogOp with value 0 is invalid
@@ -83,6 +109,7 @@ enum LogOp {
 // size transaction.
 class LogEntry {
  public:
+  // the first word (8 bytes) is used to check if the log entry is valid or not
   union {
     struct {
       // we use bitfield to pack `op` and `last_remaining` into 16 bits
@@ -168,10 +195,10 @@ class MetaBlock {
       uint32_t num_blocks;
 
       // if inline_tx_entries is used up, this points to the next log block
-      LogicalBlockIdx log_head;
+      LogicalBlockIdx tx_log_head;
 
       // hint to find log tail; not necessarily up-to-date
-      LogicalBlockIdx log_tail;
+      LogicalBlockIdx tx_log_tail;
     };
 
     // padding avoid cache line contention
@@ -232,10 +259,10 @@ class MetaBlock {
   // allocate one block; return the index of allocated block
   // accept a hint for which bit to start searching
   // usually hint can just be the last idx return by this function
-  BlockLocalIdx inline_alloc_one(BlockLocalIdx hint = 0);
+  BitmapLocalIdx inline_alloc_one(BitmapLocalIdx hint = 0);
 
   // 64 blocks are considered as one batch; return the index of the first block
-  BlockLocalIdx inline_alloc_batch(BlockLocalIdx hint = 0);
+  BitmapLocalIdx inline_alloc_batch(BitmapLocalIdx hint = 0);
 
   friend std::ostream& operator<<(std::ostream& out, const MetaBlock& block);
 };
@@ -259,14 +286,14 @@ class BitmapBlock {
   // allocate one block; return the index of allocated block
   // accept a hint for which bit to start searching
   // usually hint can just be the last idx return by this function
-  BlockLocalIdx alloc_one(BlockLocalIdx hint = 0);
+  BitmapLocalIdx alloc_one(BitmapLocalIdx hint = 0);
 
   // 64 blocks are considered as one batch; return the index of the first block
-  BlockLocalIdx alloc_batch(BlockLocalIdx hint = 0);
+  BitmapLocalIdx alloc_batch(BitmapLocalIdx hint = 0);
 
   // map `bitmap_local_idx` from alloc_one/all to the LogicalBlockIdx
   static LogicalBlockIdx get_block_idx(BitmapBlockId bitmap_block_id,
-                                       BlockLocalIdx bitmap_local_idx) {
+                                       BitmapLocalIdx bitmap_local_idx) {
     return (bitmap_block_id << BITMAP_BLOCK_CAPACITY_SHIFT) +
            INLINE_BITMAP_CAPACITY + bitmap_local_idx;
   }
@@ -288,42 +315,21 @@ class TxLogBlock {
   TxEntry tx_entries[NUM_TX_ENTRY];
 
  public:
-  // FIXME: this one is actually wrong. In OCC, we have to verify there is no
-  // new transcation overlap with our range
-  BlockLocalIdx try_commit(TxCommitEntry commit_entry,
-                           BlockLocalIdx hint_tail = 0) {
-    for (BlockLocalIdx idx = hint_tail; idx < NUM_TX_ENTRY; ++idx) {
-      uint64_t expected = 0;
-      if (__atomic_load_n(&tx_entries[idx].entry, __ATOMIC_ACQUIRE)) continue;
-      if (__atomic_compare_exchange_n(&tx_entries[idx].entry, &expected,
-                                      commit_entry.entry, false,
-                                      __ATOMIC_RELEASE, __ATOMIC_ACQUIRE))
-        return idx;
-    }
-    return -1;
-  }
+  inline TxLocalIdx try_begin(TxBeginEntry begin_entry,
+                              TxLocalIdx hint_tail = 0);
+  inline TxLocalIdx try_commit(TxCommitEntry commit_entry,
+                               TxLocalIdx hint_tail = 0);
 };
 
 class LogEntryBlock {
   LogEntry log_entries[NUM_LOG_ENTRY];
 
-  BlockLocalIdx try_append(LogEntry log_entry, BlockLocalIdx hint_tail = 0) {
-    for (BlockLocalIdx idx = hint_tail; idx < NUM_LOG_ENTRY; ++idx) {
-      // we use the first word if a log entry is valid or not
-      if (__atomic_load_n(&log_entries[idx].word1, __ATOMIC_ACQUIRE)) continue;
-
-      // try to write the 1st word using CAS and write the 2nd word normally
-      uint64_t expected = 0;
-      if (__atomic_compare_exchange_n(&log_entries[idx].word1, &expected,
-                                      log_entry.word1, false, __ATOMIC_RELEASE,
-                                      __ATOMIC_ACQUIRE)) {
-        log_entries[idx].word2 = log_entry.word2;
-        persist_cl_fenced(&log_entries[idx]);
-        return idx;
-      }
-    }
-    return -1;
-  }
+  /**
+   * @param log_entry the log entry to be appended to the block
+   * @param hint_tail a hint for which log local idx to start searching
+   * @return the log local idx on success or -1 on failure
+   */
+  BitmapLocalIdx try_append(LogEntry log_entry, LogLocalIdx hint_tail = 0);
 };
 
 class DataBlock {
@@ -341,6 +347,8 @@ union Block {
 
 static_assert(sizeof(Bitmap) == 8, "Bitmap must of 64 bits");
 static_assert(sizeof(TxEntry) == 8, "TxEntry must be 64 bits");
+static_assert(sizeof(TxBeginEntry) == 8, "TxEntry must be 64 bits");
+static_assert(sizeof(TxCommitEntry) == 8, "TxEntry must be 64 bits");
 static_assert(sizeof(LogEntry) == 16, "LogEntry must of size 16 bytes");
 static_assert(sizeof(MetaBlock) == BLOCK_SIZE,
               "MetaBlock must be of size BLOCK_SIZE");

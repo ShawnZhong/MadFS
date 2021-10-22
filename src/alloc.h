@@ -29,7 +29,7 @@ class Allocator {
   // keep id for idx translation
   pmem::BitmapBlockId recent_bitmap_block_id;
   // NOTE: this is the index within recent_bitmap_block
-  pmem::BlockLocalIdx recent_bitmap_local_idx;
+  pmem::BitmapLocalIdx recent_bitmap_local_idx;
 
  public:
   Allocator()
