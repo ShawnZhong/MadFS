@@ -8,6 +8,7 @@
 
 #include "config.h"
 #include "layout.h"
+#include "params.h"
 #include "posix.h"
 #include "utils.h"
 
@@ -53,7 +54,7 @@ class MemTable {
         ALIGN_UP(static_cast<size_t>(idx + 1) << BLOCK_SHIFT, GROW_UNIT_SIZE);
 
     int ret = posix::ftruncate(fd, static_cast<off_t>(file_size));
-    if (ret) throw std::runtime_error("Fail to ftruncate!");
+    panic_if(ret, "ftruncate failed");
     meta->set_num_blocks_no_lock(file_size >> BLOCK_SHIFT);
   }
 
@@ -61,14 +62,18 @@ class MemTable {
    * a private helper function that calls mmap internally
    * @return the pointer to the first block on the persistent memory
    */
-  pmem::Block* mmap_file(size_t length, off_t offset) const {
-    int mmap_flags = MAP_SHARED;
-    if constexpr (BuildOptions::use_hugepage) {
-      mmap_flags |= MAP_HUGETLB | MAP_HUGE_2MB;
-    }
-    void* addr = posix::mmap(nullptr, length, PROT_READ | PROT_WRITE,
-                             mmap_flags, fd, offset);
-    if (addr == (void*)-1) throw std::runtime_error("Fail to mmap!");
+  pmem::Block* mmap_file(size_t length, off_t offset, int flags = 0) const {
+    if constexpr (BuildOptions::use_map_sync)
+      flags |= MAP_SHARED_VALIDATE | MAP_SYNC;
+    else
+      flags |= MAP_SHARED;
+    if constexpr (BuildOptions::force_map_populate) flags |= MAP_POPULATE;
+    if constexpr (BuildOptions::use_huge_page)
+      flags |= MAP_HUGETLB | MAP_HUGE_2MB;
+
+    void* addr =
+        posix::mmap(nullptr, length, PROT_READ | PROT_WRITE, flags, fd, offset);
+    panic_if(addr == (void*)-1, "mmap failed");
     return static_cast<pmem::Block*>(addr);
   }
 
@@ -78,8 +83,8 @@ class MemTable {
   pmem::MetaBlock* init(int fd, off_t file_size) {
     this->fd = fd;
     // file size should be block-aligned
-    if (!IS_ALIGNED(file_size, BLOCK_SIZE))
-      throw std::runtime_error("Invalid layout: non-block-aligned file size!");
+    panic_if(!IS_ALIGNED(file_size, BLOCK_SIZE),
+             "Invalid layout: file size not block-aligned");
 
     // grow to multiple of grow_unit_size if the file is empty or the file size
     // is not grow_unit aligned
@@ -88,7 +93,7 @@ class MemTable {
       file_size =
           file_size == 0 ? PREALLOC_SIZE : ALIGN_UP(file_size, GROW_UNIT_SIZE);
       int ret = posix::ftruncate(fd, file_size);
-      if (ret) throw std::runtime_error("Fail to ftruncate!");
+      panic_if(ret, "ftruncate failed");
     }
 
     pmem::Block* blocks = mmap_file(file_size, 0);
@@ -134,8 +139,9 @@ class MemTable {
     // validate if this idx has real blocks allocated; do allocation if not
     validate(idx);
 
-    off_t hugepage_size = static_cast<off_t>(hugepage_idx) << BLOCK_SHIFT;
-    pmem::Block* hugepage_blocks = mmap_file(PREALLOC_SIZE, hugepage_size);
+    size_t hugepage_size = static_cast<size_t>(hugepage_idx) << BLOCK_SHIFT;
+    pmem::Block* hugepage_blocks = mmap_file(
+        GROW_UNIT_SIZE, static_cast<off_t>(hugepage_size), MAP_POPULATE);
     table.emplace(hugepage_idx, hugepage_blocks);
     return hugepage_blocks + offset;
   }
