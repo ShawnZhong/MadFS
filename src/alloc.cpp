@@ -1,10 +1,7 @@
 #include "alloc.h"
 
-#include <algorithm>
 #include <cassert>
-#include <cstdlib>
 
-#include "file.h"
 #include "layout.h"
 
 namespace ulayfs::dram {
@@ -67,4 +64,4 @@ add_to_free_list:
   return allocated;
 }
 
-};  // namespace ulayfs::dram
+}  // namespace ulayfs::dram

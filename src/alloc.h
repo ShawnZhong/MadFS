@@ -51,4 +51,4 @@ class Allocator {
   pmem::LogicalBlockIdx alloc(uint32_t num_blocks);
 };
 
-};  // namespace ulayfs::dram
+}  // namespace ulayfs::dram
