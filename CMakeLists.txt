@@ -10,7 +10,7 @@ add_library(ulayfs SHARED
     src/btable.h
     src/file.h src/file.cpp
     src/futex.h
-    src/layout.h src/layout.cpp
+    src/layout.h
     src/lib.h src/lib.cpp
     src/mtable.h
     src/params.h

@@ -36,20 +36,29 @@ pmem::LogicalBlockIdx Allocator::alloc(uint32_t num_blocks) {
 
   // then we have to allocate from global bitmaps
   if (recent_bitmap_block_id == 0) {
-    recent_bitmap_local_idx = meta->inline_alloc_batch(recent_bitmap_local_idx);
-    if (recent_bitmap_local_idx >= 0) goto add_to_free_list;
-    recent_bitmap_block_id++;
-    recent_bitmap_local_idx = 0;
+    const auto& [idx, success] =
+        meta->inline_alloc_batch(recent_bitmap_local_idx);
+    if (success) {
+      recent_bitmap_local_idx = idx;
+      goto add_to_free_list;
+    } else {
+      recent_bitmap_block_id++;
+      recent_bitmap_local_idx = 0;
+    }
   }
 
   while (true) {
     bitmap_block_idx =
         pmem::BitmapBlock::get_bitmap_block_idx(recent_bitmap_block_id);
     bitmap_block = &(mtable->get_addr(bitmap_block_idx)->bitmap_block);
-    recent_bitmap_local_idx = bitmap_block->alloc_batch();
-    if (recent_bitmap_local_idx >= 0) goto add_to_free_list;
-    recent_bitmap_block_id++;
-    recent_bitmap_local_idx = 0;
+    const auto& [idx, success] = bitmap_block->alloc_batch();
+    if (success) {
+      recent_bitmap_local_idx = idx;
+      goto add_to_free_list;
+    } else {
+      recent_bitmap_block_id++;
+      recent_bitmap_local_idx = 0;
+    }
   }
 
 add_to_free_list:
