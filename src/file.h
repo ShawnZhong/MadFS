@@ -4,10 +4,12 @@
 #include <stdexcept>
 
 #include "alloc.h"
+#include "btable.h"
 #include "config.h"
 #include "layout.h"
 #include "mtable.h"
 #include "posix.h"
+#include "tx.h"
 
 // data structure under this namespace must be in volatile memory (DRAM)
 namespace ulayfs::dram {
@@ -17,7 +19,9 @@ class File {
   int open_flags;
   pmem::MetaBlock* meta;
   MemTable mtable;
+  BlkTable btable;
   Allocator allocator;
+  TxMgr tx_mgr;
 
  public:
   File() : fd(-1), meta(nullptr) {}

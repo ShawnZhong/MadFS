@@ -39,7 +39,9 @@ class MemTable {
   // may be out-of-date; must re-read global one if necessary
   uint32_t num_blocks_local_copy;
 
-  std::unordered_map<pmem::LogicalBlockIdx, pmem::Block*> table;
+  std::unordered_map<pmem::LogicalBlockIdx, pmem::Block*,
+                     pmem::LogicalBlockIdx::Hash>
+      table;
 
  private:
   // called by other public functions with lock held

@@ -15,6 +15,7 @@ add_library(ulayfs SHARED
     src/mtable.h
     src/params.h
     src/posix.h
+    src/tx.h
     src/utils.h
     )
 target_link_libraries(ulayfs dl)

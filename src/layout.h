@@ -13,10 +13,50 @@
 
 namespace ulayfs::pmem {
 
+/**
+ * A wrapper class to avoid accidental implicit conversion between different
+ * index types
+ *
+ * @tparam type_id assign different type_id for different index
+ * @tparam T the storage type for the index
+ */
+template <int type_id, typename T>
+class IdxWrapper {
+ private:
+  // the actual index stored
+  T idx;
+
+ public:
+  // the underlying storage type for the index
+  // this is used when the index is store on the persistent memory
+  using type = T;
+
+  // default constructor
+  IdxWrapper(){};
+
+  // constructor allowing conversion from variables of type T
+  IdxWrapper(T idx) : idx(idx) {}
+
+  // allow implicit conversion to type T
+  operator T() const { return idx; }
+
+  // the hash struct used by std::unordered_map
+  struct Hash {
+    std::size_t operator()(IdxWrapper const& s) const noexcept {
+      return std::hash<T>{}(s.idx);
+    }
+  };
+
+  IdxWrapper& operator+=(const IdxWrapper& v) {
+    idx += v.idx;
+    return *this;
+  }
+};
+
 // block index within a file; the meta block has a LogicalBlockIdx of 0
-using LogicalBlockIdx = uint32_t;
+using LogicalBlockIdx = IdxWrapper<0, uint32_t>;
 // block index seen by applications
-using VirtualBlockIdx = uint32_t;
+using VirtualBlockIdx = IdxWrapper<1, uint32_t>;
 
 // local index within a block; this can be -1 to indicate an error
 using BitmapLocalIdx = int32_t;
@@ -32,9 +72,19 @@ using BitmapBlockId = uint32_t;
  *
  * 5 bytes (40 bits) in size
  */
-class __attribute__((packed)) LogEntryIdx {
-  LogicalBlockIdx block_idx;
+struct __attribute__((packed)) LogEntryIdx {
+  LogicalBlockIdx::type block_idx;
   LogLocalIdx local_idx : 8;
+};
+
+/**
+ * A transaction entry is identified by the block index and the local index
+ */
+struct TxEntryIdx {
+  LogicalBlockIdx::type block_idx;
+  TxLocalIdx local_idx;
+  TxEntryIdx(LogicalBlockIdx block_idx, TxLocalIdx local_idx)
+      : block_idx(block_idx), local_idx(local_idx) {}
 };
 
 // All member functions are thread-safe and require no locks
@@ -79,7 +129,7 @@ class Bitmap {
   [[nodiscard]] uint64_t get() const { return bitmap; }
 };
 
-enum TxEntryType : bool {
+enum class TxEntryType : bool {
   TX_BEGIN = false,
   TX_COMMIT = true,
 };
@@ -89,25 +139,40 @@ using TxEntry = uint64_t;
 struct TxBeginEntry {
   union {
     struct {
-      // should always be TX_BEGIN for TxBeginEntry
-      enum TxEntryType type : 1;
+      enum TxEntryType type : 1 = TxEntryType::TX_BEGIN;
 
       // This transaction affects the blocks [block_idx_start, block_idx_end]
       // We have 32 bits for block_id_end instead of 31 because we want to use
-      // -1 to represent the end of the file
-      VirtualBlockIdx block_idx_start : 31;
-      VirtualBlockIdx block_idx_end;
+      // -1 (i.e., UINT32_MAX) to represent the end of the file
+      VirtualBlockIdx::type block_idx_start : 31;
+      VirtualBlockIdx::type block_idx_end;
     };
 
     TxEntry data;
   };
+
+  /**
+   * Construct a tx begin entry from block_idx_start to the end of the file
+   */
+  explicit TxBeginEntry(VirtualBlockIdx block_idx_start)
+      : block_idx_start(block_idx_start) {
+    block_idx_end = std::numeric_limits<VirtualBlockIdx::type>::max();
+  }
+
+  /**
+   * Construct a tx begin entry for the range
+   * [block_idx_start, block_idx_start + num_blocks]
+   */
+  explicit TxBeginEntry(VirtualBlockIdx block_idx_start, uint32_t num_blocks)
+      : block_idx_start(block_idx_start) {
+    block_idx_end = block_idx_start + num_blocks;
+  }
 };
 
 struct TxCommitEntry {
   union {
     struct {
-      // should always be TX_COMMIT for TxCommitEntry
-      enum TxEntryType type : 1;
+      enum TxEntryType type : 1 = TxEntryType::TX_COMMIT;
 
       // how many entries ahead is the corresponding TxBeginEntry
       // the value stored should always be positive
@@ -156,8 +221,8 @@ class LogEntry {
     struct {
       // we map the logical blocks [logical_idx, logical_idx + num_blocks)
       // to the virtual blocks [virtual_idx, virtual_idx + num_blocks)
-      VirtualBlockIdx virtual_idx;
-      LogicalBlockIdx logical_idx;
+      VirtualBlockIdx::type start_virtual_idx;
+      LogicalBlockIdx::type start_logical_idx;
     };
     uint64_t word2;
   };
@@ -341,6 +406,13 @@ class TxLogBlock {
     // new transaction overlap with our range
     return try_append(tx_entries, NUM_TX_ENTRY, commit_entry.data, hint_tail);
   }
+
+  [[nodiscard]] LogicalBlockIdx get_next_block_idx() const { return next; }
+
+  void set_next_block_idx(LogicalBlockIdx next) {
+    this->next = next;
+    persist_cl_fenced(&this->next);
+  }
 };
 
 class LogEntryBlock {
@@ -392,11 +464,17 @@ class MetaBlock {
       // total number of blocks actually in this file (including unused ones)
       uint32_t num_blocks;
 
-      // if inline_tx_entries is used up, this points to the next log block
-      LogicalBlockIdx tx_log_head;
+      // the first log entry block; not to be confused with tx_log_head
+      LogEntryIdx log_head;
 
-      // hint to find log tail; not necessarily up-to-date
-      LogicalBlockIdx tx_log_tail;
+      // hint for the latest log entry; not to be confused with tx_log_tail
+      LogEntryIdx log_tail;
+
+      // the first tx log index
+      TxEntryIdx tx_log_head;
+
+      // hint to find tx log tail; not necessarily up-to-date
+      TxEntryIdx tx_log_tail;
     };
 
     // padding avoid cache line contention
@@ -427,7 +505,10 @@ class MetaBlock {
                 "inline_tx_entries must be 30 cache lines");
 
  public:
-  // only called if a new file is created
+  /**
+   * only called if a new file is created
+   * We can assume that all other fields are zero-initialized upon ftruncate
+   */
   void init() {
     // the first block is always used (by MetaBlock itself)
     meta_lock.init();
@@ -446,13 +527,45 @@ class MetaBlock {
   void lock() { meta_lock.acquire(); }
   void unlock() { meta_lock.release(); }
 
+  /*
+   * Getters and setters
+   */
+
   // called by other public functions with lock held
   void set_num_blocks_no_lock(uint32_t num_blocks) {
     this->num_blocks = num_blocks;
-    persist_cl_fenced(&num_blocks);
+    persist_cl_fenced(&cl1);
+  }
+
+  void set_log_head(LogEntryIdx log_head) {
+    this->log_head = log_head;
+    persist_cl_fenced(&cl1);
+  }
+
+  void set_log_tail(LogEntryIdx log_tail) {
+    this->log_tail = log_tail;
+    persist_cl_fenced(&cl1);
+  }
+
+  void set_tx_log_head(TxEntryIdx tx_log_head) {
+    this->tx_log_head = tx_log_head;
+    persist_cl_fenced(&cl1);
+  }
+
+  void set_tx_log_tail(TxEntryIdx tx_log_tail) {
+    this->tx_log_tail = tx_log_tail;
+    persist_cl_fenced(&cl1);
   }
 
   [[nodiscard]] uint32_t get_num_blocks() const { return num_blocks; }
+  [[nodiscard]] LogEntryIdx get_log_head() const { return log_head; }
+  [[nodiscard]] LogEntryIdx get_log_tail() const { return log_tail; }
+  [[nodiscard]] TxEntryIdx get_tx_log_head() const { return tx_log_head; }
+  [[nodiscard]] TxEntryIdx get_tx_log_tail() const { return tx_log_tail; }
+
+  /*
+   * Methods for inline metadata
+   */
 
   // allocate one block; return the index of allocated block
   // accept a hint for which bit to start searching
