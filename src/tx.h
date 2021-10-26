@@ -1,12 +1,14 @@
 #pragma once
 
+#include "file.h"
+
 namespace ulayfs::dram {
 
 class TxMgr {
  private:
   pmem::MetaBlock* meta;
+
   Allocator* allocator;
-  BlkTable* blk_table;
   MemTable* mem_table;
 
   // the tail of the local log entry
@@ -92,15 +94,9 @@ class TxMgr {
   };
 
  public:
-  TxMgr() : meta{nullptr}, local_tail{} {}
-  void init(pmem::MetaBlock* meta, Allocator* allocator, MemTable* mem_table,
-            BlkTable* blk_table) {
-    this->meta = meta;
-    this->allocator = allocator;
-    this->blk_table = blk_table;
-    this->mem_table = mem_table;
-
-  }
+  TxMgr() = default;
+  TxMgr(pmem::MetaBlock* meta, Allocator* allocator, MemTable* mem_table)
+      : meta(meta), allocator(allocator), mem_table(mem_table), local_tail() {}
 
   /**
    * Begin a transaction that affects the range of blocks
@@ -111,14 +107,18 @@ class TxMgr {
   pmem::TxEntryIdx begin_tx(pmem::VirtualBlockIdx start_virtual_idx,
                             uint32_t num_blocks) {
     pmem::TxBeginEntry tx_begin_entry{start_virtual_idx, num_blocks};
-    return append_tx_begin_entry(tx_begin_entry);
+    auto tx_log_tail = append_tx_begin_entry(tx_begin_entry);
+    meta->set_tx_log_tail(tx_log_tail);
+    return tx_log_tail;
   }
 
   pmem::TxEntryIdx commit_tx(pmem::TxEntryIdx tx_begin_idx,
                              pmem::LogEntryIdx log_entry_idx) {
     // TODO: compute begin_offset from tx_begin_idx
     pmem::TxCommitEntry tx_commit_entry{0, log_entry_idx};
-    return append_tx_commit_entry(tx_commit_entry);
+    auto tx_log_tail = append_tx_commit_entry(tx_commit_entry);
+    meta->set_tx_log_tail(tx_log_tail);
+    return tx_log_tail;
   }
 
   pmem::LogEntryIdx write_log_entry(pmem::VirtualBlockIdx start_virtual_idx,
@@ -126,7 +126,7 @@ class TxMgr {
                                     uint8_t num_blocks,
                                     uint16_t last_remaining) {
     // prepare the log_entry
-    pmem::LogEntry log_entry;
+    pmem::LogEntry log_entry;  // NOLINT(cppcoreguidelines-pro-type-member-init)
     log_entry.op = pmem::LOG_OVERWRITE;
     log_entry.last_remaining = last_remaining;
     log_entry.num_blocks = num_blocks;

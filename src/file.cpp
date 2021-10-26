@@ -14,7 +14,9 @@ int File::open(const char* pathname, int flags, mode_t mode) {
 
   meta = mtable.init(fd, stat_buf.st_size);
   allocator.init(fd, meta, &mtable);
-  tx_mgr.init(meta, &allocator, &mtable, &btable);
+
+  btable = BlkTable(meta, &mtable);
+  tx_mgr = TxMgr(meta, &allocator, &mtable);
 
   if (stat_buf.st_size == 0) meta->init();
   return fd;

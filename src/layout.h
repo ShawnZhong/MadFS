@@ -5,6 +5,7 @@
 #include <cstdint>
 #include <cstring>
 #include <iostream>
+#include <tuple>
 
 #include "config.h"
 #include "futex.h"
@@ -32,16 +33,17 @@ struct IdxWrapper {
   // default constructor
   IdxWrapper(){};
 
-  // constructor allowing conversion from variables of type T
+  // allow conversion from variables of type T
   IdxWrapper(T idx) : val(val) {}
+  void operator=(const T v) { val = v; }
 
   // allow implicit conversion to type T
   operator T() const { return val; }
 
   // the hash struct used by std::unordered_map
   struct Hash {
-    std::size_t operator()(IdxWrapper const& s) const noexcept {
-      return std::hash<T>{}(s.val);
+    std::size_t operator()(IdxWrapper const& v) const noexcept {
+      return std::hash<T>{}(v.val);
     }
   };
 
@@ -87,6 +89,18 @@ struct __attribute__((packed)) LogEntryIdx {
 struct TxEntryIdx {
   LogicalBlockIdx::type block_idx;
   TxLocalIdx local_idx;
+
+  bool operator==(const TxEntryIdx& rhs) const {
+    return block_idx == rhs.block_idx && local_idx == rhs.local_idx;
+  }
+  bool operator!=(const TxEntryIdx& rhs) const { return !(rhs == *this); }
+  bool operator<(const TxEntryIdx& rhs) const {
+    return std::tie(block_idx, local_idx) <
+           std::tie(rhs.block_idx, rhs.local_idx);
+  }
+  bool operator>(const TxEntryIdx& rhs) const { return rhs < *this; }
+  bool operator<=(const TxEntryIdx& rhs) const { return !(rhs < *this); }
+  bool operator>=(const TxEntryIdx& rhs) const { return !(*this < rhs); }
 };
 
 // All member functions are thread-safe and require no locks
@@ -141,22 +155,14 @@ enum class TxEntryType : bool {
   TX_COMMIT = true,
 };
 
-using TxEntry = uint64_t;
-
 struct TxBeginEntry {
-  union {
-    struct {
-      enum TxEntryType type : 1 = TxEntryType::TX_BEGIN;
+  enum TxEntryType type : 1 = TxEntryType::TX_BEGIN;
 
-      // This transaction affects the blocks [block_idx_start, block_idx_end]
-      // We have 32 bits for block_id_end instead of 31 because we want to use
-      // -1 (i.e., UINT32_MAX) to represent the end of the file
-      VirtualBlockIdx::type block_idx_start : 31;
-      VirtualBlockIdx::type block_idx_end;
-    };
-
-    TxEntry data;
-  };
+  // This transaction affects the blocks [block_idx_start, block_idx_end]
+  // We have 32 bits for block_id_end instead of 31 because we want to use
+  // -1 (i.e., UINT32_MAX) to represent the end of the file
+  VirtualBlockIdx::type block_idx_start : 31;
+  VirtualBlockIdx::type block_idx_end;
 
   /**
    * Construct a tx begin_tx entry from block_idx_start to the end of the file
@@ -177,24 +183,30 @@ struct TxBeginEntry {
 };
 
 struct TxCommitEntry {
-  union {
-    struct {
-      enum TxEntryType type : 1 = TxEntryType::TX_COMMIT;
+  enum TxEntryType type : 1 = TxEntryType::TX_COMMIT;
 
-      // how many entries ahead is the corresponding TxBeginEntry
-      // the value stored should always be positive
-      uint32_t begin_offset : 23;
+  // how many entries ahead is the corresponding TxBeginEntry
+  // the value stored should always be positive
+  uint32_t begin_offset : 23;
 
-      // the first log entry for this transaction, 40 bits in size
-      // The rest of the log entries are organized as a linked list
-      LogEntryIdx log_entry_idx;
-    };
-
-    TxEntry data;
-  };
+  // the first log entry for this transaction, 40 bits in size
+  // The rest of the log entries are organized as a linked list
+  LogEntryIdx log_entry_idx;
 
   TxCommitEntry(uint32_t begin_offset, const LogEntryIdx log_entry_idx)
       : begin_offset(begin_offset), log_entry_idx(log_entry_idx) {}
+};
+
+union TxEntry {
+  TxBeginEntry begin_entry;
+  TxCommitEntry commit_entry;
+  uint64_t data;
+
+  TxEntry(const TxBeginEntry& begin_entry) : begin_entry(begin_entry) {}
+  TxEntry(const TxCommitEntry& commit_entry) : commit_entry(commit_entry) {}
+
+  bool is_begin() { return begin_entry.type == TxEntryType::TX_BEGIN; }
+  bool is_commit() { return commit_entry.type == TxEntryType::TX_COMMIT; }
 };
 
 enum LogOp {
@@ -395,9 +407,10 @@ class TxLogBlock {
                                       TxEntry entry, TxLocalIdx hint) {
     for (TxLocalIdx idx = hint; idx <= num_entries - 1; ++idx) {
       uint64_t expected = 0;
-      if (__atomic_load_n(&entry, __ATOMIC_ACQUIRE)) continue;
-      if (__atomic_compare_exchange_n(&entries[idx], &expected, entry, false,
-                                      __ATOMIC_RELEASE, __ATOMIC_ACQUIRE)) {
+      if (__atomic_load_n(&entry.data, __ATOMIC_ACQUIRE)) continue;
+      if (__atomic_compare_exchange_n(&entries[idx].data, &expected, entry.data,
+                                      false, __ATOMIC_RELEASE,
+                                      __ATOMIC_ACQUIRE)) {
         persist_cl_fenced(&entries[idx]);
         return idx;
       }
@@ -407,15 +420,17 @@ class TxLogBlock {
 
   inline TxLocalIdx try_begin(TxBeginEntry begin_entry,
                               TxLocalIdx hint_tail = 0) {
-    return try_append(tx_entries, NUM_TX_ENTRY, begin_entry.data, hint_tail);
+    return try_append(tx_entries, NUM_TX_ENTRY, begin_entry, hint_tail);
   }
 
   inline TxLocalIdx try_commit(TxCommitEntry commit_entry,
                                TxLocalIdx hint_tail = 0) {
     // FIXME: this one is actually wrong. In OCC, we have to verify there is no
     // new transaction overlap with our range
-    return try_append(tx_entries, NUM_TX_ENTRY, commit_entry.data, hint_tail);
+    return try_append(tx_entries, NUM_TX_ENTRY, commit_entry, hint_tail);
   }
+
+  TxEntry get_entry(TxLocalIdx idx) { return tx_entries[idx]; }
 
   [[nodiscard]] LogicalBlockIdx get_next_block_idx() const {
     return next.load(std::memory_order_acquire);
@@ -472,7 +487,7 @@ class MetaBlock {
       // total number of blocks actually in this file (including unused ones)
       uint32_t num_blocks;
 
-      // the first tx log index
+      // if inline_tx_entries is used up, this points to the next log block
       TxEntryIdx tx_log_head;
 
       // hint to find tx log tail; not necessarily up-to-date
@@ -540,11 +555,13 @@ class MetaBlock {
   }
 
   void set_tx_log_head(TxEntryIdx tx_log_head) {
+    if (tx_log_head <= this->tx_log_head) return;
     this->tx_log_head = tx_log_head;
     persist_cl_fenced(&cl1);
   }
 
   void set_tx_log_tail(TxEntryIdx tx_log_tail) {
+    if (tx_log_tail <= this->tx_log_tail) return;
     this->tx_log_tail = tx_log_tail;
     persist_cl_fenced(&cl1);
   }
@@ -552,6 +569,10 @@ class MetaBlock {
   [[nodiscard]] uint32_t get_num_blocks() const { return num_blocks; }
   [[nodiscard]] TxEntryIdx get_tx_log_head() const { return tx_log_head; }
   [[nodiscard]] TxEntryIdx get_tx_log_tail() const { return tx_log_tail; }
+
+  [[nodiscard]] TxEntry get_inline_tx_entry(TxLocalIdx idx) const {
+    return inline_tx_entries[idx];
+  }
 
   /*
    * Methods for inline metadata
@@ -573,14 +594,14 @@ class MetaBlock {
   inline TxLocalIdx inline_try_begin(TxBeginEntry begin_entry,
                                      TxLocalIdx hint_tail = 0) {
     return TxLogBlock::try_append(inline_tx_entries, NUM_INLINE_TX_ENTRY,
-                                  begin_entry.data, hint_tail);
+                                  begin_entry, hint_tail);
   }
 
   inline TxLocalIdx inline_try_commit(TxCommitEntry commit_entry,
                                       TxLocalIdx hint_tail = 0) {
     // TODO: OCC
     return TxLogBlock::try_append(inline_tx_entries, NUM_INLINE_TX_ENTRY,
-                                  commit_entry.data, hint_tail);
+                                  commit_entry, hint_tail);
   }
 
   friend std::ostream& operator<<(std::ostream& out, const MetaBlock& block) {
