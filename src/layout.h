@@ -21,34 +21,38 @@ namespace ulayfs::pmem {
  * @tparam T the storage type for the index
  */
 template <int type_id, typename T>
-class IdxWrapper {
- private:
-  // the actual index stored
-  T idx;
-
- public:
+struct IdxWrapper {
   // the underlying storage type for the index
   // this is used when the index is store on the persistent memory
   using type = T;
+
+  // the actual index stored
+  T val;
 
   // default constructor
   IdxWrapper(){};
 
   // constructor allowing conversion from variables of type T
-  IdxWrapper(T idx) : idx(idx) {}
+  IdxWrapper(T idx) : val(val) {}
 
   // allow implicit conversion to type T
-  operator T() const { return idx; }
+  operator T() const { return val; }
 
   // the hash struct used by std::unordered_map
   struct Hash {
     std::size_t operator()(IdxWrapper const& s) const noexcept {
-      return std::hash<T>{}(s.idx);
+      return std::hash<T>{}(s.val);
     }
   };
 
   IdxWrapper& operator+=(const IdxWrapper& v) {
-    idx += v.idx;
+    val += v.val;
+    return *this;
+  }
+
+  // Postfix increment operator
+  IdxWrapper operator++(int) {
+    val++;
     return *this;
   }
 };
@@ -83,8 +87,6 @@ struct __attribute__((packed)) LogEntryIdx {
 struct TxEntryIdx {
   LogicalBlockIdx::type block_idx;
   TxLocalIdx local_idx;
-  TxEntryIdx(LogicalBlockIdx block_idx, TxLocalIdx local_idx)
-      : block_idx(block_idx), local_idx(local_idx) {}
 };
 
 // All member functions are thread-safe and require no locks
@@ -125,6 +127,11 @@ class Bitmap {
     persist_cl_fenced(&bitmap);
   }
 
+  inline void set_unallocated(uint32_t idx) {
+    bitmap &= ~(1 << idx);
+    persist_cl_fenced(&bitmap);
+  }
+
   // get a read-only snapshot of bitmap
   [[nodiscard]] uint64_t get() const { return bitmap; }
 };
@@ -152,7 +159,7 @@ struct TxBeginEntry {
   };
 
   /**
-   * Construct a tx begin entry from block_idx_start to the end of the file
+   * Construct a tx begin_tx entry from block_idx_start to the end of the file
    */
   explicit TxBeginEntry(VirtualBlockIdx block_idx_start)
       : block_idx_start(block_idx_start) {
@@ -160,7 +167,7 @@ struct TxBeginEntry {
   }
 
   /**
-   * Construct a tx begin entry for the range
+   * Construct a tx begin_tx entry for the range
    * [block_idx_start, block_idx_start + num_blocks]
    */
   explicit TxBeginEntry(VirtualBlockIdx block_idx_start, uint32_t num_blocks)
@@ -185,6 +192,9 @@ struct TxCommitEntry {
 
     TxEntry data;
   };
+
+  TxCommitEntry(uint32_t begin_offset, const LogEntryIdx log_entry_idx)
+      : begin_offset(begin_offset), log_entry_idx(log_entry_idx) {}
 };
 
 enum LogOp {
@@ -315,7 +325,7 @@ class BitmapBlock {
    * @param bitmaps a pointer to an array of bitmaps
    * @param num_bitmaps the total number of bitmaps in the array
    * @param hint hint to the empty bit
-   * @return the BitmapLocalIdx and whether the operation is successful
+   * @return the BitmapLocalIdx
    */
   inline static BitmapLocalIdx alloc_batch(Bitmap bitmaps[],
                                            uint16_t num_bitmaps,
@@ -366,8 +376,8 @@ class BitmapBlock {
 };
 
 class TxLogBlock {
-  LogicalBlockIdx prev;
-  LogicalBlockIdx next;
+  std::atomic<LogicalBlockIdx::type> prev;
+  std::atomic<LogicalBlockIdx::type> next;
   TxEntry tx_entries[NUM_TX_ENTRY];
 
  public:
@@ -407,43 +417,41 @@ class TxLogBlock {
     return try_append(tx_entries, NUM_TX_ENTRY, commit_entry.data, hint_tail);
   }
 
-  [[nodiscard]] LogicalBlockIdx get_next_block_idx() const { return next; }
+  [[nodiscard]] LogicalBlockIdx get_next_block_idx() const {
+    return next.load(std::memory_order_acquire);
+  }
 
-  void set_next_block_idx(LogicalBlockIdx next) {
-    this->next = next;
+  /**
+   * Set the next block index
+   * @return true on success, false if there is a race condition
+   */
+  bool set_next_block_idx(LogicalBlockIdx next) {
+    LogicalBlockIdx::type expected = 0;
+    bool success = this->next.compare_exchange_strong(
+        expected, next.val, std::memory_order_release,
+        std::memory_order_acquire);
     persist_cl_fenced(&this->next);
+    return success;
   }
 };
 
+// LogEntryBlock is per-thread to avoid contention
 class LogEntryBlock {
   LogEntry log_entries[NUM_LOG_ENTRY];
 
+ public:
   /**
    * @param log_entry the log entry to be appended to the block
-   * @param hint_tail a hint for which log local idx to start searching
-   * @return the log local idx and whether the operation is successful
+   * @param tail_idx the current log tail
    */
-  inline std::pair<LogLocalIdx, bool> try_append(LogEntry log_entry,
-                                                 LogLocalIdx hint_tail = 0) {
-    for (LogLocalIdx idx = hint_tail; idx <= NUM_LOG_ENTRY - 1; ++idx) {
-      // we use the first word if a log entry is valid or not
-      if (__atomic_load_n(&log_entries[idx].word1, __ATOMIC_ACQUIRE)) continue;
-
-      // try to write the 1st word using CAS and write the 2nd word normally
-      uint64_t expected = 0;
-      if (__atomic_compare_exchange_n(&log_entries[idx].word1, &expected,
-                                      log_entry.word1, false, __ATOMIC_RELEASE,
-                                      __ATOMIC_ACQUIRE)) {
-        log_entries[idx].word2 = log_entry.word2;
-        persist_cl_fenced(&log_entries[idx]);
-        return {idx, true};
-      }
-    }
-    return {0, false};
-  }
+  inline void append(LogEntry log_entry, LogLocalIdx tail_idx) {
+    log_entries[tail_idx] = log_entry;
+    persist_cl_fenced(&log_entries[tail_idx]);
+  };
 };
 
 class DataBlock {
+ public:
   char data[BLOCK_SIZE];
 };
 
@@ -464,12 +472,6 @@ class MetaBlock {
       // total number of blocks actually in this file (including unused ones)
       uint32_t num_blocks;
 
-      // the first log entry block; not to be confused with tx_log_head
-      LogEntryIdx log_head;
-
-      // hint for the latest log entry; not to be confused with tx_log_tail
-      LogEntryIdx log_tail;
-
       // the first tx log index
       TxEntryIdx tx_log_head;
 
@@ -486,8 +488,8 @@ class MetaBlock {
     // this lock is ONLY used for ftruncate
     Futex meta_lock;
 
-    // set futex to another cacheline to avoid futex's contention affect reading
-    // the metadata above
+    // set futex to another cacheline to avoid futex's contention affect
+    // reading the metadata above
     char cl2[CACHELINE_SIZE];
   };
 
@@ -537,16 +539,6 @@ class MetaBlock {
     persist_cl_fenced(&cl1);
   }
 
-  void set_log_head(LogEntryIdx log_head) {
-    this->log_head = log_head;
-    persist_cl_fenced(&cl1);
-  }
-
-  void set_log_tail(LogEntryIdx log_tail) {
-    this->log_tail = log_tail;
-    persist_cl_fenced(&cl1);
-  }
-
   void set_tx_log_head(TxEntryIdx tx_log_head) {
     this->tx_log_head = tx_log_head;
     persist_cl_fenced(&cl1);
@@ -558,8 +550,6 @@ class MetaBlock {
   }
 
   [[nodiscard]] uint32_t get_num_blocks() const { return num_blocks; }
-  [[nodiscard]] LogEntryIdx get_log_head() const { return log_head; }
-  [[nodiscard]] LogEntryIdx get_log_tail() const { return log_tail; }
   [[nodiscard]] TxEntryIdx get_tx_log_head() const { return tx_log_head; }
   [[nodiscard]] TxEntryIdx get_tx_log_tail() const { return tx_log_tail; }
 
@@ -574,7 +564,8 @@ class MetaBlock {
     return BitmapBlock::alloc_one(inline_bitmaps, NUM_INLINE_BITMAP, hint);
   }
 
-  // 64 blocks are considered as one batch; return the index of the first block
+  // 64 blocks are considered as one batch; return the index of the first
+  // block
   inline BitmapLocalIdx inline_alloc_batch(BitmapLocalIdx hint = 0) {
     return BitmapBlock::alloc_batch(inline_bitmaps, NUM_INLINE_BITMAP, hint);
   }

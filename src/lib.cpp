@@ -39,6 +39,12 @@ ssize_t read(int fd, void* buf, size_t count) {
   return posix::read(fd, buf, count);
 }
 
+ssize_t pwrite(int fd, const void* buf, size_t count, off_t offset) {
+  auto file = files[fd];
+  file->overwrite(buf, count, offset);
+  return count;
+}
+
 /**
  * Called when the shared library is first loaded
  *

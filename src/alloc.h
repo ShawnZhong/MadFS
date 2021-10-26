@@ -48,7 +48,12 @@ class Allocator {
   // allocate contiguous blocks (num_blocks must <= 64)
   // if large number of blocks required, please break it into multiple alloc
   // and use log entries to chain them together
-  pmem::LogicalBlockIdx alloc(uint32_t num_blocks);
+  [[nodiscard]] pmem::LogicalBlockIdx alloc(uint32_t num_blocks);
+
+  /**
+   * Free the blocks in the range [block_idx, block_idx + num_blocks)
+   */
+  void free(pmem::LogicalBlockIdx block_idx, uint32_t num_blocks);
 };
 
 }  // namespace ulayfs::dram

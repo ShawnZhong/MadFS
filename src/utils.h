@@ -46,17 +46,17 @@ static inline void persist_cl_fenced(void *p) {
 /**
  * persist the range [buf, buf + len) with possibly reordering
  */
-static inline void persist_unfenced(void *buf, uint32_t len) {
+static inline void persist_unfenced(void *buf, uint64_t len) {
   // adjust for cacheline alignment
   len += (uint64_t)buf & (CACHELINE_SIZE - 1);
-  for (uint32_t i = 0; i < len; i += CACHELINE_SIZE)
+  for (uint64_t i = 0; i < len; i += CACHELINE_SIZE)
     persist_cl_unfenced((char *)buf + i);
 }
 
 /**
  * persist the range [buf, buf + len) without reordering
  */
-static inline void persist_fenced(void *buf, uint32_t len) {
+static inline void persist_fenced(void *buf, uint64_t len) {
   persist_unfenced(buf, len);
   _mm_sfence();
 }

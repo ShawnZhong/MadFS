@@ -64,4 +64,8 @@ add_to_free_list:
   return allocated;
 }
 
+void Allocator::free(pmem::LogicalBlockIdx block_idx, uint32_t num_blocks) {
+  // TODO: implement this
+}
+
 }  // namespace ulayfs::dram
