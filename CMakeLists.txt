@@ -28,9 +28,6 @@ add_executable(test_futex test/futex.cpp)
 add_executable(test_alloc test/alloc.cpp)
 target_link_libraries(test_alloc ulayfs)
 
-add_executable(test_utils test/utils.cpp)
-target_link_libraries(test_utils ulayfs)
-
 # build options
 option(MEM_PROTECT "Enable memory protection to avoid stray writes" OFF)
 option(NO_SHARING "Assume that no two processes concurrently operate on the same file" OFF)
