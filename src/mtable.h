@@ -132,9 +132,9 @@ class MemTable {
   // not, it does mapping first
   pmem::Block* get_addr(pmem::LogicalBlockIdx idx) {
     pmem::LogicalBlockIdx hugepage_idx = idx & ~GROW_UNIT_IN_BLOCK_MASK;
-    auto offset = ((idx & GROW_UNIT_IN_BLOCK_MASK) << BLOCK_SHIFT);
-    auto it = table.find(hugepage_idx);
-    if (it != table.end()) return it->second + offset;
+    auto byte_offset = ((idx & GROW_UNIT_IN_BLOCK_MASK) << BLOCK_SHIFT);
+    if (auto it = table.find(hugepage_idx); it != table.end())
+      return reinterpret_cast<pmem::Block*>(it->second->data + byte_offset);
 
     // validate if this idx has real blocks allocated; do allocation if not
     validate(idx);
@@ -143,15 +143,14 @@ class MemTable {
     pmem::Block* hugepage_blocks = mmap_file(
         GROW_UNIT_SIZE, static_cast<off_t>(hugepage_size), MAP_POPULATE);
     table.emplace(hugepage_idx, hugepage_blocks);
-    return hugepage_blocks + offset;
+    return hugepage_blocks + byte_offset;
   }
 
   friend std::ostream& operator<<(std::ostream& out, const MemTable& m) {
     out << "MemTable:\n";
-    out << "\tnum_blocks_local_copy: " << m.num_blocks_local_copy << "\n";
-    out << "\ttable: \n";
     for (const auto& [blk_idx, mem_addr] : m.table) {
-      out << "\t\tblk_idx: " << blk_idx << ", mem_addr: " << mem_addr;
+      out << "\t" << blk_idx << " - " << blk_idx + NUM_BLOCKS_PER_GROW << ": ";
+      out << mem_addr << " - " << mem_addr + NUM_BLOCKS_PER_GROW;
     }
     return out;
   }

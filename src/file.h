@@ -73,7 +73,7 @@ class File {
     uint32_t num_blocks = ALIGN_UP(count, BLOCK_SIZE) >> BLOCK_SHIFT;
     pmem::VirtualBlockIdx start_virtual_idx = ALIGN_DOWN(offset, BLOCK_SIZE);
     pmem::LogicalBlockIdx start_logical_idx = allocator.alloc(num_blocks);
-    
+
     auto tx_begin_idx = tx_mgr.begin_tx(start_virtual_idx, num_blocks);
 
     // TODO: handle the case where num_blocks > 64
@@ -90,7 +90,13 @@ class File {
     btable.update();
   }
 
-  friend std::ostream& operator<<(std::ostream& out, const File& f);
+  friend std::ostream& operator<<(std::ostream& out, const File& f) {
+    out << "fd: " << f.fd << "\n";
+    out << *f.meta;
+    out << f.mtable;
+    out << "\n";
+    return out;
+  }
 };
 
 }  // namespace ulayfs::dram

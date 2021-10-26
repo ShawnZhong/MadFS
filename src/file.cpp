@@ -21,12 +21,4 @@ int File::open(const char* pathname, int flags, mode_t mode) {
   if (stat_buf.st_size == 0) meta->init();
   return fd;
 }
-
-std::ostream& operator<<(std::ostream& out, const File& f) {
-  out << "fd: " << f.fd << "\n";
-  out << *f.meta;
-  out << f.mtable;
-  return out;
-}
-
 };  // namespace ulayfs::dram

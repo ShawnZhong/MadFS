@@ -55,6 +55,12 @@ struct TxEntryIdx {
   bool operator>(const TxEntryIdx& rhs) const { return rhs < *this; }
   bool operator<=(const TxEntryIdx& rhs) const { return !(rhs < *this); }
   bool operator>=(const TxEntryIdx& rhs) const { return !(*this < rhs); }
+
+  friend std::ostream& operator<<(std::ostream& out, const TxEntryIdx& idx) {
+    out << "{ block_idx = " << idx.block_idx
+        << ", local_idx = " << idx.local_idx << " }";
+    return out;
+  }
 };
 
 // All member functions are thread-safe and require no locks
@@ -325,6 +331,7 @@ class BitmapBlock {
   // map `bitmap_local_idx` from alloc_one/all to the LogicalBlockIdx
   inline static LogicalBlockIdx get_block_idx(BitmapBlockId bitmap_block_id,
                                               BitmapLocalIdx bitmap_local_idx) {
+    if (bitmap_block_id == 0) return bitmap_local_idx;
     return (bitmap_block_id << BITMAP_BLOCK_CAPACITY_SHIFT) +
            INLINE_BITMAP_CAPACITY + bitmap_local_idx;
   }
@@ -361,7 +368,6 @@ class TxLogBlock {
                                       TxEntry entry, TxLocalIdx hint) {
     for (TxLocalIdx idx = hint; idx <= num_entries - 1; ++idx) {
       uint64_t expected = 0;
-      if (__atomic_load_n(&entry.data, __ATOMIC_ACQUIRE)) continue;
       if (__atomic_compare_exchange_n(&entries[idx].data, &expected, entry.data,
                                       false, __ATOMIC_RELEASE,
                                       __ATOMIC_ACQUIRE)) {
@@ -562,6 +568,8 @@ class MetaBlock {
     out << "\tsignature: \"" << block.signature << "\"\n";
     out << "\tfilesize: " << block.file_size << "\n";
     out << "\tnum_blocks: " << block.num_blocks << "\n";
+    out << "\ttx_log_head: " << block.tx_log_head << "\n";
+    out << "\ttx_log_tail: " << block.tx_log_tail << "\n";
     return out;
   }
 };
@@ -572,7 +580,7 @@ union Block {
   TxLogBlock tx_log_block;
   LogEntryBlock log_entry_block;
   DataBlock data_block;
-  //  char padding[BLOCK_SIZE];
+  char data[BLOCK_SIZE];
 };
 
 static_assert(sizeof(LogEntryIdx) == 5, "LogEntryIdx must of 5 bytes");

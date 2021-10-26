@@ -26,6 +26,7 @@ class BlkTable {
 
   inline void apply_tx(pmem::TxCommitEntry tx_commit_entry) {
     auto log_entry_idx = tx_commit_entry.log_entry_idx;
+    // TODO: implement this
   }
 
  public:
