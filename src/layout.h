@@ -13,56 +13,10 @@
 #include "utils.h"
 
 namespace ulayfs::pmem {
-
-/**
- * A wrapper class to avoid accidental implicit conversion between different
- * index types
- *
- * @tparam type_id assign different type_id for different index
- * @tparam T the storage type for the index
- */
-template <int type_id, typename T>
-struct IdxWrapper {
-  // the underlying storage type for the index
-  // this is used when the index is store on the persistent memory
-  using type = T;
-
-  // the actual index stored
-  T val;
-
-  // default constructor
-  IdxWrapper(){};
-
-  // allow conversion from variables of type T
-  IdxWrapper(T idx) : val(val) {}
-  void operator=(const T v) { val = v; }
-
-  // allow implicit conversion to type T
-  operator T() const { return val; }
-
-  // the hash struct used by std::unordered_map
-  struct Hash {
-    std::size_t operator()(IdxWrapper const& v) const noexcept {
-      return std::hash<T>{}(v.val);
-    }
-  };
-
-  IdxWrapper& operator+=(const IdxWrapper& v) {
-    val += v.val;
-    return *this;
-  }
-
-  // Postfix increment operator
-  IdxWrapper operator++(int) {
-    val++;
-    return *this;
-  }
-};
-
 // block index within a file; the meta block has a LogicalBlockIdx of 0
-using LogicalBlockIdx = IdxWrapper<0, uint32_t>;
+using LogicalBlockIdx = uint32_t;
 // block index seen by applications
-using VirtualBlockIdx = IdxWrapper<1, uint32_t>;
+using VirtualBlockIdx = uint32_t;
 
 // local index within a block; this can be -1 to indicate an error
 using BitmapLocalIdx = int32_t;
@@ -79,7 +33,7 @@ using BitmapBlockId = uint32_t;
  * 5 bytes (40 bits) in size
  */
 struct __attribute__((packed)) LogEntryIdx {
-  LogicalBlockIdx::type block_idx;
+  LogicalBlockIdx block_idx;
   LogLocalIdx local_idx : 8;
 };
 
@@ -87,7 +41,7 @@ struct __attribute__((packed)) LogEntryIdx {
  * A transaction entry is identified by the block index and the local index
  */
 struct TxEntryIdx {
-  LogicalBlockIdx::type block_idx;
+  LogicalBlockIdx block_idx;
   TxLocalIdx local_idx;
 
   bool operator==(const TxEntryIdx& rhs) const {
@@ -161,15 +115,15 @@ struct TxBeginEntry {
   // This transaction affects the blocks [block_idx_start, block_idx_end]
   // We have 32 bits for block_id_end instead of 31 because we want to use
   // -1 (i.e., UINT32_MAX) to represent the end of the file
-  VirtualBlockIdx::type block_idx_start : 31;
-  VirtualBlockIdx::type block_idx_end;
+  VirtualBlockIdx block_idx_start : 31;
+  VirtualBlockIdx block_idx_end;
 
   /**
    * Construct a tx begin_tx entry from block_idx_start to the end of the file
    */
   explicit TxBeginEntry(VirtualBlockIdx block_idx_start)
       : block_idx_start(block_idx_start) {
-    block_idx_end = std::numeric_limits<VirtualBlockIdx::type>::max();
+    block_idx_end = std::numeric_limits<VirtualBlockIdx>::max();
   }
 
   /**
@@ -243,8 +197,8 @@ class LogEntry {
     struct {
       // we map the logical blocks [logical_idx, logical_idx + num_blocks)
       // to the virtual blocks [virtual_idx, virtual_idx + num_blocks)
-      VirtualBlockIdx::type start_virtual_idx;
-      LogicalBlockIdx::type start_logical_idx;
+      VirtualBlockIdx start_virtual_idx;
+      LogicalBlockIdx start_logical_idx;
     };
     uint64_t word2;
   };
@@ -388,8 +342,8 @@ class BitmapBlock {
 };
 
 class TxLogBlock {
-  std::atomic<LogicalBlockIdx::type> prev;
-  std::atomic<LogicalBlockIdx::type> next;
+  std::atomic<LogicalBlockIdx> prev;
+  std::atomic<LogicalBlockIdx> next;
   TxEntry tx_entries[NUM_TX_ENTRY];
 
  public:
@@ -441,10 +395,9 @@ class TxLogBlock {
    * @return true on success, false if there is a race condition
    */
   bool set_next_block_idx(LogicalBlockIdx next) {
-    LogicalBlockIdx::type expected = 0;
+    LogicalBlockIdx expected = 0;
     bool success = this->next.compare_exchange_strong(
-        expected, next.val, std::memory_order_release,
-        std::memory_order_acquire);
+        expected, next, std::memory_order_release, std::memory_order_acquire);
     persist_cl_fenced(&this->next);
     return success;
   }
