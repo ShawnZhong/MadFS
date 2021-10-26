@@ -598,7 +598,7 @@ union Block {
   TxLogBlock tx_log_block;
   LogEntryBlock log_entry_block;
   DataBlock data_block;
-  char padding[BLOCK_SIZE];
+  //  char padding[BLOCK_SIZE];
 };
 
 static_assert(sizeof(LogEntryIdx) == 5, "LogEntryIdx must of 5 bytes");

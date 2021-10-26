@@ -12,6 +12,8 @@ class BlkTable {
   std::vector<pmem::LogicalBlockIdx> table;
 
  public:
+  BlkTable() = default;
+
   void put(pmem::VirtualBlockIdx key, pmem::LogicalBlockIdx val) {
     table[key] = val;
   }

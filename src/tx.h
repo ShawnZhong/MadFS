@@ -99,6 +99,7 @@ class TxMgr {
     this->allocator = allocator;
     this->blk_table = blk_table;
     this->mem_table = mem_table;
+
   }
 
   /**
@@ -115,6 +116,7 @@ class TxMgr {
 
   pmem::TxEntryIdx commit_tx(pmem::TxEntryIdx tx_begin_idx,
                              pmem::LogEntryIdx log_entry_idx) {
+    // TODO: compute begin_offset from tx_begin_idx
     pmem::TxCommitEntry tx_commit_entry{0, log_entry_idx};
     return append_tx_commit_entry(tx_commit_entry);
   }
