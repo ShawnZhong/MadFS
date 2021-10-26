@@ -1,6 +1,9 @@
 #pragma once
 
+#include <ostream>
+
 #include "file.h"
+#include "tx_iter.h"
 
 namespace ulayfs::dram {
 
@@ -98,6 +101,9 @@ class TxMgr {
   TxMgr(pmem::MetaBlock* meta, Allocator* allocator, MemTable* mem_table)
       : meta(meta), allocator(allocator), mem_table(mem_table), local_tail() {}
 
+  [[nodiscard]] TxIter begin() const { return TxIter(meta, mem_table, {0, 0}); }
+  [[nodiscard]] TxIter end() const { return TxIter(meta, mem_table, {0, -1}); }
+
   /**
    * Begin a transaction that affects the range of blocks
    * [start_virtual_idx, start_virtual_idx + num_blocks)
@@ -148,6 +154,14 @@ class TxMgr {
     log_entry_block.append(log_entry, local_tail.local_idx);
 
     return local_tail;
+  }
+  
+  friend std::ostream& operator<<(std::ostream& out, const TxMgr& mgr) {
+    out << "Transaction Log: \n";
+    for (auto tx : mgr) {
+      out << tx << "\n";
+    }
+    return out;
   }
 };
 }  // namespace ulayfs::dram

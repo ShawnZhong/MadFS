@@ -4,6 +4,7 @@
 
 #include "layout.h"
 #include "tx.h"
+#include "tx_iter.h"
 
 namespace ulayfs::dram {
 

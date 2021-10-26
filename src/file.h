@@ -91,10 +91,12 @@ class File {
   }
 
   friend std::ostream& operator<<(std::ostream& out, const File& f) {
-    out << "fd: " << f.fd << "\n";
+    out << "File: fd = " << f.fd << "\n";
     out << *f.meta;
     out << f.mtable;
+    out << f.tx_mgr;
     out << "\n";
+
     return out;
   }
 };

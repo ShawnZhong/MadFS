@@ -35,6 +35,12 @@ using BitmapBlockId = uint32_t;
 struct __attribute__((packed)) LogEntryIdx {
   LogicalBlockIdx block_idx;
   LogLocalIdx local_idx : 8;
+
+  friend std::ostream& operator<<(std::ostream& out, const LogEntryIdx& idx) {
+    out << "{ block_idx = " << idx.block_idx
+        << ", local_idx = " << idx.local_idx << " }";
+    return out;
+  }
 };
 
 /**
@@ -140,6 +146,13 @@ struct TxBeginEntry {
       : block_idx_start(block_idx_start) {
     block_idx_end = block_idx_start + num_blocks;
   }
+
+  friend std::ostream& operator<<(std::ostream& os, const TxBeginEntry& entry) {
+    os << "\tTX_BEGIN: "
+       << "{ block_idx_start = " << entry.block_idx_start
+       << ", block_idx_end: " << entry.block_idx_end << " }";
+    return os;
+  }
 };
 
 struct TxCommitEntry {
@@ -155,6 +168,14 @@ struct TxCommitEntry {
 
   TxCommitEntry(uint32_t begin_offset, const LogEntryIdx log_entry_idx)
       : begin_offset(begin_offset), log_entry_idx(log_entry_idx) {}
+
+  friend std::ostream& operator<<(std::ostream& out,
+                                  const TxCommitEntry& entry) {
+    out << "\tTX_COMMIT: "
+        << "{ begin_offset: " << entry.begin_offset
+        << ", log_entry_idx: " << entry.log_entry_idx << " }";
+    return out;
+  }
 };
 
 union TxEntry {
@@ -165,8 +186,21 @@ union TxEntry {
   TxEntry(const TxBeginEntry& begin_entry) : begin_entry(begin_entry) {}
   TxEntry(const TxCommitEntry& commit_entry) : commit_entry(commit_entry) {}
 
-  bool is_begin() { return begin_entry.type == TxEntryType::TX_BEGIN; }
-  bool is_commit() { return commit_entry.type == TxEntryType::TX_COMMIT; }
+  [[nodiscard]] bool is_begin() const {
+    return begin_entry.type == TxEntryType::TX_BEGIN;
+  }
+  [[nodiscard]] bool is_commit() const {
+    return commit_entry.type == TxEntryType::TX_COMMIT;
+  }
+
+  friend std::ostream& operator<<(std::ostream& out, const TxEntry& tx_entry) {
+    if (tx_entry.is_begin()) {
+      out << tx_entry.begin_entry;
+    } else if (tx_entry.is_commit()) {
+      out << tx_entry.commit_entry;
+    }
+    return out;
+  }
 };
 
 enum LogOp {

@@ -152,6 +152,7 @@ class MemTable {
       out << "\t" << blk_idx << " - " << blk_idx + NUM_BLOCKS_PER_GROW << ": ";
       out << mem_addr << " - " << mem_addr + NUM_BLOCKS_PER_GROW;
     }
+    out << "\n";
     return out;
   }
 };
