@@ -53,6 +53,10 @@ class File {
     pmem::persist_fenced(&dst, count + start_offset);
   }
 
+  /**
+   * @param virtual_block_idx the virtual block index for a data block
+   * @return the char pointer pointing to the memory location of the data block
+   */
   char* get_data_block_ptr(pmem::VirtualBlockIdx virtual_block_idx) {
     pmem::LogicalBlockIdx start_logical_idx = btable.get(virtual_block_idx);
     return mtable.get_addr(start_logical_idx)->data;
@@ -69,11 +73,16 @@ class File {
 
   int get_fd() const { return fd; }
 
-  // we use File::open to construct a File object instead of the standard
-  // constructor since open may fail, and we want to report the return value
-  // back to the caller
+  /**
+   * We use File::open to construct a File object instead of the standard
+   * constructor since open may fail, and we want to report the return value
+   * back to the caller
+   */
   int open(const char* pathname, int flags, mode_t mode);
 
+  /**
+   * overwrite the byte range [offset, offset + count) with the content in buf
+   */
   ssize_t overwrite(const void* buf, size_t count, size_t offset) {
     uint32_t num_blocks = ALIGN_UP(count, BLOCK_SIZE) >> BLOCK_SHIFT;
 
@@ -98,6 +107,9 @@ class File {
     return static_cast<ssize_t>(count);
   }
 
+  /**
+   * read_entry the byte range [offset, offset + count) to buf
+   */
   ssize_t pread(void* buf, size_t count, off_t offset) {
     pmem::VirtualBlockIdx start_virtual_idx = ALIGN_DOWN(offset, BLOCK_SIZE);
 

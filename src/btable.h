@@ -67,6 +67,9 @@ class BlkTable {
     return table[virtual_block_idx];
   }
 
+  /**
+   * Update the block table by applying the transactions
+   */
   void update() {
     auto end = tx_mgr->end();
     auto it = tx_mgr->iter(recent_tx_log_tail);

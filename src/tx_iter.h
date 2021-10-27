@@ -12,6 +12,9 @@ struct TxIter {
   pmem::TxEntryIdx idx;
   pmem::TxEntry entry;
 
+  /**
+   * Move to the next transaction entry
+   */
   void forward() {
     // the current one is an inline tx entry
     if (idx.block_idx == 0) {
@@ -38,9 +41,10 @@ struct TxIter {
     idx.local_idx = idx.block_idx == 0 ? -1 : 0;
   }
 
-
-
-  void update() {
+  /**
+   * Read the entry from the MetaBlock or TxLogBlock and update the internal var
+   */
+  void read_entry() {
     if (!is_valid()) return;
     entry = idx.block_idx == 0 ? meta->get_inline_tx_entry(idx.local_idx)
                                : block->get_entry(idx.local_idx);
@@ -54,18 +58,16 @@ struct TxIter {
  public:
   TxIter(pmem::MetaBlock* meta, MemTable* mem_table, pmem::TxEntryIdx idx)
       : meta(meta), mem_table(mem_table), idx(idx) {
-    update();
+    read_entry();
   }
 
   [[nodiscard]] inline bool is_valid() const { return idx.local_idx >= 0; }
-
   [[nodiscard]] pmem::TxEntryIdx get_idx() const { return idx; }
-
   pmem::TxEntry operator*() const { return entry; }
 
   TxIter& operator++() {
     forward();
-    update();
+    read_entry();
     return *this;
   }
 
