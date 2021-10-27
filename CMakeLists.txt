@@ -21,13 +21,13 @@ add_library(ulayfs SHARED
     )
 target_link_libraries(ulayfs dl)
 
-add_executable(test_basic test/basic.c)
+add_executable(test_basic test/test_basic.c)
 target_link_libraries(test_basic ulayfs)
 
-add_executable(test_futex test/futex.cpp)
+add_executable(test_futex test/test_futex.cpp)
 
-add_executable(test_alloc test/alloc.cpp)
-target_link_libraries(test_alloc ulayfs)
+add_executable(test_rw test/test_rw.cpp)
+target_link_libraries(test_rw ulayfs)
 
 # build options
 option(MEM_PROTECT "Enable memory protection to avoid stray writes" OFF)
