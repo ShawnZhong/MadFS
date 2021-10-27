@@ -25,24 +25,14 @@ int open(const char* pathname, int flags, ...) {
   return fd;
 }
 
-ssize_t write(int fd, const void* buf, size_t count) {
-  if constexpr (BuildOptions::debug) {
-    printf("write:count:%lu\n", count);
-  }
-  return posix::write(fd, buf, count);
-}
-
-ssize_t read(int fd, void* buf, size_t count) {
-  if constexpr (BuildOptions::debug) {
-    printf("read:count:%lu\n", count);
-  }
-  return posix::read(fd, buf, count);
-}
-
 ssize_t pwrite(int fd, const void* buf, size_t count, off_t offset) {
   auto file = files[fd];
-  file->overwrite(buf, count, offset);
-  return count;
+  return file->overwrite(buf, count, offset);
+}
+
+ssize_t pread(int fd, void* buf, size_t count, off_t offset) {
+  auto file = files[fd];
+  return file->pread(buf, count, offset);
 }
 
 /**

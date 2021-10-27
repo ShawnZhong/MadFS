@@ -10,41 +10,62 @@ struct TxIter {
 
   pmem::TxLogBlock* block;
   pmem::TxEntryIdx idx;
+  pmem::TxEntry entry;
 
- public:
-  TxIter(pmem::MetaBlock* meta, MemTable* mem_table, pmem::TxEntryIdx idx)
-      : meta(meta), mem_table(mem_table), idx(idx) {}
-
-  pmem::TxEntry operator*() const {
+  void forward() {
+    // the current one is an inline tx entry
     if (idx.block_idx == 0) {
-      return meta->get_inline_tx_entry(idx.local_idx);
-    } else {
-      return block->get_entry(idx.local_idx);
+      // the next entry is still an inline tx entry
+      if (idx.local_idx + 1 < pmem::NUM_INLINE_TX_ENTRY) {
+        idx.local_idx++;
+        return;
+      }
+
+      // move to the tx block
+      idx = meta->get_tx_log_head();
+      return;
     }
+
+    // the current on is in tx_log_block, and the next one is in the same block
+    if (idx.local_idx + 1 < pmem::NUM_TX_ENTRY) {
+      idx.local_idx++;
+      return;
+    }
+
+    // move to the next block
+    block = &mem_table->get_addr(idx.block_idx)->tx_log_block;
+    idx.block_idx = block->get_next_block_idx();
+    idx.local_idx = idx.block_idx == 0 ? -1 : 0;
   }
 
-  TxIter& operator++() {
-    if (idx.block_idx == 0) {
-      if (idx.local_idx < pmem::NUM_INLINE_TX_ENTRY) {
-        idx.local_idx++;
-      } else {
-        idx = meta->get_tx_log_head();
-      }
-    } else {
-      if (idx.local_idx < pmem::NUM_TX_ENTRY) {
-        idx.local_idx++;
-      } else {
-        block = &mem_table->get_addr(idx.block_idx)->tx_log_block;
-        idx.block_idx = block->get_next_block_idx();
-        idx.local_idx = idx.block_idx == 0 ? -1 : 0;
-      }
-    }
 
-    if (this->operator*().data == 0) {
+
+  void update() {
+    if (!is_valid()) return;
+    entry = idx.block_idx == 0 ? meta->get_inline_tx_entry(idx.local_idx)
+                               : block->get_entry(idx.local_idx);
+
+    if (entry.data == 0) {
       idx.block_idx = 0;
       idx.local_idx = -1;
     }
+  }
 
+ public:
+  TxIter(pmem::MetaBlock* meta, MemTable* mem_table, pmem::TxEntryIdx idx)
+      : meta(meta), mem_table(mem_table), idx(idx) {
+    update();
+  }
+
+  [[nodiscard]] inline bool is_valid() const { return idx.local_idx >= 0; }
+
+  [[nodiscard]] pmem::TxEntryIdx get_idx() const { return idx; }
+
+  pmem::TxEntry operator*() const { return entry; }
+
+  TxIter& operator++() {
+    forward();
+    update();
     return *this;
   }
 

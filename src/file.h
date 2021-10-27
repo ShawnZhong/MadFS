@@ -16,9 +16,9 @@
 namespace ulayfs::dram {
 
 class File {
-  int fd;
+  int fd = -1;
   int open_flags;
-  pmem::MetaBlock* meta;
+  pmem::MetaBlock* meta{nullptr};
   MemTable mtable;
   BlkTable btable;
   Allocator allocator;
@@ -53,8 +53,13 @@ class File {
     pmem::persist_fenced(&dst, count + start_offset);
   }
 
+  char* get_data_block_ptr(pmem::VirtualBlockIdx virtual_block_idx) {
+    pmem::LogicalBlockIdx start_logical_idx = btable.get(virtual_block_idx);
+    return mtable.get_addr(start_logical_idx)->data;
+  }
+
  public:
-  File() : fd(-1), meta(nullptr) {}
+  File() = default;
 
   // test if File is in a valid state
   explicit operator bool() const { return fd >= 0; }
@@ -69,8 +74,9 @@ class File {
   // back to the caller
   int open(const char* pathname, int flags, mode_t mode);
 
-  void overwrite(const void* buf, size_t count, size_t offset) {
+  ssize_t overwrite(const void* buf, size_t count, size_t offset) {
     uint32_t num_blocks = ALIGN_UP(count, BLOCK_SIZE) >> BLOCK_SHIFT;
+
     pmem::VirtualBlockIdx start_virtual_idx = ALIGN_DOWN(offset, BLOCK_SIZE);
     pmem::LogicalBlockIdx start_logical_idx = allocator.alloc(num_blocks);
 
@@ -88,6 +94,28 @@ class File {
     tx_mgr.commit_tx(tx_begin_idx, log_entry_idx);
 
     btable.update();
+
+    return static_cast<ssize_t>(count);
+  }
+
+  ssize_t pread(void* buf, size_t count, off_t offset) {
+    pmem::VirtualBlockIdx start_virtual_idx = ALIGN_DOWN(offset, BLOCK_SIZE);
+
+    uint32_t num_blocks = ALIGN_UP(count, BLOCK_SIZE) >> BLOCK_SHIFT;
+    uint64_t start_offset = offset - start_virtual_idx * BLOCK_SIZE;
+    uint16_t last_remaining = num_blocks * BLOCK_SIZE - count - start_offset;
+
+    for (int i = 0; i < num_blocks; ++i) {
+      size_t num_bytes = i == num_blocks - 1 ? last_remaining : BLOCK_SIZE;
+
+      char* ptr = get_data_block_ptr(start_virtual_idx + i);
+      void* src = i == 0 ? ptr + start_offset : ptr;
+      void* dst = static_cast<char*>(buf) + i * BLOCK_SIZE;
+
+      memcpy(dst, src, num_bytes);
+    }
+
+    return static_cast<ssize_t>(count);
   }
 
   friend std::ostream& operator<<(std::ostream& out, const File& f) {
@@ -95,6 +123,7 @@ class File {
     out << *f.meta;
     out << f.mtable;
     out << f.tx_mgr;
+    out << f.btable;
     out << "\n";
 
     return out;

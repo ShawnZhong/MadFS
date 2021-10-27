@@ -1,5 +1,6 @@
 #pragma once
 
+#include <ostream>
 #include <unordered_map>
 
 #include "layout.h"
@@ -14,66 +15,80 @@ class BlkTable {
   pmem::TxEntryIdx recent_tx_log_tail;
 
   MemTable* mem_table;
+  TxMgr* tx_mgr;
 
   //  std::unordered_map<pmem::VirtualBlockIdx, pmem::LogicalBlockIdx> table;
   std::vector<pmem::LogicalBlockIdx> table;
 
-  inline pmem::TxEntry get_tx_entry(pmem::TxEntryIdx idx) {
-    const auto [block_idx, local_idx] = idx;
-    auto block = mem_table->get_addr(block_idx);
-    auto tx_log_block = &block->tx_log_block;
-    return tx_log_block->get_entry(local_idx);
+  /**
+   * Get log entry based on the log entry index
+   */
+  inline pmem::LogEntry get_log_entry(pmem::LogEntryIdx idx) {
+    auto block = mem_table->get_addr(idx.block_idx);
+    auto log_entry_block = &block->log_entry_block;
+    return log_entry_block->get_entry(idx.local_idx);
   }
 
+  /**
+   * Apply a transaction to the block table
+   */
   inline void apply_tx(pmem::TxCommitEntry tx_commit_entry) {
     auto log_entry_idx = tx_commit_entry.log_entry_idx;
-    // TODO: implement this
+    auto log_entry = get_log_entry(log_entry_idx);
+    // TODO: linked list
+    range_put(log_entry.start_virtual_idx, log_entry.start_logical_idx,
+              log_entry.num_blocks);
   }
 
  public:
   BlkTable() = default;
-  explicit BlkTable(pmem::MetaBlock* meta, MemTable* mem_table)
-      : meta(meta), mem_table(mem_table), recent_tx_log_tail() {}
+  explicit BlkTable(pmem::MetaBlock* meta, MemTable* mem_table, TxMgr* tx_mgr)
+      : meta(meta), mem_table(mem_table), tx_mgr(tx_mgr), recent_tx_log_tail() {
+    table.resize(16);
+  }
 
-  void put(pmem::VirtualBlockIdx virtual_block_idx,
-           pmem::LogicalBlockIdx logical_block_idx) {
+  inline void put(pmem::VirtualBlockIdx virtual_block_idx,
+                  pmem::LogicalBlockIdx logical_block_idx) {
     table[virtual_block_idx] = logical_block_idx;
   }
 
-  void range_put(pmem::VirtualBlockIdx virtual_block_idx,
-                 pmem::LogicalBlockIdx logical_block_idx, uint32_t num_blocks) {
+  inline void range_put(pmem::VirtualBlockIdx virtual_block_idx,
+                        pmem::LogicalBlockIdx logical_block_idx,
+                        uint32_t num_blocks) {
+    if (table.size() < virtual_block_idx + num_blocks) {
+      table.resize(table.size() * 2);
+    }
     for (uint32_t i = 0; i < num_blocks; ++i) {
-      table[virtual_block_idx + i] = logical_block_idx + i;
+      put(virtual_block_idx + i, logical_block_idx + i);
     }
   }
 
-  pmem::LogicalBlockIdx get(pmem::VirtualBlockIdx virtual_block_idx) {
+  inline pmem::LogicalBlockIdx get(pmem::VirtualBlockIdx virtual_block_idx) {
     return table[virtual_block_idx];
   }
 
   void update() {
-    auto tx_log_tail = meta->get_tx_log_tail();
-    if (recent_tx_log_tail == tx_log_tail) return;
-    auto [recent_block_idx, recent_local_idx] = recent_tx_log_tail;
-
-    if (recent_block_idx == 0) {
-      for (; recent_local_idx < pmem::NUM_INLINE_TX_ENTRY; ++recent_local_idx) {
-        auto tx_entry = meta->get_inline_tx_entry(recent_local_idx);
-        if (tx_entry.data == 0) break;
-        if (!tx_entry.is_commit()) continue;
-        auto tx_commit_entry = tx_entry.commit_entry;
-        apply_tx(tx_commit_entry);
-      }
-
-      recent_tx_log_tail.local_idx = recent_local_idx;
-      if (recent_tx_log_tail == tx_log_tail) return;
-
-      recent_tx_log_tail = meta->get_tx_log_head();
+    auto end = tx_mgr->end();
+    auto it = tx_mgr->iter(recent_tx_log_tail);
+    for (; it != end; ++it) {
+      auto tx_entry = *it;
+      std::cout << tx_entry << "\n";
+      if (!tx_entry.is_commit()) continue;
+      auto tx_commit_entry = tx_entry.commit_entry;
+      apply_tx(tx_commit_entry);
     }
 
-    // TODO: apply tx in blocks
+    if (it.is_valid()) recent_tx_log_tail = it.get_idx();
+  }
 
-    recent_tx_log_tail = tx_log_tail;
+  friend std::ostream& operator<<(std::ostream& out, const BlkTable& b) {
+    out << "BlkTable:\n";
+    for (int i = 0; i < b.table.size(); ++i) {
+      if (b.table[i] != 0) {
+        out << "\t" << i << " -> " << b.table[i] << "\n";
+      }
+    }
+    return out;
   }
 };
 }  // namespace ulayfs::dram

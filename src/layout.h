@@ -2,6 +2,7 @@
 
 #include <atomic>
 #include <bit>
+#include <cassert>
 #include <cstdint>
 #include <cstring>
 #include <iostream>
@@ -148,7 +149,7 @@ struct TxBeginEntry {
   }
 
   friend std::ostream& operator<<(std::ostream& os, const TxBeginEntry& entry) {
-    os << "\tTX_BEGIN: "
+    os << "TX_BEGIN "
        << "{ block_idx_start = " << entry.block_idx_start
        << ", block_idx_end: " << entry.block_idx_end << " }";
     return os;
@@ -171,7 +172,7 @@ struct TxCommitEntry {
 
   friend std::ostream& operator<<(std::ostream& out,
                                   const TxCommitEntry& entry) {
-    out << "\tTX_COMMIT: "
+    out << "TX_COMMIT "
         << "{ begin_offset: " << entry.begin_offset
         << ", log_entry_idx: " << entry.log_entry_idx << " }";
     return out;
@@ -183,6 +184,7 @@ union TxEntry {
   TxCommitEntry commit_entry;
   uint64_t data;
 
+  TxEntry(){};
   TxEntry(const TxBeginEntry& begin_entry) : begin_entry(begin_entry) {}
   TxEntry(const TxCommitEntry& commit_entry) : commit_entry(commit_entry) {}
 
@@ -283,7 +285,18 @@ constexpr static uint32_t BITMAP_BLOCK_CAPACITY =
 constexpr static uint32_t INLINE_BITMAP_CAPACITY =
     NUM_INLINE_BITMAP * BITMAP_CAPACITY;
 
-/*
+/**
+ * The base class for all the blocks
+ *
+ * Disable copy constructor and assignment operator to avoid accidental copies
+ */
+class BaseBlock {
+ public:
+  BaseBlock(BaseBlock const&) = delete;
+  BaseBlock& operator=(BaseBlock const&) = delete;
+};
+
+/**
  * In the current design, the inline bitmap in the meta block can manage 16k
  * blocks (64 MB in total); after that, every 32k blocks (128 MB) will have its
  * first block as the bitmap block that manages its allocation.
@@ -291,7 +304,7 @@ constexpr static uint32_t INLINE_BITMAP_CAPACITY =
  * one in the meta block (LogicalBlockIdx=0); bitmap block id=1 is the block
  * with LogicalBlockIdx 16384; id=2 is the one with LogicalBlockIdx 32768, etc.
  */
-class BitmapBlock {
+class BitmapBlock : public BaseBlock {
  private:
   Bitmap bitmaps[NUM_BITMAP];
 
@@ -382,7 +395,7 @@ class BitmapBlock {
   }
 };
 
-class TxLogBlock {
+class TxLogBlock : public BaseBlock {
   std::atomic<LogicalBlockIdx> prev;
   std::atomic<LogicalBlockIdx> next;
   TxEntry tx_entries[NUM_TX_ENTRY];
@@ -424,7 +437,10 @@ class TxLogBlock {
     return try_append(tx_entries, NUM_TX_ENTRY, commit_entry, hint_tail);
   }
 
-  TxEntry get_entry(TxLocalIdx idx) { return tx_entries[idx]; }
+  TxEntry get_entry(TxLocalIdx idx) {
+    assert(idx >= 0 && idx < NUM_TX_ENTRY);
+    return tx_entries[idx];
+  }
 
   [[nodiscard]] LogicalBlockIdx get_next_block_idx() const {
     return next.load(std::memory_order_acquire);
@@ -444,7 +460,7 @@ class TxLogBlock {
 };
 
 // LogEntryBlock is per-thread to avoid contention
-class LogEntryBlock {
+class LogEntryBlock : public BaseBlock {
   LogEntry log_entries[NUM_LOG_ENTRY];
 
  public:
@@ -456,9 +472,14 @@ class LogEntryBlock {
     log_entries[tail_idx] = log_entry;
     persist_cl_fenced(&log_entries[tail_idx]);
   };
+
+  [[nodiscard]] LogEntry get_entry(LogLocalIdx idx) {
+    assert(idx >= 0 && idx < NUM_LOG_ENTRY);
+    return log_entries[idx];
+  }
 };
 
-class DataBlock {
+class DataBlock : public BaseBlock {
  public:
   char data[BLOCK_SIZE];
 };
@@ -466,7 +487,7 @@ class DataBlock {
 /*
  * LogicalBlockIdx 0 -> MetaBlock; other blocks can be any type of blocks
  */
-class MetaBlock {
+class MetaBlock : public BaseBlock {
  private:
   // contents in the first cache line
   union {
@@ -564,6 +585,7 @@ class MetaBlock {
   [[nodiscard]] TxEntryIdx get_tx_log_tail() const { return tx_log_tail; }
 
   [[nodiscard]] TxEntry get_inline_tx_entry(TxLocalIdx idx) const {
+    assert(idx >= 0 && idx < NUM_INLINE_TX_ENTRY);
     return inline_tx_entries[idx];
   }
 

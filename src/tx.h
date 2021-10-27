@@ -103,6 +103,9 @@ class TxMgr {
 
   [[nodiscard]] TxIter begin() const { return TxIter(meta, mem_table, {0, 0}); }
   [[nodiscard]] TxIter end() const { return TxIter(meta, mem_table, {0, -1}); }
+  [[nodiscard]] TxIter iter(pmem::TxEntryIdx idx) const {
+    return {meta, mem_table, idx};
+  }
 
   /**
    * Begin a transaction that affects the range of blocks
@@ -150,16 +153,16 @@ class TxMgr {
 
     // append the log entry
     auto block = mem_table->get_addr(local_tail.block_idx);
-    auto log_entry_block = block->log_entry_block;
-    log_entry_block.append(log_entry, local_tail.local_idx);
+    auto log_entry_block = &block->log_entry_block;
+    log_entry_block->append(log_entry, local_tail.local_idx);
 
     return local_tail;
   }
-  
-  friend std::ostream& operator<<(std::ostream& out, const TxMgr& mgr) {
+
+  friend std::ostream& operator<<(std::ostream& out, const TxMgr& tx_mgr) {
     out << "Transaction Log: \n";
-    for (auto tx : mgr) {
-      out << tx << "\n";
+    for (auto it = tx_mgr.begin(); it != tx_mgr.end(); ++it) {
+      out << "\t" << it.get_idx() << ": " << *it << "\n";
     }
     return out;
   }
