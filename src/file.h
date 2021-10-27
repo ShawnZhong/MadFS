@@ -18,6 +18,9 @@ namespace ulayfs::dram {
 class File {
   int fd = -1;
   int open_flags;
+
+  bool is_ulayfs_file;
+
   pmem::MetaBlock* meta{nullptr};
   MemTable mtable;
   BlkTable btable;
@@ -66,8 +69,8 @@ class File {
   File() = default;
 
   // test if File is in a valid state
-  explicit operator bool() const { return fd >= 0; }
-  bool operator!() const { return fd < 0; }
+  explicit operator bool() const { return is_ulayfs_file && fd >= 0; }
+  bool operator!() const { return !bool(this); }
 
   pmem::MetaBlock* get_meta() { return meta; }
 

@@ -12,6 +12,16 @@ int File::open(const char* pathname, int flags, mode_t mode) {
   ret = posix::fstat(fd, &stat_buf);
   panic_if(ret, "fstat failed");
 
+  is_ulayfs_file = S_ISREG(stat_buf.st_mode) || S_ISLNK(stat_buf.st_mode);
+  if (!is_ulayfs_file) return fd;
+
+  if (!IS_ALIGNED(stat_buf.st_size, BLOCK_SIZE)) {
+    std::cerr << "Invalid layout: file size not block-aligned for \""
+              << pathname << "\" Fallback to syscall\n";
+    is_ulayfs_file = false;
+    return fd;
+  }
+
   meta = mtable.init(fd, stat_buf.st_size);
   allocator.init(fd, meta, &mtable);
 

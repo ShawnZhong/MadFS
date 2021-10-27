@@ -82,9 +82,6 @@ class MemTable {
 
   pmem::MetaBlock* init(int fd, off_t file_size) {
     this->fd = fd;
-    // file size should be block-aligned
-    panic_if(!IS_ALIGNED(file_size, BLOCK_SIZE),
-             "Invalid layout: file size not block-aligned");
 
     // grow to multiple of grow_unit_size if the file is empty or the file size
     // is not grow_unit aligned

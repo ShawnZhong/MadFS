@@ -21,18 +21,24 @@ int open(const char* pathname, int flags, ...) {
 
   auto file = new dram::File();
   int fd = file->open(pathname, flags, mode);
-  files[fd] = file;
+  if (file) files[fd] = file;
   return fd;
 }
 
 ssize_t pwrite(int fd, const void* buf, size_t count, off_t offset) {
-  auto file = files[fd];
-  return file->overwrite(buf, count, offset);
+  if (auto it = files.find(fd); it != files.end()) {
+    return it->second->overwrite(buf, count, offset);
+  } else {
+    return posix::pwrite(fd, buf, count, offset);
+  }
 }
 
 ssize_t pread(int fd, void* buf, size_t count, off_t offset) {
-  auto file = files[fd];
-  return file->pread(buf, count, offset);
+  if (auto it = files.find(fd); it != files.end()) {
+    return it->second->pread(buf, count, offset);
+  } else {
+    return posix::pread(fd, buf, count, offset);
+  }
 }
 
 /**
