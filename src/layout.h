@@ -215,35 +215,24 @@ enum LogOp {
 // size transaction.
 class LogEntry {
  public:
-  // the first word (8 bytes) is used to check if the log entry is valid or not
-  union {
-    struct {
-      // we use bitfield to pack `op` and `last_remaining` into 16 bits
-      enum LogOp op : 4;
+  // we use bitfield to pack `op` and `last_remaining` into 16 bits
+  enum LogOp op : 4;
 
-      // the remaining number of bytes that are not used in this log entry
-      // only the last log entry for a tx can have non-zero value for this field
-      // the maximum number of remaining bytes is BLOCK_SIZE - 1
-      uint16_t last_remaining : 12;
+  // the remaining number of bytes that are not used in this log entry
+  // only the last log entry for a tx can have non-zero value for this field
+  // the maximum number of remaining bytes is BLOCK_SIZE - 1
+  uint16_t last_remaining : 12;
 
-      // the number of blocks within a log entry is at most 64
-      uint8_t num_blocks;
+  // the number of blocks within a log entry is at most 64
+  uint8_t num_blocks;
 
-      // the index of the next log entry
-      LogEntryIdx next;
-    };
-    uint64_t word1;
-  };
+  // the index of the next log entry
+  LogEntryIdx next;
 
-  union {
-    struct {
-      // we map the logical blocks [logical_idx, logical_idx + num_blocks)
-      // to the virtual blocks [virtual_idx, virtual_idx + num_blocks)
-      VirtualBlockIdx start_virtual_idx;
-      LogicalBlockIdx start_logical_idx;
-    };
-    uint64_t word2;
-  };
+  // we map the logical blocks [logical_idx, logical_idx + num_blocks)
+  // to the virtual blocks [virtual_idx, virtual_idx + num_blocks)
+  VirtualBlockIdx start_virtual_idx;
+  LogicalBlockIdx start_logical_idx;
 };
 
 static_assert(sizeof(LogEntry) == 16, "LogEntry must of size 16 bytes");
