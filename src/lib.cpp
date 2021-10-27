@@ -50,7 +50,7 @@ ssize_t pread(int fd, void* buf, size_t count, off_t offset) {
 void __attribute__((constructor)) ulayfs_ctor() {
   runtime_options.init();
   if (runtime_options.show_config) {
-    std::cout << build_options << std::endl;
+    std::cerr << build_options << std::endl;
   }
 }
 

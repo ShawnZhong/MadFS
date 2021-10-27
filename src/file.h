@@ -33,27 +33,27 @@ class File {
    *
    * @param buf the buffer given by the user
    * @param count number of bytes in the buffer
-   * @param start_offset the start offset within the first block
+   * @param local_offset the start offset within the first block
    */
-  void write_data(const void* buf, size_t count, uint64_t start_offset,
+  void write_data(const void* buf, size_t count, uint64_t local_offset,
                   pmem::VirtualBlockIdx& start_virtual_idx,
                   pmem::LogicalBlockIdx& start_logical_idx) {
     // the address of the start of the new blocks
-    auto dst = mtable.get_addr(start_logical_idx)->data_block.data;
+    char* dst = mtable.get_addr(start_logical_idx)->data;
 
     // if the offset is not block-aligned, copy the remaining bytes at the
     // beginning to the shadow page
-    if (start_offset) {
+    if (local_offset) {
       auto src_idx = btable.get(start_virtual_idx);
-      auto src = mtable.get_addr(src_idx)->data_block.data;
-      memcpy(dst, src, start_offset);
+      char* src = mtable.get_addr(src_idx)->data;
+      memcpy(dst, src, local_offset);
     }
 
     // write the actual buffer
-    memcpy(dst + start_offset, buf, count);
+    memcpy(dst + local_offset, buf, count);
 
     // persist the changes
-    pmem::persist_fenced(&dst, count + start_offset);
+    pmem::persist_fenced(dst, count + local_offset);
   }
 
   /**
@@ -61,8 +61,10 @@ class File {
    * @return the char pointer pointing to the memory location of the data block
    */
   char* get_data_block_ptr(pmem::VirtualBlockIdx virtual_block_idx) {
-    pmem::LogicalBlockIdx start_logical_idx = btable.get(virtual_block_idx);
-    return mtable.get_addr(start_logical_idx)->data;
+    auto logical_block_idx = btable.get(virtual_block_idx);
+    assert(logical_block_idx != 0);
+    auto block = mtable.get_addr(logical_block_idx);
+    return block->data;
   }
 
  public:
@@ -87,19 +89,20 @@ class File {
    * overwrite the byte range [offset, offset + count) with the content in buf
    */
   ssize_t overwrite(const void* buf, size_t count, size_t offset) {
-    uint32_t num_blocks = ALIGN_UP(count, BLOCK_SIZE) >> BLOCK_SHIFT;
-
     pmem::VirtualBlockIdx start_virtual_idx = ALIGN_DOWN(offset, BLOCK_SIZE);
-    pmem::LogicalBlockIdx start_logical_idx = allocator.alloc(num_blocks);
+
+    uint64_t local_offset = offset - start_virtual_idx * BLOCK_SIZE;
+    uint32_t num_blocks =
+        ALIGN_UP(count + local_offset, BLOCK_SIZE) >> BLOCK_SHIFT;
 
     auto tx_begin_idx = tx_mgr.begin_tx(start_virtual_idx, num_blocks);
 
     // TODO: handle the case where num_blocks > 64
 
-    uint64_t start_offset = offset - start_virtual_idx * BLOCK_SIZE;
-    write_data(buf, count, start_offset, start_virtual_idx, start_logical_idx);
+    pmem::LogicalBlockIdx start_logical_idx = allocator.alloc(num_blocks);
+    write_data(buf, count, local_offset, start_virtual_idx, start_logical_idx);
 
-    uint16_t last_remaining = num_blocks * BLOCK_SIZE - count - start_offset;
+    uint16_t last_remaining = num_blocks * BLOCK_SIZE - count - local_offset;
     auto log_entry_idx = tx_mgr.write_log_entry(
         start_virtual_idx, start_logical_idx, num_blocks, last_remaining);
 
@@ -116,18 +119,22 @@ class File {
   ssize_t pread(void* buf, size_t count, off_t offset) {
     pmem::VirtualBlockIdx start_virtual_idx = ALIGN_DOWN(offset, BLOCK_SIZE);
 
-    uint32_t num_blocks = ALIGN_UP(count, BLOCK_SIZE) >> BLOCK_SHIFT;
-    uint64_t start_offset = offset - start_virtual_idx * BLOCK_SIZE;
-    uint16_t last_remaining = num_blocks * BLOCK_SIZE - count - start_offset;
+    uint64_t local_offset = offset - start_virtual_idx * BLOCK_SIZE;
+    uint32_t num_blocks =
+        ALIGN_UP(count + local_offset, BLOCK_SIZE) >> BLOCK_SHIFT;
+    uint16_t last_remaining = num_blocks * BLOCK_SIZE - count - local_offset;
 
+    char* dst = static_cast<char*>(buf);
     for (int i = 0; i < num_blocks; ++i) {
-      size_t num_bytes = i == num_blocks - 1 ? last_remaining : BLOCK_SIZE;
+      size_t num_bytes = BLOCK_SIZE;
+      if (i == 0) num_bytes -= local_offset;
+      if (i == num_blocks - 1) num_bytes -= last_remaining;
 
       char* ptr = get_data_block_ptr(start_virtual_idx + i);
-      void* src = i == 0 ? ptr + start_offset : ptr;
-      void* dst = static_cast<char*>(buf) + i * BLOCK_SIZE;
+      char* src = i == 0 ? ptr + local_offset : ptr;
 
       memcpy(dst, src, num_bytes);
+      dst += num_bytes;
     }
 
     return static_cast<ssize_t>(count);
