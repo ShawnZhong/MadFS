@@ -23,7 +23,7 @@ class BlkTable {
   /**
    * Get log entry based on the log entry index
    */
-  inline pmem::LogEntry get_log_entry(pmem::LogEntryIdx idx) {
+  pmem::LogEntry get_log_entry(pmem::LogEntryIdx idx) {
     auto block = mem_table->get_addr(idx.block_idx);
     auto log_entry_block = &block->log_entry_block;
     return log_entry_block->get_entry(idx.local_idx);
@@ -32,7 +32,7 @@ class BlkTable {
   /**
    * Apply a transaction to the block table
    */
-  inline void apply_tx(pmem::TxCommitEntry tx_commit_entry) {
+  void apply_tx(pmem::TxCommitEntry tx_commit_entry) {
     auto log_entry_idx = tx_commit_entry.log_entry_idx;
     auto log_entry = get_log_entry(log_entry_idx);
     // TODO: linked list
@@ -47,12 +47,12 @@ class BlkTable {
     table.resize(16);
   }
 
-  inline void put(VirtualBlockIdx virtual_block_idx,
+  void put(VirtualBlockIdx virtual_block_idx,
                   LogicalBlockIdx logical_block_idx) {
     table[virtual_block_idx] = logical_block_idx;
   }
 
-  inline void range_put(VirtualBlockIdx virtual_block_idx,
+  void range_put(VirtualBlockIdx virtual_block_idx,
                         LogicalBlockIdx logical_block_idx,
                         uint32_t num_blocks) {
     if (table.size() < virtual_block_idx + num_blocks) {
@@ -63,7 +63,7 @@ class BlkTable {
     }
   }
 
-  inline LogicalBlockIdx get(VirtualBlockIdx virtual_block_idx) {
+  LogicalBlockIdx get(VirtualBlockIdx virtual_block_idx) {
     return table[virtual_block_idx];
   }
 

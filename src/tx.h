@@ -23,7 +23,7 @@ class TxMgr {
    * given a current tx_log_block, return the next block id
    * allocate one if the next one doesn't exist
    */
-  inline LogicalBlockIdx get_next_tx_log_block_idx(
+  LogicalBlockIdx get_next_tx_log_block_idx(
       pmem::TxLogBlock* tx_log_block) {
     auto block_idx = tx_log_block->get_next_block_idx();
     if (block_idx != 0) return block_idx;
@@ -43,7 +43,7 @@ class TxMgr {
   /**
    * append a transaction begin_tx entry to the tx_log
    */
-  inline pmem::TxEntryIdx append_tx_begin_entry(
+  pmem::TxEntryIdx append_tx_begin_entry(
       pmem::TxBeginEntry tx_begin_entry) {
     auto [block_idx_hint, local_idx_hint] = meta->get_tx_log_tail();
 
@@ -71,7 +71,7 @@ class TxMgr {
   /**
    * append a transaction commit_tx entry to the tx_log
    */
-  inline pmem::TxEntryIdx append_tx_commit_entry(
+  pmem::TxEntryIdx append_tx_commit_entry(
       pmem::TxCommitEntry tx_commit_entry) {
     // TODO: OCC
     auto [block_idx_hint, local_idx_hint] = meta->get_tx_log_tail();
