@@ -6,10 +6,10 @@
 
 namespace ulayfs::dram {
 
-pmem::LogicalBlockIdx Allocator::alloc(uint32_t num_blocks) {
-  pmem::LogicalBlockIdx bitmap_block_idx;
+LogicalBlockIdx Allocator::alloc(uint32_t num_blocks) {
+  LogicalBlockIdx bitmap_block_idx;
   pmem::BitmapBlock* bitmap_block;
-  assert(num_blocks <= pmem::BITMAP_CAPACITY);
+  assert(num_blocks <= BITMAP_CAPACITY);
 
   // we first try to allocate from the free list
   for (auto it = free_list.begin(); it != free_list.end(); ++it) {
@@ -52,10 +52,10 @@ pmem::LogicalBlockIdx Allocator::alloc(uint32_t num_blocks) {
 add_to_free_list:
   assert(recent_bitmap_local_idx >= 0);
   // push in decreasing order so pop will in increasing order
-  pmem::LogicalBlockIdx allocated = pmem::BitmapBlock::get_block_idx(
+  LogicalBlockIdx allocated = pmem::BitmapBlock::get_block_idx(
       recent_bitmap_block_id, recent_bitmap_local_idx);
-  if (num_blocks < pmem::BITMAP_CAPACITY) {
-    free_list.emplace_back(pmem::BITMAP_CAPACITY - num_blocks,
+  if (num_blocks < BITMAP_CAPACITY) {
+    free_list.emplace_back(BITMAP_CAPACITY - num_blocks,
                            allocated + num_blocks);
     std::sort(free_list.begin(), free_list.end());
   }
@@ -64,7 +64,7 @@ add_to_free_list:
   return allocated;
 }
 
-void Allocator::free(pmem::LogicalBlockIdx block_idx, uint32_t num_blocks) {
+void Allocator::free(LogicalBlockIdx block_idx, uint32_t num_blocks) {
   // TODO: implement this
 }
 

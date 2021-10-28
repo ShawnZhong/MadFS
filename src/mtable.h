@@ -39,11 +39,11 @@ class MemTable {
   // may be out-of-date; must re-read global one if necessary
   uint32_t num_blocks_local_copy;
 
-  std::unordered_map<pmem::LogicalBlockIdx, pmem::Block*> table;
+  std::unordered_map<LogicalBlockIdx, pmem::Block*> table;
 
  private:
   // called by other public functions with lock held
-  void grow_no_lock(pmem::LogicalBlockIdx idx) {
+  void grow_no_lock(LogicalBlockIdx idx) {
     // we need to revalidate under after acquiring lock
     if (idx < meta->get_num_blocks()) return;
 
@@ -101,7 +101,7 @@ class MemTable {
     if (should_grow) this->meta->set_num_blocks_no_lock(num_blocks_local_copy);
 
     // initialize the mapping
-    for (pmem::LogicalBlockIdx idx = 0; idx < num_blocks_local_copy;
+    for (LogicalBlockIdx idx = 0; idx < num_blocks_local_copy;
          idx += NUM_BLOCKS_PER_GROW)
       table.emplace(idx, blocks + idx);
 
@@ -109,7 +109,7 @@ class MemTable {
   }
 
   // ask more blocks for the kernel filesystem, so that idx is valid
-  void validate(pmem::LogicalBlockIdx idx) {
+  void validate(LogicalBlockIdx idx) {
     // fast path: if smaller than local copy; return
     if (idx < num_blocks_local_copy) return;
 
@@ -127,8 +127,8 @@ class MemTable {
   // filesystem block
   // get_addr will then check if it has been mapped into the address space; if
   // not, it does mapping first
-  pmem::Block* get_addr(pmem::LogicalBlockIdx idx) {
-    pmem::LogicalBlockIdx hugepage_idx = idx & ~GROW_UNIT_IN_BLOCK_MASK;
+  pmem::Block* get_addr(LogicalBlockIdx idx) {
+    LogicalBlockIdx hugepage_idx = idx & ~GROW_UNIT_IN_BLOCK_MASK;
     auto byte_offset = ((idx & GROW_UNIT_IN_BLOCK_MASK) << BLOCK_SHIFT);
     if (auto it = table.find(hugepage_idx); it != table.end())
       return reinterpret_cast<pmem::Block*>(it->second->data + byte_offset);

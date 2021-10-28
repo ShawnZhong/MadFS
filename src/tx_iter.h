@@ -19,7 +19,7 @@ struct TxIter {
     // the current one is an inline tx entry
     if (idx.block_idx == 0) {
       // the next entry is still an inline tx entry
-      if (idx.local_idx + 1 < pmem::NUM_INLINE_TX_ENTRY) {
+      if (idx.local_idx + 1 < NUM_INLINE_TX_ENTRY) {
         idx.local_idx++;
         return;
       }
@@ -30,7 +30,7 @@ struct TxIter {
     }
 
     // the current on is in tx_log_block, and the next one is in the same block
-    if (idx.local_idx + 1 < pmem::NUM_TX_ENTRY) {
+    if (idx.local_idx + 1 < NUM_TX_ENTRY) {
       idx.local_idx++;
       return;
     }

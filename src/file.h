@@ -36,8 +36,8 @@ class File {
    * @param local_offset the start offset within the first block
    */
   void write_data(const void* buf, size_t count, uint64_t local_offset,
-                  pmem::VirtualBlockIdx& start_virtual_idx,
-                  pmem::LogicalBlockIdx& start_logical_idx) {
+                  VirtualBlockIdx& start_virtual_idx,
+                  LogicalBlockIdx& start_logical_idx) {
     // the address of the start of the new blocks
     char* dst = mtable.get_addr(start_logical_idx)->data;
 
@@ -60,7 +60,7 @@ class File {
    * @param virtual_block_idx the virtual block index for a data block
    * @return the char pointer pointing to the memory location of the data block
    */
-  char* get_data_block_ptr(pmem::VirtualBlockIdx virtual_block_idx) {
+  char* get_data_block_ptr(VirtualBlockIdx virtual_block_idx) {
     auto logical_block_idx = btable.get(virtual_block_idx);
     assert(logical_block_idx != 0);
     auto block = mtable.get_addr(logical_block_idx);
@@ -89,7 +89,7 @@ class File {
    * overwrite the byte range [offset, offset + count) with the content in buf
    */
   ssize_t overwrite(const void* buf, size_t count, size_t offset) {
-    pmem::VirtualBlockIdx start_virtual_idx = ALIGN_DOWN(offset, BLOCK_SIZE);
+    VirtualBlockIdx start_virtual_idx = ALIGN_DOWN(offset, BLOCK_SIZE);
 
     uint64_t local_offset = offset - start_virtual_idx * BLOCK_SIZE;
     uint32_t num_blocks =
@@ -99,7 +99,7 @@ class File {
 
     // TODO: handle the case where num_blocks > 64
 
-    pmem::LogicalBlockIdx start_logical_idx = allocator.alloc(num_blocks);
+    LogicalBlockIdx start_logical_idx = allocator.alloc(num_blocks);
     write_data(buf, count, local_offset, start_virtual_idx, start_logical_idx);
 
     uint16_t last_remaining = num_blocks * BLOCK_SIZE - count - local_offset;
@@ -117,7 +117,7 @@ class File {
    * read_entry the byte range [offset, offset + count) to buf
    */
   ssize_t pread(void* buf, size_t count, off_t offset) {
-    pmem::VirtualBlockIdx start_virtual_idx = ALIGN_DOWN(offset, BLOCK_SIZE);
+    VirtualBlockIdx start_virtual_idx = ALIGN_DOWN(offset, BLOCK_SIZE);
 
     uint64_t local_offset = offset - start_virtual_idx * BLOCK_SIZE;
     uint32_t num_blocks =

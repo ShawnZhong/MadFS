@@ -17,8 +17,8 @@ class BlkTable {
   MemTable* mem_table;
   TxMgr* tx_mgr;
 
-  //  std::unordered_map<pmem::VirtualBlockIdx, pmem::LogicalBlockIdx> table;
-  std::vector<pmem::LogicalBlockIdx> table;
+  //  std::unordered_map<VirtualBlockIdx, LogicalBlockIdx> table;
+  std::vector<LogicalBlockIdx> table;
 
   /**
    * Get log entry based on the log entry index
@@ -47,13 +47,13 @@ class BlkTable {
     table.resize(16);
   }
 
-  inline void put(pmem::VirtualBlockIdx virtual_block_idx,
-                  pmem::LogicalBlockIdx logical_block_idx) {
+  inline void put(VirtualBlockIdx virtual_block_idx,
+                  LogicalBlockIdx logical_block_idx) {
     table[virtual_block_idx] = logical_block_idx;
   }
 
-  inline void range_put(pmem::VirtualBlockIdx virtual_block_idx,
-                        pmem::LogicalBlockIdx logical_block_idx,
+  inline void range_put(VirtualBlockIdx virtual_block_idx,
+                        LogicalBlockIdx logical_block_idx,
                         uint32_t num_blocks) {
     if (table.size() < virtual_block_idx + num_blocks) {
       table.resize(table.size() * 2);
@@ -63,7 +63,7 @@ class BlkTable {
     }
   }
 
-  inline pmem::LogicalBlockIdx get(pmem::VirtualBlockIdx virtual_block_idx) {
+  inline LogicalBlockIdx get(VirtualBlockIdx virtual_block_idx) {
     return table[virtual_block_idx];
   }
 

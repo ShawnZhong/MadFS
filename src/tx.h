@@ -2,7 +2,9 @@
 
 #include <ostream>
 
-#include "file.h"
+#include "alloc.h"
+#include "block.h"
+#include "mtable.h"
 #include "tx_iter.h"
 
 namespace ulayfs::dram {
@@ -21,7 +23,7 @@ class TxMgr {
    * given a current tx_log_block, return the next block id
    * allocate one if the next one doesn't exist
    */
-  inline pmem::LogicalBlockIdx get_next_tx_log_block_idx(
+  inline LogicalBlockIdx get_next_tx_log_block_idx(
       pmem::TxLogBlock* tx_log_block) {
     auto block_idx = tx_log_block->get_next_block_idx();
     if (block_idx != 0) return block_idx;
@@ -113,7 +115,7 @@ class TxMgr {
    * @param start_virtual_idx
    * @param num_blocks
    */
-  pmem::TxEntryIdx begin_tx(pmem::VirtualBlockIdx start_virtual_idx,
+  pmem::TxEntryIdx begin_tx(VirtualBlockIdx start_virtual_idx,
                             uint32_t num_blocks) {
     pmem::TxBeginEntry tx_begin_entry{start_virtual_idx, num_blocks};
     auto tx_log_tail = append_tx_begin_entry(tx_begin_entry);
@@ -130,8 +132,8 @@ class TxMgr {
     return tx_log_tail;
   }
 
-  pmem::LogEntryIdx write_log_entry(pmem::VirtualBlockIdx start_virtual_idx,
-                                    pmem::LogicalBlockIdx start_logical_idx,
+  pmem::LogEntryIdx write_log_entry(VirtualBlockIdx start_virtual_idx,
+                                    LogicalBlockIdx start_logical_idx,
                                     uint8_t num_blocks,
                                     uint16_t last_remaining) {
     // prepare the log_entry
@@ -146,7 +148,7 @@ class TxMgr {
 
     // check we need to allocate a new log entry block
     if (local_tail.block_idx == 0 ||
-        local_tail.local_idx == pmem::NUM_LOG_ENTRY - 1) {
+        local_tail.local_idx == NUM_LOG_ENTRY - 1) {
       local_tail.block_idx = allocator->alloc(1);
       local_tail.local_idx = 0;
     }
