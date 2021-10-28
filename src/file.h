@@ -22,8 +22,8 @@ class File {
   bool is_ulayfs_file;
 
   pmem::MetaBlock* meta{nullptr};
-  MemTable mtable;
-  BlkTable btable;
+  MemTable mem_table;
+  BlkTable blk_table;
   Allocator allocator;
   TxMgr tx_mgr;
 
@@ -39,13 +39,13 @@ class File {
                   VirtualBlockIdx& start_virtual_idx,
                   LogicalBlockIdx& start_logical_idx) {
     // the address of the start of the new blocks
-    char* dst = mtable.get_addr(start_logical_idx)->data;
+    char* dst = mem_table.get_addr(start_logical_idx)->data;
 
     // if the offset is not block-aligned, copy the remaining bytes at the
     // beginning to the shadow page
     if (local_offset) {
-      auto src_idx = btable.get(start_virtual_idx);
-      char* src = mtable.get_addr(src_idx)->data;
+      auto src_idx = blk_table.get(start_virtual_idx);
+      char* src = mem_table.get_addr(src_idx)->data;
       memcpy(dst, src, local_offset);
     }
 
@@ -61,9 +61,9 @@ class File {
    * @return the char pointer pointing to the memory location of the data block
    */
   char* get_data_block_ptr(VirtualBlockIdx virtual_block_idx) {
-    auto logical_block_idx = btable.get(virtual_block_idx);
+    auto logical_block_idx = blk_table.get(virtual_block_idx);
     assert(logical_block_idx != 0);
-    auto block = mtable.get_addr(logical_block_idx);
+    auto block = mem_table.get_addr(logical_block_idx);
     return block->data;
   }
 
@@ -108,7 +108,7 @@ class File {
 
     tx_mgr.commit_tx(tx_begin_idx, log_entry_idx);
 
-    btable.update();
+    blk_table.update();
 
     return static_cast<ssize_t>(count);
   }
@@ -143,9 +143,9 @@ class File {
   friend std::ostream& operator<<(std::ostream& out, const File& f) {
     out << "File: fd = " << f.fd << "\n";
     out << *f.meta;
-    out << f.mtable;
+    out << f.mem_table;
     out << f.tx_mgr;
-    out << f.btable;
+    out << f.blk_table;
     out << "\n";
 
     return out;

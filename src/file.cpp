@@ -22,13 +22,13 @@ int File::open(const char* pathname, int flags, mode_t mode) {
     return fd;
   }
 
-  meta = mtable.init(fd, stat_buf.st_size);
-  allocator.init(fd, meta, &mtable);
+  meta = mem_table.init(fd, stat_buf.st_size);
+  allocator.init(fd, meta, &mem_table);
 
-  tx_mgr = TxMgr(meta, &allocator, &mtable);
-  btable = BlkTable(meta, &mtable, &tx_mgr);
+  tx_mgr = TxMgr(meta, &allocator, &mem_table);
+  blk_table = BlkTable(meta, &mem_table, &tx_mgr);
 
-  btable.update();
+  blk_table.update();
 
   if (stat_buf.st_size == 0) meta->init();
   return fd;

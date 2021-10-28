@@ -42,7 +42,7 @@ LogicalBlockIdx Allocator::alloc(uint32_t num_blocks) {
   while (true) {
     bitmap_block_idx =
         pmem::BitmapBlock::get_bitmap_block_idx(recent_bitmap_block_id);
-    bitmap_block = &(mtable->get_addr(bitmap_block_idx)->bitmap_block);
+    bitmap_block = &(mem_table->get_addr(bitmap_block_idx)->bitmap_block);
     recent_bitmap_local_idx = bitmap_block->alloc_batch();
     if (recent_bitmap_local_idx >= 0) goto add_to_free_list;
     recent_bitmap_block_id++;
