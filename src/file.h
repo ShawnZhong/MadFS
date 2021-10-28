@@ -4,6 +4,7 @@
 #include <stdexcept>
 
 #include "alloc.h"
+#include "block.h"
 #include "btable.h"
 #include "config.h"
 #include "layout.h"

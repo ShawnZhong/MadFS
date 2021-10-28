@@ -6,6 +6,7 @@
 #include <stdexcept>
 #include <unordered_map>
 
+#include "block.h"
 #include "config.h"
 #include "layout.h"
 #include "params.h"
@@ -129,9 +130,9 @@ class MemTable {
   // not, it does mapping first
   pmem::Block* get_addr(LogicalBlockIdx idx) {
     LogicalBlockIdx hugepage_idx = idx & ~GROW_UNIT_IN_BLOCK_MASK;
-    auto byte_offset = ((idx & GROW_UNIT_IN_BLOCK_MASK) << BLOCK_SHIFT);
+    LogicalBlockIdx hugepage_local_idx = idx & GROW_UNIT_IN_BLOCK_MASK;
     if (auto it = table.find(hugepage_idx); it != table.end())
-      return reinterpret_cast<pmem::Block*>(it->second->data + byte_offset);
+      return it->second + hugepage_local_idx;
 
     // validate if this idx has real blocks allocated; do allocation if not
     validate(idx);
@@ -140,7 +141,7 @@ class MemTable {
     pmem::Block* hugepage_blocks = mmap_file(
         GROW_UNIT_SIZE, static_cast<off_t>(hugepage_size), MAP_POPULATE);
     table.emplace(hugepage_idx, hugepage_blocks);
-    return hugepage_blocks + byte_offset;
+    return hugepage_blocks + hugepage_local_idx;
   }
 
   friend std::ostream& operator<<(std::ostream& out, const MemTable& m) {

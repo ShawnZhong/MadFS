@@ -3,6 +3,7 @@
 #include <ostream>
 #include <unordered_map>
 
+#include "block.h"
 #include "layout.h"
 #include "tx.h"
 #include "tx_iter.h"
@@ -74,7 +75,6 @@ class BlkTable {
     auto it = tx_mgr->iter(recent_tx_log_tail);
     for (; it != end; ++it) {
       auto tx_entry = *it;
-      std::cout << tx_entry << "\n";
       if (!tx_entry.is_commit()) continue;
       auto tx_commit_entry = tx_entry.commit_entry;
       apply_tx(tx_commit_entry);

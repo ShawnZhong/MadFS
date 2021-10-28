@@ -1,5 +1,7 @@
 #include "file.h"
 
+#include "block.h"
+
 namespace ulayfs::dram {
 
 int File::open(const char* pathname, int flags, mode_t mode) {

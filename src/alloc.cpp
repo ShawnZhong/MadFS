@@ -2,6 +2,7 @@
 
 #include <cassert>
 
+#include "block.h"
 #include "layout.h"
 
 namespace ulayfs::dram {
