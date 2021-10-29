@@ -50,8 +50,6 @@ class TxMgr {
   /**
    * Begin a transaction that affects the range of blocks
    * [begin_virtual_idx, begin_virtual_idx + num_blocks)
-   * @param begin_virtual_idx
-   * @param num_blocks
    */
   pmem::TxEntryIdx begin_tx(VirtualBlockIdx begin_virtual_idx,
                             uint32_t num_blocks);
@@ -79,11 +77,9 @@ class TxMgr {
   /**
    * Move to the next transaction entry
    *
-   * @param idx the current index
+   * @param idx the current index, will be changed to the next index
    * @param tx_log_block output parameter, change to the TxLogBlock
    * corresponding to the next idx
-   *
-   * @return the next tx entry
    */
   void advance_tx_idx(pmem::TxEntryIdx& idx,
                    pmem::TxLogBlock*& tx_log_block) const;
@@ -91,6 +87,8 @@ class TxMgr {
   /**
    * given a current tx_log_block, return the next block id
    * allocate one if the next one doesn't exist
+   *
+   * @return the index of the next TxLogBlock
    */
   LogicalBlockIdx get_next_tx_block(pmem::TxLogBlock* tx_log_block) const;
 
