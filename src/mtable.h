@@ -153,4 +153,4 @@ class MemTable {
   }
 };
 
-}   // namespace ulayfs::dram
+}  // namespace ulayfs::dram

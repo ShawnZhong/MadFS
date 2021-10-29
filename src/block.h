@@ -307,8 +307,6 @@ union Block {
   char data[BLOCK_SIZE];
 };
 
-
-
 static_assert(sizeof(MetaBlock) == BLOCK_SIZE,
               "MetaBlock must be of size BLOCK_SIZE");
 static_assert(sizeof(BitmapBlock) == BLOCK_SIZE,
