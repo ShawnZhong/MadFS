@@ -82,7 +82,7 @@ class TxMgr {
    * corresponding to the next idx
    */
   void advance_tx_idx(pmem::TxEntryIdx& idx,
-                   pmem::TxLogBlock*& tx_log_block) const;
+                      pmem::TxLogBlock*& tx_log_block) const;
 
   /**
    * given a current tx_log_block, return the next block id
