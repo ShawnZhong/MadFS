@@ -65,7 +65,7 @@ constexpr static struct BuildOptions {
 
 static struct RuntimeOptions {
   bool show_config;
-  void init() {
+  RuntimeOptions() {
     show_config = std::getenv("ULAYFS_NO_SHOW_CONFIG") == nullptr;
   };
 } runtime_options;
