@@ -19,7 +19,6 @@ add_library(ulayfs SHARED
     src/params.h
     src/posix.h
     src/tx.h
-    src/tx_iter.h
     src/utils.h
     )
 target_link_libraries(ulayfs dl)

@@ -129,6 +129,8 @@ union TxEntry {
     return commit_entry.type == TxEntryType::TX_COMMIT;
   }
 
+  [[nodiscard]] bool is_valid() const { return this->data != 0; }
+
   friend std::ostream& operator<<(std::ostream& out, const TxEntry& tx_entry) {
     if (tx_entry.is_begin()) {
       out << tx_entry.begin_entry;

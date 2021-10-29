@@ -6,19 +6,16 @@
 #include "block.h"
 #include "layout.h"
 #include "tx.h"
-#include "tx_iter.h"
 
 namespace ulayfs::dram {
 
 // read logs and update mapping from virtual blocks to logical blocks
 class BlkTable {
   pmem::MetaBlock* meta;
-  pmem::TxEntryIdx recent_tx_log_tail;
 
   MemTable* mem_table;
   TxMgr* tx_mgr;
 
-  //  std::unordered_map<VirtualBlockIdx, LogicalBlockIdx> table;
   std::vector<LogicalBlockIdx> table;
 
   /**
@@ -44,7 +41,7 @@ class BlkTable {
  public:
   BlkTable() = default;
   explicit BlkTable(pmem::MetaBlock* meta, MemTable* mem_table, TxMgr* tx_mgr)
-      : meta(meta), mem_table(mem_table), tx_mgr(tx_mgr), recent_tx_log_tail() {
+      : meta(meta), mem_table(mem_table), tx_mgr(tx_mgr) {
     table.resize(16);
   }
 
@@ -71,16 +68,14 @@ class BlkTable {
    * Update the block table by applying the transactions
    */
   void update() {
-    auto end = tx_mgr->end();
-    auto it = tx_mgr->iter(recent_tx_log_tail);
-    for (; it != end; ++it) {
-      auto tx_entry = *it;
-      if (!tx_entry.is_commit()) continue;
-      auto tx_commit_entry = tx_entry.commit_entry;
-      apply_tx(tx_commit_entry);
+    while (true) {
+      auto tx_entry = tx_mgr->get_curr_tx_entry();
+      if (!tx_entry.is_valid()) break;
+      if (tx_entry.is_commit()) {
+        apply_tx(tx_entry.commit_entry);
+      }
+      tx_mgr->forward_tx_idx();
     }
-
-    if (it.is_valid()) recent_tx_log_tail = it.get_idx();
   }
 
   friend std::ostream& operator<<(std::ostream& out, const BlkTable& b) {

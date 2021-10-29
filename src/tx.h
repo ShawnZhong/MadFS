@@ -5,7 +5,6 @@
 #include "alloc.h"
 #include "block.h"
 #include "mtable.h"
-#include "tx_iter.h"
 
 namespace ulayfs::dram {
 
@@ -16,8 +15,62 @@ class TxMgr {
   Allocator* allocator;
   MemTable* mem_table;
 
+  // the tail of the local tx entry
+  pmem::TxEntryIdx local_tx_tail{};
+
+  // the block for the local_tx_tail
+  pmem::TxLogBlock* local_tx_log_block{nullptr};
+
   // the tail of the local log entry
-  pmem::LogEntryIdx local_tail;
+  pmem::LogEntryIdx local_log_tail{};
+
+  /**
+   * Read the entry from the MetaBlock or TxLogBlock
+   */
+  pmem::TxEntry get_tx_entry(pmem::TxEntryIdx idx,
+                             pmem::TxLogBlock* tx_log_block) const {
+    const auto [block_idx, local_idx] = idx;
+    if (block_idx == 0) return meta->get_inline_tx_entry(local_idx);
+    return tx_log_block->get_entry(local_idx);
+  }
+
+  /**
+   * Move to the next transaction entry
+   *
+   * @param idx the current index
+   * @param tx_log_block output parameter, change to the TxLogBlock
+   * corresponding to the next idx
+   *
+   * @return the next tx entry
+   */
+  pmem::TxEntryIdx get_next_tx_idx(pmem::TxEntryIdx idx,
+                                   pmem::TxLogBlock** tx_log_block) const {
+    // the current one is an inline tx entry
+    if (idx.block_idx == 0) {
+      // the next entry is still an inline tx entry
+      if (idx.local_idx + 1 < NUM_INLINE_TX_ENTRY) {
+        idx.local_idx++;
+        return idx;
+      }
+
+      // move to the tx block
+      idx = meta->get_tx_log_head();
+      return idx;
+    }
+
+    // the current on is in tx_log_block, and the next one is in the same block
+    if (idx.local_idx + 1 < NUM_TX_ENTRY) {
+      idx.local_idx++;
+      return idx;
+    }
+
+    // move to the next block
+    *tx_log_block = &mem_table->get_addr(idx.block_idx)->tx_log_block;
+    idx.block_idx = (*tx_log_block)->get_next_block_idx();
+    idx.local_idx = 0;
+    assert(idx.block_idx != 0);
+    return idx;
+  }
 
   /**
    * given a current tx_log_block, return the next block id
@@ -98,12 +151,20 @@ class TxMgr {
  public:
   TxMgr() = default;
   TxMgr(pmem::MetaBlock* meta, Allocator* allocator, MemTable* mem_table)
-      : meta(meta), allocator(allocator), mem_table(mem_table), local_tail() {}
+      : meta(meta), allocator(allocator), mem_table(mem_table) {}
 
-  [[nodiscard]] TxIter begin() const { return TxIter(meta, mem_table, {0, 0}); }
-  [[nodiscard]] TxIter end() const { return TxIter(meta, mem_table, {0, -1}); }
-  [[nodiscard]] TxIter iter(pmem::TxEntryIdx idx) const {
-    return {meta, mem_table, idx};
+  /**
+   * Move to the next tx index
+   */
+  void forward_tx_idx() {
+    local_tx_tail = get_next_tx_idx(local_tx_tail, &local_tx_log_block);
+  }
+
+  /**
+   * @return the current transaction entry
+   */
+  [[nodiscard]] pmem::TxEntry get_curr_tx_entry() const {
+    return get_tx_entry(local_tx_tail, local_tx_log_block);
   }
 
   /**
@@ -144,25 +205,33 @@ class TxMgr {
     log_entry.start_logical_idx = start_logical_idx;
 
     // check we need to allocate a new log entry block
-    if (local_tail.block_idx == 0 ||
-        local_tail.local_idx == NUM_LOG_ENTRY - 1) {
-      local_tail.block_idx = allocator->alloc(1);
-      local_tail.local_idx = 0;
+    if (local_log_tail.block_idx == 0 ||
+        local_log_tail.local_idx == NUM_LOG_ENTRY - 1) {
+      local_log_tail.block_idx = allocator->alloc(1);
+      local_log_tail.local_idx = 0;
     }
 
     // append the log entry
-    auto block = mem_table->get_addr(local_tail.block_idx);
+    auto block = mem_table->get_addr(local_log_tail.block_idx);
     auto log_entry_block = &block->log_entry_block;
-    log_entry_block->append(log_entry, local_tail.local_idx);
+    log_entry_block->append(log_entry, local_log_tail.local_idx);
 
-    return local_tail;
+    return local_log_tail;
   }
 
   friend std::ostream& operator<<(std::ostream& out, const TxMgr& tx_mgr) {
     out << "Transaction Log: \n";
-    for (auto it = tx_mgr.begin(); it != tx_mgr.end(); ++it) {
-      out << "\t" << it.get_idx() << ": " << *it << "\n";
+
+    pmem::TxEntryIdx idx{};
+    pmem::TxLogBlock* tx_log_block{nullptr};
+
+    while (true) {
+      auto tx_entry = tx_mgr.get_tx_entry(idx, tx_log_block);
+      if (!tx_entry.is_valid()) break;
+      out << "\t" << idx << ": " << tx_entry << "\n";
+      idx = tx_mgr.get_next_tx_idx(idx, &tx_log_block);
     }
+
     return out;
   }
 };
