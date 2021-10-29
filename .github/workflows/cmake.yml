@@ -28,4 +28,6 @@ jobs:
 
       - name: Test
         working-directory: ${{github.workspace}}/build-${{env.BUILD_TYPE}}
-        run: ./test_rw
+        run: |
+          ./test_rw
+#          ./test_sync
