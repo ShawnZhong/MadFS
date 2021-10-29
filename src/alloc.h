@@ -13,9 +13,9 @@ namespace ulayfs::dram {
 
 // per-thread data structure
 class Allocator {
+  int fd;
   pmem::MetaBlock* meta;
   MemTable* mem_table;
-  int fd;
 
   // this local free_list maintains blocks allocated from the global free_list
   // and not used yet; pair: <size, idx>

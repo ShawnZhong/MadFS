@@ -3,7 +3,15 @@ project(uLayFS)
 
 set(CMAKE_CXX_STANDARD 20)
 
-set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -march=native")
+set(CMAKE_CXX_FLAGS "\
+    ${CMAKE_CXX_FLAGS} \
+    -march=native \
+    -Werror -Wall -Wextra \
+    -Wno-unused-parameter \
+    -Wno-unused-function \
+    -Wno-unused-variable \
+    -Wno-sign-compare \
+")
 
 add_library(ulayfs SHARED
     src/alloc.h src/alloc.cpp
