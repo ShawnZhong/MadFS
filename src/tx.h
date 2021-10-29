@@ -38,7 +38,7 @@ class TxMgr {
   /**
    * Move to the next tx index
    */
-  void next() { next_tx_idx(local_tx_tail, local_tx_log_block); }
+  void advance() { advance_tx_idx(local_tx_tail, local_tx_log_block); }
 
   /**
    * @return the current transaction entry
@@ -85,7 +85,7 @@ class TxMgr {
    *
    * @return the next tx entry
    */
-  void next_tx_idx(pmem::TxEntryIdx& idx,
+  void advance_tx_idx(pmem::TxEntryIdx& idx,
                    pmem::TxLogBlock*& tx_log_block) const;
 
   /**
@@ -94,7 +94,6 @@ class TxMgr {
    */
   LogicalBlockIdx get_next_tx_block(pmem::TxLogBlock* tx_log_block) const;
 
-  // debug
  public:
   friend std::ostream& operator<<(std::ostream& out, const TxMgr& tx_mgr);
 };

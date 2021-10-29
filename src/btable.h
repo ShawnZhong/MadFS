@@ -64,7 +64,7 @@ class BlkTable {
       auto tx_entry = tx_mgr->get_entry();
       if (!tx_entry.is_valid()) break;
       if (tx_entry.is_commit()) apply_tx(tx_entry.commit_entry);
-      tx_mgr->next();
+      tx_mgr->advance();
     }
   }
 
