@@ -19,9 +19,13 @@ int open(const char* pathname, int flags, ...) {
     va_end(arg);
   }
 
-  auto file = new dram::File();
-  int fd = file->open(pathname, flags, mode);
-  if (file) files[fd] = file;
+  auto file = new dram::File(pathname, flags, mode);
+  auto fd = file->get_fd();
+  if (file) {
+    files[fd] = file;
+  } else {
+    delete file;
+  }
   return fd;
 }
 
