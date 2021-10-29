@@ -1,8 +1,8 @@
 #include "tx.h"
 
 namespace ulayfs::dram {
-void TxMgr::next_tx_idx(pmem::TxEntryIdx& idx,
-                        pmem::TxLogBlock*& tx_log_block) const {
+void TxMgr::advance_tx_idx(pmem::TxEntryIdx& idx,
+                           pmem::TxLogBlock*& tx_log_block) const {
   // the current one is an inline tx entry
   if (idx.block_idx == 0) {
     // the next entry is still an inline tx entry
@@ -163,7 +163,7 @@ std::ostream& operator<<(std::ostream& out, const TxMgr& tx_mgr) {
     auto tx_entry = tx_mgr.get_entry_from_block(idx, tx_log_block);
     if (!tx_entry.is_valid()) break;
     out << "\t" << idx << ": " << tx_entry << "\n";
-    tx_mgr.next_tx_idx(idx, tx_log_block);
+    tx_mgr.advance_tx_idx(idx, tx_log_block);
   }
 
   return out;
