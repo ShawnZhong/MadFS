@@ -316,12 +316,6 @@ union Block {
   char data[BLOCK_SIZE];
 };
 
-static_assert(sizeof(LogEntryIdx) == 5, "LogEntryIdx must of 5 bytes");
-static_assert(sizeof(Bitmap) == 8, "Bitmap must of 64 bits");
-static_assert(sizeof(TxEntry) == 8, "TxEntry must be 64 bits");
-static_assert(sizeof(TxBeginEntry) == 8, "TxEntry must be 64 bits");
-static_assert(sizeof(TxCommitEntry) == 8, "TxEntry must be 64 bits");
-static_assert(sizeof(LogEntry) == 16, "LogEntry must of size 16 bytes");
 static_assert(sizeof(MetaBlock) == BLOCK_SIZE,
               "MetaBlock must be of size BLOCK_SIZE");
 static_assert(sizeof(BitmapBlock) == BLOCK_SIZE,

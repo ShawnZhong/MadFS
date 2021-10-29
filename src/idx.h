@@ -17,4 +17,4 @@ using LogLocalIdx = int32_t;
 // identifier of bitmap blocks; checkout BitmapBlock's doc to see more
 using BitmapBlockId = uint32_t;
 
-};  // namespace ulayfs
+}  // namespace ulayfs
