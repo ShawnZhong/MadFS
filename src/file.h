@@ -20,13 +20,13 @@ class File {
   int fd = -1;
   int open_flags;
 
-  bool is_ulayfs_file;
-
-  pmem::MetaBlock* meta{nullptr};
+  pmem::MetaBlock* meta;
+  Allocator allocator;
   MemTable mem_table;
   BlkTable blk_table;
-  Allocator allocator;
   TxMgr tx_mgr;
+
+  bool is_ulayfs_file;
 
  private:
   /**
@@ -69,7 +69,35 @@ class File {
   }
 
  public:
-  File() = default;
+  File(const char* pathname, int flags, mode_t mode) {
+    int ret;
+    fd = posix::open(pathname, flags, mode);
+    if (fd < 0) return;  // fail to open the file
+    open_flags = flags;
+
+    struct stat stat_buf;  // NOLINT(cppcoreguidelines-pro-type-member-init)
+    ret = posix::fstat(fd, &stat_buf);
+    panic_if(ret, "fstat failed");
+
+    is_ulayfs_file = S_ISREG(stat_buf.st_mode) || S_ISLNK(stat_buf.st_mode);
+    if (!is_ulayfs_file) return;
+
+    if (!IS_ALIGNED(stat_buf.st_size, BLOCK_SIZE)) {
+      std::cerr << "Invalid layout: file size not block-aligned for \""
+                << pathname << "\" Fallback to syscall\n";
+      is_ulayfs_file = false;
+      return;
+    }
+
+    mem_table = MemTable(fd, stat_buf.st_size);
+    meta = mem_table.get_meta();
+    allocator = Allocator(fd, meta, &mem_table);
+    tx_mgr = TxMgr(meta, &allocator, &mem_table);
+    blk_table = BlkTable(meta, &mem_table, &tx_mgr);
+    blk_table.update();
+
+    if (stat_buf.st_size == 0) meta->init();
+  }
 
   // test if File is in a valid state
   explicit operator bool() const { return is_ulayfs_file && fd >= 0; }
@@ -78,13 +106,6 @@ class File {
   pmem::MetaBlock* get_meta() { return meta; }
 
   int get_fd() const { return fd; }
-
-  /**
-   * We use File::open to construct a File object instead of the standard
-   * constructor since open may fail, and we want to report the return value
-   * back to the caller
-   */
-  int open(const char* pathname, int flags, mode_t mode);
 
   /**
    * overwrite the byte range [offset, offset + count) with the content in buf
