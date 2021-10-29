@@ -20,13 +20,13 @@ class File {
   int fd = -1;
   int open_flags;
 
-  bool is_ulayfs_file;
-
   pmem::MetaBlock* meta;
+  Allocator allocator;
   MemTable mem_table;
   BlkTable blk_table;
-  Allocator allocator;
   TxMgr tx_mgr;
+
+  bool is_ulayfs_file;
 
  private:
   /**
@@ -89,12 +89,11 @@ class File {
       return;
     }
 
-    meta = mem_table.init(fd, stat_buf.st_size);
-    allocator.init(fd, meta, &mem_table);
-
+    mem_table = MemTable(fd, stat_buf.st_size);
+    meta = mem_table.get_meta();
+    allocator = Allocator(fd, meta, &mem_table);
     tx_mgr = TxMgr(meta, &allocator, &mem_table);
     blk_table = BlkTable(meta, &mem_table, &tx_mgr);
-
     blk_table.update();
 
     if (stat_buf.st_size == 0) meta->init();

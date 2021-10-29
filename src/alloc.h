@@ -33,17 +33,13 @@ class Allocator {
   BitmapLocalIdx recent_bitmap_local_idx;
 
  public:
-  Allocator()
-      : fd(-1),
-        meta(nullptr),
-        recent_bitmap_block_id(0),
-        recent_bitmap_local_idx(0) {}
+  Allocator() = default;
 
-  void init(int fd, pmem::MetaBlock* meta, MemTable* mem_table) {
+  Allocator(int fd, pmem::MetaBlock* meta, MemTable* mem_table) {
     this->fd = fd;
     this->meta = meta;
-    this->free_list.reserve(64);
     this->mem_table = mem_table;
+    free_list.reserve(64);
   }
 
   // allocate contiguous blocks (num_blocks must <= 64)

@@ -79,9 +79,9 @@ class MemTable {
   }
 
  public:
-  MemTable() : fd(-1), num_blocks_local_copy(0), table(){};
+  MemTable() = default;
 
-  pmem::MetaBlock* init(int fd, off_t file_size) {
+  MemTable(int fd, off_t file_size) {
     this->fd = fd;
 
     // grow to multiple of grow_unit_size if the file is empty or the file size
@@ -95,19 +95,19 @@ class MemTable {
     }
 
     pmem::Block* blocks = mmap_file(file_size, 0);
-    this->meta = &blocks->meta_block;
+    meta = &blocks->meta_block;
 
     // compute number of blocks and update the mata block if necessary
-    this->num_blocks_local_copy = file_size >> BLOCK_SHIFT;
-    if (should_grow) this->meta->set_num_blocks_no_lock(num_blocks_local_copy);
+    num_blocks_local_copy = file_size >> BLOCK_SHIFT;
+    if (should_grow) meta->set_num_blocks_no_lock(num_blocks_local_copy);
 
     // initialize the mapping
     for (LogicalBlockIdx idx = 0; idx < num_blocks_local_copy;
          idx += NUM_BLOCKS_PER_GROW)
       table.emplace(idx, blocks + idx);
-
-    return this->meta;
   }
+
+  [[nodiscard]] pmem::MetaBlock* get_meta() const { return meta; }
 
   // ask more blocks for the kernel filesystem, so that idx is valid
   void validate(LogicalBlockIdx idx) {
