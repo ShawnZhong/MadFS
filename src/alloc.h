@@ -34,11 +34,12 @@ class Allocator {
 
  public:
   Allocator() = default;
-
-  Allocator(int fd, pmem::MetaBlock* meta, MemTable* mem_table) {
-    this->fd = fd;
-    this->meta = meta;
-    this->mem_table = mem_table;
+  Allocator(int fd, pmem::MetaBlock* meta, MemTable* mem_table)
+      : fd(fd),
+        meta(meta),
+        mem_table(mem_table),
+        recent_bitmap_block_id(),
+        recent_bitmap_local_idx() {
     free_list.reserve(64);
   }
 
