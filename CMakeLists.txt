@@ -36,6 +36,9 @@ add_library(ulayfs SHARED
     )
 target_link_libraries(ulayfs dl)
 
+# enable link time optimization
+set_property(TARGET ulayfs PROPERTY INTERPROCEDURAL_OPTIMIZATION TRUE)
+
 # build options
 option(MEM_PROTECT "Enable memory protection to avoid stray writes" OFF)
 option(NO_SHARING "Assume that no two processes concurrently operate on the same file" OFF)
