@@ -118,4 +118,6 @@ class Bitmap {
   }
 };
 
+static_assert(sizeof(Bitmap) == 8, "Bitmap must of 64 bits");
+
 }  // namespace ulayfs::pmem

@@ -18,6 +18,6 @@ constexpr static uint32_t GROW_UNIT_SIZE = 1 << GROW_UNIT_SHIFT;
 // preallocate must be multiple of grow_unit
 constexpr static uint32_t PREALLOC_SHIFT = 1 * GROW_UNIT_SHIFT;
 constexpr static uint32_t PREALLOC_SIZE = 1 * GROW_UNIT_SIZE;
-};  // namespace LayoutParams
+}  // namespace LayoutParams
 
 }  // namespace ulayfs
