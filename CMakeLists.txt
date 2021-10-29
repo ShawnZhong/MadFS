@@ -36,14 +36,6 @@ add_library(ulayfs SHARED
     )
 target_link_libraries(ulayfs dl)
 
-add_executable(test_basic test/test_basic.c)
-target_link_libraries(test_basic ulayfs)
-
-add_executable(test_futex test/test_futex.cpp)
-
-add_executable(test_rw test/test_rw.cpp)
-target_link_libraries(test_rw ulayfs)
-
 # build options
 option(MEM_PROTECT "Enable memory protection to avoid stray writes" OFF)
 option(NO_SHARING "Assume that no two processes concurrently operate on the same file" OFF)
@@ -69,3 +61,14 @@ execute_process(
 configure_file("src/config.h.in" "config.h")
 
 include_directories(${CMAKE_CURRENT_BINARY_DIR})
+
+# tests
+include_directories(src)
+
+add_executable(test_basic test/test_basic.c)
+target_link_libraries(test_basic ulayfs)
+
+add_executable(test_futex test/test_futex.cpp)
+
+add_executable(test_rw test/test_rw.cpp)
+target_link_libraries(test_rw ulayfs)
