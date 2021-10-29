@@ -1,0 +1,101 @@
+#pragma once
+
+#include <ostream>
+
+#include "alloc.h"
+#include "block.h"
+#include "entry.h"
+#include "mtable.h"
+
+namespace ulayfs::dram {
+
+class TxMgr {
+ private:
+  pmem::MetaBlock* meta;
+
+  Allocator* allocator;
+  MemTable* mem_table;
+
+  // the tail of the local tx entry
+  pmem::TxEntryIdx local_tx_tail;
+
+  // the block for the local_tx_tail
+  pmem::TxLogBlock* local_tx_log_block;
+
+  // the tail of the local log entry
+  pmem::LogEntryIdx local_log_tail;
+
+ public:
+  TxMgr() = default;
+  TxMgr(pmem::MetaBlock* meta, Allocator* allocator, MemTable* mem_table)
+      : meta(meta),
+        allocator(allocator),
+        mem_table(mem_table),
+        local_tx_tail(),
+        local_tx_log_block(nullptr),
+        local_log_tail() {}
+
+  /**
+   * Move to the next tx index
+   */
+  void next() { next_tx_idx(local_tx_tail, local_tx_log_block); }
+
+  /**
+   * @return the current transaction entry
+   */
+  [[nodiscard]] pmem::TxEntry get_entry() const {
+    return get_entry_from_block(local_tx_tail, local_tx_log_block);
+  }
+
+  /**
+   * Begin a transaction that affects the range of blocks
+   * [begin_virtual_idx, begin_virtual_idx + num_blocks)
+   * @param begin_virtual_idx
+   * @param num_blocks
+   */
+  pmem::TxEntryIdx begin_tx(VirtualBlockIdx begin_virtual_idx,
+                            uint32_t num_blocks);
+
+  pmem::TxEntryIdx commit_tx(pmem::TxEntryIdx tx_begin_idx,
+                             pmem::LogEntryIdx log_entry_idx);
+
+  // TODO: move it to an dedicated LogMgr instead
+  pmem::LogEntryIdx write_log_entry(VirtualBlockIdx begin_virtual_idx,
+                                    LogicalBlockIdx begin_logical_idx,
+                                    uint8_t num_blocks,
+                                    uint16_t last_remaining);
+
+ private:
+  /**
+   * Read the entry from the MetaBlock or TxLogBlock
+   */
+  pmem::TxEntry get_entry_from_block(pmem::TxEntryIdx idx,
+                                     pmem::TxLogBlock* tx_log_block) const {
+    const auto [block_idx, local_idx] = idx;
+    if (block_idx == 0) return meta->get_inline_tx_entry(local_idx);
+    return tx_log_block->get_entry(local_idx);
+  }
+
+  /**
+   * Move to the next transaction entry
+   *
+   * @param idx the current index
+   * @param tx_log_block output parameter, change to the TxLogBlock
+   * corresponding to the next idx
+   *
+   * @return the next tx entry
+   */
+  void next_tx_idx(pmem::TxEntryIdx& idx,
+                   pmem::TxLogBlock*& tx_log_block) const;
+
+  /**
+   * given a current tx_log_block, return the next block id
+   * allocate one if the next one doesn't exist
+   */
+  LogicalBlockIdx get_next_tx_block(pmem::TxLogBlock* tx_log_block) const;
+
+  // debug
+ public:
+  friend std::ostream& operator<<(std::ostream& out, const TxMgr& tx_mgr);
+};
+}  // namespace ulayfs::dram

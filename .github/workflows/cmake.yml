@@ -4,7 +4,6 @@ on:
   push:
     branches: [ main ]
   pull_request:
-    branches: [ main ]
 
 env:
   BUILD_TYPE: debug
@@ -31,5 +30,5 @@ jobs:
 
       - name: Test
         working-directory: ${{github.workspace}}/build
-        run: ./test_alloc
+        run: ./test_rw
       

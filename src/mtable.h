@@ -6,6 +6,7 @@
 #include <stdexcept>
 #include <unordered_map>
 
+#include "block.h"
 #include "config.h"
 #include "layout.h"
 #include "params.h"
@@ -22,7 +23,7 @@ constexpr static uint32_t GROW_UNIT_IN_BLOCK_MASK =
     (1 << GROW_UNIT_IN_BLOCK_SHIFT) - 1;
 constexpr static uint32_t NUM_BLOCKS_PER_GROW = GROW_UNIT_SIZE / BLOCK_SIZE;
 
-// map index into address
+// map LogicalBlockIdx into memory address
 // this is a more low-level data structure than Allocator
 // it should maintain the virtualization of infinite large of file
 // everytime it gets a LogicalBlockIdx:
@@ -39,11 +40,11 @@ class MemTable {
   // may be out-of-date; must re-read global one if necessary
   uint32_t num_blocks_local_copy;
 
-  std::unordered_map<pmem::LogicalBlockIdx, pmem::Block*> table;
+  std::unordered_map<LogicalBlockIdx, pmem::Block*> table;
 
  private:
   // called by other public functions with lock held
-  void grow_no_lock(pmem::LogicalBlockIdx idx) {
+  void grow_no_lock(LogicalBlockIdx idx) {
     // we need to revalidate under after acquiring lock
     if (idx < meta->get_num_blocks()) return;
 
@@ -78,13 +79,10 @@ class MemTable {
   }
 
  public:
-  MemTable() : fd(-1), num_blocks_local_copy(0), table(){};
+  MemTable() = default;
 
-  pmem::MetaBlock* init(int fd, off_t file_size) {
+  MemTable(int fd, off_t file_size) {
     this->fd = fd;
-    // file size should be block-aligned
-    panic_if(!IS_ALIGNED(file_size, BLOCK_SIZE),
-             "Invalid layout: file size not block-aligned");
 
     // grow to multiple of grow_unit_size if the file is empty or the file size
     // is not grow_unit aligned
@@ -97,22 +95,22 @@ class MemTable {
     }
 
     pmem::Block* blocks = mmap_file(file_size, 0);
-    this->meta = &blocks->meta_block;
+    meta = &blocks->meta_block;
 
     // compute number of blocks and update the mata block if necessary
-    this->num_blocks_local_copy = file_size >> BLOCK_SHIFT;
-    if (should_grow) this->meta->set_num_blocks_no_lock(num_blocks_local_copy);
+    num_blocks_local_copy = file_size >> BLOCK_SHIFT;
+    if (should_grow) meta->set_num_blocks_no_lock(num_blocks_local_copy);
 
     // initialize the mapping
-    for (pmem::LogicalBlockIdx idx = 0; idx < num_blocks_local_copy;
+    for (LogicalBlockIdx idx = 0; idx < num_blocks_local_copy;
          idx += NUM_BLOCKS_PER_GROW)
       table.emplace(idx, blocks + idx);
-
-    return this->meta;
   }
 
+  [[nodiscard]] pmem::MetaBlock* get_meta() const { return meta; }
+
   // ask more blocks for the kernel filesystem, so that idx is valid
-  void validate(pmem::LogicalBlockIdx idx) {
+  void validate(LogicalBlockIdx idx) {
     // fast path: if smaller than local copy; return
     if (idx < num_blocks_local_copy) return;
 
@@ -130,11 +128,11 @@ class MemTable {
   // filesystem block
   // get_addr will then check if it has been mapped into the address space; if
   // not, it does mapping first
-  pmem::Block* get_addr(pmem::LogicalBlockIdx idx) {
-    pmem::LogicalBlockIdx hugepage_idx = idx & ~GROW_UNIT_IN_BLOCK_MASK;
-    auto offset = ((idx & GROW_UNIT_IN_BLOCK_MASK) << BLOCK_SHIFT);
-    auto it = table.find(hugepage_idx);
-    if (it != table.end()) return it->second + offset;
+  pmem::Block* get_addr(LogicalBlockIdx idx) {
+    LogicalBlockIdx hugepage_idx = idx & ~GROW_UNIT_IN_BLOCK_MASK;
+    LogicalBlockIdx hugepage_local_idx = idx & GROW_UNIT_IN_BLOCK_MASK;
+    if (auto it = table.find(hugepage_idx); it != table.end())
+      return it->second + hugepage_local_idx;
 
     // validate if this idx has real blocks allocated; do allocation if not
     validate(idx);
@@ -143,16 +141,16 @@ class MemTable {
     pmem::Block* hugepage_blocks = mmap_file(
         GROW_UNIT_SIZE, static_cast<off_t>(hugepage_size), MAP_POPULATE);
     table.emplace(hugepage_idx, hugepage_blocks);
-    return hugepage_blocks + offset;
+    return hugepage_blocks + hugepage_local_idx;
   }
 
   friend std::ostream& operator<<(std::ostream& out, const MemTable& m) {
     out << "MemTable:\n";
-    out << "\tnum_blocks_local_copy: " << m.num_blocks_local_copy << "\n";
-    out << "\ttable: \n";
     for (const auto& [blk_idx, mem_addr] : m.table) {
-      out << "\t\tblk_idx: " << blk_idx << ", mem_addr: " << mem_addr;
+      out << "\t" << blk_idx << " - " << blk_idx + NUM_BLOCKS_PER_GROW << ": ";
+      out << mem_addr << " - " << mem_addr + NUM_BLOCKS_PER_GROW;
     }
+    out << "\n";
     return out;
   }
 };

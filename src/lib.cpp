@@ -19,24 +19,30 @@ int open(const char* pathname, int flags, ...) {
     va_end(arg);
   }
 
-  auto file = new dram::File();
-  int fd = file->open(pathname, flags, mode);
-  files[fd] = file;
+  auto file = new dram::File(pathname, flags, mode);
+  auto fd = file->get_fd();
+  if (file) {
+    files[fd] = file;
+  } else {
+    delete file;
+  }
   return fd;
 }
 
-ssize_t write(int fd, const void* buf, size_t count) {
-  if constexpr (BuildOptions::debug) {
-    printf("write:count:%lu\n", count);
+ssize_t pwrite(int fd, const void* buf, size_t count, off_t offset) {
+  if (auto it = files.find(fd); it != files.end()) {
+    return it->second->overwrite(buf, count, offset);
+  } else {
+    return posix::pwrite(fd, buf, count, offset);
   }
-  return posix::write(fd, buf, count);
 }
 
-ssize_t read(int fd, void* buf, size_t count) {
-  if constexpr (BuildOptions::debug) {
-    printf("read:count:%lu\n", count);
+ssize_t pread(int fd, void* buf, size_t count, off_t offset) {
+  if (auto it = files.find(fd); it != files.end()) {
+    return it->second->pread(buf, count, offset);
+  } else {
+    return posix::pread(fd, buf, count, offset);
   }
-  return posix::read(fd, buf, count);
 }
 
 /**
@@ -48,7 +54,7 @@ ssize_t read(int fd, void* buf, size_t count) {
 void __attribute__((constructor)) ulayfs_ctor() {
   runtime_options.init();
   if (runtime_options.show_config) {
-    std::cout << build_options << std::endl;
+    std::cerr << build_options << std::endl;
   }
 }
 
