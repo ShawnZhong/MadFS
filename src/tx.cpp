@@ -1,5 +1,7 @@
 #include "tx.h"
 
+#include "entry.h"
+
 namespace ulayfs::dram {
 void TxMgr::advance_tx_idx(pmem::TxEntryIdx& idx,
                            pmem::TxLogBlock*& tx_log_block) const {
@@ -56,10 +58,7 @@ pmem::TxEntryIdx TxMgr::begin_tx(VirtualBlockIdx begin_virtual_idx,
   // append to the inline tx_entries
   if (block_idx_hint == 0) {
     auto local_idx = meta->inline_try_begin(tx_begin_entry, local_idx_hint);
-    if (local_idx >= 0) {
-      local_tx_tail = {0, local_idx};
-      goto done;
-    }
+    if (local_idx >= 0) return {0, local_idx};
   }
 
   // inline tx_entries are full, append to the tx log blocks
@@ -69,20 +68,12 @@ pmem::TxEntryIdx TxMgr::begin_tx(VirtualBlockIdx begin_virtual_idx,
 
     // try to append a begin entry to the current block
     auto local_idx = tx_log_block->try_begin(tx_begin_entry, local_idx_hint);
-    if (local_idx >= 0) {
-      local_tx_tail = {block_idx_hint, local_idx};
-      goto done;
-    }
+    if (local_idx >= 0) return {block_idx_hint, local_idx};
 
     // current block if full, try next one
     block_idx_hint = get_next_tx_block(tx_log_block);
     local_idx_hint = 0;
   }
-
-done:
-  // FIXME: in the latest design, only update tail if flush
-  meta->set_tx_log_tail(local_tx_tail);
-  return local_tx_tail;
 }
 
 pmem::TxEntryIdx TxMgr::commit_tx(pmem::TxEntryIdx tx_begin_idx,
@@ -96,10 +87,7 @@ pmem::TxEntryIdx TxMgr::commit_tx(pmem::TxEntryIdx tx_begin_idx,
   // append to the inline tx_entries
   if (block_idx_hint == 0) {
     auto local_idx = meta->inline_try_commit(tx_commit_entry, local_idx_hint);
-    if (local_idx >= 0) {
-      local_tx_tail = {0, local_idx};
-      goto done;
-    }
+    if (local_idx >= 0) return {0, local_idx};
   }
 
   // inline tx_entries are full, append to the tx log blocks
@@ -109,19 +97,12 @@ pmem::TxEntryIdx TxMgr::commit_tx(pmem::TxEntryIdx tx_begin_idx,
 
     // try to append a begin entry to the current block
     auto local_idx = tx_log_block->try_commit(tx_commit_entry, local_idx_hint);
-    if (local_idx >= 0) {
-      local_tx_tail = {block_idx_hint, local_idx};
-      goto done;
-    }
+    if (local_idx >= 0) return {block_idx_hint, local_idx};
 
     // current block if full, try next one
     block_idx_hint = get_next_tx_block(tx_log_block);
     local_idx_hint = 0;
   }
-
-done:
-  meta->set_tx_log_tail(local_tx_tail);
-  return local_tx_tail;
 }
 
 std::ostream& operator<<(std::ostream& out, const TxMgr& tx_mgr) {

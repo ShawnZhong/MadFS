@@ -20,19 +20,6 @@ class BlkTable {
 
   std::vector<LogicalBlockIdx> table;
 
-  /**
-   * Apply a transaction to the block table
-   */
-  void apply_tx(pmem::TxCommitEntry tx_commit_entry) {
-    auto log_entry_idx = tx_commit_entry.log_entry_idx;
-    auto log_entry = log_mgr->get_entry(log_entry_idx);
-    // TODO: linked list
-    if (table.size() < log_entry->begin_virtual_idx + log_entry->num_blocks)
-      table.resize(table.size() * 2);
-    for (uint32_t i = 0; i < log_entry->num_blocks; ++i)
-      put(log_entry->begin_virtual_idx + i, log_entry->begin_logical_idx + i);
-  }
-
  public:
   BlkTable() = default;
   explicit BlkTable(pmem::MetaBlock* meta, MemTable* mem_table, LogMgr* log_mgr,
@@ -48,6 +35,19 @@ class BlkTable {
 
   LogicalBlockIdx get(VirtualBlockIdx virtual_block_idx) {
     return table[virtual_block_idx];
+  }
+
+  /**
+   * Apply a transaction to the block table
+   */
+  void apply_tx(pmem::TxCommitEntry tx_commit_entry) {
+    auto log_entry_idx = tx_commit_entry.log_entry_idx;
+    auto log_entry = log_mgr->get_entry(log_entry_idx);
+    // TODO: linked list
+    if (table.size() < log_entry->begin_virtual_idx + log_entry->num_blocks)
+      table.resize(table.size() * 2);
+    for (uint32_t i = 0; i < log_entry->num_blocks; ++i)
+      put(log_entry->begin_virtual_idx + i, log_entry->begin_logical_idx + i);
   }
 
   /**

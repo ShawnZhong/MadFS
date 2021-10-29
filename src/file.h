@@ -128,8 +128,6 @@ class File {
         log_mgr.append(pmem::LOG_OVERWRITE, begin_virtual_idx,
                        begin_logical_idx, num_blocks, last_remaining);
     tx_mgr.commit_tx(tx_begin_idx, log_entry_idx);
-
-    // FIXME: tx_mgr might have already move the tail...
     blk_table.update();
 
     return static_cast<ssize_t>(count);

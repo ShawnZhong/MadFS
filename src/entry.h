@@ -15,7 +15,7 @@ namespace ulayfs::pmem {
  */
 struct __attribute__((packed)) LogEntryIdx {
   LogicalBlockIdx block_idx;
-  LogLocalIdx local_idx : 8;
+  LogLocalIdx local_idx;
 
   friend std::ostream& operator<<(std::ostream& out, const LogEntryIdx& idx) {
     out << "{ block_idx = " << idx.block_idx

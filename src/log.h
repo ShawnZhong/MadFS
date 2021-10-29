@@ -53,8 +53,7 @@ class LogMgr {
   // TODO: allocate LogEntryIdx into from allocator to free_list
   void alloc() {
     LogicalBlockIdx idx = allocator->alloc(1);
-    pmem::LogEntryBlock* block = &mem_table->get_addr(idx)->log_entry_block;
-    for (LogLocalIdx i = 0; i < NUM_LOG_ENTRY; ++i)
+    for (LogLocalIdx i = 0; i <= NUM_LOG_ENTRY - 1; ++i)
       free_list.push_back({idx, i});
   }
 };
