@@ -8,9 +8,15 @@
 
 constexpr auto FILEPATH = "test.txt";
 constexpr auto NUM_BYTES = 32;
+constexpr auto BYTES_PER_THREAD = 2;
 
 char const hex_chars[16] = {'0', '1', '2', '3', '4', '5', '6', '7',
                             '8', '9', 'A', 'B', 'C', 'D', 'E', 'F'};
+
+void fill_buff(char* buff, int num_elem, int init = 0) {
+  std::generate(buff, buff + num_elem,
+                [i = init]() mutable { return hex_chars[i++ % 16]; });
+}
 
 int main(int argc, char* argv[]) {
   remove(FILEPATH);
@@ -23,12 +29,12 @@ int main(int argc, char* argv[]) {
 
   for (int i = 0; i < NUM_BYTES; ++i) {
     threads.emplace_back(std::thread([&]() {
-      char src_buf[1]{};
-      src_buf[0] = hex_chars[i % 16];
-      pwrite(fd, src_buf, 1, i);
+      char buf[BYTES_PER_THREAD]{};
+      fill_buff(buf, BYTES_PER_THREAD, i);
+      pwrite(fd, buf, BYTES_PER_THREAD, i);
     }));
     // uncomment the line below to run sequentially
-    //    threads.back().join();
+    // threads.back().join();
   }
 
   for (auto& thread : threads) {
@@ -40,8 +46,7 @@ int main(int argc, char* argv[]) {
   std::cout << actual << "\n";
 
   char expected[NUM_BYTES];
-  std::generate(expected, expected + NUM_BYTES,
-                [i = 0]() mutable { return hex_chars[i++ % 16]; });
+  fill_buff(expected, NUM_BYTES);
 
   assert(memcmp(expected, actual, NUM_BYTES) == 0);
 }
