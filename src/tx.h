@@ -4,6 +4,7 @@
 
 #include "alloc.h"
 #include "block.h"
+#include "entry.h"
 #include "mtable.h"
 
 namespace ulayfs::dram {
@@ -37,42 +38,30 @@ class TxMgr {
   /**
    * Move to the next tx index
    */
-  void forward_tx_idx() {
-    local_tx_tail = get_next_tx_idx(local_tx_tail, &local_tx_log_block);
-  }
+  void next() { next_tx_idx(local_tx_tail, local_tx_log_block); }
 
   /**
    * @return the current transaction entry
    */
-  [[nodiscard]] pmem::TxEntry get_curr_tx_entry() const {
-    return get_tx_entry(local_tx_tail, local_tx_log_block);
+  [[nodiscard]] pmem::TxEntry get_entry() const {
+    return get_entry_from_block(local_tx_tail, local_tx_log_block);
   }
 
   /**
    * Begin a transaction that affects the range of blocks
-   * [start_virtual_idx, start_virtual_idx + num_blocks)
-   * @param start_virtual_idx
+   * [begin_virtual_idx, begin_virtual_idx + num_blocks)
+   * @param begin_virtual_idx
    * @param num_blocks
    */
-  pmem::TxEntryIdx begin_tx(VirtualBlockIdx start_virtual_idx,
-                            uint32_t num_blocks) {
-    pmem::TxBeginEntry tx_begin_entry{start_virtual_idx, num_blocks};
-    auto tx_log_tail = append_tx_begin_entry(tx_begin_entry);
-    meta->set_tx_log_tail(tx_log_tail);
-    return tx_log_tail;
-  }
+  pmem::TxEntryIdx begin_tx(VirtualBlockIdx begin_virtual_idx,
+                            uint32_t num_blocks);
 
   pmem::TxEntryIdx commit_tx(pmem::TxEntryIdx tx_begin_idx,
-                             pmem::LogEntryIdx log_entry_idx) {
-    // TODO: compute begin_offset from tx_begin_idx
-    pmem::TxCommitEntry tx_commit_entry{0, log_entry_idx};
-    auto tx_log_tail = append_tx_commit_entry(tx_commit_entry);
-    meta->set_tx_log_tail(tx_log_tail);
-    return tx_log_tail;
-  }
+                             pmem::LogEntryIdx log_entry_idx);
 
-  pmem::LogEntryIdx write_log_entry(VirtualBlockIdx start_virtual_idx,
-                                    LogicalBlockIdx start_logical_idx,
+  // TODO: move it to an dedicated LogMgr instead
+  pmem::LogEntryIdx write_log_entry(VirtualBlockIdx begin_virtual_idx,
+                                    LogicalBlockIdx begin_logical_idx,
                                     uint8_t num_blocks,
                                     uint16_t last_remaining);
 
@@ -80,8 +69,8 @@ class TxMgr {
   /**
    * Read the entry from the MetaBlock or TxLogBlock
    */
-  pmem::TxEntry get_tx_entry(pmem::TxEntryIdx idx,
-                             pmem::TxLogBlock* tx_log_block) const {
+  pmem::TxEntry get_entry_from_block(pmem::TxEntryIdx idx,
+                                     pmem::TxLogBlock* tx_log_block) const {
     const auto [block_idx, local_idx] = idx;
     if (block_idx == 0) return meta->get_inline_tx_entry(local_idx);
     return tx_log_block->get_entry(local_idx);
@@ -96,24 +85,14 @@ class TxMgr {
    *
    * @return the next tx entry
    */
-  pmem::TxEntryIdx get_next_tx_idx(pmem::TxEntryIdx idx,
-                                   pmem::TxLogBlock** tx_log_block) const;
+  void next_tx_idx(pmem::TxEntryIdx& idx,
+                   pmem::TxLogBlock*& tx_log_block) const;
 
   /**
    * given a current tx_log_block, return the next block id
    * allocate one if the next one doesn't exist
    */
-  LogicalBlockIdx get_next_tx_log_block_idx(pmem::TxLogBlock* tx_log_block);
-
-  /**
-   * append a transaction begin_tx entry to the tx_log
-   */
-  pmem::TxEntryIdx append_tx_begin_entry(pmem::TxBeginEntry tx_begin_entry);
-
-  /**
-   * append a transaction commit_tx entry to the tx_log
-   */
-  pmem::TxEntryIdx append_tx_commit_entry(pmem::TxCommitEntry tx_commit_entry);
+  LogicalBlockIdx get_next_tx_block(pmem::TxLogBlock* tx_log_block) const;
 
   // debug
  public:

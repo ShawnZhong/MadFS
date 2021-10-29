@@ -34,8 +34,10 @@ class BlkTable {
     auto log_entry_idx = tx_commit_entry.log_entry_idx;
     auto log_entry = get_log_entry(log_entry_idx);
     // TODO: linked list
-    range_put(log_entry.start_virtual_idx, log_entry.start_logical_idx,
-              log_entry.num_blocks);
+    if (table.size() < log_entry.begin_virtual_idx + log_entry.num_blocks)
+      table.resize(table.size() * 2);
+    for (uint32_t i = 0; i < log_entry.num_blocks; ++i)
+      put(log_entry.begin_virtual_idx + i, log_entry.begin_logical_idx + i);
   }
 
  public:
@@ -50,16 +52,6 @@ class BlkTable {
     table[virtual_block_idx] = logical_block_idx;
   }
 
-  void range_put(VirtualBlockIdx virtual_block_idx,
-                 LogicalBlockIdx logical_block_idx, uint32_t num_blocks) {
-    if (table.size() < virtual_block_idx + num_blocks) {
-      table.resize(table.size() * 2);
-    }
-    for (uint32_t i = 0; i < num_blocks; ++i) {
-      put(virtual_block_idx + i, logical_block_idx + i);
-    }
-  }
-
   LogicalBlockIdx get(VirtualBlockIdx virtual_block_idx) {
     return table[virtual_block_idx];
   }
@@ -69,12 +61,10 @@ class BlkTable {
    */
   void update() {
     while (true) {
-      auto tx_entry = tx_mgr->get_curr_tx_entry();
+      auto tx_entry = tx_mgr->get_entry();
       if (!tx_entry.is_valid()) break;
-      if (tx_entry.is_commit()) {
-        apply_tx(tx_entry.commit_entry);
-      }
-      tx_mgr->forward_tx_idx();
+      if (tx_entry.is_commit()) apply_tx(tx_entry.commit_entry);
+      tx_mgr->next();
     }
   }
 

@@ -84,8 +84,8 @@ class TxLogBlock : public BaseBlock {
                                TxEntry entry, TxLocalIdx hint) {
     for (TxLocalIdx idx = hint; idx <= num_entries - 1; ++idx) {
       uint64_t expected = 0;
-      if (__atomic_compare_exchange_n(&entries[idx].data, &expected, entry.data,
-                                      false, __ATOMIC_RELEASE,
+      if (__atomic_compare_exchange_n(&entries[idx].raw_bits, &expected,
+                                      entry.raw_bits, false, __ATOMIC_RELEASE,
                                       __ATOMIC_ACQUIRE)) {
         persist_cl_fenced(&entries[idx]);
         return idx;

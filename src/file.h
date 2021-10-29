@@ -30,22 +30,22 @@ class File {
 
  private:
   /**
-   * Write data to the shadow page starting from start_logical_idx
+   * Write data to the shadow page starting from begin_logical_idx
    *
    * @param buf the buffer given by the user
    * @param count number of bytes in the buffer
    * @param local_offset the start offset within the first block
    */
   void write_data(const void* buf, size_t count, uint64_t local_offset,
-                  VirtualBlockIdx& start_virtual_idx,
-                  LogicalBlockIdx& start_logical_idx) {
+                  VirtualBlockIdx& begin_virtual_idx,
+                  LogicalBlockIdx& begin_logical_idx) {
     // the address of the start of the new blocks
-    char* dst = mem_table.get_addr(start_logical_idx)->data;
+    char* dst = mem_table.get_addr(begin_logical_idx)->data;
 
     // if the offset is not block-aligned, copy the remaining bytes at the
     // beginning to the shadow page
     if (local_offset) {
-      auto src_idx = blk_table.get(start_virtual_idx);
+      auto src_idx = blk_table.get(begin_virtual_idx);
       char* src = mem_table.get_addr(src_idx)->data;
       memcpy(dst, src, local_offset);
     }
@@ -111,22 +111,22 @@ class File {
    * overwrite the byte range [offset, offset + count) with the content in buf
    */
   ssize_t overwrite(const void* buf, size_t count, size_t offset) {
-    VirtualBlockIdx start_virtual_idx = ALIGN_DOWN(offset, BLOCK_SIZE);
+    VirtualBlockIdx begin_virtual_idx = ALIGN_DOWN(offset, BLOCK_SIZE);
 
-    uint64_t local_offset = offset - start_virtual_idx * BLOCK_SIZE;
+    uint64_t local_offset = offset - begin_virtual_idx * BLOCK_SIZE;
     uint32_t num_blocks =
         ALIGN_UP(count + local_offset, BLOCK_SIZE) >> BLOCK_SHIFT;
 
-    auto tx_begin_idx = tx_mgr.begin_tx(start_virtual_idx, num_blocks);
+    auto tx_begin_idx = tx_mgr.begin_tx(begin_virtual_idx, num_blocks);
 
     // TODO: handle the case where num_blocks > 64
 
-    LogicalBlockIdx start_logical_idx = allocator.alloc(num_blocks);
-    write_data(buf, count, local_offset, start_virtual_idx, start_logical_idx);
+    LogicalBlockIdx begin_logical_idx = allocator.alloc(num_blocks);
+    write_data(buf, count, local_offset, begin_virtual_idx, begin_logical_idx);
 
     uint16_t last_remaining = num_blocks * BLOCK_SIZE - count - local_offset;
     auto log_entry_idx = tx_mgr.write_log_entry(
-        start_virtual_idx, start_logical_idx, num_blocks, last_remaining);
+        begin_virtual_idx, begin_logical_idx, num_blocks, last_remaining);
 
     tx_mgr.commit_tx(tx_begin_idx, log_entry_idx);
 
@@ -139,9 +139,9 @@ class File {
    * read_entry the byte range [offset, offset + count) to buf
    */
   ssize_t pread(void* buf, size_t count, off_t offset) {
-    VirtualBlockIdx start_virtual_idx = ALIGN_DOWN(offset, BLOCK_SIZE);
+    VirtualBlockIdx begin_virtual_idx = ALIGN_DOWN(offset, BLOCK_SIZE);
 
-    uint64_t local_offset = offset - start_virtual_idx * BLOCK_SIZE;
+    uint64_t local_offset = offset - begin_virtual_idx * BLOCK_SIZE;
     uint32_t num_blocks =
         ALIGN_UP(count + local_offset, BLOCK_SIZE) >> BLOCK_SHIFT;
     uint16_t last_remaining = num_blocks * BLOCK_SIZE - count - local_offset;
@@ -152,7 +152,7 @@ class File {
       if (i == 0) num_bytes -= local_offset;
       if (i == num_blocks - 1) num_bytes -= last_remaining;
 
-      char* ptr = get_data_block_ptr(start_virtual_idx + i);
+      char* ptr = get_data_block_ptr(begin_virtual_idx + i);
       char* src = i == 0 ? ptr + local_offset : ptr;
 
       memcpy(dst, src, num_bytes);
