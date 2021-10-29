@@ -124,35 +124,6 @@ done:
   return local_tx_tail;
 }
 
-pmem::LogEntryIdx TxMgr::write_log_entry(VirtualBlockIdx begin_virtual_idx,
-                                         LogicalBlockIdx begin_logical_idx,
-                                         uint8_t num_blocks,
-                                         uint16_t last_remaining) {
-  // prepare the log_entry
-  pmem::LogEntry log_entry;  // NOLINT(cppcoreguidelines-pro-type-member-init)
-  log_entry.op = pmem::LOG_OVERWRITE;
-  log_entry.last_remaining = last_remaining;
-  log_entry.num_blocks = num_blocks;
-  log_entry.next.block_idx = 0;
-  log_entry.next.local_idx = 0;
-  log_entry.begin_virtual_idx = begin_virtual_idx;
-  log_entry.begin_logical_idx = begin_logical_idx;
-
-  // check we need to allocate a new log entry block
-  if (local_log_tail.block_idx == 0 ||
-      local_log_tail.local_idx == NUM_LOG_ENTRY - 1) {
-    local_log_tail.block_idx = allocator->alloc(1);
-    local_log_tail.local_idx = 0;
-  }
-
-  // append the log entry
-  auto block = mem_table->get_addr(local_log_tail.block_idx);
-  auto log_entry_block = &block->log_entry_block;
-  log_entry_block->append(log_entry, local_log_tail.local_idx);
-
-  return local_log_tail;
-}
-
 std::ostream& operator<<(std::ostream& out, const TxMgr& tx_mgr) {
   out << "Transaction Log: \n";
 

@@ -22,9 +22,6 @@ class TxMgr {
   // the block for the local_tx_tail
   pmem::TxLogBlock* local_tx_log_block;
 
-  // the tail of the local log entry
-  pmem::LogEntryIdx local_log_tail;
-
  public:
   TxMgr() = default;
   TxMgr(pmem::MetaBlock* meta, Allocator* allocator, MemTable* mem_table)
@@ -32,8 +29,7 @@ class TxMgr {
         allocator(allocator),
         mem_table(mem_table),
         local_tx_tail(),
-        local_tx_log_block(nullptr),
-        local_log_tail() {}
+        local_tx_log_block(nullptr) {}
 
   /**
    * Move to the next tx index
@@ -43,7 +39,7 @@ class TxMgr {
   /**
    * @return the current transaction entry
    */
-  [[nodiscard]] pmem::TxEntry get_entry() const {
+  [[nodiscard]] pmem::TxEntry get() const {
     return get_entry_from_block(local_tx_tail, local_tx_log_block);
   }
 
@@ -59,12 +55,6 @@ class TxMgr {
   pmem::TxEntryIdx commit_tx(pmem::TxEntryIdx tx_begin_idx,
                              pmem::LogEntryIdx log_entry_idx);
 
-  // TODO: move it to an dedicated LogMgr instead
-  pmem::LogEntryIdx write_log_entry(VirtualBlockIdx begin_virtual_idx,
-                                    LogicalBlockIdx begin_logical_idx,
-                                    uint8_t num_blocks,
-                                    uint16_t last_remaining);
-
  private:
   /**
    * Read the entry from the MetaBlock or TxLogBlock
@@ -73,7 +63,7 @@ class TxMgr {
                                      pmem::TxLogBlock* tx_log_block) const {
     const auto [block_idx, local_idx] = idx;
     if (block_idx == 0) return meta->get_inline_tx_entry(local_idx);
-    return tx_log_block->get_entry(local_idx);
+    return tx_log_block->get(local_idx);
   }
 
   /**

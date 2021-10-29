@@ -1,6 +1,7 @@
 #pragma once
 
 #include "bitmap.h"
+#include "entry.h"
 #include "layout.h"
 
 namespace ulayfs::pmem {
@@ -65,6 +66,9 @@ class BitmapBlock : public BaseBlock {
 };
 
 class TxLogBlock : public BaseBlock {
+  // FIXME: it doesn't have to be atomic, because it only gets updated when new
+  // block is added. Normal read doesn't have to acquire fence; only if seeing
+  // a null and try to CAS will require fence
   std::atomic<LogicalBlockIdx> prev;
   std::atomic<LogicalBlockIdx> next;
   TxEntry tx_entries[NUM_TX_ENTRY];
@@ -104,7 +108,7 @@ class TxLogBlock : public BaseBlock {
     return try_append(tx_entries, NUM_TX_ENTRY, commit_entry, hint_tail);
   }
 
-  TxEntry get_entry(TxLocalIdx idx) {
+  TxEntry get(TxLocalIdx idx) {
     assert(idx >= 0 && idx < NUM_TX_ENTRY);
     return tx_entries[idx];
   }
@@ -132,18 +136,23 @@ class LogEntryBlock : public BaseBlock {
   LogEntry log_entries[NUM_LOG_ENTRY];
 
  public:
-  /**
-   * @param log_entry the log entry to be appended to the block
-   * @param tail_idx the current log tail
-   */
-  void append(LogEntry log_entry, LogLocalIdx tail_idx) {
-    log_entries[tail_idx] = log_entry;
-    persist_cl_fenced(&log_entries[tail_idx]);
-  };
-
-  [[nodiscard]] LogEntry get_entry(LogLocalIdx idx) {
+  [[nodiscard]] LogEntry& get(LogLocalIdx idx) {
     assert(idx >= 0 && idx < NUM_LOG_ENTRY);
     return log_entries[idx];
+  }
+
+  // TODO: linked list
+  void set(LogLocalIdx idx, LogOp op, VirtualBlockIdx begin_virtual_idx,
+           LogicalBlockIdx begin_logical_idx, uint8_t num_blocks,
+           uint16_t last_remaining) {
+    log_entries[idx].op = op;
+    log_entries[idx].last_remaining = last_remaining;
+    log_entries[idx].num_blocks = num_blocks;
+    log_entries[idx].begin_virtual_idx = begin_virtual_idx;
+    log_entries[idx].begin_logical_idx = begin_logical_idx;
+    // log_entries[idx].next.block_idx = 0;
+    // log_entries[idx].next.local_idx = 0;
+    persist_cl_fenced(&log_entries[idx]);
   }
 };
 

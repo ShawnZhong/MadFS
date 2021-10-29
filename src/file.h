@@ -7,7 +7,9 @@
 #include "block.h"
 #include "btable.h"
 #include "config.h"
+#include "entry.h"
 #include "layout.h"
+#include "log.h"
 #include "mtable.h"
 #include "posix.h"
 #include "tx.h"
@@ -17,13 +19,14 @@
 namespace ulayfs::dram {
 
 class File {
-  int fd = -1;
+  int fd;
   int open_flags;
 
   pmem::MetaBlock* meta;
   Allocator allocator;
   MemTable mem_table;
   BlkTable blk_table;
+  LogMgr log_mgr;
   TxMgr tx_mgr;
 
   bool is_ulayfs_file;
@@ -92,8 +95,9 @@ class File {
     mem_table = MemTable(fd, stat_buf.st_size);
     meta = mem_table.get_meta();
     allocator = Allocator(fd, meta, &mem_table);
+    log_mgr = LogMgr(meta, &allocator, &mem_table);
     tx_mgr = TxMgr(meta, &allocator, &mem_table);
-    blk_table = BlkTable(meta, &mem_table, &tx_mgr);
+    blk_table = BlkTable(meta, &mem_table, &log_mgr, &tx_mgr);
     blk_table.update();
 
     if (stat_buf.st_size == 0) meta->init();
@@ -125,11 +129,12 @@ class File {
     write_data(buf, count, local_offset, begin_virtual_idx, begin_logical_idx);
 
     uint16_t last_remaining = num_blocks * BLOCK_SIZE - count - local_offset;
-    auto log_entry_idx = tx_mgr.write_log_entry(
-        begin_virtual_idx, begin_logical_idx, num_blocks, last_remaining);
-
+    auto log_entry_idx =
+        log_mgr.append(pmem::LOG_OVERWRITE, begin_virtual_idx,
+                       begin_logical_idx, num_blocks, last_remaining);
     tx_mgr.commit_tx(tx_begin_idx, log_entry_idx);
 
+    // FIXME: tx_mgr might have already move the tail...
     blk_table.update();
 
     return static_cast<ssize_t>(count);
