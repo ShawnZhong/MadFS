@@ -4,6 +4,7 @@
 #include <stdexcept>
 
 #include "alloc.h"
+#include "block.h"
 #include "btable.h"
 #include "config.h"
 #include "layout.h"
@@ -19,33 +20,33 @@ class File {
   int fd = -1;
   int open_flags;
 
-  bool is_ulayfs_file;
-
-  pmem::MetaBlock* meta{nullptr};
-  MemTable mtable;
-  BlkTable btable;
+  pmem::MetaBlock* meta;
   Allocator allocator;
+  MemTable mem_table;
+  BlkTable blk_table;
   TxMgr tx_mgr;
+
+  bool is_ulayfs_file;
 
  private:
   /**
-   * Write data to the shadow page starting from start_logical_idx
+   * Write data to the shadow page starting from begin_logical_idx
    *
    * @param buf the buffer given by the user
    * @param count number of bytes in the buffer
    * @param local_offset the start offset within the first block
    */
   void write_data(const void* buf, size_t count, uint64_t local_offset,
-                  pmem::VirtualBlockIdx& start_virtual_idx,
-                  pmem::LogicalBlockIdx& start_logical_idx) {
+                  VirtualBlockIdx& begin_virtual_idx,
+                  LogicalBlockIdx& begin_logical_idx) {
     // the address of the start of the new blocks
-    char* dst = mtable.get_addr(start_logical_idx)->data;
+    char* dst = mem_table.get_addr(begin_logical_idx)->data;
 
     // if the offset is not block-aligned, copy the remaining bytes at the
     // beginning to the shadow page
     if (local_offset) {
-      auto src_idx = btable.get(start_virtual_idx);
-      char* src = mtable.get_addr(src_idx)->data;
+      auto src_idx = blk_table.get(begin_virtual_idx);
+      char* src = mem_table.get_addr(src_idx)->data;
       memcpy(dst, src, local_offset);
     }
 
@@ -60,15 +61,43 @@ class File {
    * @param virtual_block_idx the virtual block index for a data block
    * @return the char pointer pointing to the memory location of the data block
    */
-  char* get_data_block_ptr(pmem::VirtualBlockIdx virtual_block_idx) {
-    auto logical_block_idx = btable.get(virtual_block_idx);
+  char* get_data_block_ptr(VirtualBlockIdx virtual_block_idx) {
+    auto logical_block_idx = blk_table.get(virtual_block_idx);
     assert(logical_block_idx != 0);
-    auto block = mtable.get_addr(logical_block_idx);
+    auto block = mem_table.get_addr(logical_block_idx);
     return block->data;
   }
 
  public:
-  File() = default;
+  File(const char* pathname, int flags, mode_t mode) {
+    int ret;
+    fd = posix::open(pathname, flags, mode);
+    if (fd < 0) return;  // fail to open the file
+    open_flags = flags;
+
+    struct stat stat_buf;  // NOLINT(cppcoreguidelines-pro-type-member-init)
+    ret = posix::fstat(fd, &stat_buf);
+    panic_if(ret, "fstat failed");
+
+    is_ulayfs_file = S_ISREG(stat_buf.st_mode) || S_ISLNK(stat_buf.st_mode);
+    if (!is_ulayfs_file) return;
+
+    if (!IS_ALIGNED(stat_buf.st_size, BLOCK_SIZE)) {
+      std::cerr << "Invalid layout: file size not block-aligned for \""
+                << pathname << "\" Fallback to syscall\n";
+      is_ulayfs_file = false;
+      return;
+    }
+
+    mem_table = MemTable(fd, stat_buf.st_size);
+    meta = mem_table.get_meta();
+    allocator = Allocator(fd, meta, &mem_table);
+    tx_mgr = TxMgr(meta, &allocator, &mem_table);
+    blk_table = BlkTable(meta, &mem_table, &tx_mgr);
+    blk_table.update();
+
+    if (stat_buf.st_size == 0) meta->init();
+  }
 
   // test if File is in a valid state
   explicit operator bool() const { return is_ulayfs_file && fd >= 0; }
@@ -79,36 +108,29 @@ class File {
   int get_fd() const { return fd; }
 
   /**
-   * We use File::open to construct a File object instead of the standard
-   * constructor since open may fail, and we want to report the return value
-   * back to the caller
-   */
-  int open(const char* pathname, int flags, mode_t mode);
-
-  /**
    * overwrite the byte range [offset, offset + count) with the content in buf
    */
   ssize_t overwrite(const void* buf, size_t count, size_t offset) {
-    pmem::VirtualBlockIdx start_virtual_idx = ALIGN_DOWN(offset, BLOCK_SIZE);
+    VirtualBlockIdx begin_virtual_idx = ALIGN_DOWN(offset, BLOCK_SIZE);
 
-    uint64_t local_offset = offset - start_virtual_idx * BLOCK_SIZE;
+    uint64_t local_offset = offset - begin_virtual_idx * BLOCK_SIZE;
     uint32_t num_blocks =
         ALIGN_UP(count + local_offset, BLOCK_SIZE) >> BLOCK_SHIFT;
 
-    auto tx_begin_idx = tx_mgr.begin_tx(start_virtual_idx, num_blocks);
+    auto tx_begin_idx = tx_mgr.begin_tx(begin_virtual_idx, num_blocks);
 
     // TODO: handle the case where num_blocks > 64
 
-    pmem::LogicalBlockIdx start_logical_idx = allocator.alloc(num_blocks);
-    write_data(buf, count, local_offset, start_virtual_idx, start_logical_idx);
+    LogicalBlockIdx begin_logical_idx = allocator.alloc(num_blocks);
+    write_data(buf, count, local_offset, begin_virtual_idx, begin_logical_idx);
 
     uint16_t last_remaining = num_blocks * BLOCK_SIZE - count - local_offset;
     auto log_entry_idx = tx_mgr.write_log_entry(
-        start_virtual_idx, start_logical_idx, num_blocks, last_remaining);
+        begin_virtual_idx, begin_logical_idx, num_blocks, last_remaining);
 
     tx_mgr.commit_tx(tx_begin_idx, log_entry_idx);
 
-    btable.update();
+    blk_table.update();
 
     return static_cast<ssize_t>(count);
   }
@@ -117,9 +139,9 @@ class File {
    * read_entry the byte range [offset, offset + count) to buf
    */
   ssize_t pread(void* buf, size_t count, off_t offset) {
-    pmem::VirtualBlockIdx start_virtual_idx = ALIGN_DOWN(offset, BLOCK_SIZE);
+    VirtualBlockIdx begin_virtual_idx = ALIGN_DOWN(offset, BLOCK_SIZE);
 
-    uint64_t local_offset = offset - start_virtual_idx * BLOCK_SIZE;
+    uint64_t local_offset = offset - begin_virtual_idx * BLOCK_SIZE;
     uint32_t num_blocks =
         ALIGN_UP(count + local_offset, BLOCK_SIZE) >> BLOCK_SHIFT;
     uint16_t last_remaining = num_blocks * BLOCK_SIZE - count - local_offset;
@@ -130,7 +152,7 @@ class File {
       if (i == 0) num_bytes -= local_offset;
       if (i == num_blocks - 1) num_bytes -= last_remaining;
 
-      char* ptr = get_data_block_ptr(start_virtual_idx + i);
+      char* ptr = get_data_block_ptr(begin_virtual_idx + i);
       char* src = i == 0 ? ptr + local_offset : ptr;
 
       memcpy(dst, src, num_bytes);
@@ -143,9 +165,9 @@ class File {
   friend std::ostream& operator<<(std::ostream& out, const File& f) {
     out << "File: fd = " << f.fd << "\n";
     out << *f.meta;
-    out << f.mtable;
+    out << f.mem_table;
     out << f.tx_mgr;
-    out << f.btable;
+    out << f.blk_table;
     out << "\n";
 
     return out;
