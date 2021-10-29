@@ -27,10 +27,12 @@ int main(int argc, char* argv[]) {
       src_buf[0] = hex_chars[i % 16];
       pwrite(fd, src_buf, 1, i);
     }));
+    // uncomment the line below to run sequentially
+    //    threads.back().join();
   }
 
   for (auto& thread : threads) {
-    thread.join();
+    if (thread.joinable()) thread.join();
   }
 
   char actual[NUM_BYTES]{};
