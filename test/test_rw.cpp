@@ -3,7 +3,7 @@
 #include <cassert>
 #include <iostream>
 
-#include "../src/lib.h"
+#include "lib.h"
 
 constexpr auto FILEPATH = "test.txt";
 constexpr auto NUM_BYTES = 4096 * 7 + 4567;

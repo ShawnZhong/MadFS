@@ -13,6 +13,7 @@ void TxMgr::advance_tx_idx(pmem::TxEntryIdx& idx,
 
     // move to the tx block
     idx = meta->get_tx_log_head();
+    assert(idx.block_idx != 0);
     return;
   }
 
@@ -27,7 +28,6 @@ void TxMgr::advance_tx_idx(pmem::TxEntryIdx& idx,
   idx.block_idx = tx_log_block->get_next_block_idx();
   idx.local_idx = 0;
   assert(idx.block_idx != 0);
-  return;
 }
 
 LogicalBlockIdx TxMgr::get_next_tx_block(pmem::TxLogBlock* tx_log_block) const {

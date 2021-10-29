@@ -19,14 +19,13 @@ namespace ulayfs::dram {
 class File {
   int fd = -1;
   int open_flags;
+  bool valid;
 
   pmem::MetaBlock* meta;
   Allocator allocator;
   MemTable mem_table;
   BlkTable blk_table;
   TxMgr tx_mgr;
-
-  bool is_ulayfs_file;
 
  private:
   /**
@@ -69,23 +68,21 @@ class File {
   }
 
  public:
-  File(const char* pathname, int flags, mode_t mode) {
-    int ret;
+  File(const char* pathname, int flags, mode_t mode)
+      : open_flags(flags), valid(false) {
     fd = posix::open(pathname, flags, mode);
     if (fd < 0) return;  // fail to open the file
-    open_flags = flags;
 
     struct stat stat_buf;  // NOLINT(cppcoreguidelines-pro-type-member-init)
-    ret = posix::fstat(fd, &stat_buf);
+    int ret = posix::fstat(fd, &stat_buf);
     panic_if(ret, "fstat failed");
 
-    is_ulayfs_file = S_ISREG(stat_buf.st_mode) || S_ISLNK(stat_buf.st_mode);
-    if (!is_ulayfs_file) return;
+    // we don't handle non-normal file (e.g., socket, directory, block dev)
+    if (!S_ISREG(stat_buf.st_mode) && !S_ISLNK(stat_buf.st_mode)) return;
 
     if (!IS_ALIGNED(stat_buf.st_size, BLOCK_SIZE)) {
       std::cerr << "Invalid layout: file size not block-aligned for \""
                 << pathname << "\" Fallback to syscall\n";
-      is_ulayfs_file = false;
       return;
     }
 
@@ -97,15 +94,13 @@ class File {
     blk_table.update();
 
     if (stat_buf.st_size == 0) meta->init();
+
+    valid = true;
   }
 
-  // test if File is in a valid state
-  explicit operator bool() const { return is_ulayfs_file && fd >= 0; }
-  bool operator!() const { return !bool(this); }
-
-  pmem::MetaBlock* get_meta() { return meta; }
-
-  int get_fd() const { return fd; }
+  [[nodiscard]] bool is_valid() const { return valid; }
+  [[nodiscard]] pmem::MetaBlock* get_meta() { return meta; }
+  [[nodiscard]] int get_fd() const { return fd; }
 
   /**
    * overwrite the byte range [offset, offset + count) with the content in buf

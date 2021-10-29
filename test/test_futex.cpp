@@ -1,7 +1,7 @@
 #include <sys/mman.h>
 #include <sys/wait.h>
 
-#include "../src/futex.h"
+#include "futex.h"
 
 using namespace ulayfs;
 
