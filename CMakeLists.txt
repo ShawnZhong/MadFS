@@ -11,15 +11,14 @@ add_library(ulayfs SHARED
     src/block.h
     src/btable.h
     src/entry.h
-    src/file.h src/file.cpp
+    src/file.h
     src/futex.h
     src/layout.h
     src/lib.h src/lib.cpp
     src/mtable.h
     src/params.h
     src/posix.h
-    src/tx.h
-    src/tx_iter.h
+    src/tx.h src/tx.cpp
     src/utils.h
     )
 target_link_libraries(ulayfs dl)

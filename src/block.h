@@ -84,8 +84,8 @@ class TxLogBlock : public BaseBlock {
                                TxEntry entry, TxLocalIdx hint) {
     for (TxLocalIdx idx = hint; idx <= num_entries - 1; ++idx) {
       uint64_t expected = 0;
-      if (__atomic_compare_exchange_n(&entries[idx].data, &expected, entry.data,
-                                      false, __ATOMIC_RELEASE,
+      if (__atomic_compare_exchange_n(&entries[idx].raw_bits, &expected,
+                                      entry.raw_bits, false, __ATOMIC_RELEASE,
                                       __ATOMIC_ACQUIRE)) {
         persist_cl_fenced(&entries[idx]);
         return idx;
@@ -117,10 +117,11 @@ class TxLogBlock : public BaseBlock {
    * Set the next block index
    * @return true on success, false if there is a race condition
    */
-  bool set_next_block_idx(LogicalBlockIdx next) {
+  bool set_next_block_idx(LogicalBlockIdx new_next) {
     LogicalBlockIdx expected = 0;
     bool success = this->next.compare_exchange_strong(
-        expected, next, std::memory_order_release, std::memory_order_acquire);
+        expected, new_next, std::memory_order_release,
+        std::memory_order_acquire);
     persist_cl_fenced(&this->next);
     return success;
   }

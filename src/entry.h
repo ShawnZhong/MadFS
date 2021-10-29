@@ -1,7 +1,6 @@
 #pragma once
 
 #include <iostream>
-#include <limits>
 #include <tuple>
 
 #include "idx.h"
@@ -24,6 +23,8 @@ struct __attribute__((packed)) LogEntryIdx {
     return out;
   }
 };
+
+static_assert(sizeof(LogEntryIdx) == 5, "LogEntryIdx must of size 5 bytes");
 
 /**
  * A transaction entry is identified by the block index and the local index
@@ -59,19 +60,8 @@ enum class TxEntryType : bool {
 struct TxBeginEntry {
   enum TxEntryType type : 1 = TxEntryType::TX_BEGIN;
 
-  // This transaction affects the blocks [block_idx_start, block_idx_end]
-  // We have 32 bits for block_id_end instead of 31 because we want to use
-  // -1 (i.e., UINT32_MAX) to represent the end of the file
   VirtualBlockIdx block_idx_start : 31;
   VirtualBlockIdx block_idx_end;
-
-  /**
-   * Construct a tx begin_tx entry from block_idx_start to the end of the file
-   */
-  explicit TxBeginEntry(VirtualBlockIdx block_idx_start)
-      : block_idx_start(block_idx_start) {
-    block_idx_end = std::numeric_limits<VirtualBlockIdx>::max();
-  }
 
   /**
    * Construct a tx begin_tx entry for the range
@@ -116,7 +106,7 @@ struct TxCommitEntry {
 union TxEntry {
   TxBeginEntry begin_entry;
   TxCommitEntry commit_entry;
-  uint64_t data;
+  uint64_t raw_bits;
 
   TxEntry(){};
   TxEntry(const TxBeginEntry& begin_entry) : begin_entry(begin_entry) {}
@@ -129,17 +119,19 @@ union TxEntry {
     return commit_entry.type == TxEntryType::TX_COMMIT;
   }
 
+  [[nodiscard]] bool is_valid() const { return raw_bits != 0; }
+
   friend std::ostream& operator<<(std::ostream& out, const TxEntry& tx_entry) {
-    if (tx_entry.is_begin()) {
+    if (tx_entry.is_begin())
       out << tx_entry.begin_entry;
-    } else if (tx_entry.is_commit()) {
+    else if (tx_entry.is_commit())
       out << tx_entry.commit_entry;
-    }
     return out;
   }
 };
 
 enum LogOp {
+  LOG_INVALID = 0,
   // we start the enum from 1 so that a LogOp with value 0 is invalid
   LOG_OVERWRITE = 1,
 };
@@ -165,8 +157,8 @@ class LogEntry {
 
   // we map the logical blocks [logical_idx, logical_idx + num_blocks)
   // to the virtual blocks [virtual_idx, virtual_idx + num_blocks)
-  VirtualBlockIdx start_virtual_idx;
-  LogicalBlockIdx start_logical_idx;
+  VirtualBlockIdx begin_virtual_idx;
+  LogicalBlockIdx begin_logical_idx;
 };
 
 static_assert(sizeof(LogEntry) == 16, "LogEntry must of size 16 bytes");
