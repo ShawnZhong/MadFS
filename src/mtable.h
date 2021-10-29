@@ -15,8 +15,6 @@
 
 namespace ulayfs::dram {
 
-using namespace LayoutParams;
-
 constexpr static uint32_t GROW_UNIT_IN_BLOCK_SHIFT =
     GROW_UNIT_SHIFT - BLOCK_SHIFT;
 constexpr static uint32_t GROW_UNIT_IN_BLOCK_MASK =
@@ -155,4 +153,4 @@ class MemTable {
   }
 };
 
-};  // namespace ulayfs::dram
+}  // namespace ulayfs::dram

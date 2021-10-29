@@ -13,9 +13,7 @@ namespace ulayfs {
 constexpr static uint32_t BITMAP_CAPACITY_SHIFT = 6;
 constexpr static uint32_t BITMAP_CAPACITY = 1 << BITMAP_CAPACITY_SHIFT;
 
-}  // namespace ulayfs
-
-namespace ulayfs::pmem {
+namespace pmem {
 // All member functions are thread-safe and require no locks
 class Bitmap {
  private:
@@ -118,4 +116,7 @@ class Bitmap {
   }
 };
 
-}  // namespace ulayfs::pmem
+static_assert(sizeof(Bitmap) == 8, "Bitmap must of 64 bits");
+
+}  // namespace pmem
+}  // namespace ulayfs

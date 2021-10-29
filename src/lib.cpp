@@ -21,7 +21,7 @@ int open(const char* pathname, int flags, ...) {
 
   auto file = new dram::File(pathname, flags, mode);
   auto fd = file->get_fd();
-  if (file) {
+  if (file->is_valid()) {
     files[fd] = file;
   } else {
     delete file;

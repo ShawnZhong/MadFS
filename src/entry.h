@@ -52,6 +52,8 @@ struct TxEntryIdx {
   }
 };
 
+static_assert(sizeof(TxEntryIdx) == 8, "TxEntryIdx must be 64 bits");
+
 enum class TxEntryType : bool {
   TX_BEGIN = false,
   TX_COMMIT = true,
@@ -129,6 +131,10 @@ union TxEntry {
     return out;
   }
 };
+
+static_assert(sizeof(TxEntry) == 8, "TxEntry must be 64 bits");
+static_assert(sizeof(TxBeginEntry) == 8, "TxEntry must be 64 bits");
+static_assert(sizeof(TxCommitEntry) == 8, "TxEntry must be 64 bits");
 
 enum LogOp {
   LOG_INVALID = 0,

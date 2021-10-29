@@ -48,4 +48,4 @@ constexpr static uint32_t BITMAP_BLOCK_CAPACITY =
 constexpr static uint32_t INLINE_BITMAP_CAPACITY =
     NUM_INLINE_BITMAP * BITMAP_CAPACITY;
 
-};  // namespace ulayfs
+}  // namespace ulayfs
