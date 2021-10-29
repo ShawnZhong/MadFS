@@ -25,7 +25,7 @@ class BlkTable {
    */
   void apply_tx(pmem::TxCommitEntry tx_commit_entry) {
     auto log_entry_idx = tx_commit_entry.log_entry_idx;
-    auto log_entry = log_mgr->get(log_entry_idx);
+    auto log_entry = log_mgr->get_entry(log_entry_idx);
     // TODO: linked list
     if (table.size() < log_entry->begin_virtual_idx + log_entry->num_blocks)
       table.resize(table.size() * 2);
@@ -55,7 +55,7 @@ class BlkTable {
    */
   void update() {
     while (true) {
-      auto tx_entry = tx_mgr->get();
+      auto tx_entry = tx_mgr->get_entry();
       if (!tx_entry.is_valid()) break;
       if (tx_entry.is_commit()) apply_tx(tx_entry.commit_entry);
       tx_mgr->advance();

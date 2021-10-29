@@ -39,7 +39,7 @@ class TxMgr {
   /**
    * @return the current transaction entry
    */
-  [[nodiscard]] pmem::TxEntry get() const {
+  [[nodiscard]] pmem::TxEntry get_entry() const {
     return get_entry_from_block(local_tx_tail, local_tx_log_block);
   }
 

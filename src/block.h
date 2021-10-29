@@ -136,7 +136,7 @@ class LogEntryBlock : public BaseBlock {
   LogEntry log_entries[NUM_LOG_ENTRY];
 
  public:
-  [[nodiscard]] LogEntry& get(LogLocalIdx idx) {
+  [[nodiscard]] const LogEntry& get(LogLocalIdx idx) {
     assert(idx >= 0 && idx < NUM_LOG_ENTRY);
     return log_entries[idx];
   }

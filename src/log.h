@@ -27,7 +27,7 @@ class LogMgr {
     free_list.reserve(NUM_LOG_ENTRY);
   }
 
-  pmem::LogEntry* get(pmem::LogEntryIdx idx) {
+  const pmem::LogEntry* get_entry(pmem::LogEntryIdx idx) {
     return &mem_table->get_addr(idx.block_idx)
                 ->log_entry_block.get(idx.local_idx);
   }
