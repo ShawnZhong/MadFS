@@ -13,6 +13,11 @@ set(CMAKE_CXX_FLAGS "\
     -Wno-sign-compare \
 ")
 
+set(CMAKE_CXX_FLAGS_DEBUG "\
+    ${CMAKE_CXX_FLAGS_DEBUG} \
+    -fsanitize=undefined \
+")
+
 add_library(ulayfs SHARED
     src/alloc.h src/alloc.cpp
     src/bitmap.h
