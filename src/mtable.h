@@ -146,9 +146,8 @@ class MemTable {
     out << "MemTable:\n";
     for (const auto& [blk_idx, mem_addr] : m.table) {
       out << "\t" << blk_idx << " - " << blk_idx + NUM_BLOCKS_PER_GROW << ": ";
-      out << mem_addr << " - " << mem_addr + NUM_BLOCKS_PER_GROW;
+      out << mem_addr << " - " << mem_addr + NUM_BLOCKS_PER_GROW << "\n";
     }
-    out << "\n";
     return out;
   }
 };
