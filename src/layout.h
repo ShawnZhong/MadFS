@@ -26,8 +26,12 @@ constexpr static uint16_t NUM_TX_ENTRY =
     (BLOCK_SIZE - 2 * sizeof(LogicalBlockIdx)) / sizeof(pmem::TxEntry);
 constexpr static uint16_t NUM_LOG_ENTRY = BLOCK_SIZE / sizeof(pmem::LogEntry);
 
-static_assert(NUM_LOG_ENTRY <= 1 << 8,
-              "NUM_LOG_ENTRY should be representable in less than 8 bits");
+static_assert(NUM_BITMAP - 1 <= std::numeric_limits<BitmapLocalIdx>::max(),
+              "NUM_BITMAP - 1 should be representable with BitmapLocalIdx");
+static_assert(NUM_TX_ENTRY - 1 <= std::numeric_limits<TxLocalIdx>::max(),
+              "NUM_TX_ENTRY - 1 should be representable with TxLocalIdx");
+static_assert(NUM_LOG_ENTRY - 1 <= std::numeric_limits<LogLocalIdx>::max(),
+              "NUM_LOG_ENTRY - 1 should be representable with LogLocalIdx");
 
 // inline data structure count in meta block
 constexpr static uint16_t NUM_CL_BITMAP_IN_META = 32;

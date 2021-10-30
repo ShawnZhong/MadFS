@@ -1,7 +1,5 @@
 #pragma once
 
-#include <bits/stdint-uintn.h>
-
 #include <cstdint>
 
 namespace ulayfs {
@@ -12,8 +10,8 @@ using LogicalBlockIdx = uint32_t;
 using VirtualBlockIdx = uint32_t;
 
 // local index within a block; this can be -1 to indicate an error
-using BitmapLocalIdx = int32_t;
-using TxLocalIdx = int32_t;
+using BitmapLocalIdx = int16_t;
+using TxLocalIdx = int16_t;
 // Note: LogLocalIdx will persist and we need range [0, 256)
 using LogLocalIdx = uint8_t;
 
