@@ -76,3 +76,6 @@ add_executable(test_futex test/test_futex.cpp)
 
 add_executable(test_rw test/test_rw.cpp)
 target_link_libraries(test_rw ulayfs)
+
+add_executable(test_sync test/test_sync.cpp)
+target_link_libraries(test_sync ulayfs pthread)
