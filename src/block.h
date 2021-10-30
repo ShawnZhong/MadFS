@@ -238,6 +238,10 @@ class MetaBlock : public BaseBlock {
     persist_cl_fenced(&cl1);
   }
 
+  /**
+   * Set the next tx block index
+   * @return true on success, false if there is a race condition
+   */
   bool set_next_tx_block(LogicalBlockIdx block_idx) {
     LogicalBlockIdx expected = 0;
     bool success =
