@@ -21,7 +21,9 @@ int main(int argc, char* argv[]) {
   char src_buf[NUM_BYTES];
   std::generate(src_buf, src_buf + NUM_BYTES,
                 [i = 0]() mutable { return hex_chars[i++ % 16]; });
-  pwrite(fd, src_buf, NUM_BYTES, OFFSET);
+  for (int i = 0; i < 119; ++i) {
+    pwrite(fd, src_buf, NUM_BYTES, OFFSET);
+  }
 
   std::cerr << *file << "\n";
 
