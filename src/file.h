@@ -125,7 +125,7 @@ class File {
 
     uint16_t last_remaining = num_blocks * BLOCK_SIZE - count - local_offset;
     auto log_entry_idx =
-        log_mgr.append(pmem::LOG_OVERWRITE, begin_virtual_idx,
+        log_mgr.append(pmem::LogOp::LOG_OVERWRITE, begin_virtual_idx,
                        begin_logical_idx, num_blocks, last_remaining);
     tx_mgr.commit_tx(tx_begin_idx, log_entry_idx);
     blk_table.update();
