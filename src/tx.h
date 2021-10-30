@@ -81,12 +81,12 @@ class TxMgr {
                       pmem::TxLogBlock*& tx_log_block) const;
 
   /**
-   * @tparam Block MetaBlock or TxLogBlock
+   * @tparam B MetaBlock or TxLogBlock
    * @param block the block that needs a next block to be allocated
    * @return the block id of the allocated block
    */
-  template <class Block>
-  LogicalBlockIdx alloc_next_block(Block block) const;
+  template <class B>
+  LogicalBlockIdx alloc_next_block(B* block) const;
 
   /**
    * @tparam Entry TxBeginEntry or TxCommitEntry

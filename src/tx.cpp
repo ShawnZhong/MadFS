@@ -35,8 +35,8 @@ pmem::TxEntryIdx TxMgr::commit_tx(pmem::TxEntryIdx tx_begin_idx,
   return try_append(tx_commit_entry);
 }
 
-template <class Block>
-LogicalBlockIdx TxMgr::alloc_next_block(Block block) const {
+template <class B>
+LogicalBlockIdx TxMgr::alloc_next_block(B* block) const {
   // allocate the next block
   auto new_block_id = allocator->alloc(1);
   bool success = block->set_next_tx_block(new_block_id);
