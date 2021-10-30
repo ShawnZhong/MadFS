@@ -15,7 +15,7 @@ namespace ulayfs::pmem {
  */
 struct __attribute__((packed)) LogEntryIdx {
   LogicalBlockIdx block_idx;
-  LogLocalIdx local_idx;
+  LogLocalIdx local_idx : 8;
 
   friend std::ostream& operator<<(std::ostream& out, const LogEntryIdx& idx) {
     out << "{ block_idx = " << idx.block_idx
@@ -136,7 +136,7 @@ static_assert(sizeof(TxEntry) == 8, "TxEntry must be 64 bits");
 static_assert(sizeof(TxBeginEntry) == 8, "TxEntry must be 64 bits");
 static_assert(sizeof(TxCommitEntry) == 8, "TxEntry must be 64 bits");
 
-enum LogOp {
+enum class LogOp {
   LOG_INVALID = 0,
   // we start the enum from 1 so that a LogOp with value 0 is invalid
   LOG_OVERWRITE = 1,
@@ -145,8 +145,7 @@ enum LogOp {
 // Since allocator can only guarantee to allocate 64 contiguous blocks (by
 // single CAS), log entry must organize as a linked list in case of a large
 // size transaction.
-class LogEntry {
- public:
+struct LogEntry {
   // we use bitfield to pack `op` and `last_remaining` into 16 bits
   enum LogOp op : 4;
 

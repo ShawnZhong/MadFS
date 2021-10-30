@@ -10,7 +10,6 @@ set(CMAKE_CXX_FLAGS "\
     -Wno-unused-parameter \
     -Wno-unused-function \
     -Wno-unused-variable \
-    -Wno-sign-compare \
 ")
 
 set(CMAKE_CXX_FLAGS_DEBUG "\

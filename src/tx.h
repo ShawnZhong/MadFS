@@ -12,7 +12,6 @@ namespace ulayfs::dram {
 class TxMgr {
  private:
   pmem::MetaBlock* meta;
-
   Allocator* allocator;
   MemTable* mem_table;
 
@@ -50,6 +49,13 @@ class TxMgr {
   pmem::TxEntryIdx begin_tx(VirtualBlockIdx begin_virtual_idx,
                             uint32_t num_blocks);
 
+  /**
+   * Commit a transaction
+   *
+   * @param tx_begin_idx the index of the corresponding begin transaction
+   * @param log_entry_idx the first log entry that corresponds to the tx
+   * @return the index of the committed transaction
+   */
   pmem::TxEntryIdx commit_tx(pmem::TxEntryIdx tx_begin_idx,
                              pmem::LogEntryIdx log_entry_idx);
 
@@ -60,7 +66,7 @@ class TxMgr {
   pmem::TxEntry get_entry_from_block(pmem::TxEntryIdx idx,
                                      pmem::TxLogBlock* tx_log_block) const {
     const auto [block_idx, local_idx] = idx;
-    if (block_idx == 0) return meta->get_inline_tx_entry(local_idx);
+    if (block_idx == 0) return meta->get_tx_entry(local_idx);
     return tx_log_block->get(local_idx);
   }
 
@@ -75,12 +81,20 @@ class TxMgr {
                       pmem::TxLogBlock*& tx_log_block) const;
 
   /**
-   * given a current tx_log_block, return the next block id
-   * allocate one if the next one doesn't exist
-   *
-   * @return the index of the next TxLogBlock
+   * @tparam B MetaBlock or TxLogBlock
+   * @param block the block that needs a next block to be allocated
+   * @return the block id of the allocated block
    */
-  LogicalBlockIdx get_next_tx_block(pmem::TxLogBlock* tx_log_block) const;
+  template <class B>
+  LogicalBlockIdx alloc_next_block(B* block) const;
+
+  /**
+   * @tparam Entry TxBeginEntry or TxCommitEntry
+   * @param entry the tx entry to be appended
+   * @return the index of the inserted entry
+   */
+  template <class Entry>
+  pmem::TxEntryIdx try_append(Entry entry);
 
  public:
   friend std::ostream& operator<<(std::ostream& out, const TxMgr& tx_mgr);

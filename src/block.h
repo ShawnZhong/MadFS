@@ -66,11 +66,8 @@ class BitmapBlock : public BaseBlock {
 };
 
 class TxLogBlock : public BaseBlock {
-  // FIXME: it doesn't have to be atomic, because it only gets updated when new
-  // block is added. Normal read doesn't have to acquire fence; only if seeing
-  // a null and try to CAS will require fence
-  std::atomic<LogicalBlockIdx> prev;
-  std::atomic<LogicalBlockIdx> next;
+  LogicalBlockIdx prev;
+  LogicalBlockIdx next;
   TxEntry tx_entries[NUM_TX_ENTRY];
 
  public:
@@ -98,11 +95,11 @@ class TxLogBlock : public BaseBlock {
     return -1;
   }
 
-  TxLocalIdx try_begin(TxBeginEntry begin_entry, TxLocalIdx hint_tail = 0) {
+  TxLocalIdx try_append(TxBeginEntry begin_entry, TxLocalIdx hint_tail = 0) {
     return try_append(tx_entries, NUM_TX_ENTRY, begin_entry, hint_tail);
   }
 
-  TxLocalIdx try_commit(TxCommitEntry commit_entry, TxLocalIdx hint_tail = 0) {
+  TxLocalIdx try_append(TxCommitEntry commit_entry, TxLocalIdx hint_tail = 0) {
     // FIXME: this one is actually wrong. In OCC, we have to verify there is no
     // new transaction overlap with our range
     return try_append(tx_entries, NUM_TX_ENTRY, commit_entry, hint_tail);
@@ -113,20 +110,17 @@ class TxLogBlock : public BaseBlock {
     return tx_entries[idx];
   }
 
-  [[nodiscard]] LogicalBlockIdx get_next_block_idx() const {
-    return next.load(std::memory_order_acquire);
-  }
+  [[nodiscard]] LogicalBlockIdx get_next_tx_block() const { return next; }
 
   /**
    * Set the next block index
    * @return true on success, false if there is a race condition
    */
-  bool set_next_block_idx(LogicalBlockIdx new_next) {
+  bool set_next_tx_block(LogicalBlockIdx block_idx) {
     LogicalBlockIdx expected = 0;
-    bool success = this->next.compare_exchange_strong(
-        expected, new_next, std::memory_order_release,
-        std::memory_order_acquire);
-    persist_cl_fenced(&this->next);
+    bool success = __atomic_compare_exchange_n(
+        &next, &expected, block_idx, true, __ATOMIC_ACQ_REL, __ATOMIC_ACQUIRE);
+    if (success) persist_cl_fenced(&next);
     return success;
   }
 };
@@ -179,7 +173,7 @@ class MetaBlock : public BaseBlock {
       uint32_t num_blocks;
 
       // if inline_tx_entries is used up, this points to the next log block
-      TxEntryIdx tx_log_head;
+      LogicalBlockIdx next_tx_block;
 
       // hint to find tx log tail; not necessarily up-to-date
       TxEntryIdx tx_log_tail;
@@ -245,10 +239,17 @@ class MetaBlock : public BaseBlock {
     persist_cl_fenced(&cl1);
   }
 
-  void set_tx_log_head(TxEntryIdx tx_log_head) {
-    if (tx_log_head <= this->tx_log_head) return;
-    this->tx_log_head = tx_log_head;
-    persist_cl_fenced(&cl1);
+  /**
+   * Set the next tx block index
+   * @return true on success, false if there is a race condition
+   */
+  bool set_next_tx_block(LogicalBlockIdx block_idx) {
+    LogicalBlockIdx expected = 0;
+    bool success =
+        __atomic_compare_exchange_n(&next_tx_block, &expected, block_idx, true,
+                                    __ATOMIC_ACQ_REL, __ATOMIC_ACQUIRE);
+    if (success) persist_cl_fenced(&next_tx_block);
+    return success;
   }
 
   void set_tx_log_tail(TxEntryIdx tx_log_tail) {
@@ -258,10 +259,12 @@ class MetaBlock : public BaseBlock {
   }
 
   [[nodiscard]] uint32_t get_num_blocks() const { return num_blocks; }
-  [[nodiscard]] TxEntryIdx get_tx_log_head() const { return tx_log_head; }
+  [[nodiscard]] LogicalBlockIdx get_next_tx_block() const {
+    return next_tx_block;
+  }
   [[nodiscard]] TxEntryIdx get_tx_log_tail() const { return tx_log_tail; }
 
-  [[nodiscard]] TxEntry get_inline_tx_entry(TxLocalIdx idx) const {
+  [[nodiscard]] TxEntry get_tx_entry(TxLocalIdx idx) const {
     assert(idx >= 0 && idx < NUM_INLINE_TX_ENTRY);
     return inline_tx_entries[idx];
   }
@@ -283,14 +286,13 @@ class MetaBlock : public BaseBlock {
     return Bitmap::alloc_batch(inline_bitmaps, NUM_INLINE_BITMAP, hint);
   }
 
-  TxLocalIdx inline_try_begin(TxBeginEntry begin_entry,
-                              TxLocalIdx hint_tail = 0) {
+  TxLocalIdx try_append_tx(TxBeginEntry begin_entry, TxLocalIdx hint_tail = 0) {
     return TxLogBlock::try_append(inline_tx_entries, NUM_INLINE_TX_ENTRY,
                                   begin_entry, hint_tail);
   }
 
-  TxLocalIdx inline_try_commit(TxCommitEntry commit_entry,
-                               TxLocalIdx hint_tail = 0) {
+  TxLocalIdx try_append_tx(TxCommitEntry commit_entry,
+                           TxLocalIdx hint_tail = 0) {
     // TODO: OCC
     return TxLogBlock::try_append(inline_tx_entries, NUM_INLINE_TX_ENTRY,
                                   commit_entry, hint_tail);
@@ -301,7 +303,7 @@ class MetaBlock : public BaseBlock {
     out << "\tsignature: \"" << block.signature << "\"\n";
     out << "\tfilesize: " << block.file_size << "\n";
     out << "\tnum_blocks: " << block.num_blocks << "\n";
-    out << "\ttx_log_head: " << block.tx_log_head << "\n";
+    out << "\tnext_tx_block: " << block.next_tx_block << "\n";
     out << "\ttx_log_tail: " << block.tx_log_tail << "\n";
     return out;
   }

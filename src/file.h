@@ -125,7 +125,7 @@ class File {
 
     uint16_t last_remaining = num_blocks * BLOCK_SIZE - count - local_offset;
     auto log_entry_idx =
-        log_mgr.append(pmem::LOG_OVERWRITE, begin_virtual_idx,
+        log_mgr.append(pmem::LogOp::LOG_OVERWRITE, begin_virtual_idx,
                        begin_logical_idx, num_blocks, last_remaining);
     tx_mgr.commit_tx(tx_begin_idx, log_entry_idx);
     blk_table.update();
@@ -145,7 +145,7 @@ class File {
     uint16_t last_remaining = num_blocks * BLOCK_SIZE - count - local_offset;
 
     char* dst = static_cast<char*>(buf);
-    for (int i = 0; i < num_blocks; ++i) {
+    for (size_t i = 0; i < num_blocks; ++i) {
       size_t num_bytes = BLOCK_SIZE;
       if (i == 0) num_bytes -= local_offset;
       if (i == num_blocks - 1) num_bytes -= last_remaining;
