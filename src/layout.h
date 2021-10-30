@@ -30,12 +30,12 @@ static_assert(NUM_LOG_ENTRY <= 1 << 8,
               "NUM_LOG_ENTRY should be representable in less than 8 bits");
 
 // inline data structure count in meta block
-constexpr static uint32_t NUM_CL_BITMAP_IN_META = 32;
-constexpr static uint32_t NUM_CL_TX_ENTRY_IN_META =
+constexpr static uint16_t NUM_CL_BITMAP_IN_META = 32;
+constexpr static uint16_t NUM_CL_TX_ENTRY_IN_META =
     ((BLOCK_SIZE / CACHELINE_SIZE) - 2) - NUM_CL_BITMAP_IN_META;
-constexpr static uint32_t NUM_INLINE_BITMAP =
+constexpr static uint16_t NUM_INLINE_BITMAP =
     NUM_CL_BITMAP_IN_META * (CACHELINE_SIZE / sizeof(pmem::Bitmap));
-constexpr static uint32_t NUM_INLINE_TX_ENTRY =
+constexpr static uint16_t NUM_INLINE_TX_ENTRY =
     NUM_CL_TX_ENTRY_IN_META * (CACHELINE_SIZE / sizeof(pmem::TxEntry));
 
 // how many blocks a bitmap block can manage

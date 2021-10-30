@@ -5,6 +5,8 @@
 namespace ulayfs::dram {
 void TxMgr::advance_tx_idx(pmem::TxEntryIdx& idx,
                            pmem::TxLogBlock*& tx_log_block) const {
+  assert(idx.local_idx >= 0);
+
   // the current one is an inline tx entry
   if (idx.block_idx == 0) {
     // the next entry is still an inline tx entry

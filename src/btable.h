@@ -64,7 +64,7 @@ class BlkTable {
 
   friend std::ostream& operator<<(std::ostream& out, const BlkTable& b) {
     out << "BlkTable:\n";
-    for (int i = 0; i < b.table.size(); ++i) {
+    for (size_t i = 0; i < b.table.size(); ++i) {
       if (b.table[i] != 0) {
         out << "\t" << i << " -> " << b.table[i] << "\n";
       }
