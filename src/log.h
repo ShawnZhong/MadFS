@@ -53,10 +53,9 @@ class LogMgr {
   // TODO: allocate LogEntryIdx into from allocator to free_list
   void alloc() {
     LogicalBlockIdx idx = allocator->alloc(1);
-    LogLocalIdx i = 0;
-    do {
-      free_list.push_back({idx, i});
-    } while (++i);  // stops when ++i overflows and becomes 0
+    // `i` cannot be of type LogLocalIdx because it will cause `++i` overflow
+    for (uint16_t i = 0; i < NUM_LOG_ENTRY; ++i)
+      free_list.push_back({idx, static_cast<LogLocalIdx>(i)});
   }
 };
 }  // namespace ulayfs::dram
