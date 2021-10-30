@@ -19,7 +19,7 @@ struct __attribute__((packed)) LogEntryIdx {
 
   friend std::ostream& operator<<(std::ostream& out, const LogEntryIdx& idx) {
     out << "{ block_idx = " << idx.block_idx
-        << ", local_idx = " << idx.local_idx << " }";
+        << ", local_idx = " << unsigned(idx.local_idx) << " }";
     return out;
   }
 };
