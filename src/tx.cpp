@@ -35,6 +35,57 @@ pmem::TxEntryIdx TxMgr::commit_tx(pmem::TxEntryIdx tx_begin_idx,
   return try_append(tx_commit_entry);
 }
 
+template <class Block>
+LogicalBlockIdx TxMgr::alloc_next_block(Block block) const {
+  // allocate the next block
+  auto new_block_id = allocator->alloc(1);
+  bool success = block->set_next_tx_block(new_block_id);
+  if (success) {
+    return new_block_id;
+  } else {
+    // there is a race condition for adding the new blocks
+    allocator->free(new_block_id, 1);
+    return block->get_next_tx_block();
+  }
+}
+
+// explicit template instantiations
+template LogicalBlockIdx TxMgr::alloc_next_block(pmem::MetaBlock* block) const;
+template LogicalBlockIdx TxMgr::alloc_next_block(pmem::TxLogBlock* block) const;
+
+template <class Entry>
+pmem::TxEntryIdx TxMgr::try_append(Entry entry) {
+  pmem::TxEntryIdx global_tx_tail = meta->get_tx_log_tail();
+  auto [block_idx_hint, local_idx_hint] =
+      global_tx_tail > local_tx_tail ? global_tx_tail : local_tx_tail;
+
+  // append to the inline tx_entries
+  if (block_idx_hint == 0) {
+    auto local_idx = meta->try_append_tx(entry, local_idx_hint);
+    if (local_idx == NUM_INLINE_TX_ENTRY - 1) alloc_next_block(meta);
+    if (local_idx >= 0) return {0, local_idx};
+  }
+
+  // inline tx_entries are full, append to the tx log blocks
+  while (true) {
+    auto block = mem_table->get_addr(block_idx_hint);
+    auto tx_log_block = &block->tx_log_block;
+
+    // try to append an entry to the current block
+    auto local_idx = tx_log_block->try_append(entry, local_idx_hint);
+    if (local_idx == NUM_TX_ENTRY - 1) alloc_next_block(tx_log_block);
+    if (local_idx >= 0) return {block_idx_hint, local_idx};
+
+    // current block if full, try next one
+    block_idx_hint = tx_log_block->get_next_tx_block();
+    local_idx_hint = 0;
+  }
+}
+
+// explicit template instantiations
+template pmem::TxEntryIdx TxMgr::try_append(pmem::TxCommitEntry entry);
+template pmem::TxEntryIdx TxMgr::try_append(pmem::TxBeginEntry entry);
+
 std::ostream& operator<<(std::ostream& out, const TxMgr& tx_mgr) {
   out << "Transaction Log: \n";
 
