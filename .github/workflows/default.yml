@@ -1,0 +1,43 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  lint:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v2
+      - uses: DoozyX/clang-format-lint-action@v0.12
+        with:
+          extensions: "h,h.in,cpp"
+          clangFormatVersion: 12
+
+  test:
+    strategy:
+      matrix:
+        build_type: [debug, release]
+
+    runs-on: ubuntu-latest
+
+    defaults:
+      run:
+        working-directory: ${{github.workspace}}/build-${{matrix.build_type}}
+
+    steps:
+      - uses: actions/checkout@v2
+
+      - name: build
+        working-directory: ${{github.workspace}}
+        run: make ${{matrix.build_type}}
+
+      - name: test_rw
+        run: ./test_rw
+
+      - name: test_futex
+        run: ./test_futex
+
+      # - name: test_sync
+      #   run: ./test_sync

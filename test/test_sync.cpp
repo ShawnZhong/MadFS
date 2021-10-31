@@ -19,11 +19,14 @@ void fill_buff(char* buff, int num_elem, int init = 0) {
 }
 
 int main(int argc, char* argv[]) {
+  ssize_t ret;
+
   remove(FILEPATH);
   int fd = open(FILEPATH, O_CREAT | O_RDWR, S_IRUSR | S_IWUSR);
 
   char empty_buf[NUM_BYTES]{};
-  pwrite(fd, empty_buf, NUM_BYTES, 0);
+  ret = pwrite(fd, empty_buf, NUM_BYTES, 0);
+  assert(ret == NUM_BYTES);
 
   std::vector<std::thread> threads;
 
@@ -31,7 +34,8 @@ int main(int argc, char* argv[]) {
     threads.emplace_back(std::thread([&]() {
       char buf[BYTES_PER_THREAD]{};
       fill_buff(buf, BYTES_PER_THREAD, i);
-      pwrite(fd, buf, BYTES_PER_THREAD, i);
+      ret = pwrite(fd, buf, BYTES_PER_THREAD, i);
+      assert(ret == BYTES_PER_THREAD);
     }));
     // uncomment the line below to run sequentially
     // threads.back().join();
@@ -42,7 +46,8 @@ int main(int argc, char* argv[]) {
   }
 
   char actual[NUM_BYTES]{};
-  pread(fd, actual, NUM_BYTES, 0);
+  ret = pread(fd, actual, NUM_BYTES, 0);
+  assert(ret == NUM_BYTES);
   std::cout << actual << "\n";
 
   char expected[NUM_BYTES];
