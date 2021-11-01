@@ -2,15 +2,37 @@
 
 #include <immintrin.h>
 
+#include <ctime>
+#include <iomanip>
+#include <iostream>
+
 #include "config.h"
 #include "params.h"
 
-#define panic_if(expr, msg)                                       \
-  do {                                                            \
-    if (expr) {                                                   \
-      fprintf(stderr, "[%s:%d] %s: %m", __FILE__, __LINE__, msg); \
-      exit(1);                                                    \
-    }                                                             \
+#define __FILENAME__ \
+  (strrchr(__FILE__, '/') ? strrchr(__FILE__, '/') + 1 : __FILE__)
+
+#define log(msg, ...)                                                       \
+  do {                                                                      \
+    std::time_t t = std::time(nullptr);                                     \
+    std::tm *tm = std::localtime(&t);                                       \
+    fprintf(stderr, "%02d:%02d:%02d [%8s:%d] " msg "\n", tm->tm_hour,       \
+            tm->tm_min, tm->tm_sec, __FILENAME__, __LINE__, ##__VA_ARGS__); \
+  } while (0)
+
+#define panic_if(expr, msg, ...)                 \
+  do {                                           \
+    if (expr) {                                  \
+      log("[PANIC] " msg ": %m", ##__VA_ARGS__); \
+      exit(1);                                   \
+    }                                            \
+  } while (0)
+
+#define debug(msg, ...)                   \
+  do {                                    \
+    if constexpr (BuildOptions::debug) {  \
+      log("[DEBUG] " msg, ##__VA_ARGS__); \
+    }                                     \
   } while (0)
 
 // adopted from `include/linux/align.h`

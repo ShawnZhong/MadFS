@@ -72,7 +72,7 @@ class MemTable {
 
     void* addr =
         posix::mmap(nullptr, length, PROT_READ | PROT_WRITE, flags, fd, offset);
-    panic_if(addr == (void*)-1, "mmap failed");
+    panic_if(addr == (void*)-1, "mmap fd = %d failed", fd);
     return static_cast<pmem::Block*>(addr);
   }
 

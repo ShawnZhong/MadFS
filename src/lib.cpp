@@ -26,6 +26,9 @@ int open(const char* pathname, int flags, ...) {
   } else {
     delete file;
   }
+
+  debug("open(%s, %d, %d) = %d", pathname, flags, mode, fd);
+
   return fd;
 }
 
