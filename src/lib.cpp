@@ -32,6 +32,16 @@ int open(const char* pathname, int flags, ...) {
   return fd;
 }
 
+int close(int fd) {
+  if (files.erase(fd) == 1) {
+    LOG("ulayfs::close(%d)", fd);
+    return 0;
+  } else {
+    LOG("posix::close(%d)", fd);
+    return posix::close(fd);
+  }
+}
+
 ssize_t write(int fd, const void* buf, size_t count) {
   LOG("posix::write(%d, buf, %zu)", fd, count);
   return posix::write(fd, buf, count);
@@ -73,8 +83,9 @@ void __attribute__((constructor)) ulayfs_ctor() {
     std::cerr << build_options << std::endl;
     std::cerr << runtime_options << std::endl;
   }
-  if (runtime_options.log_file)
+  if (runtime_options.log_file) {
     log_file = fopen(runtime_options.log_file, "a");
+  }
 }
 
 /**
