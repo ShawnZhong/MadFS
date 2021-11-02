@@ -5,6 +5,7 @@
 #include "alloc.h"
 #include "block.h"
 #include "entry.h"
+#include "idx.h"
 #include "mtable.h"
 
 namespace ulayfs::dram {
@@ -43,6 +44,35 @@ class TxMgr {
   [[nodiscard]] pmem::TxEntry get_entry() const {
     return get_entry_from_block(local_tx_tail, local_tx_tail_block);
   }
+
+  /**
+   * Move to the linked list of TxLogBlock and find the tail. The returned tail
+   * may not be up-to-date due to race conditon.
+   * No new blocks will be allocated. If the end of TxLogBlock is reached, just
+   * return NUM_TX_ENTRY as the TxLocalIdx.
+   */
+  [[nodiscard]] pmem::TxEntryIdx find_tail(pmem::TxEntryIdx hint) const {
+    LogicalBlockIdx block_idx = hint.block_idx;
+    LogicalBlockIdx next_idx;
+    TxLocalIdx local_idx;
+    assert(block_idx != 0);
+    pmem::TxLogBlock* curr_block =
+        &(mem_table->get_addr(block_idx)->tx_log_block);
+
+    // if the hinted block has the tail, return
+    if (!(next_idx = curr_block->get_next())) {
+      local_idx = curr_block->find_tail(hint.local_idx);
+      return {block_idx, local_idx};
+    }
+
+    do {
+      block_idx = next_idx;
+      curr_block = &(mem_table->get_addr(block_idx)->tx_log_block);
+    } while ((next_idx = curr_block->get_next()));
+
+    local_idx = curr_block->find_tail();
+    return {block_idx, local_idx};
+  };
 
   /**
    * Begin a transaction that affects the range of blocks

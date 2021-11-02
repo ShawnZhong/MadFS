@@ -2,6 +2,8 @@
 
 #include "block.h"
 #include "entry.h"
+#include "idx.h"
+#include "layout.h"
 
 namespace ulayfs::dram {
 void TxMgr::advance_tx_idx(pmem::TxEntryIdx& idx,
@@ -26,33 +28,40 @@ void TxMgr::advance_tx_idx(pmem::TxEntryIdx& idx,
 pmem::TxEntryIdx TxMgr::begin_tx(VirtualBlockIdx begin_virtual_idx,
                                  uint32_t num_blocks) {
   pmem::TxBeginEntry tx_begin_entry{begin_virtual_idx, num_blocks};
-
-  // To find where to append a begin entry, we apply the following strategy:
-  // - if local_tx_tail_block has its next pointer set, read from the global
-  //   because it's likely that we fall behind a lot
-  // - otherwise, scan from the local one
   pmem::TxEntryIdx curr_idx = local_tx_tail;
   pmem::TxLogBlock* curr_block = local_tx_tail_block;
+  LogicalBlockIdx next_block_idx;
+  LogicalBlockIdx tmp;
 
-  if (!curr_block || curr_block->get_next()) {  // read meta
-    curr_idx = meta->get_tx_log_tail();
-    if (curr_idx.block_idx != 0)
-      curr_block = &(mem_table->get_addr(curr_idx.block_idx)->tx_log_block);
-  }
-
-  // if still nullptr, try to begin tx on meta's inline_tx_entries
-  if (!curr_block) {
+  if (!curr_block) {  // handle meta
+    if ((next_block_idx = meta->get_next_tx_block())) goto meta_next;
     curr_idx.local_idx = meta->find_tail(curr_idx.local_idx);
-    if (curr_idx.local_idx >= 0)
-      for (; curr_idx.local_idx < NUM_INLINE_TX_ENTRY; ++curr_idx.local_idx)
-        if (meta->try_append(tx_begin_entry, curr_idx.local_idx) == 0)
-          goto done;
-    curr_idx.block_idx = alloc_next_block(meta);
+    for (; curr_idx.local_idx < NUM_INLINE_TX_ENTRY; ++curr_idx.local_idx)
+      if (meta->try_append(tx_begin_entry, curr_idx.local_idx) == 0) goto done;
+    next_block_idx = alloc_next_block(meta);
+  meta_next:
+    curr_idx.block_idx = next_block_idx;
     curr_idx.local_idx = 0;
     curr_block = &mem_table->get_addr(curr_idx.block_idx)->tx_log_block;
   }
 
-  // TODO: now handle scaning from txblock
+  tmp = curr_idx.block_idx;
+  curr_idx = find_tail(curr_idx);
+  // if not in the same block, update curr_block
+  if (curr_idx.block_idx != tmp)
+    curr_block = &mem_table->get_addr(curr_idx.block_idx)->tx_log_block;
+
+retry:
+  for (; curr_idx.local_idx < NUM_TX_ENTRY; ++curr_idx.local_idx) {
+    auto res = curr_block->try_append(tx_begin_entry, curr_idx.local_idx);
+    if (!res) goto done;
+  }
+
+  // if fail to append to the current block; allocate a new one and retry
+  curr_idx.block_idx = alloc_next_block(curr_block);
+  curr_idx.local_idx = 0;
+  curr_block = &mem_table->get_addr(curr_idx.block_idx)->tx_log_block;
+  goto retry;
 
 done:
   return curr_idx;
@@ -62,7 +71,8 @@ pmem::TxEntryIdx TxMgr::commit_tx(pmem::TxEntryIdx tx_begin_idx,
                                   pmem::LogEntryIdx log_entry_idx) {
   // TODO: compute begin_offset from tx_begin_idx
   pmem::TxCommitEntry tx_commit_entry{0, log_entry_idx};
-  return try_append(tx_commit_entry);
+  // TODO: impl...
+  return {0, 0};
 }
 
 template <class B>
@@ -82,35 +92,6 @@ LogicalBlockIdx TxMgr::alloc_next_block(B* block) const {
 // explicit template instantiations
 template LogicalBlockIdx TxMgr::alloc_next_block(pmem::MetaBlock* block) const;
 template LogicalBlockIdx TxMgr::alloc_next_block(pmem::TxLogBlock* block) const;
-
-template <class Entry>
-pmem::TxEntryIdx TxMgr::try_append(Entry entry) {
-  pmem::TxEntryIdx global_tx_tail = meta->get_tx_log_tail();
-  auto [block_idx_hint, local_idx_hint] =
-      global_tx_tail > local_tx_tail ? global_tx_tail : local_tx_tail;
-
-  // append to the inline tx_entries
-  if (block_idx_hint == 0) {
-    auto local_idx = meta->try_append_tx(entry, local_idx_hint);
-    if (local_idx == NUM_INLINE_TX_ENTRY - 1) alloc_next_block(meta);
-    if (local_idx >= 0) return {0, local_idx};
-  }
-
-  // inline tx_entries are full, append to the tx log blocks
-  while (true) {
-    auto block = mem_table->get_addr(block_idx_hint);
-    auto tx_log_block = &block->tx_log_block;
-
-    // try to append an entry to the current block
-    auto local_idx = tx_log_block->try_append(entry, local_idx_hint);
-    if (local_idx == NUM_TX_ENTRY - 1) alloc_next_block(tx_log_block);
-    if (local_idx >= 0) return {block_idx_hint, local_idx};
-
-    // current block if full, try next one
-    block_idx_hint = tx_log_block->get_next_tx_block();
-    local_idx_hint = 0;
-  }
-}
 
 void TxMgr::copy_data(const void* buf, size_t count, uint64_t local_offset,
                       LogicalBlockIdx& begin_dst_idx,

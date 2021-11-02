@@ -71,7 +71,7 @@ class TxLogBlock : public BaseBlock {
   TxEntry tx_entries[NUM_TX_ENTRY];
 
  public:
-  TxLocalIdx find_tail(TxLocalIdx hint) {
+  TxLocalIdx find_tail(TxLocalIdx hint = 0) {
     return TxEntry::find_tail<NUM_TX_ENTRY>(tx_entries, hint);
   }
 
@@ -263,7 +263,7 @@ class MetaBlock : public BaseBlock {
     return Bitmap::alloc_batch(inline_bitmaps, NUM_INLINE_BITMAP, hint);
   }
 
-  TxLocalIdx find_tail(TxLocalIdx hint) {
+  TxLocalIdx find_tail(TxLocalIdx hint = 0) {
     return TxEntry::find_tail<NUM_INLINE_TX_ENTRY>(inline_tx_entries, hint);
   }
 

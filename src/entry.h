@@ -126,8 +126,8 @@ union TxEntry {
   [[nodiscard]] bool is_valid() const { return raw_bits != 0; }
 
   [[nodiscard]] static bool is_last_entry_in_cacheline(TxLocalIdx idx) {
-    constexpr uint16_t num_entries_in_cl = CACHELINE_SIZE / sizeof(TxEntry);
-    return (idx + 1) % num_entries_in_cl == 0;
+    auto offset = 2 * sizeof(LogicalBlockIdx) + (idx + 1) * sizeof(TxEntry);
+    return (offset & (CACHELINE_SIZE - 1)) == 0;
   }
 
   /**
@@ -136,13 +136,13 @@ union TxEntry {
    * @tparam NUM_ENTRIES the total number of entries in the array
    * @param entries a pointer to an array of tx entries
    * @param hint hint to start the search
-   * @return the local index of next available TxEntry; -1 if not found
+   * @return the local index of next available TxEntry; NUM_ENTRIES if not found
    */
   template <uint16_t NUM_ENTRIES>
-  static TxLocalIdx find_tail(TxEntry entries[], TxLocalIdx hint) {
+  static TxLocalIdx find_tail(TxEntry entries[], TxLocalIdx hint = 0) {
     for (TxLocalIdx idx = hint; idx < NUM_ENTRIES; ++idx)
-      if (entries[idx].raw_bits == 0) return idx;
-    return -1;
+      if (!entries[idx].is_valid()) return idx;
+    return NUM_ENTRIES;
   }
 
   /**
