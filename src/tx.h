@@ -59,6 +59,19 @@ class TxMgr {
   pmem::TxEntryIdx commit_tx(pmem::TxEntryIdx tx_begin_idx,
                              pmem::LogEntryIdx log_entry_idx);
 
+  /**
+   * @param buf the buffer given by the user
+   * @param count number of bytes in the buffer
+   * @param local_offset the start offset within the first block
+   * @param begin_dst_idx the index of the first destination block
+   * @param begin_src_idx the index of the first source block, used when
+   * local_offset is not 0, since we need to copy the data before the offset
+   * to destination
+   */
+  void copy_data(const void* buf, size_t count, uint64_t local_offset,
+                 LogicalBlockIdx& begin_dst_idx,
+                 LogicalBlockIdx& begin_src_idx);
+
  private:
   /**
    * Read the entry from the MetaBlock or TxLogBlock
