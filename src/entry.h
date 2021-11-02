@@ -134,7 +134,7 @@ union TxEntry {
    * @param hint hint to the tail of the log
    * @return the TxEntry local index and whether the operation is successful
    */
-  template <int NUM_ENTRIES>
+  template <uint16_t NUM_ENTRIES>
   static TxLocalIdx try_append(TxEntry entries[], TxEntry entry,
                                TxLocalIdx hint) {
     for (TxLocalIdx idx = hint; idx < NUM_ENTRIES; ++idx) {
