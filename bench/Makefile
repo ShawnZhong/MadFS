@@ -1,7 +1,8 @@
-.PHONY: debug release
+.PHONY: debug release posix
 debug: export ULAYFS_PATH := ../build-debug/libulayfs.so
 release: export ULAYFS_PATH := ../build-release/libulayfs.so
-debug release: leveldb-test
+posix: export ULAYFS_PATH :=
+debug release posix: leveldb-test
 
 .PHONY: ulayfs
 ulayfs:

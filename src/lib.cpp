@@ -22,10 +22,10 @@ int open(const char* pathname, int flags, ...) {
   auto file = new dram::File(pathname, flags, mode);
   auto fd = file->get_fd();
   if (file->is_valid()) {
-    LOG("ulayfs::open(%s, %x, %x) = %d", pathname, flags, mode, fd);
+    INFO("ulayfs::open(%s, %x, %x) = %d", pathname, flags, mode, fd);
     files[fd] = file;
   } else {
-    LOG("posix::open(%s, %x, %x) = %d", pathname, flags, mode, fd);
+    DEBUG("posix::open(%s, %x, %x) = %d", pathname, flags, mode, fd);
     delete file;
   }
 
@@ -34,40 +34,50 @@ int open(const char* pathname, int flags, ...) {
 
 int close(int fd) {
   if (files.erase(fd) == 1) {
-    LOG("ulayfs::close(%d)", fd);
+    INFO("ulayfs::close(%d)", fd);
     return 0;
   } else {
-    LOG("posix::close(%d)", fd);
+    DEBUG("posix::close(%d)", fd);
     return posix::close(fd);
   }
 }
 
 ssize_t write(int fd, const void* buf, size_t count) {
-  LOG("posix::write(%d, buf, %zu)", fd, count);
-  return posix::write(fd, buf, count);
+  if (auto it = files.find(fd); it != files.end()) {
+    INFO("ulayfs::write(%d, buf, %zu)", fd, count);
+    return posix::write(fd, buf, count);
+  } else {
+    DEBUG("posix::write(%d, buf, %zu)", fd, count);
+    return posix::write(fd, buf, count);
+  }
 }
 
 ssize_t read(int fd, void* buf, size_t count) {
-  LOG("posix::read(%d, buf, %zu)", fd, count);
-  return posix::read(fd, buf, count);
+  if (auto it = files.find(fd); it != files.end()) {
+    INFO("ulayfs::read(%d, buf, %zu)", fd, count);
+    return posix::read(fd, buf, count);
+  } else {
+    DEBUG("posix::read(%d, buf, %zu)", fd, count);
+    return posix::read(fd, buf, count);
+  }
 }
 
 ssize_t pwrite(int fd, const void* buf, size_t count, off_t offset) {
   if (auto it = files.find(fd); it != files.end()) {
-    LOG("ulayfs::pwrite(%d, buf, %zu, %ld)", fd, count, offset);
+    INFO("ulayfs::pwrite(%d, buf, %zu, %ld)", fd, count, offset);
     return it->second->overwrite(buf, count, offset);
   } else {
-    LOG("posix::pwrite(%d, buf, %zu, %ld)", fd, count, offset);
+    DEBUG("posix::pwrite(%d, buf, %zu, %ld)", fd, count, offset);
     return posix::pwrite(fd, buf, count, offset);
   }
 }
 
 ssize_t pread(int fd, void* buf, size_t count, off_t offset) {
   if (auto it = files.find(fd); it != files.end()) {
-    LOG("ulayfs::pread(%d, buf, %zu, %ld)", fd, count, offset);
+    INFO("ulayfs::pread(%d, buf, %zu, %ld)", fd, count, offset);
     return it->second->pread(buf, count, offset);
   } else {
-    LOG("posix::pread(%d, buf, %zu, %ld)", fd, count, offset);
+    DEBUG("posix::pread(%d, buf, %zu, %ld)", fd, count, offset);
     return posix::pread(fd, buf, count, offset);
   }
 }
