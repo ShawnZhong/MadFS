@@ -76,6 +76,9 @@ class File {
     fd = posix::open(pathname, flags, mode);
     if (fd < 0) return;  // fail to open the file
 
+    // TODO: support read-only / write-only files
+    if (!(open_flags & O_RDWR)) return;
+    
     struct stat stat_buf;  // NOLINT(cppcoreguidelines-pro-type-member-init)
     int ret = posix::fstat(fd, &stat_buf);
     PANIC_IF(ret, "fstat failed");
