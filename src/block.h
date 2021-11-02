@@ -71,38 +71,16 @@ class TxLogBlock : public BaseBlock {
   TxEntry tx_entries[NUM_TX_ENTRY];
 
  public:
-  /**
-   * a static helper function for appending a TxEntry
-   * also used for managing MetaBlock::inline_tx_entries
-   *
-   * @param entries a pointer to an array of tx entries
-   * @param num_entries the total number of entries in the array
-   * @param entry the target entry to be appended
-   * @param hint hint to the tail of the log
-   * @return the TxEntry local index and whether the operation is successful
-   */
-  static TxLocalIdx try_append(TxEntry entries[], uint16_t num_entries,
-                               TxEntry entry, TxLocalIdx hint) {
-    for (TxLocalIdx idx = hint; idx <= num_entries - 1; ++idx) {
-      uint64_t expected = 0;
-      if (__atomic_compare_exchange_n(&entries[idx].raw_bits, &expected,
-                                      entry.raw_bits, false, __ATOMIC_RELEASE,
-                                      __ATOMIC_ACQUIRE)) {
-        persist_cl_fenced(&entries[idx]);
-        return idx;
-      }
-    }
-    return -1;
-  }
-
   TxLocalIdx try_append(TxBeginEntry begin_entry, TxLocalIdx hint_tail = 0) {
-    return try_append(tx_entries, NUM_TX_ENTRY, begin_entry, hint_tail);
+    return TxEntry::try_append<NUM_TX_ENTRY>(tx_entries, begin_entry,
+                                             hint_tail);
   }
 
   TxLocalIdx try_append(TxCommitEntry commit_entry, TxLocalIdx hint_tail = 0) {
     // FIXME: this one is actually wrong. In OCC, we have to verify there is no
     // new transaction overlap with our range
-    return try_append(tx_entries, NUM_TX_ENTRY, commit_entry, hint_tail);
+    return TxEntry::try_append<NUM_TX_ENTRY>(tx_entries, commit_entry,
+                                             hint_tail);
   }
 
   TxEntry get(TxLocalIdx idx) {
@@ -287,15 +265,14 @@ class MetaBlock : public BaseBlock {
   }
 
   TxLocalIdx try_append_tx(TxBeginEntry begin_entry, TxLocalIdx hint_tail = 0) {
-    return TxLogBlock::try_append(inline_tx_entries, NUM_INLINE_TX_ENTRY,
-                                  begin_entry, hint_tail);
+    return TxEntry::try_append<NUM_INLINE_TX_ENTRY>(inline_tx_entries,
+                                                    begin_entry, hint_tail);
   }
 
   TxLocalIdx try_append_tx(TxCommitEntry commit_entry,
                            TxLocalIdx hint_tail = 0) {
-    // TODO: OCC
-    return TxLogBlock::try_append(inline_tx_entries, NUM_INLINE_TX_ENTRY,
-                                  commit_entry, hint_tail);
+    return TxEntry::try_append<NUM_INLINE_TX_ENTRY>(inline_tx_entries,
+                                                    commit_entry, hint_tail);
   }
 
   friend std::ostream& operator<<(std::ostream& out, const MetaBlock& block) {

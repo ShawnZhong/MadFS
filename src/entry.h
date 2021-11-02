@@ -4,6 +4,7 @@
 #include <tuple>
 
 #include "idx.h"
+#include "utils.h"
 
 namespace ulayfs::pmem {
 
@@ -122,6 +123,30 @@ union TxEntry {
   }
 
   [[nodiscard]] bool is_valid() const { return raw_bits != 0; }
+
+  /**
+   * a static helper function for appending a TxEntry to an array of TxEntry
+   *
+   * @tparam NUM_ENTRIES the total number of entries in the array
+   * @param entries a pointer to an array of tx entries
+   * @param entry the target entry to be appended
+   * @param hint hint to the tail of the log
+   * @return the TxEntry local index and whether the operation is successful
+   */
+  template <uint16_t NUM_ENTRIES>
+  static TxLocalIdx try_append(TxEntry entries[], TxEntry entry,
+                               TxLocalIdx hint) {
+    for (TxLocalIdx idx = hint; idx < NUM_ENTRIES; ++idx) {
+      uint64_t expected = 0;
+      if (__atomic_compare_exchange_n(&entries[idx].raw_bits, &expected,
+                                      entry.raw_bits, false, __ATOMIC_RELEASE,
+                                      __ATOMIC_ACQUIRE)) {
+        persist_cl_fenced(&entries[idx]);
+        return idx;
+      }
+    }
+    return -1;
+  }
 
   friend std::ostream& operator<<(std::ostream& out, const TxEntry& tx_entry) {
     if (tx_entry.is_begin())
