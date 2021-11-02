@@ -65,7 +65,7 @@ ssize_t read(int fd, void* buf, size_t count) {
 ssize_t pwrite(int fd, const void* buf, size_t count, off_t offset) {
   if (auto it = files.find(fd); it != files.end()) {
     INFO("ulayfs::pwrite(%d, buf, %zu, %ld)", fd, count, offset);
-    return it->second->overwrite(buf, count, offset);
+    return it->second->pwrite(buf, count, offset);
   } else {
     DEBUG("posix::pwrite(%d, buf, %zu, %ld)", fd, count, offset);
     return posix::pwrite(fd, buf, count, offset);

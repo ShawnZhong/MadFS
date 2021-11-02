@@ -85,9 +85,9 @@ class File {
   [[nodiscard]] int get_fd() const { return fd; }
 
   /**
-   * overwrite the byte range [offset, offset + count) with the content in buf
+   * write the content in buf to the byte range [offset, offset + count)
    */
-  ssize_t overwrite(const void* buf, size_t count, size_t offset) {
+  ssize_t pwrite(const void* buf, size_t count, size_t offset) {
     VirtualBlockIdx begin_virtual_idx = ALIGN_DOWN(offset, BLOCK_SIZE);
 
     uint64_t local_offset = offset - begin_virtual_idx * BLOCK_SIZE;
@@ -113,7 +113,7 @@ class File {
   }
 
   /**
-   * read_entry the byte range [offset, offset + count) to buf
+   * read the byte range [offset, offset + count) to buf
    */
   ssize_t pread(void* buf, size_t count, off_t offset) {
     VirtualBlockIdx begin_virtual_idx = ALIGN_DOWN(offset, BLOCK_SIZE);
