@@ -32,34 +32,6 @@ class File {
 
  private:
   /**
-   * Write data to the shadow page starting from begin_logical_idx
-   *
-   * @param buf the buffer given by the user
-   * @param count number of bytes in the buffer
-   * @param local_offset the start offset within the first block
-   */
-  void write_data(const void* buf, size_t count, uint64_t local_offset,
-                  VirtualBlockIdx& begin_virtual_idx,
-                  LogicalBlockIdx& begin_logical_idx) {
-    // the address of the start of the new blocks
-    char* dst = mem_table.get_addr(begin_logical_idx)->data;
-
-    // if the offset is not block-aligned, copy the remaining bytes at the
-    // beginning to the shadow page
-    if (local_offset) {
-      auto src_idx = blk_table.get(begin_virtual_idx);
-      char* src = mem_table.get_addr(src_idx)->data;
-      memcpy(dst, src, local_offset);
-    }
-
-    // write the actual buffer
-    memcpy(dst + local_offset, buf, count);
-
-    // persist the changes
-    pmem::persist_fenced(dst, count + local_offset);
-  }
-
-  /**
    * @param virtual_block_idx the virtual block index for a data block
    * @return the char pointer pointing to the memory location of the data block
    */
@@ -120,13 +92,14 @@ class File {
 
     // TODO: handle the case where num_blocks > 64
 
-    LogicalBlockIdx begin_logical_idx = allocator.alloc(num_blocks);
-    write_data(buf, count, local_offset, begin_virtual_idx, begin_logical_idx);
+    LogicalBlockIdx begin_dst_idx = allocator.alloc(num_blocks);
+    LogicalBlockIdx begin_src_idx = blk_table.get(begin_virtual_idx);
+    tx_mgr.copy_data(buf, count, local_offset, begin_dst_idx, begin_src_idx);
 
     uint16_t last_remaining = num_blocks * BLOCK_SIZE - count - local_offset;
     auto log_entry_idx =
         log_mgr.append(pmem::LogOp::LOG_OVERWRITE, begin_virtual_idx,
-                       begin_logical_idx, num_blocks, last_remaining);
+                       begin_dst_idx, num_blocks, last_remaining);
     tx_mgr.commit_tx(tx_begin_idx, log_entry_idx);
     blk_table.update();
 
