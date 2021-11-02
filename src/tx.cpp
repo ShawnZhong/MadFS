@@ -86,6 +86,26 @@ pmem::TxEntryIdx TxMgr::try_append(Entry entry) {
 template pmem::TxEntryIdx TxMgr::try_append(pmem::TxCommitEntry entry);
 template pmem::TxEntryIdx TxMgr::try_append(pmem::TxBeginEntry entry);
 
+void TxMgr::copy_data(const void* buf, size_t count, uint64_t local_offset,
+                      LogicalBlockIdx& begin_dst_idx,
+                      LogicalBlockIdx& begin_src_idx) {
+  // the address of the start of the new blocks
+  char* dst = mem_table->get_addr(begin_dst_idx)->data;
+
+  // if the offset is not block-aligned, copy the remaining bytes at the
+  // beginning to the shadow page
+  if (local_offset) {
+    char* src = mem_table->get_addr(begin_src_idx)->data;
+    memcpy(dst, src, local_offset);
+  }
+
+  // write the actual buffer
+  memcpy(dst + local_offset, buf, count);
+
+  // persist the changes
+  pmem::persist_fenced(dst, count + local_offset);
+}
+
 std::ostream& operator<<(std::ostream& out, const TxMgr& tx_mgr) {
   out << "Transaction Log: \n";
 
