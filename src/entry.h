@@ -125,11 +125,10 @@ union TxEntry {
   [[nodiscard]] bool is_valid() const { return raw_bits != 0; }
 
   /**
-   * a static helper function for appending a TxEntry
-   * also used for managing MetaBlock::inline_tx_entries
+   * a static helper function for appending a TxEntry to an array of TxEntry
    *
+   * @tparam NUM_ENTRIES the total number of entries in the array
    * @param entries a pointer to an array of tx entries
-   * @param num_entries the total number of entries in the array
    * @param entry the target entry to be appended
    * @param hint hint to the tail of the log
    * @return the TxEntry local index and whether the operation is successful
