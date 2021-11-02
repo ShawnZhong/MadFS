@@ -1,5 +1,6 @@
 #include "tx.h"
 
+#include "block.h"
 #include "entry.h"
 
 namespace ulayfs::dram {
@@ -25,7 +26,36 @@ void TxMgr::advance_tx_idx(pmem::TxEntryIdx& idx,
 pmem::TxEntryIdx TxMgr::begin_tx(VirtualBlockIdx begin_virtual_idx,
                                  uint32_t num_blocks) {
   pmem::TxBeginEntry tx_begin_entry{begin_virtual_idx, num_blocks};
-  return try_append(tx_begin_entry);
+
+  // To find where to append a begin entry, we apply the following strategy:
+  // - if local_tx_tail_block has its next pointer set, read from the global
+  //   because it's likely that we fall behind a lot
+  // - otherwise, scan from the local one
+  pmem::TxEntryIdx curr_idx = local_tx_tail;
+  pmem::TxLogBlock* curr_block = local_tx_tail_block;
+
+  if (!curr_block || curr_block->get_next()) {  // read meta
+    curr_idx = meta->get_tx_log_tail();
+    if (curr_idx.block_idx != 0)
+      curr_block = &(mem_table->get_addr(curr_idx.block_idx)->tx_log_block);
+  }
+
+  // if still nullptr, try to begin tx on meta's inline_tx_entries
+  if (!curr_block) {
+    curr_idx.local_idx = meta->find_tail(curr_idx.local_idx);
+    if (curr_idx.local_idx >= 0)
+      for (; curr_idx.local_idx < NUM_INLINE_TX_ENTRY; ++curr_idx.local_idx)
+        if (meta->try_append(tx_begin_entry, curr_idx.local_idx) == 0)
+          goto done;
+    curr_idx.block_idx = alloc_next_block(meta);
+    curr_idx.local_idx = 0;
+    curr_block = &mem_table->get_addr(curr_idx.block_idx)->tx_log_block;
+  }
+
+  // TODO: now handle scaning from txblock
+
+done:
+  return curr_idx;
 }
 
 pmem::TxEntryIdx TxMgr::commit_tx(pmem::TxEntryIdx tx_begin_idx,
@@ -81,10 +111,6 @@ pmem::TxEntryIdx TxMgr::try_append(Entry entry) {
     local_idx_hint = 0;
   }
 }
-
-// explicit template instantiations
-template pmem::TxEntryIdx TxMgr::try_append(pmem::TxCommitEntry entry);
-template pmem::TxEntryIdx TxMgr::try_append(pmem::TxBeginEntry entry);
 
 void TxMgr::copy_data(const void* buf, size_t count, uint64_t local_offset,
                       LogicalBlockIdx& begin_dst_idx,

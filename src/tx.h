@@ -15,11 +15,13 @@ class TxMgr {
   Allocator* allocator;
   MemTable* mem_table;
 
+  // NOTE: the local tail indicates the tail of **APPLIED** entry
+  //       the tail should not move except by blk_table
+  //       also, the tail should be defined as **the next to check**
   // the tail of the local tx entry
   pmem::TxEntryIdx local_tx_tail;
-
-  // the block for the local_tx_tail
-  pmem::TxLogBlock* local_tx_log_block;
+  // the block for the local_tx_tail (a cached copy without access mem_table)
+  pmem::TxLogBlock* local_tx_tail_block;
 
  public:
   TxMgr() = default;
@@ -28,18 +30,18 @@ class TxMgr {
         allocator(allocator),
         mem_table(mem_table),
         local_tx_tail(),
-        local_tx_log_block(nullptr) {}
+        local_tx_tail_block(nullptr) {}
 
   /**
    * Move to the next tx index
    */
-  void advance() { advance_tx_idx(local_tx_tail, local_tx_log_block); }
+  void advance() { advance_tx_idx(local_tx_tail, local_tx_tail_block); }
 
   /**
    * @return the current transaction entry
    */
   [[nodiscard]] pmem::TxEntry get_entry() const {
-    return get_entry_from_block(local_tx_tail, local_tx_log_block);
+    return get_entry_from_block(local_tx_tail, local_tx_tail_block);
   }
 
   /**
@@ -100,14 +102,6 @@ class TxMgr {
    */
   template <class B>
   LogicalBlockIdx alloc_next_block(B* block) const;
-
-  /**
-   * @tparam Entry TxBeginEntry or TxCommitEntry
-   * @param entry the tx entry to be appended
-   * @return the index of the inserted entry
-   */
-  template <class Entry>
-  pmem::TxEntryIdx try_append(Entry entry);
 
  public:
   friend std::ostream& operator<<(std::ostream& out, const TxMgr& tx_mgr);

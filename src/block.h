@@ -71,22 +71,21 @@ class TxLogBlock : public BaseBlock {
   TxEntry tx_entries[NUM_TX_ENTRY];
 
  public:
-  TxLocalIdx try_append(TxBeginEntry begin_entry, TxLocalIdx hint_tail = 0) {
-    return TxEntry::try_append<NUM_TX_ENTRY>(tx_entries, begin_entry,
-                                             hint_tail);
+  TxLocalIdx find_tail(TxLocalIdx hint) {
+    return TxEntry::find_tail<NUM_TX_ENTRY>(tx_entries, hint);
   }
 
-  TxLocalIdx try_append(TxCommitEntry commit_entry, TxLocalIdx hint_tail = 0) {
-    // FIXME: this one is actually wrong. In OCC, we have to verify there is no
-    // new transaction overlap with our range
-    return TxEntry::try_append<NUM_TX_ENTRY>(tx_entries, commit_entry,
-                                             hint_tail);
+  uint64_t try_append(TxEntry entry, TxLocalIdx idx) {
+    return TxEntry::try_append<NUM_TX_ENTRY>(tx_entries, entry, idx);
   }
 
-  TxEntry get(TxLocalIdx idx) {
+  [[nodiscard]] TxEntry get(TxLocalIdx idx) {
     assert(idx >= 0 && idx < NUM_TX_ENTRY);
     return tx_entries[idx];
   }
+
+  [[nodiscard]] LogicalBlockIdx get_next() { return next; }
+  [[nodiscard]] LogicalBlockIdx get_prev() { return prev; }
 
   [[nodiscard]] LogicalBlockIdx get_next_tx_block() const { return next; }
 
@@ -264,15 +263,13 @@ class MetaBlock : public BaseBlock {
     return Bitmap::alloc_batch(inline_bitmaps, NUM_INLINE_BITMAP, hint);
   }
 
-  TxLocalIdx try_append_tx(TxBeginEntry begin_entry, TxLocalIdx hint_tail = 0) {
-    return TxEntry::try_append<NUM_INLINE_TX_ENTRY>(inline_tx_entries,
-                                                    begin_entry, hint_tail);
+  TxLocalIdx find_tail(TxLocalIdx hint) {
+    return TxEntry::find_tail<NUM_INLINE_TX_ENTRY>(inline_tx_entries, hint);
   }
 
-  TxLocalIdx try_append_tx(TxCommitEntry commit_entry,
-                           TxLocalIdx hint_tail = 0) {
-    return TxEntry::try_append<NUM_INLINE_TX_ENTRY>(inline_tx_entries,
-                                                    commit_entry, hint_tail);
+  uint64_t try_append(TxEntry entry, TxLocalIdx idx) {
+    return TxEntry::try_append<NUM_INLINE_TX_ENTRY>(inline_tx_entries, entry,
+                                                    idx);
   }
 
   friend std::ostream& operator<<(std::ostream& out, const MetaBlock& block) {

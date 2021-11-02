@@ -112,8 +112,9 @@ union TxEntry {
   uint64_t raw_bits;
 
   TxEntry(){};
-  TxEntry(const TxBeginEntry& begin_entry) : begin_entry(begin_entry) {}
-  TxEntry(const TxCommitEntry& commit_entry) : commit_entry(commit_entry) {}
+  TxEntry(uint64_t raw_bits) : raw_bits(raw_bits) {}
+  TxEntry(TxBeginEntry begin_entry) : begin_entry(begin_entry) {}
+  TxEntry(TxCommitEntry commit_entry) : commit_entry(commit_entry) {}
 
   [[nodiscard]] bool is_begin() const {
     return begin_entry.type == TxEntryType::TX_BEGIN;
@@ -124,28 +125,48 @@ union TxEntry {
 
   [[nodiscard]] bool is_valid() const { return raw_bits != 0; }
 
+  [[nodiscard]] static bool is_last_entry_in_cacheline(TxLocalIdx idx) {
+    constexpr uint16_t num_entries_in_cl = CACHELINE_SIZE / sizeof(TxEntry);
+    return (idx + 1) % num_entries_in_cl == 0;
+  }
+
   /**
-   * a static helper function for appending a TxEntry to an array of TxEntry
+   * find the tail (next unused slot) in an array of TxEntry
    *
    * @tparam NUM_ENTRIES the total number of entries in the array
    * @param entries a pointer to an array of tx entries
-   * @param entry the target entry to be appended
-   * @param hint hint to the tail of the log
-   * @return the TxEntry local index and whether the operation is successful
+   * @param hint hint to start the search
+   * @return the local index of next available TxEntry; -1 if not found
    */
   template <uint16_t NUM_ENTRIES>
-  static TxLocalIdx try_append(TxEntry entries[], TxEntry entry,
-                               TxLocalIdx hint) {
-    for (TxLocalIdx idx = hint; idx < NUM_ENTRIES; ++idx) {
-      uint64_t expected = 0;
-      if (__atomic_compare_exchange_n(&entries[idx].raw_bits, &expected,
-                                      entry.raw_bits, false, __ATOMIC_RELEASE,
-                                      __ATOMIC_ACQUIRE)) {
-        persist_cl_fenced(&entries[idx]);
-        return idx;
-      }
-    }
+  static TxLocalIdx find_tail(TxEntry entries[], TxLocalIdx hint) {
+    for (TxLocalIdx idx = hint; idx < NUM_ENTRIES; ++idx)
+      if (entries[idx].raw_bits == 0) return idx;
     return -1;
+  }
+
+  /**
+   * try to append an entry to a slot in an array of TxEntry; fail if the slot
+   * is taken (likely due to a race condition)
+   *
+   * @tparam NUM_ENTRIES the total number of entries in the array
+   * @param entries a pointer to an array of tx entries
+   * @param entry the entry to append
+   * @param hint hint to start the search
+   * @return if success, return 0; otherwise, return the entry on the slot (in
+   * raw bits)
+   */
+  template <uint16_t NUM_ENTRIES>
+  static uint64_t try_append(TxEntry entries[], TxEntry entry, TxLocalIdx idx) {
+    uint64_t expected = 0;
+    if (__atomic_compare_exchange_n(&entries[idx].raw_bits, &expected,
+                                    entry.raw_bits, false, __ATOMIC_RELEASE,
+                                    __ATOMIC_ACQUIRE))
+      // only persist if it's the last entry in a cacheline
+      if (is_last_entry_in_cacheline(idx)) persist_cl_fenced(&entries[idx]);
+    // if CAS fails, `expected` will be stored the value in entries[idx]
+    // if success, it will return 0
+    return expected;
   }
 
   friend std::ostream& operator<<(std::ostream& out, const TxEntry& tx_entry) {
