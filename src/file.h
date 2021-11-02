@@ -78,14 +78,13 @@ class File {
 
     struct stat stat_buf;  // NOLINT(cppcoreguidelines-pro-type-member-init)
     int ret = posix::fstat(fd, &stat_buf);
-    panic_if(ret, "fstat failed");
+    PANIC_IF(ret, "fstat failed");
 
     // we don't handle non-normal file (e.g., socket, directory, block dev)
     if (!S_ISREG(stat_buf.st_mode) && !S_ISLNK(stat_buf.st_mode)) return;
 
     if (!IS_ALIGNED(stat_buf.st_size, BLOCK_SIZE)) {
-      std::cerr << "Invalid layout: file size not block-aligned for \""
-                << pathname << "\" Fallback to syscall\n";
+      WARN("File size not aligned for \"%s\". Fall back to syscall", pathname);
       return;
     }
 

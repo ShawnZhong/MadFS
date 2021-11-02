@@ -65,9 +65,18 @@ constexpr static struct BuildOptions {
 
 static struct RuntimeOptions {
   bool show_config;
-  RuntimeOptions() {
+  const char* log_file;
+  RuntimeOptions() noexcept {
     show_config = std::getenv("ULAYFS_NO_SHOW_CONFIG") == nullptr;
+    log_file = std::getenv("ULAYFS_LOG_FILE");
   };
+  friend std::ostream& operator<<(std::ostream& out,
+                                  const RuntimeOptions& opt) {
+    out << "RuntimeOptions: \n";
+    out << "\tshow_config: " << opt.show_config << "\n";
+    out << "\tlog_file: " << (opt.log_file ? opt.log_file : "None") << "\n";
+    return out;
+  }
 } runtime_options;
 
 }  // namespace ulayfs

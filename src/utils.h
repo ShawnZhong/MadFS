@@ -9,30 +9,41 @@
 #include "config.h"
 #include "params.h"
 
-#define __FILENAME__ \
-  (strrchr(__FILE__, '/') ? strrchr(__FILE__, '/') + 1 : __FILE__)
+/*
+ * The following macros used for assertion and logging
+ * Defined as macros since we want to have access to __FILE__ and __LINE__
+ */
 
-#define log(msg, ...)                                                       \
-  do {                                                                      \
-    std::time_t t = std::time(nullptr);                                     \
-    std::tm *tm = std::localtime(&t);                                       \
-    fprintf(stderr, "%02d:%02d:%02d [%8s:%d] " msg "\n", tm->tm_hour,       \
-            tm->tm_min, tm->tm_sec, __FILENAME__, __LINE__, ##__VA_ARGS__); \
+#define FPRINTF(file, fmt, ...)                                         \
+  do {                                                                  \
+    std::time_t t = std::time(nullptr);                                 \
+    std::tm *tm = std::localtime(&t);                                   \
+    const char *s = strrchr(__FILE__, '/');                             \
+    const char *filename = s ? s + 1 : __FILE__;                        \
+    fprintf(file, "%02d:%02d:%02d [%8s:%d] " fmt "\n", tm->tm_hour,     \
+            tm->tm_min, tm->tm_sec, filename, __LINE__, ##__VA_ARGS__); \
   } while (0)
 
-#define panic_if(expr, msg, ...)                 \
-  do {                                           \
-    if (expr) {                                  \
-      log("[PANIC] " msg ": %m", ##__VA_ARGS__); \
-      exit(1);                                   \
-    }                                            \
+// similar to assert, LOG(...) is not active in release mode
+static FILE *log_file = stderr;
+#define LOG(msg, ...)                                 \
+  do {                                                \
+    if constexpr (BuildOptions::debug) {              \
+      FPRINTF(log_file, "[LOG] " msg, ##__VA_ARGS__); \
+    }                                                 \
   } while (0)
 
-#define debug(msg, ...)                   \
-  do {                                    \
-    if constexpr (BuildOptions::debug) {  \
-      log("[DEBUG] " msg, ##__VA_ARGS__); \
-    }                                     \
+#define WARN(msg, ...)                                      \
+  do {                                                      \
+    FPRINTF(log_file, "[WARN] " msg ": %m", ##__VA_ARGS__); \
+  } while (0)
+
+#define PANIC_IF(expr, msg, ...)                             \
+  do {                                                       \
+    if (expr) {                                              \
+      FPRINTF(stderr, "[PANIC] " msg ": %m", ##__VA_ARGS__); \
+      exit(1);                                               \
+    }                                                        \
   } while (0)
 
 // adopted from `include/linux/align.h`
