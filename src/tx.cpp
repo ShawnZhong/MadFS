@@ -34,12 +34,13 @@ pmem::TxEntryIdx TxMgr::begin_tx(VirtualBlockIdx begin_virtual_idx,
   LogicalBlockIdx tmp;
 
   if (!curr_block) {  // handle meta
-    if ((next_block_idx = meta->get_next_tx_block())) goto meta_next;
-    curr_idx.local_idx = meta->find_tail(curr_idx.local_idx);
-    for (; curr_idx.local_idx < NUM_INLINE_TX_ENTRY; ++curr_idx.local_idx)
-      if (meta->try_append(tx_begin_entry, curr_idx.local_idx) == 0) goto done;
-    next_block_idx = alloc_next_block(meta);
-  meta_next:
+    if (!(next_block_idx = meta->get_next_tx_block())) {
+      curr_idx.local_idx = meta->find_tail(curr_idx.local_idx);
+      for (; curr_idx.local_idx < NUM_INLINE_TX_ENTRY; ++curr_idx.local_idx)
+        if (meta->try_append(tx_begin_entry, curr_idx.local_idx) == 0)
+          return curr_idx;
+      next_block_idx = alloc_next_block(meta);
+    }
     curr_idx.block_idx = next_block_idx;
     curr_idx.local_idx = 0;
     curr_block = &mem_table->get_addr(curr_idx.block_idx)->tx_log_block;
@@ -54,7 +55,7 @@ pmem::TxEntryIdx TxMgr::begin_tx(VirtualBlockIdx begin_virtual_idx,
 retry:
   for (; curr_idx.local_idx < NUM_TX_ENTRY; ++curr_idx.local_idx) {
     auto res = curr_block->try_append(tx_begin_entry, curr_idx.local_idx);
-    if (!res) goto done;
+    if (!res) return curr_idx;
   }
 
   // if fail to append to the current block; allocate a new one and retry
@@ -62,9 +63,6 @@ retry:
   curr_idx.local_idx = 0;
   curr_block = &mem_table->get_addr(curr_idx.block_idx)->tx_log_block;
   goto retry;
-
-done:
-  return curr_idx;
 }
 
 pmem::TxEntryIdx TxMgr::commit_tx(pmem::TxEntryIdx tx_begin_idx,
