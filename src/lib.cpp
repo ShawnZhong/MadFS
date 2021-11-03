@@ -45,6 +45,7 @@ int close(int fd) {
 ssize_t write(int fd, const void* buf, size_t count) {
   if (auto it = files.find(fd); it != files.end()) {
     INFO("ulayfs::write(%d, buf, %zu)", fd, count);
+    // TODO: implement this
     return posix::write(fd, buf, count);
   } else {
     DEBUG("posix::write(%d, buf, %zu)", fd, count);
@@ -55,6 +56,7 @@ ssize_t write(int fd, const void* buf, size_t count) {
 ssize_t read(int fd, void* buf, size_t count) {
   if (auto it = files.find(fd); it != files.end()) {
     INFO("ulayfs::read(%d, buf, %zu)", fd, count);
+    // TODO: implement this
     return posix::read(fd, buf, count);
   } else {
     DEBUG("posix::read(%d, buf, %zu)", fd, count);
@@ -79,6 +81,17 @@ ssize_t pread(int fd, void* buf, size_t count, off_t offset) {
   } else {
     DEBUG("posix::pread(%d, buf, %zu, %ld)", fd, count, offset);
     return posix::pread(fd, buf, count, offset);
+  }
+}
+
+int fstat(int fd, struct stat* buf) {
+  if (auto it = files.find(fd); it != files.end()) {
+    INFO("ulayfs::fstat(%d, buf)", fd);
+    // TODO: implement this
+    return posix::fstat(fd, buf);
+  } else {
+    DEBUG("posix::fstat(%d, buf)", fd);
+    return posix::fstat(fd, buf);
   }
 }
 
