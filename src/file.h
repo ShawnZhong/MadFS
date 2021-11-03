@@ -88,7 +88,8 @@ class File {
    * write the content in buf to the byte range [offset, offset + count)
    */
   ssize_t pwrite(const void* buf, size_t count, size_t offset) {
-    VirtualBlockIdx begin_virtual_idx = ALIGN_DOWN(offset, BLOCK_SIZE);
+    VirtualBlockIdx begin_virtual_idx =
+        ALIGN_DOWN(offset, BLOCK_SIZE) >> BLOCK_SHIFT;
 
     uint64_t local_offset = offset - begin_virtual_idx * BLOCK_SIZE;
     uint32_t num_blocks =
@@ -116,7 +117,8 @@ class File {
    * read the byte range [offset, offset + count) to buf
    */
   ssize_t pread(void* buf, size_t count, off_t offset) {
-    VirtualBlockIdx begin_virtual_idx = ALIGN_DOWN(offset, BLOCK_SIZE);
+    VirtualBlockIdx begin_virtual_idx =
+        ALIGN_DOWN(offset, BLOCK_SIZE) >> BLOCK_SHIFT;
 
     uint64_t local_offset = offset - begin_virtual_idx * BLOCK_SIZE;
     uint32_t num_blocks =
