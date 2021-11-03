@@ -65,8 +65,7 @@ retry:
   goto retry;
 }
 
-pmem::TxEntryIdx TxMgr::commit_tx(pmem::TxEntryIdx tx_begin_idx,
-                                  pmem::LogEntryIdx log_entry_idx) {
+pmem::TxEntryIdx TxMgr::commit_tx(pmem::LogEntryIdx log_entry_idx) {
   // TODO: compute begin_offset from tx_begin_idx
   pmem::TxCommitEntry tx_commit_entry{0, log_entry_idx};
   // TODO: impl...

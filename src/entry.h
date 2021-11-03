@@ -1,5 +1,6 @@
 #pragma once
 
+#include <cassert>
 #include <iostream>
 #include <tuple>
 
@@ -86,27 +87,35 @@ struct TxBeginEntry {
 struct TxCommitEntry {
   enum TxEntryType type : 1 = TxEntryType::TX_COMMIT;
 
-  // how many entries ahead is the corresponding TxBeginEntry
-  // the value stored should always be positive
-  uint32_t begin_offset : 23;
+  // optionally, set these bits so OCC conflict detection can be done inline
+  uint32_t num_blocks : 6;
+  uint32_t virtual_block_idx : 17;
 
   // the first log entry for this transaction, 40 bits in size
   // The rest of the log entries are organized as a linked list
   LogEntryIdx log_entry_idx;
 
-  TxCommitEntry(uint32_t begin_offset, const LogEntryIdx log_entry_idx)
-      : begin_offset(begin_offset), log_entry_idx(log_entry_idx) {}
+  TxCommitEntry(const LogEntryIdx log_entry_idx, uint32_t num_blocks = 0,
+                uint32_t virtual_block_idx = 0)
+      : num_blocks(num_blocks),
+        virtual_block_idx(virtual_block_idx),
+        log_entry_idx(log_entry_idx) {
+    assert(num_blocks < (1 << 6));
+    assert(virtual_block_idx < (1 << 17));
+  }
 
   friend std::ostream& operator<<(std::ostream& out,
                                   const TxCommitEntry& entry) {
     out << "TX_COMMIT "
-        << "{ begin_offset: " << entry.begin_offset
+        << "{ num_blocks: " << entry.num_blocks
+        << ", virtual_block_idx: " << entry.virtual_block_idx
         << ", log_entry_idx: " << entry.log_entry_idx << " }";
     return out;
   }
 };
 
 union TxEntry {
+  // WARN: begin_entry is deprecated
   TxBeginEntry begin_entry;
   TxCommitEntry commit_entry;
   uint64_t raw_bits;
