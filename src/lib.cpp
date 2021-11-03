@@ -64,6 +64,17 @@ ssize_t read(int fd, void* buf, size_t count) {
   }
 }
 
+off_t lseek(int fd, off_t offset, int whence) {
+  if (auto it = files.find(fd); it != files.end()) {
+    INFO("ulayfs::lseek(%d, %zu, %d)", fd, offset, whence);
+    // TODO: implement this
+    return posix::lseek(fd, offset, whence);
+  } else {
+    DEBUG("posix::lseek(%d, %zu, %d)", fd, offset, whence);
+    return posix::lseek(fd, offset, whence);
+  }
+}
+
 ssize_t pwrite(int fd, const void* buf, size_t count, off_t offset) {
   if (auto it = files.find(fd); it != files.end()) {
     INFO("ulayfs::pwrite(%d, buf, %zu, %ld)", fd, count, offset);
@@ -86,11 +97,11 @@ ssize_t pread(int fd, void* buf, size_t count, off_t offset) {
 
 int fstat(int fd, struct stat* buf) {
   if (auto it = files.find(fd); it != files.end()) {
-    INFO("ulayfs::fstat(%d, buf)", fd);
+    INFO("ulayfs::fstat(%d)", fd);
     // TODO: implement this
     return posix::fstat(fd, buf);
   } else {
-    DEBUG("posix::fstat(%d, buf)", fd);
+    DEBUG("posix::fstat(%d)", fd);
     return posix::fstat(fd, buf);
   }
 }

@@ -10,6 +10,7 @@ namespace ulayfs::posix {
 #define REGISTER_FN(fn) \
   static auto fn = reinterpret_cast<decltype(&::fn)>(dlsym(RTLD_NEXT, #fn))
 
+REGISTER_FN(lseek);
 REGISTER_FN(write);
 REGISTER_FN(pwrite);
 REGISTER_FN(read);
