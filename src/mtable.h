@@ -53,7 +53,7 @@ class MemTable {
         ALIGN_UP(static_cast<size_t>(idx + 1) << BLOCK_SHIFT, GROW_UNIT_SIZE);
 
     int ret = posix::ftruncate(fd, static_cast<off_t>(file_size));
-    panic_if(ret, "ftruncate failed");
+    PANIC_IF(ret, "ftruncate failed");
     meta->set_num_blocks_no_lock(file_size >> BLOCK_SHIFT);
   }
 
@@ -72,7 +72,7 @@ class MemTable {
 
     void* addr =
         posix::mmap(nullptr, length, PROT_READ | PROT_WRITE, flags, fd, offset);
-    panic_if(addr == (void*)-1, "mmap failed");
+    PANIC_IF(addr == (void*)-1, "mmap fd = %d failed", fd);
     return static_cast<pmem::Block*>(addr);
   }
 
@@ -89,7 +89,7 @@ class MemTable {
       file_size =
           file_size == 0 ? PREALLOC_SIZE : ALIGN_UP(file_size, GROW_UNIT_SIZE);
       int ret = posix::ftruncate(fd, file_size);
-      panic_if(ret, "ftruncate failed");
+      PANIC_IF(ret, "ftruncate failed");
     }
 
     pmem::Block* blocks = mmap_file(file_size, 0);

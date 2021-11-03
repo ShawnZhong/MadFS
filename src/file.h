@@ -48,16 +48,22 @@ class File {
     fd = posix::open(pathname, flags, mode);
     if (fd < 0) return;  // fail to open the file
 
+    // TODO: support read-only / write-only files
+    if ((open_flags & O_ACCMODE) != O_RDWR) {
+      WARN("File %s opened with %s", pathname,
+           (open_flags & O_ACCMODE) == O_RDONLY ? "O_RDONLY" : "O_WRONLY");
+      return;
+    }
+
     struct stat stat_buf;  // NOLINT(cppcoreguidelines-pro-type-member-init)
     int ret = posix::fstat(fd, &stat_buf);
-    panic_if(ret, "fstat failed");
+    PANIC_IF(ret, "fstat failed");
 
     // we don't handle non-normal file (e.g., socket, directory, block dev)
     if (!S_ISREG(stat_buf.st_mode) && !S_ISLNK(stat_buf.st_mode)) return;
 
     if (!IS_ALIGNED(stat_buf.st_size, BLOCK_SIZE)) {
-      std::cerr << "Invalid layout: file size not block-aligned for \""
-                << pathname << "\" Fallback to syscall\n";
+      WARN("File size not aligned for \"%s\". Fall back to syscall", pathname);
       return;
     }
 
@@ -79,10 +85,11 @@ class File {
   [[nodiscard]] int get_fd() const { return fd; }
 
   /**
-   * overwrite the byte range [offset, offset + count) with the content in buf
+   * write the content in buf to the byte range [offset, offset + count)
    */
-  ssize_t overwrite(const void* buf, size_t count, size_t offset) {
-    VirtualBlockIdx begin_virtual_idx = ALIGN_DOWN(offset, BLOCK_SIZE);
+  ssize_t pwrite(const void* buf, size_t count, size_t offset) {
+    VirtualBlockIdx begin_virtual_idx =
+        ALIGN_DOWN(offset, BLOCK_SIZE) >> BLOCK_SHIFT;
 
     uint64_t local_offset = offset - begin_virtual_idx * BLOCK_SIZE;
     uint32_t num_blocks =
@@ -107,10 +114,11 @@ class File {
   }
 
   /**
-   * read_entry the byte range [offset, offset + count) to buf
+   * read the byte range [offset, offset + count) to buf
    */
   ssize_t pread(void* buf, size_t count, off_t offset) {
-    VirtualBlockIdx begin_virtual_idx = ALIGN_DOWN(offset, BLOCK_SIZE);
+    VirtualBlockIdx begin_virtual_idx =
+        ALIGN_DOWN(offset, BLOCK_SIZE) >> BLOCK_SHIFT;
 
     uint64_t local_offset = offset - begin_virtual_idx * BLOCK_SIZE;
     uint32_t num_blocks =
