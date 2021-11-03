@@ -10,7 +10,7 @@ using namespace ulayfs;
 
 constexpr auto FILEPATH = "test.txt";
 constexpr auto NUM_BYTES = 4096 * 7 + 4567;
-constexpr auto OFFSET = 4096 - 1234;
+constexpr auto OFFSET = 4096 * 2 - 1234;
 
 char const hex_chars[16] = {'0', '1', '2', '3', '4', '5', '6', '7',
                             '8', '9', 'A', 'B', 'C', 'D', 'E', 'F'};

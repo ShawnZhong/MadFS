@@ -2,16 +2,51 @@
 
 #include <immintrin.h>
 
+#include <ctime>
+#include <iomanip>
+#include <iostream>
+
 #include "config.h"
 #include "params.h"
 
-#define panic_if(expr, msg)                                       \
-  do {                                                            \
-    if (expr) {                                                   \
-      fprintf(stderr, "[%s:%d] %s: %m", __FILE__, __LINE__, msg); \
-      exit(1);                                                    \
-    }                                                             \
+/*
+ * The following macros used for assertion and logging
+ * Defined as macros since we want to have access to __FILE__ and __LINE__
+ */
+
+#define FPRINTF(file, fmt, ...)                                               \
+  std::time_t t = std::time(nullptr);                                         \
+  std::tm *tm = std::localtime(&t);                                           \
+  const char *s = strrchr(__FILE__, '/');                                     \
+  const char *filename = s ? s + 1 : __FILE__;                                \
+  fprintf(file, "%02d:%02d:%02d [%8s:%d] " fmt "\n", tm->tm_hour, tm->tm_min, \
+          tm->tm_sec, filename, __LINE__, ##__VA_ARGS__);
+
+// PANIC_IF is active for both debug and release modes
+#define PANIC_IF(expr, msg, ...)                           \
+  do {                                                     \
+    if (!(expr)) break;                                    \
+    FPRINTF(stderr, "[PANIC] " msg ": %m", ##__VA_ARGS__); \
+    exit(EXIT_FAILURE);                                    \
   } while (0)
+
+// DEBUG, INFO, and WARN are not active in release mode
+static FILE *log_file = stderr;
+#define LOG(level, msg, ...)                                     \
+  do {                                                           \
+    if constexpr (BuildOptions::debug) {                         \
+      if (level < runtime_options.log_level) break;              \
+      const char *level_str = level == 1   ? "DEBUG"             \
+                              : level == 2 ? "INFO"              \
+                              : level == 3 ? "WARN"              \
+                                           : "UNK";              \
+      FPRINTF(log_file, "[%5s] " msg, level_str, ##__VA_ARGS__); \
+    }                                                            \
+  } while (0)
+
+#define DEBUG(msg, ...) LOG(1, msg, ##__VA_ARGS__)
+#define INFO(msg, ...) LOG(2, msg, ##__VA_ARGS__)
+#define WARN(msg, ...) LOG(3, msg, ##__VA_ARGS__)
 
 // adopted from `include/linux/align.h`
 #define ALIGN_MASK(x, mask) (((x) + (mask)) & ~(mask))
