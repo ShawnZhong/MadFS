@@ -7,8 +7,12 @@
 #include <unistd.h>
 
 namespace ulayfs::posix {
-#define REGISTER_FN(fn) \
-  static auto fn = reinterpret_cast<decltype(&::fn)>(dlsym(RTLD_NEXT, #fn))
+#define REGISTER_FN(fn)                                                  \
+  static auto fn = []() noexcept {                                       \
+    auto res = reinterpret_cast<decltype(&::fn)>(dlsym(RTLD_NEXT, #fn)); \
+    assert(res != nullptr);                                              \
+    return res;                                                          \
+  }()
 
 REGISTER_FN(lseek);
 REGISTER_FN(write);
