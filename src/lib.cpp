@@ -8,6 +8,12 @@
 #include "posix.h"
 
 namespace ulayfs {
+dram::File* get_file(int fd) {
+  auto it = files.find(fd);
+  if (it != files.end()) return it->second;
+  return nullptr;
+}
+
 extern "C" {
 int open(const char* pathname, int flags, ...) {
   mode_t mode = 0;
@@ -43,7 +49,7 @@ int close(int fd) {
 }
 
 ssize_t write(int fd, const void* buf, size_t count) {
-  if (auto it = files.find(fd); it != files.end()) {
+  if (auto file = get_file(fd)) {
     INFO("ulayfs::write(%d, buf, %zu)", fd, count);
     // TODO: implement this
     return posix::write(fd, buf, count);
@@ -54,7 +60,7 @@ ssize_t write(int fd, const void* buf, size_t count) {
 }
 
 ssize_t read(int fd, void* buf, size_t count) {
-  if (auto it = files.find(fd); it != files.end()) {
+  if (auto file = get_file(fd)) {
     INFO("ulayfs::read(%d, buf, %zu)", fd, count);
     // TODO: implement this
     return posix::read(fd, buf, count);
@@ -64,10 +70,21 @@ ssize_t read(int fd, void* buf, size_t count) {
   }
 }
 
+off_t lseek(int fd, off_t offset, int whence) {
+  if (auto file = get_file(fd)) {
+    INFO("ulayfs::lseek(%d, %zu, %d)", fd, offset, whence);
+    // TODO: implement this
+    return posix::lseek(fd, offset, whence);
+  } else {
+    DEBUG("posix::lseek(%d, %zu, %d)", fd, offset, whence);
+    return posix::lseek(fd, offset, whence);
+  }
+}
+
 ssize_t pwrite(int fd, const void* buf, size_t count, off_t offset) {
-  if (auto it = files.find(fd); it != files.end()) {
+  if (auto file = get_file(fd)) {
     INFO("ulayfs::pwrite(%d, buf, %zu, %ld)", fd, count, offset);
-    return it->second->pwrite(buf, count, offset);
+    return file->pwrite(buf, count, offset);
   } else {
     DEBUG("posix::pwrite(%d, buf, %zu, %ld)", fd, count, offset);
     return posix::pwrite(fd, buf, count, offset);
@@ -75,9 +92,9 @@ ssize_t pwrite(int fd, const void* buf, size_t count, off_t offset) {
 }
 
 ssize_t pread(int fd, void* buf, size_t count, off_t offset) {
-  if (auto it = files.find(fd); it != files.end()) {
+  if (auto file = get_file(fd)) {
     INFO("ulayfs::pread(%d, buf, %zu, %ld)", fd, count, offset);
-    return it->second->pread(buf, count, offset);
+    return file->pread(buf, count, offset);
   } else {
     DEBUG("posix::pread(%d, buf, %zu, %ld)", fd, count, offset);
     return posix::pread(fd, buf, count, offset);
@@ -85,12 +102,12 @@ ssize_t pread(int fd, void* buf, size_t count, off_t offset) {
 }
 
 int fstat(int fd, struct stat* buf) {
-  if (auto it = files.find(fd); it != files.end()) {
-    INFO("ulayfs::fstat(%d, buf)", fd);
+  if (auto file = get_file(fd)) {
+    INFO("ulayfs::fstat(%d)", fd);
     // TODO: implement this
     return posix::fstat(fd, buf);
   } else {
-    DEBUG("posix::fstat(%d, buf)", fd);
+    DEBUG("posix::fstat(%d)", fd);
     return posix::fstat(fd, buf);
   }
 }

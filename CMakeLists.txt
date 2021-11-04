@@ -23,7 +23,7 @@ add_library(ulayfs SHARED
     src/block.h
     src/btable.h
     src/entry.h
-    src/file.h
+    src/file.h src/file.cpp
     src/futex.h
     src/layout.h
     src/lib.h src/lib.cpp
@@ -43,8 +43,8 @@ set_property(TARGET ulayfs PROPERTY INTERPROCEDURAL_OPTIMIZATION TRUE)
 option(MEM_PROTECT "Enable memory protection to avoid stray writes" OFF)
 option(NO_SHARING "Assume that no two processes concurrently operate on the same file" OFF)
 option(RELAXED "Relax visibility and serialization guarantee on concurrent access" OFF)
-option(USE_HUGE_PAGE "Use huge page for mmap" OFF)
-option(USE_MAP_SYNC "Use MAP_SYNC for mmap" OFF)
+option(USE_HUGE_PAGE "Use huge page for mmap" ON)
+option(USE_MAP_SYNC "Use MAP_SYNC for mmap" ON)
 option(FORCE_MAP_POPULATE "Always use MAP_POPULATE for mmap" OFF)
 
 # Get the current working branch
