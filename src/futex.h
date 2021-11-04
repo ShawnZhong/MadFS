@@ -14,9 +14,9 @@
 namespace ulayfs {
 
 class Futex {
-  std::atomic_uint32_t val;
+  uint32_t val;
 
-  static long futex(std::atomic_uint32_t *uaddr, int futex_op, uint32_t val,
+  static long futex(uint32_t *uaddr, int futex_op, uint32_t val,
                     const struct timespec *timeout, uint32_t *uaddr2,
                     uint32_t val3) {
     return syscall(SYS_futex, uaddr, futex_op, val, timeout, uaddr2, val3);
@@ -29,8 +29,8 @@ class Futex {
     atomic_thread_fence(std::memory_order_acquire);
     while (true) {
       uint32_t one = 1;
-      val.compare_exchange_strong(one, 0, std::memory_order_acq_rel,
-                                  std::memory_order_acquire);
+      __atomic_compare_exchange_n(&val, &one, 0, true, __ATOMIC_ACQ_REL,
+                                  __ATOMIC_ACQUIRE);
 
       long rc = futex(&val, FUTEX_TRYLOCK_PI, 0, nullptr, nullptr, 0);
       if (errno == EAGAIN) continue;
