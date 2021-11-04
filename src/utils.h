@@ -9,6 +9,9 @@
 #include "config.h"
 #include "params.h"
 
+#define likely(x) __builtin_expect(!!(x), 1)
+#define unlikely(x) __builtin_expect(!!(x), 0)
+
 /*
  * The following macros used for assertion and logging
  * Defined as macros since we want to have access to __FILE__ and __LINE__
@@ -25,7 +28,7 @@
 // PANIC_IF is active for both debug and release modes
 #define PANIC_IF(expr, msg, ...)                           \
   do {                                                     \
-    if (!(expr)) break;                                    \
+    if (likely(!(expr))) break;                            \
     FPRINTF(stderr, "[PANIC] " msg ": %m", ##__VA_ARGS__); \
     exit(EXIT_FAILURE);                                    \
   } while (0)

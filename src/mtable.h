@@ -74,7 +74,7 @@ class MemTable {
 
     void* addr = posix::mmap(nullptr, length, prot, flags, fd, offset);
 
-    if (addr == MAP_FAILED) {
+    if (unlikely(addr == MAP_FAILED)) {
       // Note that the order of the following two fallback plans matters
       if constexpr (BuildOptions::use_huge_page) {
         if (errno == EINVAL) {
