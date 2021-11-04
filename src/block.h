@@ -144,12 +144,6 @@ class MetaBlock : public BaseBlock {
       // file signature
       char signature[SIGNATURE_SIZE];
 
-      // file size in bytes (logical size to users)
-      uint64_t file_size;
-
-      // total number of blocks actually in this file (including unused ones)
-      uint32_t num_blocks;
-
       // if inline_tx_entries is used up, this points to the next log block
       LogicalBlockIdx next_tx_block;
 
@@ -161,13 +155,24 @@ class MetaBlock : public BaseBlock {
     char cl1[CACHELINE_SIZE];
   };
 
+  // set futex to another cacheline to avoid futex's contention affect
+  // reading the metadata above
   union {
-    // address for futex to lock, 4 bytes in size
-    // this lock is ONLY used for ftruncate
-    Futex meta_lock;
+    struct {
+      // address for futex to lock, 4 bytes in size
+      // this lock is ONLY used for ftruncate
+      Futex meta_lock;
 
-    // set futex to another cacheline to avoid futex's contention affect
-    // reading the metadata above
+      // file size in bytes (logical size to users)
+      // modifications to this usually requires meta_lock being held
+      uint64_t file_size;
+
+      // total number of blocks actually in this file (including unused ones)
+      // modifications to this usually requires meta_lock being held
+      uint32_t num_blocks;
+    };
+
+    // padding
     char cl2[CACHELINE_SIZE];
   };
 
