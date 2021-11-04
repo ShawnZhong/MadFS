@@ -67,8 +67,7 @@ ssize_t read(int fd, void* buf, size_t count) {
 off_t lseek(int fd, off_t offset, int whence) {
   if (auto it = files.find(fd); it != files.end()) {
     INFO("ulayfs::lseek(%d, %zu, %d)", fd, offset, whence);
-    // TODO: implement this
-    return posix::lseek(fd, offset, whence);
+    return it->second->lseek(offset, whence);
   } else {
     DEBUG("posix::lseek(%d, %zu, %d)", fd, offset, whence);
     return posix::lseek(fd, offset, whence);

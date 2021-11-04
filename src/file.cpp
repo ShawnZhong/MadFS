@@ -92,6 +92,37 @@ ssize_t File::pread(void* buf, size_t count, off_t offset) {
   return static_cast<ssize_t>(count);
 }
 
+off_t File::lseek(off_t offset, int whence) {
+  off_t new_off, old_off = file_offset;
+
+  do {
+    switch (whence) {
+      case SEEK_SET:
+        new_off = offset;
+        break;
+
+      case SEEK_CUR:
+        new_off = old_off + offset;
+        break;
+
+      case SEEK_END:
+        new_off = meta->get_file_size() + offset;
+        break;
+
+        // TODO: add SEEK_DATA and SEEK_HOLE
+      case SEEK_DATA:
+      case SEEK_HOLE:
+      default:
+        return -1;
+    }
+
+    if (new_off < 0) return -1;
+  } while (__atomic_compare_exchange_n(&file_offset, &old_off, new_off, true,
+                                       __ATOMIC_ACQ_REL, __ATOMIC_RELAXED));
+
+  return new_off;
+}
+
 char* File::get_data_block_ptr(VirtualBlockIdx virtual_block_idx) {
   auto logical_block_idx = blk_table.get(virtual_block_idx);
   assert(logical_block_idx != 0);

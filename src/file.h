@@ -15,6 +15,13 @@
 #include "tx.h"
 #include "utils.h"
 
+#define SEEK_SET 0  /* seek relative to beginning of file */
+#define SEEK_CUR 1  /* seek relative to current file position */
+#define SEEK_END 2  /* seek relative to end of file */
+#define SEEK_DATA 3 /* seek to the next data */
+#define SEEK_HOLE 4 /* seek to the next hole */
+#define SEEK_MAX SEEK_HOLE
+
 // data structure under this namespace must be in volatile memory (DRAM)
 namespace ulayfs::dram {
 
@@ -22,6 +29,7 @@ class File {
   int fd;
   int open_flags;
   bool valid;
+  off_t file_offset;
 
   pmem::MetaBlock* meta;
   Allocator allocator;
@@ -46,6 +54,11 @@ class File {
    * read the byte range [offset, offset + count) to buf
    */
   ssize_t pread(void* buf, size_t count, off_t offset);
+
+  /**
+   * reposition read/write file offset
+   */
+  off_t lseek(off_t offset, int whence);
 
  private:
   /**
