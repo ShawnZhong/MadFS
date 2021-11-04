@@ -74,16 +74,31 @@ class MemTable {
 
     void* addr = posix::mmap(nullptr, length, prot, flags, fd, offset);
 
-    if constexpr (BuildOptions::use_map_sync) {
-      if (addr == MAP_FAILED && errno == EOPNOTSUPP) {
-        WARN("MAP_SYNC not supported for fd = %d. Retry w/o MAP_SYNC", fd);
-        flags &= ~(MAP_SHARED_VALIDATE | MAP_SYNC);
-        flags |= MAP_SHARED;
-        addr = posix::mmap(nullptr, length, prot, flags, fd, offset);
+    if (addr == MAP_FAILED) {
+      // Note that the order of the following two fallback plans matters
+      if constexpr (BuildOptions::use_huge_page) {
+        if (errno == EINVAL) {
+          WARN(
+              "Huge page not supported for fd = %d. "
+              "Please check `cat /proc/meminfo | grep Huge`. "
+              "Retry w/o huge page",
+              fd);
+          flags &= ~(MAP_HUGETLB | MAP_HUGE_2MB);
+          addr = posix::mmap(nullptr, length, prot, flags, fd, offset);
+        }
       }
-    }
 
-    PANIC_IF(addr == MAP_FAILED, "mmap fd = %d failed", fd);
+      if constexpr (BuildOptions::use_map_sync) {
+        if (errno == EOPNOTSUPP) {
+          WARN("MAP_SYNC not supported for fd = %d. Retry w/o MAP_SYNC", fd);
+          flags &= ~(MAP_SHARED_VALIDATE | MAP_SYNC);
+          flags |= MAP_SHARED;
+          addr = posix::mmap(nullptr, length, prot, flags, fd, offset);
+        }
+      }
+
+      PANIC_IF(addr == MAP_FAILED, "mmap fd = %d failed", fd);
+    }
     return static_cast<pmem::Block*>(addr);
   }
 

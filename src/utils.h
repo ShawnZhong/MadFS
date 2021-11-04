@@ -29,6 +29,7 @@
     FPRINTF(stderr, "[PANIC] " msg ": %m", ##__VA_ARGS__); \
     exit(EXIT_FAILURE);                                    \
   } while (0)
+#define PANIC(msg, ...) PANIC_IF(true, msg, ##__VA_ARGS__)
 
 // DEBUG, INFO, and WARN are not active in release mode
 static FILE *log_file = stderr;
