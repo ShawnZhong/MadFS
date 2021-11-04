@@ -47,14 +47,26 @@ option(USE_HUGE_PAGE "Use huge page for mmap" ON)
 option(USE_MAP_SYNC "Use MAP_SYNC for mmap" ON)
 option(FORCE_MAP_POPULATE "Always use MAP_POPULATE for mmap" OFF)
 
-# Get the current working branch
+# check huge page support
+execute_process(
+    COMMAND sysctl -n vm.nr_hugepages
+    OUTPUT_VARIABLE NR_HUGEPAGES
+    OUTPUT_STRIP_TRAILING_WHITESPACE)
+if (${NR_HUGEPAGES} EQUAL "0")
+    message(WARNING
+        "Huge page not available. Disable huge page support for mmap. \
+        Please use `sudo sysctl -w vm.nr_hugepages=512` to configure huge page.")
+    set(USE_HUGE_PAGE OFF)
+endif ()
+
+# get the current working branch
 execute_process(
     COMMAND git rev-parse --abbrev-ref HEAD
     WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}
     OUTPUT_VARIABLE GIT_BRANCH
     OUTPUT_STRIP_TRAILING_WHITESPACE)
 
-# Get the latest commit hash
+# get the latest commit hash
 execute_process(
     COMMAND git rev-parse HEAD
     WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}
