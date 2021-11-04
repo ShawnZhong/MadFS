@@ -70,9 +70,20 @@ class MemTable {
     if constexpr (BuildOptions::use_huge_page)
       flags |= MAP_HUGETLB | MAP_HUGE_2MB;
 
-    void* addr =
-        posix::mmap(nullptr, length, PROT_READ | PROT_WRITE, flags, fd, offset);
-    PANIC_IF(addr == (void*)-1, "mmap fd = %d failed", fd);
+    int prot = PROT_READ | PROT_WRITE;
+
+    void* addr = posix::mmap(nullptr, length, prot, flags, fd, offset);
+
+    if constexpr (BuildOptions::use_map_sync) {
+      if (addr == MAP_FAILED && errno == EOPNOTSUPP) {
+        WARN("MAP_SYNC not supported for fd = %d. Retry w/o MAP_SYNC", fd);
+        flags &= ~(MAP_SHARED_VALIDATE | MAP_SYNC);
+        flags |= MAP_SHARED;
+        addr = posix::mmap(nullptr, length, prot, flags, fd, offset);
+      }
+    }
+
+    PANIC_IF(addr == MAP_FAILED, "mmap fd = %d failed", fd);
     return static_cast<pmem::Block*>(addr);
   }
 
