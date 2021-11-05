@@ -20,11 +20,20 @@ class BlkTable {
 
   std::vector<LogicalBlockIdx> table;
 
+  // keep track of the next TxEntry to apply
+  pmem::TxEntryIdx next_tx;
+  pmem::TxLogBlock* next_tx_block;
+
  public:
   BlkTable() = default;
   explicit BlkTable(pmem::MetaBlock* meta, MemTable* mem_table, LogMgr* log_mgr,
                     TxMgr* tx_mgr)
-      : meta(meta), mem_table(mem_table), log_mgr(log_mgr), tx_mgr(tx_mgr) {
+      : meta(meta),
+        mem_table(mem_table),
+        log_mgr(log_mgr),
+        tx_mgr(tx_mgr),
+        next_tx(),
+        next_tx_block(nullptr) {
     table.resize(16);
   }
 
@@ -55,10 +64,10 @@ class BlkTable {
    */
   void update() {
     while (true) {
-      auto tx_entry = tx_mgr->get_entry();
+      auto tx_entry = tx_mgr->get_entry(next_tx, next_tx_block);
       if (!tx_entry.is_valid()) break;
       if (tx_entry.is_commit()) apply_tx(tx_entry.commit_entry);
-      tx_mgr->advance();
+      if (!tx_mgr->advance_tx_idx(next_tx, next_tx_block, false)) break;
     }
   }
 

@@ -1,6 +1,7 @@
 #include "file.h"
 
 namespace ulayfs::dram {
+
 File::File(const char* pathname, int flags, mode_t mode)
     : open_flags(flags), valid(false) {
   if ((flags & O_ACCMODE) == O_WRONLY) {
@@ -37,7 +38,7 @@ File::File(const char* pathname, int flags, mode_t mode)
   meta = mem_table.get_meta();
   allocator = Allocator(fd, meta, &mem_table);
   log_mgr = LogMgr(meta, &allocator, &mem_table);
-  tx_mgr = TxMgr(meta, &allocator, &mem_table);
+  tx_mgr = TxMgr(meta, &allocator, &mem_table, &log_mgr, &blk_table);
   blk_table = BlkTable(meta, &mem_table, &log_mgr, &tx_mgr);
   blk_table.update();
 
@@ -47,28 +48,9 @@ File::File(const char* pathname, int flags, mode_t mode)
 }
 
 ssize_t File::pwrite(const void* buf, size_t count, size_t offset) {
-  VirtualBlockIdx virtual_idx = offset >> BLOCK_SHIFT;
-
-  uint64_t local_offset = offset - virtual_idx * BLOCK_SIZE;
-  uint32_t num_blocks =
-      ALIGN_UP(count + local_offset, BLOCK_SIZE) >> BLOCK_SHIFT;
-  uint32_t num_batches =
-      ALIGN_UP(num_blocks, BITMAP_CAPACITY) >> BITMAP_CAPACITY_SHIFT;
-
-  auto tx_begin_idx = tx_mgr.begin_tx(virtual_idx, num_blocks);
-
-  // TODO: handle the case where num_blocks > 64
-
-  LogicalBlockIdx dst_idx = allocator.alloc(num_blocks);
-  LogicalBlockIdx src_idx = blk_table.get(virtual_idx);
-  tx_mgr.copy_data(buf, count, local_offset, dst_idx, src_idx);
-
-  uint16_t last_remaining = num_blocks * BLOCK_SIZE - count - local_offset;
-  auto log_entry_idx = log_mgr.append(pmem::LogOp::LOG_OVERWRITE, virtual_idx,
-                                      dst_idx, num_blocks, last_remaining);
-  tx_mgr.commit_tx(tx_begin_idx, log_entry_idx);
+  if (count == 0) return 0;
+  tx_mgr.do_cow(buf, count, offset);
   blk_table.update();
-
   return static_cast<ssize_t>(count);
 }
 

@@ -95,13 +95,15 @@ struct TxCommitEntry {
   // The rest of the log entries are organized as a linked list
   LogEntryIdx log_entry_idx;
 
-  TxCommitEntry(const LogEntryIdx log_entry_idx, uint32_t num_blocks = 0,
-                uint32_t virtual_block_idx = 0)
-      : num_blocks(num_blocks),
-        virtual_block_idx(virtual_block_idx),
-        log_entry_idx(log_entry_idx) {
-    assert(num_blocks < (1 << 6));
-    assert(virtual_block_idx < (1 << 17));
+  // It's an optimization that num_blocks and virtual_block_idx could inline
+  // with TxCommitEntry, but only if they could fit in.
+  TxCommitEntry(uint32_t num_blocks, uint32_t virtual_block_idx,
+                LogEntryIdx log_entry_idx)
+      : num_blocks(0), virtual_block_idx(0), log_entry_idx(log_entry_idx) {
+    if (num_blocks < (1 << 6) && virtual_block_idx < (1 << 17)) {
+      this->num_blocks = num_blocks;
+      this->virtual_block_idx = virtual_block_idx;
+    }
   }
 
   friend std::ostream& operator<<(std::ostream& out,

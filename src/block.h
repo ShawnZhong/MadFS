@@ -113,16 +113,8 @@ class LogEntryBlock : public BaseBlock {
   }
 
   // TODO: linked list
-  void set(LogLocalIdx idx, LogOp op, VirtualBlockIdx begin_virtual_idx,
-           LogicalBlockIdx begin_logical_idx, uint8_t num_blocks,
-           uint16_t last_remaining) {
-    log_entries[idx].op = op;
-    log_entries[idx].last_remaining = last_remaining;
-    log_entries[idx].num_blocks = num_blocks;
-    log_entries[idx].begin_virtual_idx = begin_virtual_idx;
-    log_entries[idx].begin_logical_idx = begin_logical_idx;
-    // log_entries[idx].next.block_idx = 0;
-    // log_entries[idx].next.local_idx = 0;
+  void set(LogLocalIdx idx, pmem::LogEntry entry) {
+    log_entries[idx] = entry;
     persist_cl_fenced(&log_entries[idx]);
   }
 };
