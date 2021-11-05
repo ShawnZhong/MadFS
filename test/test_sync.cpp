@@ -4,19 +4,11 @@
 #include <iostream>
 #include <thread>
 
+#include "common.h"
 #include "lib.h"
 
-constexpr auto FILEPATH = "test.txt";
 constexpr auto NUM_BYTES = 32;
 constexpr auto BYTES_PER_THREAD = 2;
-
-char const hex_chars[16] = {'0', '1', '2', '3', '4', '5', '6', '7',
-                            '8', '9', 'A', 'B', 'C', 'D', 'E', 'F'};
-
-void fill_buff(char* buff, int num_elem, int init = 0) {
-  std::generate(buff, buff + num_elem,
-                [i = init]() mutable { return hex_chars[i++ % 16]; });
-}
 
 int main(int argc, char* argv[]) {
   ssize_t ret;

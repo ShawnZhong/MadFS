@@ -5,4 +5,4 @@ debug release:
 	cmake --build build-$@ -j -- --quiet
 
 clean:
-	rm -rf build-*
+	rm -rf build-* test.txt

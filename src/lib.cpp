@@ -51,8 +51,7 @@ int close(int fd) {
 ssize_t write(int fd, const void* buf, size_t count) {
   if (auto file = get_file(fd)) {
     INFO("ulayfs::write(%d, buf, %zu)", fd, count);
-    // TODO: implement this
-    return posix::write(fd, buf, count);
+    return file->write(buf, count);
   } else {
     DEBUG("posix::write(%d, buf, %zu)", fd, count);
     return posix::write(fd, buf, count);
@@ -62,8 +61,7 @@ ssize_t write(int fd, const void* buf, size_t count) {
 ssize_t read(int fd, void* buf, size_t count) {
   if (auto file = get_file(fd)) {
     INFO("ulayfs::read(%d, buf, %zu)", fd, count);
-    // TODO: implement this
-    return posix::read(fd, buf, count);
+    return file->read(buf, count);
   } else {
     DEBUG("posix::read(%d, buf, %zu)", fd, count);
     return posix::read(fd, buf, count);
@@ -72,11 +70,10 @@ ssize_t read(int fd, void* buf, size_t count) {
 
 off_t lseek(int fd, off_t offset, int whence) {
   if (auto file = get_file(fd)) {
-    INFO("ulayfs::lseek(%d, %zu, %d)", fd, offset, whence);
-    // TODO: implement this
-    return posix::lseek(fd, offset, whence);
+    INFO("ulayfs::lseek(%d, %ld, %d)", fd, offset, whence);
+    return file->lseek(offset, whence);
   } else {
-    DEBUG("posix::lseek(%d, %zu, %d)", fd, offset, whence);
+    DEBUG("posix::lseek(%d, %ld, %d)", fd, offset, whence);
     return posix::lseek(fd, offset, whence);
   }
 }
