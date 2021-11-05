@@ -23,7 +23,7 @@ void test_read() {
   assert(fd >= 0);
 
   char buff[sizeof(TEST_STR)];
-  ssize_t sz = read(fd, buff, sizeof(TEST_STR));
+  ssize_t sz = read(fd, buff, strlen(TEST_STR));
   assert(sz == strlen(TEST_STR));
   assert(strcmp(buff, TEST_STR) == 0);
 
@@ -31,9 +31,39 @@ void test_read() {
   assert(rc == 0);
 }
 
+void test_lseek() {
+  int fd = open(FILEPATH, O_RDWR);
+  assert(fd >= 0);
+
+  int rc;
+  ssize_t sz;
+  char buff[sizeof(TEST_STR)];
+
+  sz = write(fd, TEST_STR, strlen(TEST_STR));
+  assert(sz == strlen(TEST_STR));
+
+  rc = lseek(fd, 0, SEEK_SET);
+  assert(rc == 0);
+
+  sz = read(fd, buff, strlen(TEST_STR));
+  assert(sz == strlen(TEST_STR));
+  assert(strcmp(buff, TEST_STR) == 0);
+
+  rc = lseek(fd, -strlen(TEST_STR), SEEK_CUR);
+  assert(rc == 0);
+
+  sz = read(fd, buff, strlen(TEST_STR));
+  assert(sz == strlen(TEST_STR));
+  assert(strcmp(buff, TEST_STR) == 0);
+
+  rc = close(fd);
+  assert(rc == 0);
+}
+
 int main() {
   remove(FILEPATH);
   test_write();
   test_read();
+  test_lseek();
   return 0;
 }

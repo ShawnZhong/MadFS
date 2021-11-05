@@ -45,8 +45,7 @@ int close(int fd) {
 ssize_t write(int fd, const void* buf, size_t count) {
   if (auto it = files.find(fd); it != files.end()) {
     INFO("ulayfs::write(%d, buf, %zu)", fd, count);
-    // TODO: implement this
-    return posix::write(fd, buf, count);
+    return it->second->write(buf, count);
   } else {
     DEBUG("posix::write(%d, buf, %zu)", fd, count);
     return posix::write(fd, buf, count);
@@ -56,8 +55,7 @@ ssize_t write(int fd, const void* buf, size_t count) {
 ssize_t read(int fd, void* buf, size_t count) {
   if (auto it = files.find(fd); it != files.end()) {
     INFO("ulayfs::read(%d, buf, %zu)", fd, count);
-    // TODO: implement this
-    return posix::read(fd, buf, count);
+    return it->second->read(buf, count);
   } else {
     DEBUG("posix::read(%d, buf, %zu)", fd, count);
     return posix::read(fd, buf, count);

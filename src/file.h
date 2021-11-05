@@ -60,6 +60,16 @@ class File {
    */
   off_t lseek(off_t offset, int whence);
 
+  /**
+   * write the content in buf to the byte range [file_offset, file_offset + count)
+   */
+  ssize_t write(const void *buf, size_t count);
+
+  /**
+   * read the byte range [file_offset, file_offset + count) to buf
+   */
+  ssize_t read(void *buf, size_t count);
+
  private:
   /**
    * @param virtual_block_idx the virtual block index for a data block

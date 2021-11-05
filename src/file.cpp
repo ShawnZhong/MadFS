@@ -106,8 +106,9 @@ off_t File::lseek(off_t offset, int whence) {
         break;
 
       case SEEK_END:
-        new_off = meta->get_file_size() + offset;
-        break;
+        // TODO: enable this code after file_size is implemented
+        // new_off = meta->get_file_size() + offset;
+        // break;
 
         // TODO: add SEEK_DATA and SEEK_HOLE
       case SEEK_DATA:
@@ -121,6 +122,29 @@ off_t File::lseek(off_t offset, int whence) {
                                        __ATOMIC_ACQ_REL, __ATOMIC_RELAXED));
 
   return new_off;
+}
+
+ssize_t File::write(const void* buf, size_t count) {
+  off_t new_off, old_off = file_offset;
+  
+  do {
+    new_off = old_off + count;
+  } while (__atomic_compare_exchange_n(&file_offset, &old_off, new_off, true,
+                                       __ATOMIC_ACQ_REL, __ATOMIC_RELAXED));
+
+  return pwrite(buf, count, file_offset);
+}
+
+ssize_t File::read(void* buf, size_t count) {
+  off_t new_off, old_off = file_offset;
+  
+  do {
+    // TODO: place file_offset to EOF when entire file is read
+    new_off = old_off + count;
+  } while (__atomic_compare_exchange_n(&file_offset, &old_off, new_off, true,
+                                       __ATOMIC_ACQ_REL, __ATOMIC_RELAXED));
+
+  return pread(buf, count, file_offset);
 }
 
 char* File::get_data_block_ptr(VirtualBlockIdx virtual_block_idx) {
