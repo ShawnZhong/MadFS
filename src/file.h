@@ -33,6 +33,7 @@ class File {
 
  public:
   File(const char* pathname, int flags, mode_t mode);
+  ~File();
 
   [[nodiscard]] bool is_valid() const { return valid; }
   [[nodiscard]] pmem::MetaBlock* get_meta() { return meta; }

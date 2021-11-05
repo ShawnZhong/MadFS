@@ -40,6 +40,9 @@ class MemTable {
 
   std::unordered_map<LogicalBlockIdx, pmem::Block*> table;
 
+  // a vector of <addr, length> pairs
+  std::vector<std::tuple<void*, size_t>> mmap_regions;
+
  private:
   // called by other public functions with lock held
   void grow_no_lock(LogicalBlockIdx idx) {
@@ -61,7 +64,7 @@ class MemTable {
    * a private helper function that calls mmap internally
    * @return the pointer to the first block on the persistent memory
    */
-  pmem::Block* mmap_file(size_t length, off_t offset, int flags = 0) const {
+  pmem::Block* mmap_file(size_t length, off_t offset, int flags = 0) {
     if constexpr (BuildOptions::use_map_sync)
       flags |= MAP_SHARED_VALIDATE | MAP_SYNC;
     else
@@ -99,6 +102,7 @@ class MemTable {
 
       PANIC_IF(addr == MAP_FAILED, "mmap fd = %d failed", fd);
     }
+    mmap_regions.emplace_back(addr, length);
     return static_cast<pmem::Block*>(addr);
   }
 
@@ -129,6 +133,12 @@ class MemTable {
     for (LogicalBlockIdx idx = 0; idx < num_blocks_local_copy;
          idx += NUM_BLOCKS_PER_GROW)
       table.emplace(idx, blocks + idx);
+  }
+
+  void unmap() {
+    for (const auto& [addr, length] : mmap_regions) {
+      munmap(addr, length);
+    }
   }
 
   [[nodiscard]] pmem::MetaBlock* get_meta() const { return meta; }

@@ -1,6 +1,6 @@
 .PHONY: debug release posix
-debug: export ULAYFS_PATH := ../build-debug/libulayfs.so
-release: export ULAYFS_PATH := ../build-release/libulayfs.so
+debug: export ULAYFS_PATH := $(shell readlink -e ../build-debug/libulayfs.so)
+release: export ULAYFS_PATH := $(shell readlink -e ../build-release/libulayfs.so)
 posix: export ULAYFS_PATH :=
 debug release posix: leveldb-test
 
@@ -16,7 +16,9 @@ leveldb:
 	cmake -DCMAKE_BUILD_TYPE=Release .. && \
 	cmake --build . -j
 leveldb-test: ulayfs leveldb
-	LD_PRELOAD=$(ULAYFS_PATH) ./leveldb/build/db_test
+	cd leveldb/build && \
+	mkdir -p test-temp && \
+	TEST_TMPDIR=test-temp/ LD_PRELOAD=$(ULAYFS_PATH) ./db_test
 
 .PHONY: clean
 clean:

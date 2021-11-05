@@ -1,9 +1,8 @@
-.PHONY: release debug clean
+.PHONY: debug release clean
 
 debug release:
-	mkdir -p build-$@
 	cmake -S . -B build-$@ -DCMAKE_BUILD_TYPE=$@
-	cmake --build build-$@ -j
+	cmake --build build-$@ -j -- --quiet
 
 clean:
 	rm -rf build-* test.txt
