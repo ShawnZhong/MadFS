@@ -8,6 +8,12 @@
 #include "posix.h"
 
 namespace ulayfs {
+dram::File* get_file(int fd) {
+  auto it = files.find(fd);
+  if (it != files.end()) return it->second;
+  return nullptr;
+}
+
 extern "C" {
 int open(const char* pathname, int flags, ...) {
   mode_t mode = 0;
@@ -63,7 +69,7 @@ ssize_t pread(int fd, void* buf, size_t count, off_t offset) {
 }
 
 ssize_t write(int fd, const void* buf, size_t count) {
-  if (auto it = files.find(fd); it != files.end()) {
+  if (auto file = get_file(fd)) {
     INFO("ulayfs::write(%d, buf, %zu)", fd, count);
     return it->second->write(buf, count);
   } else {
@@ -73,7 +79,7 @@ ssize_t write(int fd, const void* buf, size_t count) {
 }
 
 ssize_t read(int fd, void* buf, size_t count) {
-  if (auto it = files.find(fd); it != files.end()) {
+  if (auto file = get_file(fd)) {
     INFO("ulayfs::read(%d, buf, %zu)", fd, count);
     return it->second->read(buf, count);
   } else {
@@ -83,7 +89,7 @@ ssize_t read(int fd, void* buf, size_t count) {
 }
 
 off_t lseek(int fd, off_t offset, int whence) {
-  if (auto it = files.find(fd); it != files.end()) {
+  if (auto file = get_file(fd)) {
     INFO("ulayfs::lseek(%d, %zu, %d)", fd, offset, whence);
     return it->second->lseek(offset, whence);
   } else {
@@ -93,7 +99,7 @@ off_t lseek(int fd, off_t offset, int whence) {
 }
 
 int fstat(int fd, struct stat* buf) {
-  if (auto it = files.find(fd); it != files.end()) {
+  if (auto file = get_file(fd)) {
     INFO("ulayfs::fstat(%d)", fd);
     // TODO: implement this
     return posix::fstat(fd, buf);

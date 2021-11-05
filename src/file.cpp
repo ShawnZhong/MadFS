@@ -3,13 +3,18 @@
 namespace ulayfs::dram {
 File::File(const char* pathname, int flags, mode_t mode)
     : open_flags(flags), valid(false) {
+  if ((flags & O_ACCMODE) == O_WRONLY) {
+    INFO("File \"%s\" opened with O_WRONLY. Changed to O_RDWR.", pathname);
+    flags &= ~O_WRONLY;
+    flags |= O_RDWR;
+  }
+
   fd = posix::open(pathname, flags, mode);
   if (fd < 0) return;  // fail to open the file
 
-  // TODO: support read-only / write-only files
-  if ((open_flags & O_ACCMODE) != O_RDWR) {
-    WARN("File %s opened with %s", pathname,
-         (open_flags & O_ACCMODE) == O_RDONLY ? "O_RDONLY" : "O_WRONLY");
+  // TODO: support read-only files
+  if ((flags & O_ACCMODE) == O_RDONLY) {
+    WARN("File \"%s\" opened with O_RDONLY. Fallback to syscall.", pathname);
     return;
   }
 
@@ -42,25 +47,25 @@ File::File(const char* pathname, int flags, mode_t mode)
 }
 
 ssize_t File::pwrite(const void* buf, size_t count, size_t offset) {
-  VirtualBlockIdx begin_virtual_idx =
-      ALIGN_DOWN(offset, BLOCK_SIZE) >> BLOCK_SHIFT;
+  VirtualBlockIdx virtual_idx = offset >> BLOCK_SHIFT;
 
-  uint64_t local_offset = offset - begin_virtual_idx * BLOCK_SIZE;
+  uint64_t local_offset = offset - virtual_idx * BLOCK_SIZE;
   uint32_t num_blocks =
       ALIGN_UP(count + local_offset, BLOCK_SIZE) >> BLOCK_SHIFT;
+  uint32_t num_batches =
+      ALIGN_UP(num_blocks, BITMAP_CAPACITY) >> BITMAP_CAPACITY_SHIFT;
 
-  auto tx_begin_idx = tx_mgr.begin_tx(begin_virtual_idx, num_blocks);
+  auto tx_begin_idx = tx_mgr.begin_tx(virtual_idx, num_blocks);
 
   // TODO: handle the case where num_blocks > 64
 
-  LogicalBlockIdx begin_dst_idx = allocator.alloc(num_blocks);
-  LogicalBlockIdx begin_src_idx = blk_table.get(begin_virtual_idx);
-  tx_mgr.copy_data(buf, count, local_offset, begin_dst_idx, begin_src_idx);
+  LogicalBlockIdx dst_idx = allocator.alloc(num_blocks);
+  LogicalBlockIdx src_idx = blk_table.get(virtual_idx);
+  tx_mgr.copy_data(buf, count, local_offset, dst_idx, src_idx);
 
   uint16_t last_remaining = num_blocks * BLOCK_SIZE - count - local_offset;
-  auto log_entry_idx =
-      log_mgr.append(pmem::LogOp::LOG_OVERWRITE, begin_virtual_idx,
-                     begin_dst_idx, num_blocks, last_remaining);
+  auto log_entry_idx = log_mgr.append(pmem::LogOp::LOG_OVERWRITE, virtual_idx,
+                                      dst_idx, num_blocks, last_remaining);
   tx_mgr.commit_tx(tx_begin_idx, log_entry_idx);
   blk_table.update();
 
@@ -68,10 +73,9 @@ ssize_t File::pwrite(const void* buf, size_t count, size_t offset) {
 }
 
 ssize_t File::pread(void* buf, size_t count, off_t offset) {
-  VirtualBlockIdx begin_virtual_idx =
-      ALIGN_DOWN(offset, BLOCK_SIZE) >> BLOCK_SHIFT;
+  VirtualBlockIdx virtual_idx = offset >> BLOCK_SHIFT;
 
-  uint64_t local_offset = offset - begin_virtual_idx * BLOCK_SIZE;
+  uint64_t local_offset = offset - virtual_idx * BLOCK_SIZE;
   uint32_t num_blocks =
       ALIGN_UP(count + local_offset, BLOCK_SIZE) >> BLOCK_SHIFT;
   uint16_t last_remaining = num_blocks * BLOCK_SIZE - count - local_offset;
@@ -82,7 +86,7 @@ ssize_t File::pread(void* buf, size_t count, off_t offset) {
     if (i == 0) num_bytes -= local_offset;
     if (i == num_blocks - 1) num_bytes -= last_remaining;
 
-    char* ptr = get_data_block_ptr(begin_virtual_idx + i);
+    char* ptr = get_data_block_ptr(virtual_idx + i);
     char* src = i == 0 ? ptr + local_offset : ptr;
 
     memcpy(dst, src, num_bytes);

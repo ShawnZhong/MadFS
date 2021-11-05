@@ -9,26 +9,32 @@
 #include "config.h"
 #include "params.h"
 
+#define likely(x) __builtin_expect(!!(x), 1)
+#define unlikely(x) __builtin_expect(!!(x), 0)
+
 /*
  * The following macros used for assertion and logging
  * Defined as macros since we want to have access to __FILE__ and __LINE__
  */
 
-#define FPRINTF(file, fmt, ...)                                               \
-  std::time_t t = std::time(nullptr);                                         \
-  std::tm *tm = std::localtime(&t);                                           \
-  const char *s = strrchr(__FILE__, '/');                                     \
-  const char *filename = s ? s + 1 : __FILE__;                                \
-  fprintf(file, "%02d:%02d:%02d [%8s:%d] " fmt "\n", tm->tm_hour, tm->tm_min, \
-          tm->tm_sec, filename, __LINE__, ##__VA_ARGS__);
+#define FPRINTF(file, fmt, ...)                                         \
+  do {                                                                  \
+    std::time_t t = std::time(nullptr);                                 \
+    std::tm *tm = std::localtime(&t);                                   \
+    const char *s = strrchr(__FILE__, '/');                             \
+    const char *filename = s ? s + 1 : __FILE__;                        \
+    fprintf(file, "%02d:%02d:%02d [%8s:%-3d] " fmt "\n", tm->tm_hour,   \
+            tm->tm_min, tm->tm_sec, filename, __LINE__, ##__VA_ARGS__); \
+  } while (0)
 
 // PANIC_IF is active for both debug and release modes
 #define PANIC_IF(expr, msg, ...)                           \
   do {                                                     \
-    if (!(expr)) break;                                    \
+    if (likely(!(expr))) break;                            \
     FPRINTF(stderr, "[PANIC] " msg ": %m", ##__VA_ARGS__); \
     exit(EXIT_FAILURE);                                    \
   } while (0)
+#define PANIC(msg, ...) PANIC_IF(true, msg, ##__VA_ARGS__)
 
 // DEBUG, INFO, and WARN are not active in release mode
 static FILE *log_file = stderr;
