@@ -69,7 +69,7 @@ class File {
    * @param virtual_block_idx the virtual block index for a data block
    * @return the char pointer pointing to the memory location of the data block
    */
-  char* get_data_block_ptr(VirtualBlockIdx virtual_block_idx);
+  const char* get_ro_data_ptr(VirtualBlockIdx virtual_block_idx);
 
  public:
   friend std::ostream& operator<<(std::ostream& out, const File& f);

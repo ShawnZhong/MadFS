@@ -86,8 +86,8 @@ ssize_t File::pread(void* buf, size_t count, off_t offset) {
     if (i == 0) num_bytes -= local_offset;
     if (i == num_blocks - 1) num_bytes -= last_remaining;
 
-    char* ptr = get_data_block_ptr(virtual_idx + i);
-    char* src = i == 0 ? ptr + local_offset : ptr;
+    const char* ptr = get_ro_data_ptr(virtual_idx + i);
+    const char* src = i == 0 ? ptr + local_offset : ptr;
 
     memcpy(dst, src, num_bytes);
     dst += num_bytes;
@@ -156,7 +156,7 @@ ssize_t File::read(void* buf, size_t count) {
   return pread(buf, count, old_off);
 }
 
-char* File::get_data_block_ptr(VirtualBlockIdx virtual_block_idx) {
+const char* File::get_ro_data_ptr(VirtualBlockIdx virtual_block_idx) {
   static char empty_block[BLOCK_SIZE]{};
   auto logical_block_idx = blk_table.get(virtual_block_idx);
   if (logical_block_idx == 0) {
