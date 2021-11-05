@@ -39,5 +39,8 @@ jobs:
       - name: test_futex
         run: ./test_futex
 
+      - name: test_basic
+        run: ./test_basic
+
       # - name: test_sync
       #   run: ./test_sync
