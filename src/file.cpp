@@ -102,9 +102,7 @@ off_t File::lseek(off_t offset, int whence) {
   switch (whence) {
     case SEEK_SET: {
       if (offset < 0) return -1;
-      while (!__atomic_compare_exchange_n(&file_offset, &old_off, offset, true,
-                                          __ATOMIC_ACQ_REL, __ATOMIC_RELAXED))
-        ;
+      __atomic_store_n(&file_offset, offset, __ATOMIC_RELEASE);
       return file_offset;
     }
 
@@ -133,12 +131,9 @@ off_t File::lseek(off_t offset, int whence) {
 }
 
 ssize_t File::write(const void* buf, size_t count) {
-  off_t old_off = file_offset;
-
-  while (!__atomic_compare_exchange_n(&file_offset, &old_off,
-                                      old_off + static_cast<off_t>(count), true,
-                                      __ATOMIC_ACQ_REL, __ATOMIC_RELAXED))
-    ;
+  // atomically add then return the old value
+  off_t old_off = __atomic_fetch_add(&file_offset, static_cast<off_t>(count),
+                                     __ATOMIC_ACQ_REL);
 
   return pwrite(buf, count, old_off);
 }
