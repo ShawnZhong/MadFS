@@ -46,6 +46,8 @@ File::File(const char* pathname, int flags, mode_t mode)
   valid = true;
 }
 
+File::~File() { mem_table.unmap(); }
+
 ssize_t File::pwrite(const void* buf, size_t count, size_t offset) {
   VirtualBlockIdx virtual_idx = offset >> BLOCK_SHIFT;
 
