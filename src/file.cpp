@@ -97,44 +97,48 @@ ssize_t File::pread(void* buf, size_t count, off_t offset) {
 }
 
 off_t File::lseek(off_t offset, int whence) {
-  off_t new_off, old_off = file_offset;
+  off_t old_off = file_offset;
 
-  do {
-    switch (whence) {
-      case SEEK_SET:
-        new_off = offset;
-        break;
-
-      case SEEK_CUR:
-        new_off = old_off + offset;
-        break;
-
-      case SEEK_END:
-        // TODO: enable this code after file_size is implemented
-        // new_off = meta->get_file_size() + offset;
-        // break;
-
-        // TODO: add SEEK_DATA and SEEK_HOLE
-      case SEEK_DATA:
-      case SEEK_HOLE:
-      default:
-        return -1;
+  switch (whence) {
+    case SEEK_SET: {
+      if (offset < 0) return -1;
+      while (!__atomic_compare_exchange_n(&file_offset, &old_off, offset, true,
+                                          __ATOMIC_ACQ_REL, __ATOMIC_RELAXED))
+        ;
+      return file_offset;
     }
 
-    if (new_off < 0) return -1;
-  } while (__atomic_compare_exchange_n(&file_offset, &old_off, new_off, true,
-                                       __ATOMIC_ACQ_REL, __ATOMIC_RELAXED));
+    case SEEK_CUR: {
+      off_t new_off;
+      do {
+        new_off = old_off + offset;
+        if (new_off < 0) return -1;
+      } while (!__atomic_compare_exchange_n(&file_offset, &old_off, new_off,
+                                            true, __ATOMIC_ACQ_REL,
+                                            __ATOMIC_RELAXED));
+      return file_offset;
+    }
 
-  return new_off;
+    case SEEK_END:
+      // TODO: enable this code after file_size is implemented
+      // new_off = meta->get_file_size() + offset;
+      // break;
+
+      // TODO: add SEEK_DATA and SEEK_HOLE
+    case SEEK_DATA:
+    case SEEK_HOLE:
+    default:
+      return -1;
+  }
 }
 
 ssize_t File::write(const void* buf, size_t count) {
-  off_t new_off, old_off = file_offset;
+  off_t old_off = file_offset;
 
-  do {
-    new_off = old_off + count;
-  } while (__atomic_compare_exchange_n(&file_offset, &old_off, new_off, true,
-                                       __ATOMIC_ACQ_REL, __ATOMIC_RELAXED));
+  while (!__atomic_compare_exchange_n(&file_offset, &old_off,
+                                      old_off + static_cast<off_t>(count), true,
+                                      __ATOMIC_ACQ_REL, __ATOMIC_RELAXED))
+    ;
 
   return pwrite(buf, count, file_offset);
 }
@@ -144,9 +148,9 @@ ssize_t File::read(void* buf, size_t count) {
 
   do {
     // TODO: place file_offset to EOF when entire file is read
-    new_off = old_off + count;
-  } while (__atomic_compare_exchange_n(&file_offset, &old_off, new_off, true,
-                                       __ATOMIC_ACQ_REL, __ATOMIC_RELAXED));
+    new_off = old_off + static_cast<off_t>(count);
+  } while (!__atomic_compare_exchange_n(&file_offset, &old_off, new_off, true,
+                                        __ATOMIC_ACQ_REL, __ATOMIC_RELAXED));
 
   return pread(buf, count, file_offset);
 }
