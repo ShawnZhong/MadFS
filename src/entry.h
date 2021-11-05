@@ -89,7 +89,7 @@ struct TxCommitEntry {
 
   // optionally, set these bits so OCC conflict detection can be done inline
   uint32_t num_blocks : 6;
-  uint32_t virtual_block_idx : 17;
+  uint32_t begin_virtual_idx : 17;
 
   // the first log entry for this transaction, 40 bits in size
   // The rest of the log entries are organized as a linked list
@@ -97,12 +97,12 @@ struct TxCommitEntry {
 
   // It's an optimization that num_blocks and virtual_block_idx could inline
   // with TxCommitEntry, but only if they could fit in.
-  TxCommitEntry(uint32_t num_blocks, uint32_t virtual_block_idx,
+  TxCommitEntry(uint32_t num_blocks, uint32_t begin_virtual_idx,
                 LogEntryIdx log_entry_idx)
-      : num_blocks(0), virtual_block_idx(0), log_entry_idx(log_entry_idx) {
-    if (num_blocks < (1 << 6) && virtual_block_idx < (1 << 17)) {
+      : num_blocks(0), begin_virtual_idx(0), log_entry_idx(log_entry_idx) {
+    if (num_blocks < (1 << 6) && begin_virtual_idx < (1 << 17)) {
       this->num_blocks = num_blocks;
-      this->virtual_block_idx = virtual_block_idx;
+      this->begin_virtual_idx = begin_virtual_idx;
     }
   }
 
@@ -110,7 +110,7 @@ struct TxCommitEntry {
                                   const TxCommitEntry& entry) {
     out << "TX_COMMIT "
         << "{ num_blocks: " << entry.num_blocks
-        << ", virtual_block_idx: " << entry.virtual_block_idx
+        << ", begin_virtual_idx: " << entry.begin_virtual_idx
         << ", log_entry_idx: " << entry.log_entry_idx << " }";
     return out;
   }

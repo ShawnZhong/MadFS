@@ -113,9 +113,14 @@ class LogEntryBlock : public BaseBlock {
   }
 
   // TODO: linked list
-  void set(LogLocalIdx idx, pmem::LogEntry entry) {
+  void set(LogLocalIdx idx, pmem::LogEntry entry, bool fenced = true,
+           bool flushed = true) {
     log_entries[idx] = entry;
-    persist_cl_fenced(&log_entries[idx]);
+    if (!flushed) return;
+    if (fenced)
+      persist_cl_fenced(&log_entries[idx]);
+    else
+      persist_cl_unfenced(&log_entries[idx]);
   }
 };
 

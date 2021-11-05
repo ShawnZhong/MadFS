@@ -21,8 +21,8 @@ class BlkTable {
   std::vector<LogicalBlockIdx> table;
 
   // keep track of the next TxEntry to apply
-  pmem::TxEntryIdx next_tx;
-  pmem::TxLogBlock* next_tx_block;
+  pmem::TxEntryIdx tail_tx_idx;
+  pmem::TxLogBlock* tail_tx_block;
 
  public:
   BlkTable() = default;
@@ -32,8 +32,8 @@ class BlkTable {
         mem_table(mem_table),
         log_mgr(log_mgr),
         tx_mgr(tx_mgr),
-        next_tx(),
-        next_tx_block(nullptr) {
+        tail_tx_idx(),
+        tail_tx_block(nullptr) {
     table.resize(16);
   }
 
@@ -44,6 +44,17 @@ class BlkTable {
 
   LogicalBlockIdx get(VirtualBlockIdx virtual_block_idx) {
     return table[virtual_block_idx];
+  }
+
+  /**
+   * @brief Get the next tx to apply (by reference)
+   *
+   * @return pmem::TxEntryIdx
+   */
+  void get_tail_tx(pmem::TxEntryIdx& tx_idx,
+                   pmem::TxLogBlock*& tx_block) const {
+    tx_idx = tail_tx_idx;
+    tx_block = tail_tx_block;
   }
 
   /**
@@ -64,10 +75,11 @@ class BlkTable {
    */
   void update() {
     while (true) {
-      auto tx_entry = tx_mgr->get_entry(next_tx, next_tx_block);
+      auto tx_entry = tx_mgr->get_entry(tail_tx_idx, tail_tx_block);
       if (!tx_entry.is_valid()) break;
       if (tx_entry.is_commit()) apply_tx(tx_entry.commit_entry);
-      if (!tx_mgr->advance_tx_idx(next_tx, next_tx_block, false)) break;
+      // FIXME: handle race condition??
+      if (!tx_mgr->advance_tx_idx(tail_tx_idx, tail_tx_block, false)) break;
     }
   }
 

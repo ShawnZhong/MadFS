@@ -35,14 +35,14 @@ class LogMgr {
   // TODO: handle linked list
   // TODO: avoid using the same cacheline for the next op, but use same
   // cacheline for linked list
-  pmem::LogEntryIdx append(pmem::LogEntry entry) {
+  pmem::LogEntryIdx append(pmem::LogEntry entry, bool fenced = true) {
     if (free_list.empty()) alloc();
     pmem::LogEntryIdx idx = free_list.back();
     free_list.pop_back();
 
     pmem::LogEntryBlock* block =
         &mem_table->get_addr(idx.block_idx)->log_entry_block;
-    block->set(idx.local_idx, entry);
+    block->set(idx.local_idx, entry, fenced);
     return idx;
   }
 
