@@ -42,6 +42,26 @@ int close(int fd) {
   }
 }
 
+ssize_t pwrite(int fd, const void* buf, size_t count, off_t offset) {
+  if (auto it = files.find(fd); it != files.end()) {
+    INFO("ulayfs::pwrite(%d, buf, %zu, %ld)", fd, count, offset);
+    return it->second->pwrite(buf, count, offset);
+  } else {
+    DEBUG("posix::pwrite(%d, buf, %zu, %ld)", fd, count, offset);
+    return posix::pwrite(fd, buf, count, offset);
+  }
+}
+
+ssize_t pread(int fd, void* buf, size_t count, off_t offset) {
+  if (auto it = files.find(fd); it != files.end()) {
+    INFO("ulayfs::pread(%d, buf, %zu, %ld)", fd, count, offset);
+    return it->second->pread(buf, count, offset);
+  } else {
+    DEBUG("posix::pread(%d, buf, %zu, %ld)", fd, count, offset);
+    return posix::pread(fd, buf, count, offset);
+  }
+}
+
 ssize_t write(int fd, const void* buf, size_t count) {
   if (auto it = files.find(fd); it != files.end()) {
     INFO("ulayfs::write(%d, buf, %zu)", fd, count);
@@ -69,26 +89,6 @@ off_t lseek(int fd, off_t offset, int whence) {
   } else {
     DEBUG("posix::lseek(%d, %zu, %d)", fd, offset, whence);
     return posix::lseek(fd, offset, whence);
-  }
-}
-
-ssize_t pwrite(int fd, const void* buf, size_t count, off_t offset) {
-  if (auto it = files.find(fd); it != files.end()) {
-    INFO("ulayfs::pwrite(%d, buf, %zu, %ld)", fd, count, offset);
-    return it->second->pwrite(buf, count, offset);
-  } else {
-    DEBUG("posix::pwrite(%d, buf, %zu, %ld)", fd, count, offset);
-    return posix::pwrite(fd, buf, count, offset);
-  }
-}
-
-ssize_t pread(int fd, void* buf, size_t count, off_t offset) {
-  if (auto it = files.find(fd); it != files.end()) {
-    INFO("ulayfs::pread(%d, buf, %zu, %ld)", fd, count, offset);
-    return it->second->pread(buf, count, offset);
-  } else {
-    DEBUG("posix::pread(%d, buf, %zu, %ld)", fd, count, offset);
-    return posix::pread(fd, buf, count, offset);
   }
 }
 
