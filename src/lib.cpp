@@ -48,30 +48,10 @@ int close(int fd) {
   }
 }
 
-ssize_t pwrite(int fd, const void* buf, size_t count, off_t offset) {
-  if (auto it = files.find(fd); it != files.end()) {
-    INFO("ulayfs::pwrite(%d, buf, %zu, %ld)", fd, count, offset);
-    return it->second->pwrite(buf, count, offset);
-  } else {
-    DEBUG("posix::pwrite(%d, buf, %zu, %ld)", fd, count, offset);
-    return posix::pwrite(fd, buf, count, offset);
-  }
-}
-
-ssize_t pread(int fd, void* buf, size_t count, off_t offset) {
-  if (auto it = files.find(fd); it != files.end()) {
-    INFO("ulayfs::pread(%d, buf, %zu, %ld)", fd, count, offset);
-    return it->second->pread(buf, count, offset);
-  } else {
-    DEBUG("posix::pread(%d, buf, %zu, %ld)", fd, count, offset);
-    return posix::pread(fd, buf, count, offset);
-  }
-}
-
 ssize_t write(int fd, const void* buf, size_t count) {
   if (auto file = get_file(fd)) {
     INFO("ulayfs::write(%d, buf, %zu)", fd, count);
-    return it->second->write(buf, count);
+    return file->write(buf, count);
   } else {
     DEBUG("posix::write(%d, buf, %zu)", fd, count);
     return posix::write(fd, buf, count);
@@ -81,7 +61,7 @@ ssize_t write(int fd, const void* buf, size_t count) {
 ssize_t read(int fd, void* buf, size_t count) {
   if (auto file = get_file(fd)) {
     INFO("ulayfs::read(%d, buf, %zu)", fd, count);
-    return it->second->read(buf, count);
+    return file->read(buf, count);
   } else {
     DEBUG("posix::read(%d, buf, %zu)", fd, count);
     return posix::read(fd, buf, count);
@@ -91,10 +71,30 @@ ssize_t read(int fd, void* buf, size_t count) {
 off_t lseek(int fd, off_t offset, int whence) {
   if (auto file = get_file(fd)) {
     INFO("ulayfs::lseek(%d, %zu, %d)", fd, offset, whence);
-    return it->second->lseek(offset, whence);
+    return file->lseek(offset, whence);
   } else {
     DEBUG("posix::lseek(%d, %zu, %d)", fd, offset, whence);
     return posix::lseek(fd, offset, whence);
+  }
+}
+
+ssize_t pwrite(int fd, const void* buf, size_t count, off_t offset) {
+  if (auto file = get_file(fd)) {
+    INFO("ulayfs::pwrite(%d, buf, %zu, %ld)", fd, count, offset);
+    return file->pwrite(buf, count, offset);
+  } else {
+    DEBUG("posix::pwrite(%d, buf, %zu, %ld)", fd, count, offset);
+    return posix::pwrite(fd, buf, count, offset);
+  }
+}
+
+ssize_t pread(int fd, void* buf, size_t count, off_t offset) {
+  if (auto file = get_file(fd)) {
+    INFO("ulayfs::pread(%d, buf, %zu, %ld)", fd, count, offset);
+    return file->pread(buf, count, offset);
+  } else {
+    DEBUG("posix::pread(%d, buf, %zu, %ld)", fd, count, offset);
+    return posix::pread(fd, buf, count, offset);
   }
 }
 
