@@ -22,7 +22,7 @@ void test_read() {
   int fd = open(FILEPATH, O_RDWR);
   assert(fd >= 0);
 
-  char buff[sizeof(TEST_STR)] = {};
+  char buff[sizeof(TEST_STR)]{};
   ssize_t sz = read(fd, buff, strlen(TEST_STR));
   assert(sz == strlen(TEST_STR));
   assert(strcmp(buff, TEST_STR) == 0);
@@ -37,7 +37,7 @@ void test_lseek() {
 
   int rc;
   ssize_t sz;
-  char buff[sizeof(TEST_STR)] = {};
+  char buff[sizeof(TEST_STR)]{};
 
   sz = write(fd, TEST_STR, strlen(TEST_STR));
   assert(sz == strlen(TEST_STR));
