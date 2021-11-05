@@ -1,18 +1,20 @@
-#include <assert.h>
 #include <fcntl.h>
-#include <stdio.h>
-#include <string.h>
 #include <unistd.h>
 
-#define FILEPATH "test.txt"
-#define TEST_STR "test str\n"
+#include <cassert>
+#include <cstdio>
+#include <cstring>
+
+constexpr char FILEPATH[] = "test.txt";
+constexpr char TEST_STR[] = "test str\n";
+constexpr int TEST_STR_LEN = sizeof(TEST_STR) - 1;
 
 void test_write() {
   int fd = open(FILEPATH, O_CREAT | O_RDWR, S_IRUSR | S_IWUSR);
   assert(fd >= 0);
 
-  ssize_t sz = write(fd, TEST_STR, strlen(TEST_STR));
-  assert(sz == strlen(TEST_STR));
+  ssize_t sz = write(fd, TEST_STR, TEST_STR_LEN);
+  assert(sz == TEST_STR_LEN);
 
   int rc = close(fd);
   assert(rc == 0);
@@ -22,9 +24,9 @@ void test_read() {
   int fd = open(FILEPATH, O_RDWR);
   assert(fd >= 0);
 
-  char buff[sizeof(TEST_STR)]{};
-  ssize_t sz = read(fd, buff, strlen(TEST_STR));
-  assert(sz == strlen(TEST_STR));
+  char buff[TEST_STR_LEN + 1]{};
+  ssize_t sz = read(fd, buff, TEST_STR_LEN);
+  assert(sz == TEST_STR_LEN);
   assert(strcmp(buff, TEST_STR) == 0);
 
   int rc = close(fd);
@@ -35,29 +37,28 @@ void test_lseek() {
   int fd = open(FILEPATH, O_RDWR);
   assert(fd >= 0);
 
-  int rc;
-  ssize_t sz;
+  [[maybe_unused]] off_t res;
   char buff[sizeof(TEST_STR)]{};
 
-  sz = write(fd, TEST_STR, strlen(TEST_STR));
-  assert(sz == strlen(TEST_STR));
+  res = write(fd, TEST_STR, TEST_STR_LEN);
+  assert(res == TEST_STR_LEN);
 
-  rc = lseek(fd, 0, SEEK_SET);
-  assert(rc == 0);
+  res = lseek(fd, 0, SEEK_SET);
+  assert(res == 0);
 
-  sz = read(fd, buff, strlen(TEST_STR));
-  assert(sz == strlen(TEST_STR));
+  res = read(fd, buff, TEST_STR_LEN);
+  assert(res == TEST_STR_LEN);
   assert(strcmp(buff, TEST_STR) == 0);
 
-  rc = lseek(fd, -strlen(TEST_STR), SEEK_CUR);
-  assert(rc == 0);
+  res = lseek(fd, -TEST_STR_LEN, SEEK_CUR);
+  assert(res == 0);
 
-  sz = read(fd, buff, strlen(TEST_STR));
-  assert(sz == strlen(TEST_STR));
+  res = read(fd, buff, TEST_STR_LEN);
+  assert(res == TEST_STR_LEN);
   assert(strcmp(buff, TEST_STR) == 0);
 
-  rc = close(fd);
-  assert(rc == 0);
+  res = close(fd);
+  assert(res == 0);
 }
 
 int main() {

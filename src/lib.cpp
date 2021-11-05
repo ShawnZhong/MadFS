@@ -70,10 +70,10 @@ ssize_t read(int fd, void* buf, size_t count) {
 
 off_t lseek(int fd, off_t offset, int whence) {
   if (auto file = get_file(fd)) {
-    INFO("ulayfs::lseek(%d, %zu, %d)", fd, offset, whence);
+    INFO("ulayfs::lseek(%d, %ld, %d)", fd, offset, whence);
     return file->lseek(offset, whence);
   } else {
-    DEBUG("posix::lseek(%d, %zu, %d)", fd, offset, whence);
+    DEBUG("posix::lseek(%d, %ld, %d)", fd, offset, whence);
     return posix::lseek(fd, offset, whence);
   }
 }
