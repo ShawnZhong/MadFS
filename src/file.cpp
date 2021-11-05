@@ -86,8 +86,8 @@ ssize_t File::pread(void* buf, size_t count, off_t offset) {
     if (i == 0) num_bytes -= local_offset;
     if (i == num_blocks - 1) num_bytes -= last_remaining;
 
-    char* ptr = get_data_block_ptr(virtual_idx + i);
-    char* src = i == 0 ? ptr + local_offset : ptr;
+    const char* ptr = get_ro_data_ptr(virtual_idx + i);
+    const char* src = i == 0 ? ptr + local_offset : ptr;
 
     memcpy(dst, src, num_bytes);
     dst += num_bytes;
@@ -96,15 +96,74 @@ ssize_t File::pread(void* buf, size_t count, off_t offset) {
   return static_cast<ssize_t>(count);
 }
 
-char* File::get_data_block_ptr(VirtualBlockIdx virtual_block_idx) {
+off_t File::lseek(off_t offset, int whence) {
+  off_t old_off = file_offset;
+
+  switch (whence) {
+    case SEEK_SET: {
+      if (offset < 0) return -1;
+      __atomic_store_n(&file_offset, offset, __ATOMIC_RELEASE);
+      return file_offset;
+    }
+
+    case SEEK_CUR: {
+      off_t new_off;
+      do {
+        new_off = old_off + offset;
+        if (new_off < 0) return -1;
+      } while (!__atomic_compare_exchange_n(&file_offset, &old_off, new_off,
+                                            true, __ATOMIC_ACQ_REL,
+                                            __ATOMIC_RELAXED));
+      return file_offset;
+    }
+
+    case SEEK_END:
+      // TODO: enable this code after file_size is implemented
+      // new_off = meta->get_file_size() + offset;
+      // break;
+
+      // TODO: add SEEK_DATA and SEEK_HOLE
+    case SEEK_DATA:
+    case SEEK_HOLE:
+    default:
+      return -1;
+  }
+}
+
+ssize_t File::write(const void* buf, size_t count) {
+  // atomically add then return the old value
+  off_t old_off = __atomic_fetch_add(&file_offset, static_cast<off_t>(count),
+                                     __ATOMIC_ACQ_REL);
+
+  return pwrite(buf, count, old_off);
+}
+
+ssize_t File::read(void* buf, size_t count) {
+  off_t new_off;
+  off_t old_off = file_offset;
+
+  do {
+    // TODO: place file_offset to EOF when entire file is read
+    new_off = old_off + static_cast<off_t>(count);
+  } while (!__atomic_compare_exchange_n(&file_offset, &old_off, new_off, true,
+                                        __ATOMIC_ACQ_REL, __ATOMIC_RELAXED));
+
+  return pread(buf, count, old_off);
+}
+
+const char* File::get_ro_data_ptr(VirtualBlockIdx virtual_block_idx) {
+  static char empty_block[BLOCK_SIZE]{};
   auto logical_block_idx = blk_table.get(virtual_block_idx);
-  assert(logical_block_idx != 0);
+  if (logical_block_idx == 0) {
+    INFO("Virtual block %d is a hole block", virtual_block_idx);
+    return empty_block;
+  }
   auto block = mem_table.get_addr(logical_block_idx);
   return block->data;
 }
 
 std::ostream& operator<<(std::ostream& out, const File& f) {
-  out << "File: fd = " << f.fd << "\n";
+  out << "File: fd = " << f.fd << ", offset = " << f.file_offset << "\n";
   out << *f.meta;
   out << f.mem_table;
   out << f.tx_mgr;

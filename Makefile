@@ -6,4 +6,4 @@ debug release:
 	cmake --build build-$@ -j
 
 clean:
-	rm -rf build-*
+	rm -rf build-* test.txt
