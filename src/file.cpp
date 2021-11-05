@@ -140,11 +140,12 @@ ssize_t File::write(const void* buf, size_t count) {
                                       __ATOMIC_ACQ_REL, __ATOMIC_RELAXED))
     ;
 
-  return pwrite(buf, count, file_offset);
+  return pwrite(buf, count, old_off);
 }
 
 ssize_t File::read(void* buf, size_t count) {
-  off_t new_off, old_off = file_offset;
+  off_t new_off;
+  off_t old_off = file_offset;
 
   do {
     // TODO: place file_offset to EOF when entire file is read
@@ -152,18 +153,22 @@ ssize_t File::read(void* buf, size_t count) {
   } while (!__atomic_compare_exchange_n(&file_offset, &old_off, new_off, true,
                                         __ATOMIC_ACQ_REL, __ATOMIC_RELAXED));
 
-  return pread(buf, count, file_offset);
+  return pread(buf, count, old_off);
 }
 
 char* File::get_data_block_ptr(VirtualBlockIdx virtual_block_idx) {
+  static char empty_block[BLOCK_SIZE]{};
   auto logical_block_idx = blk_table.get(virtual_block_idx);
-  assert(logical_block_idx != 0);
+  if (logical_block_idx == 0) {
+    INFO("Virtual block %d is a hole block", virtual_block_idx);
+    return empty_block;
+  }
   auto block = mem_table.get_addr(logical_block_idx);
   return block->data;
 }
 
 std::ostream& operator<<(std::ostream& out, const File& f) {
-  out << "File: fd = " << f.fd << "\n";
+  out << "File: fd = " << f.fd << ", offset = " << f.file_offset << "\n";
   out << *f.meta;
   out << f.mem_table;
   out << f.tx_mgr;

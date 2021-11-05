@@ -5,9 +5,7 @@
 #include <cstdio>
 #include <cstring>
 
-constexpr char FILEPATH[] = "test.txt";
-constexpr char TEST_STR[] = "test str\n";
-constexpr int TEST_STR_LEN = sizeof(TEST_STR) - 1;
+#include "common.h"
 
 void test_write() {
   int fd = open(FILEPATH, O_CREAT | O_RDWR, S_IRUSR | S_IWUSR);

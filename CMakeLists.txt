@@ -68,13 +68,13 @@ include_directories(${CMAKE_CURRENT_BINARY_DIR})
 # tests
 include_directories(src)
 
-add_executable(test_basic test/test_basic.cpp)
+add_executable(test_basic test/test_basic.cpp test/common.h)
 target_link_libraries(test_basic ulayfs)
 
 add_executable(test_futex test/test_futex.cpp)
 
-add_executable(test_rw test/test_rw.cpp)
+add_executable(test_rw test/test_rw.cpp test/common.h)
 target_link_libraries(test_rw ulayfs)
 
-add_executable(test_sync test/test_sync.cpp)
+add_executable(test_sync test/test_sync.cpp test/common.h)
 target_link_libraries(test_sync ulayfs pthread)
