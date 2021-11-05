@@ -126,7 +126,7 @@ off_t File::lseek(off_t offset, int whence) {
 
 ssize_t File::write(const void* buf, size_t count) {
   off_t new_off, old_off = file_offset;
-  
+
   do {
     new_off = old_off + count;
   } while (__atomic_compare_exchange_n(&file_offset, &old_off, new_off, true,
@@ -137,7 +137,7 @@ ssize_t File::write(const void* buf, size_t count) {
 
 ssize_t File::read(void* buf, size_t count) {
   off_t new_off, old_off = file_offset;
-  
+
   do {
     // TODO: place file_offset to EOF when entire file is read
     new_off = old_off + count;
