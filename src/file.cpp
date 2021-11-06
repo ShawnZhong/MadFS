@@ -51,7 +51,7 @@ File::~File() { mem_table.unmap(); }
 
 ssize_t File::pwrite(const void* buf, size_t count, size_t offset) {
   if (count == 0) return 0;
-  blk_table.update();
+  blk_table.update(/*do_alloc*/ true);
   tx_mgr.do_cow(buf, count, offset);
   return static_cast<ssize_t>(count);
 }

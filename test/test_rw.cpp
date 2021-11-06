@@ -11,7 +11,7 @@ using namespace ulayfs;
 
 constexpr auto NUM_BYTES = 64;
 constexpr auto OFFSET = 4096 * 2 + 1234;
-constexpr auto NUM_ITER = (NUM_INLINE_TX_ENTRY + NUM_TX_ENTRY) / 2 + 1;
+constexpr auto NUM_ITER = NUM_INLINE_TX_ENTRY + NUM_TX_ENTRY + 1;
 
 int main(int argc, char* argv[]) {
   [[maybe_unused]] ssize_t ret;

@@ -75,8 +75,8 @@ class TxLogBlock : public BaseBlock {
     return TxEntry::find_tail<NUM_TX_ENTRY>(tx_entries, hint);
   }
 
-  uint64_t try_append(TxEntry entry, TxLocalIdx idx) {
-    return TxEntry::try_append<NUM_TX_ENTRY>(tx_entries, entry, idx);
+  TxEntry try_append(TxEntry entry, TxLocalIdx idx) {
+    return TxEntry::try_append(tx_entries, entry, idx);
   }
 
   [[nodiscard]] TxEntry get(TxLocalIdx idx) {
@@ -271,9 +271,8 @@ class MetaBlock : public BaseBlock {
     return TxEntry::find_tail<NUM_INLINE_TX_ENTRY>(inline_tx_entries, hint);
   }
 
-  uint64_t try_append(TxEntry entry, TxLocalIdx idx) {
-    return TxEntry::try_append<NUM_INLINE_TX_ENTRY>(inline_tx_entries, entry,
-                                                    idx);
+  TxEntry try_append(TxEntry entry, TxLocalIdx idx) {
+    return TxEntry::try_append(inline_tx_entries, entry, idx);
   }
 
   friend std::ostream& operator<<(std::ostream& out, const MetaBlock& block) {

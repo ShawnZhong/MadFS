@@ -23,6 +23,8 @@ class TxMgr {
   LogMgr* log_mgr;
   BlkTable* blk_table;
 
+  class Tx;
+
  public:
   TxMgr() = default;
   TxMgr(pmem::MetaBlock* meta, Allocator* allocator, MemTable* mem_table,
@@ -36,8 +38,8 @@ class TxMgr {
   /**
    * Move to the next transaction entry
    *
-   * @param tx_idx the current index, will be changed to the next index
-   * @param tx_block output parameter, change to the TxLogBlock
+   * @param[in,out] tx_idx the current index, will be changed to the next index
+   * @param[in,out] tx_block output parameter, change to the TxLogBlock
    * corresponding to the next idx
    * @return bool if advance succeed; if reach the end of a block, it may return
    * false
@@ -46,31 +48,27 @@ class TxMgr {
                       bool do_alloc = false) const {
     assert(tx_idx.local_idx >= 0);
 
+    bool is_inline = tx_idx.block_idx == 0;
+
     // next index is within the same block, just increment local index
-    uint16_t capacity =
-        tx_idx.block_idx == 0 ? NUM_INLINE_TX_ENTRY : NUM_TX_ENTRY;
+    uint16_t capacity = is_inline ? NUM_INLINE_TX_ENTRY : NUM_TX_ENTRY;
     if (tx_idx.local_idx < capacity - 1) {
       tx_idx.local_idx++;
       return true;
     }
 
-    if (tx_idx.block_idx == 0) {
-      tx_idx.block_idx = meta->get_next_tx_block();
-      if (tx_idx.block_idx == 0) {
-        if (do_alloc)
-          tx_idx.block_idx = alloc_next_block(meta);
-        else
-          return false;
-      }
-    } else {
-      tx_idx.block_idx = tx_block->get_next_tx_block();
-      if (tx_idx.block_idx == 0) {
-        if (do_alloc)
-          tx_idx.block_idx = alloc_next_block(tx_block);
-        else
-          return false;
-      }
+    // get the index of the next block
+    LogicalBlockIdx block_idx =
+        is_inline ? meta->get_next_tx_block() : tx_block->get_next_tx_block();
+
+    // check if the next index is valid; allocate the next block if allowed
+    if (block_idx == 0) {
+      if (!do_alloc) return false;
+      block_idx =
+          is_inline ? alloc_next_block(meta) : alloc_next_block(tx_block);
     }
+
+    tx_idx.block_idx = block_idx;
     tx_idx.local_idx = 0;
     tx_block = &mem_table->get_addr(tx_idx.block_idx)->tx_log_block;
     return true;
@@ -87,15 +85,15 @@ class TxMgr {
   /**
    * Try to commit an entry
    *
-   * @param entry entry to commit
-   * @param tx_idx idx of entry to commit; will be updated to the index of
-   * success slot if cont_if_fail is set
-   * @param tx_block block pointer of the block by tx_idx
-   * @param cont_if_fail whether continue to the next tx entry if fail
-   * @return uint64_t 0 if success; raw bits of conflict entry otherwise
+   * @param[in] entry entry to commit
+   * @param[in,out] tx_idx idx of entry to commit; will be updated to the index
+   * of success slot if cont_if_fail is set
+   * @param[in,out] tx_block block pointer of the block by tx_idx
+   * @param[in] cont_if_fail whether continue to the next tx entry if fail
+   * @return empty entry on success; raw bits of conflict entry otherwise
    */
-  uint64_t try_commit(pmem::TxEntry entry, pmem::TxEntryIdx& tx_idx,
-                      pmem::TxLogBlock*& tx_block, bool cont_if_fail);
+  pmem::TxEntry try_commit(pmem::TxEntry entry, pmem::TxEntryIdx& tx_idx,
+                           pmem::TxLogBlock*& tx_block, bool cont_if_fail);
 
   /**
    * Same argurments as pwrite
@@ -103,30 +101,6 @@ class TxMgr {
   void do_cow(const void* buf, size_t count, size_t offset);
 
  private:
-  /**
-   * Move to the real tx and update first/last_src_block to indicate whether to
-   * redo
-   *
-   * @param curr_entry the last entry returned by try_commit; this should be
-   * what dereferenced from tail_tx_idx, and we only take it to avoid one more
-   * dereference to some shared memory
-   * @param tail_tx_idx the index to the tail of tx (probably out-of-date)
-   * @param tail_tx_block the corresponding tx block
-   * @param copy_first whether to copy the first block (will be updated)
-   * @param copy_last whether to copy the last block (will be updated)
-   * @param first_vidx the first block's virtual index; ignored if !copy_first
-   * @param last_vidx the last block's virtual index; ignored if !copy_last
-   * @param first_src_block updated if the copy of first block need to redo
-   * @param last_src_block updated if the copy of last block need to redo
-   * @return true need redo
-   * @return false need not redo
-   */
-  bool handle_conflict(pmem::TxEntry curr_entry, pmem::TxEntryIdx& tail_tx_idx,
-                       pmem::TxLogBlock*& tail_tx_block, bool& copy_first,
-                       bool& copy_last, VirtualBlockIdx first_vidx,
-                       VirtualBlockIdx last_vidx, pmem::Block*& first_src_block,
-                       pmem::Block*& last_src_block);
-
   /**
    * Read the entry from the MetaBlock or TxLogBlock
    */
@@ -164,5 +138,91 @@ class TxMgr {
 
  public:
   friend std::ostream& operator<<(std::ostream& out, const TxMgr& tx_mgr);
+};
+
+/**
+ * Tx is an inner class of TxMgr that represents a single transaction
+ */
+class TxMgr::Tx {
+ public:
+  Tx(TxMgr* tx_mgr, const void* buf, size_t count, size_t offset);
+  void do_cow();
+
+ private:
+  void do_cow_aligned() const;
+  void do_cow_single_block();
+  void do_cow_multiple_blocks();
+
+  /**
+   * Move to the real tx and update first/last_src_block to indicate whether to
+   * redo
+   *
+   * @param[in] curr_entry the last entry returned by try_commit; this should be
+   * what dereferenced from tail_tx_idx, and we only take it to avoid one more
+   * dereference to some shared memory
+   * @param[in,out] tail_tx_idx the index to the tail of tx (probably
+   * out-of-date)
+   * @param[in,out] tail_tx_block the corresponding tx block
+   * @param[in] first_vidx the first block's virtual index; ignored if
+   * !copy_first
+   * @param[in] last_vidx the last block's virtual index; ignored if !copy_last
+   * @return true if needs redo; false otherwise
+   */
+  bool handle_conflict(pmem::TxEntry curr_entry, pmem::TxEntryIdx& tail_tx_idx,
+                       pmem::TxLogBlock*& tail_tx_block,
+                       VirtualBlockIdx first_vidx,
+                       VirtualBlockIdx last_vidx = 0);
+
+ private:
+  // pointer to the outer class
+  TxMgr* tx_mgr;
+
+  /*
+   * Input (read-only) properties
+   */
+  const char* const buf;
+  const size_t count;
+  const size_t offset;
+
+  /*
+   * Derived (read-only) properties
+   */
+
+  // some offset and idx
+  const size_t end_offset;
+  const VirtualBlockIdx begin_vidx;
+  const VirtualBlockIdx begin_full_vidx;
+  const VirtualBlockIdx end_vidx;
+  const VirtualBlockIdx end_full_vidx;
+
+  // total number of blocks
+  const size_t num_blocks;
+
+  // number of bytes to copy in the first block
+  const size_t bytes_first_block;
+  // number of bytes to copy in the last block
+  const size_t bytes_last_block;
+
+  // the logical index of the destination data block
+  const LogicalBlockIdx dst_idx;
+  // the pointer to the destination data block
+  pmem::Block* const dst_blocks;
+
+  // the index of the current log entry
+  const pmem::LogEntryIdx log_idx;
+
+  // address of the fisrt block (only set if copy_first is true)
+  pmem::Block* first_src_block;
+  // address of the last block (only set if copy_last is true)
+  pmem::Block* last_src_block;
+
+  /*
+   * Mutable states
+   */
+
+  // whether to copy the first block
+  bool copy_first;
+  // whether to copy the last block
+  bool copy_last;
 };
 }  // namespace ulayfs::dram

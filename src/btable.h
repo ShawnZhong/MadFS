@@ -47,14 +47,14 @@ class BlkTable {
   }
 
   /**
-   * @brief Get the next tx to apply (by reference)
+   * Get the next tx to apply
    *
-   * @return pmem::TxEntryIdx
+   * @return a tuple containing the transaction index of the current tail and
+   * the log block corresponding to the transaction>
    */
-  void get_tail_tx(pmem::TxEntryIdx& tx_idx,
-                   pmem::TxLogBlock*& tx_block) const {
-    tx_idx = tail_tx_idx;
-    tx_block = tail_tx_block;
+  [[nodiscard]] std::tuple<pmem::TxEntryIdx, pmem::TxLogBlock*> get_tail_tx()
+      const {
+    return {tail_tx_idx, tail_tx_block};
   }
 
   /**
@@ -73,13 +73,13 @@ class BlkTable {
   /**
    * Update the block table by applying the transactions
    */
-  void update() {
+  void update(bool do_alloc = false) {
     while (true) {
       auto tx_entry = tx_mgr->get_entry(tail_tx_idx, tail_tx_block);
       if (!tx_entry.is_valid()) break;
       if (tx_entry.is_commit()) apply_tx(tx_entry.commit_entry);
       // FIXME: handle race condition??
-      if (!tx_mgr->advance_tx_idx(tail_tx_idx, tail_tx_block, false)) break;
+      if (!tx_mgr->advance_tx_idx(tail_tx_idx, tail_tx_block, do_alloc)) break;
     }
   }
 

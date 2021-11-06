@@ -170,18 +170,16 @@ union TxEntry {
    * try to append an entry to a slot in an array of TxEntry; fail if the slot
    * is taken (likely due to a race condition)
    *
-   * @tparam NUM_ENTRIES the total number of entries in the array
    * @param entries a pointer to an array of tx entries
    * @param entry the entry to append
    * @param hint hint to start the search
    * @return if success, return 0; otherwise, return the entry on the slot (in
    * raw bits)
    */
-  template <uint16_t NUM_ENTRIES>
-  static uint64_t try_append(TxEntry entries[], TxEntry entry, TxLocalIdx idx) {
+  static TxEntry try_append(TxEntry entries[], TxEntry entry, TxLocalIdx idx) {
     uint64_t expected = 0;
     if (__atomic_compare_exchange_n(&entries[idx].raw_bits, &expected,
-                                    entry.raw_bits, false, __ATOMIC_RELEASE,
+                                    entry.raw_bits, true, __ATOMIC_RELEASE,
                                     __ATOMIC_ACQUIRE))
       // only persist if it's the last entry in a cacheline
       if (is_last_entry_in_cacheline(idx)) persist_cl_fenced(&entries[idx]);
