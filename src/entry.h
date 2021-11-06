@@ -85,11 +85,21 @@ struct TxBeginEntry {
 };
 
 struct TxCommitEntry {
+ private:
+  static constexpr int NUM_BLOCKS_SZ = 6;
+  static constexpr int BEGIN_VIRTUAL_IDX_SZ = 17;
+
+  static constexpr int NUM_BLOCKS_MAX = (1 << NUM_BLOCKS_SZ) - 1;
+  static constexpr int BEGIN_VIRTUAL_IDX_MAX = (1 << BEGIN_VIRTUAL_IDX_SZ) - 1;
+
   enum TxEntryType type : 1 = TxEntryType::TX_COMMIT;
 
+  friend union TxEntry;
+
+ public:
   // optionally, set these bits so OCC conflict detection can be done inline
-  uint32_t num_blocks : 6;
-  uint32_t begin_virtual_idx : 17;
+  uint32_t num_blocks : NUM_BLOCKS_SZ;
+  uint32_t begin_virtual_idx : BEGIN_VIRTUAL_IDX_SZ;
 
   // the first log entry for this transaction, 40 bits in size
   // The rest of the log entries are organized as a linked list
@@ -100,10 +110,10 @@ struct TxCommitEntry {
   TxCommitEntry(uint32_t num_blocks, uint32_t begin_virtual_idx,
                 LogEntryIdx log_entry_idx)
       : num_blocks(0), begin_virtual_idx(0), log_entry_idx(log_entry_idx) {
-    if (num_blocks < (1 << 6) && begin_virtual_idx < (1 << 17)) {
-      this->num_blocks = num_blocks;
-      this->begin_virtual_idx = begin_virtual_idx;
-    }
+    assert(num_blocks <= NUM_BLOCKS_MAX);
+    assert(begin_virtual_idx <= BEGIN_VIRTUAL_IDX_MAX);
+    this->num_blocks = num_blocks;
+    this->begin_virtual_idx = begin_virtual_idx;
   }
 
   friend std::ostream& operator<<(std::ostream& out,
