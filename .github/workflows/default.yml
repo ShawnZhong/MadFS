@@ -2,7 +2,7 @@ name: CI
 
 on:
   push:
-    branches: [main]
+    branches: [ main ]
   pull_request:
 
 jobs:
@@ -18,9 +18,11 @@ jobs:
   test:
     strategy:
       matrix:
-        build_type: [debug, release]
+        build_type: [ debug, release ]
 
     runs-on: ubuntu-latest
+
+    timeout-minutes: 1
 
     defaults:
       run:
