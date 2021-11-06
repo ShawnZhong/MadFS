@@ -22,6 +22,7 @@ class File {
   int fd;
   int open_flags;
   bool valid;
+  off_t file_offset;
 
   pmem::MetaBlock* meta;
   Allocator allocator;
@@ -32,6 +33,7 @@ class File {
 
  public:
   File(const char* pathname, int flags, mode_t mode);
+  ~File();
 
   [[nodiscard]] bool is_valid() const { return valid; }
   [[nodiscard]] pmem::MetaBlock* get_meta() { return meta; }
@@ -47,12 +49,28 @@ class File {
    */
   ssize_t pread(void* buf, size_t count, off_t offset);
 
+  /**
+   * reposition read/write file offset
+   */
+  off_t lseek(off_t offset, int whence);
+
+  /**
+   * write the content in buf to the byte range [file_offset, file_offset +
+   * count)
+   */
+  ssize_t write(const void* buf, size_t count);
+
+  /**
+   * read the byte range [file_offset, file_offset + count) to buf
+   */
+  ssize_t read(void* buf, size_t count);
+
  private:
   /**
    * @param virtual_block_idx the virtual block index for a data block
    * @return the char pointer pointing to the memory location of the data block
    */
-  char* get_data_block_ptr(VirtualBlockIdx virtual_block_idx);
+  const char* get_ro_data_ptr(VirtualBlockIdx virtual_block_idx);
 
  public:
   friend std::ostream& operator<<(std::ostream& out, const File& f);

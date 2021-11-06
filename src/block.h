@@ -212,6 +212,8 @@ class MetaBlock : public BaseBlock {
    * Getters and setters
    */
 
+  size_t get_file_size() { return file_size; }
+
   // called by other public functions with lock held
   void set_num_blocks_no_lock(uint32_t num_blocks) {
     this->num_blocks = num_blocks;

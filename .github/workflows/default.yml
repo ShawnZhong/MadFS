@@ -2,7 +2,7 @@ name: CI
 
 on:
   push:
-    branches: [main]
+    branches: [ main ]
   pull_request:
 
 jobs:
@@ -18,9 +18,11 @@ jobs:
   test:
     strategy:
       matrix:
-        build_type: [debug, release]
+        build_type: [ debug, release ]
 
     runs-on: ubuntu-latest
+
+    timeout-minutes: 1
 
     defaults:
       run:
@@ -38,6 +40,9 @@ jobs:
 
       - name: test_futex
         run: ./test_futex
+
+      - name: test_basic
+        run: ./test_basic
 
       # - name: test_sync
       #   run: ./test_sync
