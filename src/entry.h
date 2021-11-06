@@ -20,8 +20,8 @@ struct __attribute__((packed)) LogEntryIdx {
   LogLocalIdx local_idx : 8;
 
   friend std::ostream& operator<<(std::ostream& out, const LogEntryIdx& idx) {
-    out << "{ block_idx = " << idx.block_idx
-        << ", local_idx = " << unsigned(idx.local_idx) << " }";
+    out << "LogEntryIdx{" << idx.block_idx << "," << unsigned(idx.local_idx)
+        << "}";
     return out;
   }
 };
@@ -48,8 +48,7 @@ struct TxEntryIdx {
   bool operator>=(const TxEntryIdx& rhs) const { return !(*this < rhs); }
 
   friend std::ostream& operator<<(std::ostream& out, const TxEntryIdx& idx) {
-    out << "{ block_idx = " << idx.block_idx
-        << ", local_idx = " << idx.local_idx << " }";
+    out << "TxEntryIdx{" << idx.block_idx << "," << idx.local_idx << "}";
     return out;
   }
 };
@@ -118,10 +117,8 @@ struct TxCommitEntry {
 
   friend std::ostream& operator<<(std::ostream& out,
                                   const TxCommitEntry& entry) {
-    out << "TX_COMMIT "
-        << "{ num_blocks: " << entry.num_blocks
-        << ", begin_virtual_idx: " << entry.begin_virtual_idx
-        << ", log_entry_idx: " << entry.log_entry_idx << " }";
+    out << "TxCommitEntry{n_blk=" << entry.num_blocks
+        << ", vidx=" << entry.begin_virtual_idx << "}";
     return out;
   }
 };
@@ -229,6 +226,15 @@ struct LogEntry {
   // to the virtual blocks [virtual_idx, virtual_idx + num_blocks)
   VirtualBlockIdx begin_virtual_idx;
   LogicalBlockIdx begin_logical_idx;
+
+  friend std::ostream& operator<<(std::ostream& out, const LogEntry& entry) {
+    out << "LogEntry{";
+    out << "vidx=" << entry.begin_virtual_idx << ", ";
+    out << "lidx=" << entry.begin_logical_idx << ", ";
+    out << "n_blk=" << unsigned(entry.num_blocks);
+    out << "}";
+    return out;
+  }
 };
 
 static_assert(sizeof(LogEntry) == 16, "LogEntry must of size 16 bytes");

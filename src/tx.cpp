@@ -105,7 +105,7 @@ template LogicalBlockIdx TxMgr::alloc_next_block(pmem::MetaBlock* block) const;
 template LogicalBlockIdx TxMgr::alloc_next_block(pmem::TxLogBlock* block) const;
 
 std::ostream& operator<<(std::ostream& out, const TxMgr& tx_mgr) {
-  out << "Transaction Log: \n";
+  out << "Transactions: \n";
 
   pmem::TxEntryIdx idx{};
   pmem::TxLogBlock* tx_log_block{nullptr};
@@ -113,7 +113,10 @@ std::ostream& operator<<(std::ostream& out, const TxMgr& tx_mgr) {
   while (true) {
     auto tx_entry = tx_mgr.get_entry_from_block(idx, tx_log_block);
     if (!tx_entry.is_valid()) break;
-    out << "\t" << idx << ": " << tx_entry << "\n";
+    auto commit_entry = tx_entry.commit_entry;
+    out << "\t" << idx << " -> " << commit_entry << "\n";
+    out << "\t\t" << commit_entry.log_entry_idx << " -> "
+        << tx_mgr.get_log_entry_from_commit(commit_entry) << "\n";
     tx_mgr.advance_tx_idx(idx, tx_log_block);
   }
 
