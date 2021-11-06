@@ -98,16 +98,6 @@ class TxMgr {
                       pmem::TxLogBlock*& tx_block, bool cont_if_fail);
 
   /**
-   * Commit a transaction
-   *
-   * @param tx_begin_idx the index of the corresponding begin transaction
-   * @param log_entry_idx the first log entry that corresponds to the tx
-   * @return the index of the committed transaction
-   */
-  pmem::TxEntryIdx commit_tx(pmem::TxEntryIdx tx_begin_idx,
-                             pmem::LogEntryIdx log_entry_idx);
-
-  /**
    * Same argurments as pwrite
    */
   void do_cow(const void* buf, size_t count, size_t offset);
