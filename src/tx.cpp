@@ -42,16 +42,34 @@ void TxMgr::do_cow(const void* buf, size_t count, size_t offset) {
   // caller should handle count == 0 so that we keep the invariant that once
   // do_cow is called, exactly one tx must happen
   assert(count != 0);
+  // some offset and idx
   size_t end_offset = offset + count;
   VirtualBlockIdx begin_vidx = offset >> BLOCK_SHIFT;
   VirtualBlockIdx begin_full_vidx = ALIGN_UP(offset, BLOCK_SIZE) >> BLOCK_SHIFT;
   VirtualBlockIdx end_vidx = ALIGN_UP(end_offset, BLOCK_SIZE) >> BLOCK_SHIFT;
   VirtualBlockIdx end_full_vidx = end_offset >> BLOCK_SHIFT;
+  // total number of blocks
   size_t num_blocks = end_vidx - begin_vidx;
   // whether copy the first/last block (if both not, no COW is necessary)
   bool copy_first = begin_full_vidx != begin_vidx;
   bool copy_last = end_full_vidx != end_vidx;
+  // return value for try_commit
+  uint64_t ret;
+  // full blocks (blocks that could be blink written without copying original)
+  pmem::Block* full_blocks;
+  size_t num_full_blocks;  // must delay calculation otherwise it could be -1
+  // number of bytes to copy in the first/last block
+  size_t bytes_first_block, bytes_last_block;
+  // logical index for the first block and the last block
+  LogicalBlockIdx first_lidx, last_lidx;
+  // address of fisrt and last block (only set if copy_first/last is true)
+  pmem::Block* first_src_block;
+  pmem::Block* last_src_block;
+  // iterator for tx (only set right before critical section)
+  pmem::TxEntryIdx tail_tx_idx;
+  pmem::TxLogBlock* tail_tx_block;
 
+  // allocate space
   LogicalBlockIdx dst_idx = allocator->alloc(num_blocks);
   pmem::Block* dst_blocks = mem_table->get_addr(dst_idx);
 
@@ -65,8 +83,10 @@ void TxMgr::do_cow(const void* buf, size_t count, size_t offset) {
       begin_vidx,                        // begin_virtual_idx
       dst_idx,                           // begin_logical_idx
   };
+  // append log without fenece because we only care flush completion before
+  // try_commit
   pmem::LogEntryIdx log_idx = log_mgr->append(log_entry, /* fenced */ false);
-  // It's fine that we append log first as long we don't publish it by tx
+  // it's fine that we append log first as long we don't publish it by tx
 
   // special case that we have everything aligned, no OCC
   if (!copy_first && !copy_last) {
@@ -84,40 +104,66 @@ void TxMgr::do_cow(const void* buf, size_t count, size_t offset) {
     return;
   }
 
-  // TODO: handle the case the first block is the last block...
+  bytes_first_block = (begin_full_vidx << BLOCK_SHIFT) - offset;
+  bytes_last_block = end_offset - (end_full_vidx << BLOCK_SHIFT);
+  assert(bytes_first_block != 0);
+  assert(bytes_last_block != 0);
+
+  // another special case the first block is the last block...
   if (begin_full_vidx > end_full_vidx) {
     assert(begin_full_vidx - end_full_vidx == 1);
-    // ???
+    assert(num_blocks == 1);
+    // must acquire it before any get
+    blk_table->get_tail_tx(tail_tx_idx, tail_tx_block);
+
+    // we only use first_* but not last_* because they are the same one
+    LogicalBlockIdx lidx = blk_table->get(begin_vidx);
+    first_src_block = mem_table->get_addr(lidx);
+
+    // some placeholder variables to make handle_conflict happy...
+    bool fake_bool = false;
+    VirtualBlockIdx fake_idx = 0;
+    pmem::Block* fake_block = nullptr;
+
+  redo_single:
+    memcpy(dst_blocks->data, first_src_block->data, BLOCK_SIZE);
+    memcpy(dst_blocks->data + BLOCK_SIZE - bytes_first_block, buf, count);
+    persist_fenced(dst_blocks, BLOCK_SIZE);
+
+  retry_single:
+    ret = try_commit(pmem::TxCommitEntry(num_blocks, begin_vidx, log_idx),
+                     tail_tx_idx, tail_tx_block, false);
+    if (ret == 0) return;
+    assert(copy_first);
+    if (handle_conflict(ret, tail_tx_idx, tail_tx_block, copy_first, fake_bool,
+                        begin_vidx, fake_idx, first_src_block, fake_block))
+      goto redo_single;
+    else
+      goto retry_single;
   }
 
   // first copy middle blocks
-  pmem::Block* full_blocks = dst_blocks + (begin_full_vidx - begin_vidx);
-  size_t num_full_blocks = (end_full_vidx - begin_full_vidx);
-  size_t bytes_first_block = (begin_full_vidx << BLOCK_SHIFT) - offset;
-  size_t bytes_last_block = end_offset - (end_full_vidx << BLOCK_SHIFT);
-  memcpy(reinterpret_cast<char*>(full_blocks),
-         static_cast<const char*>(buf) + bytes_first_block,
-         num_full_blocks << BLOCK_SHIFT);
-  persist_unfenced(full_blocks, num_full_blocks << BLOCK_SHIFT);
+  full_blocks = dst_blocks + (begin_full_vidx - begin_vidx);
+  num_full_blocks = (end_full_vidx - begin_full_vidx);
+  if (num_full_blocks > 0) {
+    memcpy(reinterpret_cast<char*>(full_blocks),
+           static_cast<const char*>(buf) + bytes_first_block,
+           num_full_blocks << BLOCK_SHIFT);
+    persist_unfenced(full_blocks, num_full_blocks << BLOCK_SHIFT);
+  }
 
-  pmem::TxEntryIdx tail_tx_idx;
-  pmem::TxLogBlock* tail_tx_block;
+  // only get a snapshot of the tail when starting critical piece
   blk_table->get_tail_tx(tail_tx_idx, tail_tx_block);
-
-  LogicalBlockIdx begin_lidx, end_lidx;
-  pmem::Block* first_src_block;
-  pmem::Block* last_src_block;
-  uint64_t ret;
 
   if (copy_first) {
     assert(begin_full_vidx - begin_vidx == 1);
-    begin_lidx = blk_table->get(begin_vidx);
-    first_src_block = mem_table->get_addr(begin_lidx);
+    first_lidx = blk_table->get(begin_vidx);
+    first_src_block = mem_table->get_addr(first_lidx);
   }
   if (copy_last) {
     assert(end_vidx - end_full_vidx == 1);
-    end_lidx = blk_table->get(end_full_vidx);
-    last_src_block = mem_table->get_addr(end_lidx);
+    last_lidx = blk_table->get(end_full_vidx);
+    last_src_block = mem_table->get_addr(last_lidx);
   }
 
 redo:  // redo copy
