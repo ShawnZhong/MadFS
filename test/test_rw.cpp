@@ -74,6 +74,7 @@ int main(int argc, char* argv[]) {
   test_rw<8>();
   test_rw<64>();
   test_rw<BLOCK_SIZE / 2>();
+  test_rw<BLOCK_SIZE - 1>();
 
   // single-block write w/o alignment
   test_rw<8, 1, 8>();
@@ -85,6 +86,7 @@ int main(int argc, char* argv[]) {
 
   // multi-block write w/ block-aligned starting offset
   test_rw<BLOCK_SIZE + 1>();
+  test_rw<BLOCK_SIZE * 2 - 1>();
   test_rw<BLOCK_SIZE * 16 + 1>();
   test_rw<BLOCK_SIZE + 1, 1, BLOCK_SIZE * 2>();
   test_rw<12345, 1, BLOCK_SIZE * 7>();
@@ -92,6 +94,7 @@ int main(int argc, char* argv[]) {
   // multi-block write w/o alignment
   test_rw<BLOCK_SIZE, 1, 8>();
   test_rw<BLOCK_SIZE * 16 + 1, 1, BLOCK_SIZE - 1>();
+  test_rw<BLOCK_SIZE * 16 - 13, 1, 13>();
   test_rw<12345, 6, 7890>();
 
   return 0;

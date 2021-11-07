@@ -90,7 +90,7 @@ class TxMgr {
    * of success slot if cont_if_fail is set
    * @param[in,out] tx_block block pointer of the block by tx_idx
    * @param[in] cont_if_fail whether continue to the next tx entry if fail
-   * @return empty entry on success; raw bits of conflict entry otherwise
+   * @return empty entry on success; conflict entry otherwise
    */
   pmem::TxEntry try_commit(pmem::TxEntry entry, pmem::TxEntryIdx& tx_idx,
                            pmem::TxLogBlock*& tx_block, bool cont_if_fail);
@@ -118,6 +118,16 @@ class TxMgr {
              ->log_entry_block;
     return log_block->get(commit_entry.log_entry_idx.local_idx);
   }
+
+  /**
+   * Given a virtual block index, return a write-only data pointer
+   *
+   * @param idx the virtual block index for a data block
+   * @return the char pointer pointing to the memory location of the data block.
+   * nullptr returned if the block is not allocated yet (e.g., a hole)
+   */
+  [[nodiscard]] pmem::Block* get_data_block_from_vidx(
+      VirtualBlockIdx idx) const;
 
   /**
    * @tparam B MetaBlock or TxLogBlock

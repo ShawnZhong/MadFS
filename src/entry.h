@@ -124,10 +124,13 @@ struct TxCommitEntry {
 };
 
 union TxEntry {
+ private:
+  uint64_t raw_bits;
+
+ public:
   // WARN: begin_entry is deprecated
   TxBeginEntry begin_entry;
   TxCommitEntry commit_entry;
-  uint64_t raw_bits;
 
   TxEntry(){};
   TxEntry(uint64_t raw_bits) : raw_bits(raw_bits) {}
@@ -142,6 +145,7 @@ union TxEntry {
   }
 
   [[nodiscard]] bool is_valid() const { return raw_bits != 0; }
+  [[nodiscard]] bool is_empty() const { return raw_bits == 0; }
 
   [[nodiscard]] static bool is_last_entry_in_cacheline(TxLocalIdx idx) {
     auto offset = 2 * sizeof(LogicalBlockIdx) + (idx + 1) * sizeof(TxEntry);
@@ -170,8 +174,7 @@ union TxEntry {
    * @param entries a pointer to an array of tx entries
    * @param entry the entry to append
    * @param hint hint to start the search
-   * @return if success, return 0; otherwise, return the entry on the slot (in
-   * raw bits)
+   * @return if success, return 0; otherwise, return the entry on the slot
    */
   static TxEntry try_append(TxEntry entries[], TxEntry entry, TxLocalIdx idx) {
     uint64_t expected = 0;

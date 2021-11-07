@@ -67,9 +67,11 @@ class File {
 
  private:
   /**
+   * Given a virtual block index, return a read-only data pointer
+   *
    * @param virtual_block_idx the virtual block index for a data block
    * @return the const char pointer pointing to the memory location of the data
-   * block
+   * block. An empty block if the block is not allocated yet (e.g., a hole)
    */
   const char* get_ro_data_ptr(VirtualBlockIdx virtual_block_idx);
 
