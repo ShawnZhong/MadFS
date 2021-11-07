@@ -8,6 +8,10 @@
 #include "posix.h"
 
 namespace ulayfs {
+
+// mapping between fd and in-memory file handle
+std::unordered_map<int, dram::File*> files;
+
 dram::File* get_file(int fd) {
   auto it = files.find(fd);
   if (it != files.end()) return it->second;

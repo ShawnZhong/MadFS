@@ -57,6 +57,7 @@ ssize_t File::pwrite(const void* buf, size_t count, size_t offset) {
 }
 
 ssize_t File::pread(void* buf, size_t count, off_t offset) {
+  blk_table.update(/*do_alloc*/ false);
   VirtualBlockIdx virtual_idx = offset >> BLOCK_SHIFT;
 
   uint64_t local_offset = offset - virtual_idx * BLOCK_SIZE;

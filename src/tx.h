@@ -160,18 +160,31 @@ class TxMgr::Tx {
    * @param[in] curr_entry the last entry returned by try_commit; this should be
    * what dereferenced from tail_tx_idx, and we only take it to avoid one more
    * dereference to some shared memory
-   * @param[in,out] tail_tx_idx the index to the tail of tx (probably
-   * out-of-date)
+   *
+   * @param[in,out] tail_tx_idx the idx to the tx tail (probably out-of-date)
    * @param[in,out] tail_tx_block the corresponding tx block
-   * @param[in] first_vidx the first block's virtual index; ignored if
-   * !copy_first
-   * @param[in] last_vidx the last block's virtual index; ignored if !copy_last
+   *
+   * @param[in,out] copy_first whether to copy the first block (will be updated)
+   * @param[in,out] copy_last whether to copy the last block (will be updated)
+   *
+   * @param[in] first_vidx the first block's virtual idx; ignored if !copy_first
+   * @param[in] last_vidx the last block's virtual idx; ignored if !copy_last
+   *
+   * @param[out] first_src_block updated if need to redo copy of first block
+   * @param[out] last_src_block updated if need to redo copy of last block
+   *
+   *
    * @return true if needs redo; false otherwise
    */
   bool handle_conflict(pmem::TxEntry curr_entry, pmem::TxEntryIdx& tail_tx_idx,
-                       pmem::TxLogBlock*& tail_tx_block,
-                       VirtualBlockIdx first_vidx,
-                       VirtualBlockIdx last_vidx = 0);
+                       pmem::TxLogBlock*& tail_tx_block, bool& copy_first,
+                       bool& copy_last, VirtualBlockIdx first_vidx,
+                       VirtualBlockIdx last_vidx, pmem::Block*& first_src_block,
+                       pmem::Block*& last_src_block);
+
+  bool handle_conflict(pmem::TxEntry curr_entry, pmem::TxEntryIdx& tail_tx_idx,
+                       pmem::TxLogBlock*& tail_tx_block, bool& copy,
+                       VirtualBlockIdx vidx, pmem::Block*& src_block);
 
  private:
   // pointer to the outer class
@@ -188,20 +201,18 @@ class TxMgr::Tx {
    * Derived (read-only) properties
    */
 
-  // some offset and idx
+  // the byte range to be written is [offset, end_offset), and the byte at
+  // end_offset is NOT included
   const size_t end_offset;
+
+  // the index of the virtual block that contains the beginning offset
   const VirtualBlockIdx begin_vidx;
-  const VirtualBlockIdx begin_full_vidx;
+  // the block index to be written is [begin_vidx, end_vidx), and the block with
+  // index end_vidx is NOT included
   const VirtualBlockIdx end_vidx;
-  const VirtualBlockIdx end_full_vidx;
 
   // total number of blocks
   const size_t num_blocks;
-
-  // number of bytes to copy in the first block
-  const size_t bytes_first_block;
-  // number of bytes to copy in the last block
-  const size_t bytes_last_block;
 
   // the logical index of the destination data block
   const LogicalBlockIdx dst_idx;
@@ -210,19 +221,5 @@ class TxMgr::Tx {
 
   // the index of the current log entry
   const pmem::LogEntryIdx log_idx;
-
-  // address of the fisrt block (only set if copy_first is true)
-  pmem::Block* first_src_block;
-  // address of the last block (only set if copy_last is true)
-  pmem::Block* last_src_block;
-
-  /*
-   * Mutable states
-   */
-
-  // whether to copy the first block
-  bool copy_first;
-  // whether to copy the last block
-  bool copy_last;
 };
 }  // namespace ulayfs::dram

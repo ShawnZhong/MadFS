@@ -138,12 +138,8 @@ TxMgr::Tx::Tx(TxMgr* tx_mgr, const void* buf, size_t count, size_t offset)
       // derived properties
       end_offset(offset + count),
       begin_vidx(offset >> BLOCK_SHIFT),
-      begin_full_vidx(ALIGN_UP(offset, BLOCK_SIZE) >> BLOCK_SHIFT),
       end_vidx(ALIGN_UP(end_offset, BLOCK_SIZE) >> BLOCK_SHIFT),
-      end_full_vidx(end_offset >> BLOCK_SHIFT),
       num_blocks(end_vidx - begin_vidx),
-      bytes_first_block((begin_full_vidx << BLOCK_SHIFT) - offset),
-      bytes_last_block(end_offset - (end_full_vidx << BLOCK_SHIFT)),
 
       dst_idx(tx_mgr->allocator->alloc(num_blocks)),
       dst_blocks(tx_mgr->mem_table->get_addr(dst_idx)),
@@ -164,23 +160,17 @@ TxMgr::Tx::Tx(TxMgr* tx_mgr, const void* buf, size_t count, size_t offset)
         // try_commit
         return tx_mgr->log_mgr->append(log_entry, /* fenced */ false);
         // it's fine that we append log first as long we don't publish it by tx
-      }()) {
-  // whether copy the first/last block (if both not, no COW is necessary)
-  copy_first = begin_full_vidx != begin_vidx;
-  copy_last = end_full_vidx != end_vidx;
-}
+      }()) {}
 
 void TxMgr::Tx::do_cow() {
   // special case that we have everything aligned, no OCC
-  if (!copy_first && !copy_last) {
+  if (count % BLOCK_SIZE == 0 && offset % BLOCK_SIZE == 0) {
     do_cow_aligned();
     return;
   }
 
-  assert(bytes_first_block != 0);
-  assert(bytes_last_block != 0);
-  // another special case the first block is the last block...
-  if (begin_full_vidx > end_full_vidx) {
+  // another special case where range is within a single block
+  if ((offset >> BLOCK_SHIFT) == ((offset + count - 1) >> BLOCK_SHIFT)) {
     do_cow_single_block();
     return;
   }
@@ -189,11 +179,13 @@ void TxMgr::Tx::do_cow() {
 }
 
 void TxMgr::Tx::do_cow_aligned() const {
-  assert(count % BLOCK_SIZE == 0);
+  // since everything is block-aligned, we can copy data directly
   memcpy(dst_blocks->data, buf, count);
+
   // we have unfenced here because log_mgr's append will do fence
   persist_unfenced(dst_blocks, count);
-  // make a local copy
+
+  // make a local copy of the tx tail
   auto [tail_tx_idx, tail_tx_block] = tx_mgr->blk_table->get_tail_tx();
   _mm_sfence();  // make sure flush of block and log entry is done
 
@@ -202,24 +194,29 @@ void TxMgr::Tx::do_cow_aligned() const {
 }
 
 void TxMgr::Tx::do_cow_single_block() {
-  assert(begin_full_vidx - end_full_vidx == 1);
   assert(num_blocks == 1);
+
+  // local_offset is the starting offset within the block
+  const size_t local_offset = offset - begin_vidx * BLOCK_SIZE;
 
   // must acquire it before any get
   auto [tail_tx_idx, tail_tx_block] = tx_mgr->blk_table->get_tail_tx();
 
-  // we only use first_* but not last_* because they are the same one
-  LogicalBlockIdx lidx = tx_mgr->blk_table->get(begin_vidx);
-  first_src_block = tx_mgr->mem_table->get_addr(lidx);
+  // the tx entry to be committed
   pmem::TxCommitEntry entry(num_blocks, begin_vidx, log_idx);
 
+  // check if we have the source block to be copied
+  LogicalBlockIdx lidx = tx_mgr->blk_table->get(begin_vidx);
+  pmem::Block* src_block = tx_mgr->mem_table->get_addr(lidx);
+
+  bool copy = true;
+
 redo:
-  // copy data from the source block
-  // @chenhao, do we need to copy the entire block?
-  memcpy(dst_blocks->data, first_src_block->data, BLOCK_SIZE);
+  // copy data from the source block if needed
+  if (src_block) memcpy(dst_blocks->data, src_block->data, BLOCK_SIZE);
 
   // copy data from buf
-  memcpy(dst_blocks->data + BLOCK_SIZE - bytes_first_block, buf, count);
+  memcpy(dst_blocks->data + local_offset, buf, count);
 
   // persist the data
   persist_fenced(dst_blocks, BLOCK_SIZE);
@@ -227,58 +224,77 @@ redo:
 retry:
   pmem::TxEntry res_entry = tx_mgr->try_commit(
       entry, tail_tx_idx, tail_tx_block, /*cont_if_fail*/ false);
-  if (res_entry.raw_bits == 0) return;
-  assert(copy_first);
-  if (handle_conflict(res_entry, tail_tx_idx, tail_tx_block, begin_vidx))
+  if (res_entry.raw_bits == 0) return;  // success
+  assert(copy);
+  if (handle_conflict(res_entry, tail_tx_idx, tail_tx_block, copy, begin_vidx,
+                      src_block))
     goto redo;
   else
     goto retry;
 }
 
 void TxMgr::Tx::do_cow_multiple_blocks() {
-  // first copy middle blocks
+  // the index of the first virtual block that needs to be copied entirely
+  const VirtualBlockIdx begin_full_vidx =
+      ALIGN_UP(offset, BLOCK_SIZE) >> BLOCK_SHIFT;
+  // the index of the last virtual block that needs to be copied entirely
+  const VirtualBlockIdx end_full_vidx = end_offset >> BLOCK_SHIFT;
 
-  // full blocks (blocks that could be blink written without copying original)
-  pmem::Block* full_blocks = dst_blocks + (begin_full_vidx - begin_vidx);
-  size_t num_full_blocks = (end_full_vidx - begin_full_vidx);
-  if (num_full_blocks > 0) {
-    memcpy(reinterpret_cast<char*>(full_blocks),
-           static_cast<const char*>(buf) + bytes_first_block,
-           num_full_blocks << BLOCK_SHIFT);
-    persist_unfenced(full_blocks, num_full_blocks << BLOCK_SHIFT);
+  // number of bytes to be written in the beginning.
+  // If the offset is 4097, then this var should be 4095.
+  const size_t bytes_first_block = (begin_full_vidx << BLOCK_SHIFT) - offset;
+
+  // number of bytes to be written for the last block
+  // If the end_offset is 4097, then this var should be 1.
+  const size_t bytes_last_block = end_offset - (end_full_vidx << BLOCK_SHIFT);
+
+  // full blocks are blocks that can be written from buf directly without
+  // copying the src data
+  if (size_t num_full_blocks = end_full_vidx - begin_full_vidx;
+      num_full_blocks > 0) {
+    pmem::Block* full_blocks = dst_blocks + (begin_full_vidx - begin_vidx);
+    const size_t num_bytes = num_full_blocks << BLOCK_SHIFT;
+    memcpy(full_blocks->data, buf + bytes_first_block, num_bytes);
+    persist_unfenced(full_blocks, num_bytes);
   }
+
+  // whether copy the first/last block
+  bool copy_first = begin_full_vidx != begin_vidx;
+  bool copy_last = end_full_vidx != end_vidx;
+
+  // address of fisrt and last block (only set if copy_first/last is true)
+  pmem::Block* first_src_block;
+  pmem::Block* last_src_block;
 
   // only get a snapshot of the tail when starting critical piece
   auto [tail_tx_idx, tail_tx_block] = tx_mgr->blk_table->get_tail_tx();
 
-  // logical index for the first block and the last block
-  LogicalBlockIdx first_lidx, last_lidx;
-
   if (copy_first) {
     assert(begin_full_vidx - begin_vidx == 1);
-    first_lidx = tx_mgr->blk_table->get(begin_vidx);
+    LogicalBlockIdx first_lidx = tx_mgr->blk_table->get(begin_vidx);
     first_src_block = tx_mgr->mem_table->get_addr(first_lidx);
   }
   if (copy_last) {
     assert(end_vidx - end_full_vidx == 1);
-    last_lidx = tx_mgr->blk_table->get(end_full_vidx);
+    LogicalBlockIdx last_lidx = tx_mgr->blk_table->get(end_full_vidx);
     last_src_block = tx_mgr->mem_table->get_addr(last_lidx);
   }
 
-redo:  // redo copy
+redo:
+  // copy first block
   if (copy_first) {
-    // copy first block
-    memcpy(dst_blocks->data, first_src_block, BLOCK_SIZE);
-    memcpy(dst_blocks->data + BLOCK_SIZE - bytes_first_block, buf,
-           bytes_first_block);
+    if (first_src_block) memcpy(dst_blocks->data, first_src_block, BLOCK_SIZE);
+    char* dst = dst_blocks->data + BLOCK_SIZE - bytes_first_block;
+    memcpy(dst, buf, bytes_first_block);
     persist_unfenced(dst_blocks, BLOCK_SIZE);
   }
+
+  // copy last block
   if (copy_last) {
-    // copy last block
-    memcpy((dst_blocks + (end_full_vidx - begin_vidx))->data, last_src_block,
-           BLOCK_SIZE);
-    memcpy((dst_blocks + (end_full_vidx - begin_vidx))->data,
-           buf + (count - bytes_last_block), bytes_last_block);
+    char* last_dst_block = (dst_blocks + (end_full_vidx - begin_vidx))->data;
+
+    if (last_src_block) memcpy(last_dst_block, last_src_block, BLOCK_SIZE);
+    memcpy(last_dst_block, buf + (count - bytes_last_block), bytes_last_block);
     persist_unfenced((dst_blocks + (end_full_vidx - begin_vidx)), BLOCK_SIZE);
   }
   _mm_sfence();
@@ -293,18 +309,19 @@ retry:  // retry commit
   copy_last = end_full_vidx != end_vidx;
   // handle_conflict will update copy_first/last according to indicate whether
   // redo is needed
-  if (handle_conflict(entry, tail_tx_idx, tail_tx_block, begin_vidx,
-                      end_full_vidx))
+  if (handle_conflict(entry, tail_tx_idx, tail_tx_block, copy_first, copy_last,
+                      begin_vidx, end_full_vidx, first_src_block,
+                      last_src_block))
     goto redo;  // conflict is detected, redo copy
   else
     goto retry;  // we have moved to the new tail, retry commit
 }
 
-bool TxMgr::Tx::handle_conflict(pmem::TxEntry curr_entry,
-                                pmem::TxEntryIdx& tail_tx_idx,
-                                pmem::TxLogBlock*& tail_tx_block,
-                                VirtualBlockIdx first_vidx,
-                                VirtualBlockIdx last_vidx) {
+bool TxMgr::Tx::handle_conflict(
+    pmem::TxEntry curr_entry, pmem::TxEntryIdx& tail_tx_idx,
+    pmem::TxLogBlock*& tail_tx_block, bool& copy_first, bool& copy_last,
+    VirtualBlockIdx first_vidx, VirtualBlockIdx last_vidx,
+    pmem::Block*& first_src_block, pmem::Block*& last_src_block) {
   bool redo_first = false;
   bool redo_last = false;
   VirtualBlockIdx begin_vidx;
@@ -357,6 +374,19 @@ bool TxMgr::Tx::handle_conflict(pmem::TxEntry curr_entry,
   copy_first = redo_first;
   copy_last = redo_last;
   return redo_first || redo_last;
+}
+
+bool TxMgr::Tx::handle_conflict(pmem::TxEntry curr_entry,
+                                pmem::TxEntryIdx& tail_tx_idx,
+                                pmem::TxLogBlock*& tail_tx_block, bool& copy,
+                                VirtualBlockIdx vidx, pmem::Block*& src_block) {
+  bool dummy_copy = false;
+  VirtualBlockIdx dummy_vidx = 0;
+  pmem::Block* dummy_src_block = nullptr;
+
+  return handle_conflict(curr_entry, tail_tx_idx, tail_tx_block, copy,
+                         dummy_copy, vidx, dummy_vidx, src_block,
+                         dummy_src_block);
 }
 
 }  // namespace ulayfs::dram

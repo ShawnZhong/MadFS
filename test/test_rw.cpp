@@ -9,16 +9,23 @@
 
 using namespace ulayfs;
 
-constexpr auto NUM_BYTES = 64;
-constexpr auto OFFSET = 4096 * 2 + 1234;
-constexpr auto NUM_ITER = NUM_INLINE_TX_ENTRY + NUM_TX_ENTRY + 1;
+#define CHECK_RESULT(expected, actual, length)             \
+  do {                                                     \
+    if (memcmp(expected, actual, length) != 0) {           \
+      std::cerr << *file << "\n";                          \
+      std::cerr << "expected: \"" << (expected) << "\"\n"; \
+      std::cerr << "actual  : \"" << (actual) << "\"\n";   \
+      assert(false);                                       \
+    }                                                      \
+  } while (0)
 
-int main(int argc, char* argv[]) {
+template <int NUM_BYTES, int NUM_ITER = 1, int OFFSET = 0>
+int test_rw() {
   [[maybe_unused]] ssize_t ret;
 
   remove(FILEPATH);
   int fd = open(FILEPATH, O_CREAT | O_RDWR, S_IRUSR | S_IWUSR);
-  auto file = files[fd];
+  auto file = get_file(fd);
 
   lseek(fd, OFFSET, SEEK_SET);
 
@@ -29,16 +36,14 @@ int main(int argc, char* argv[]) {
     assert(ret == NUM_BYTES);
   }
 
-  std::cerr << *file << "\n";
-
   // check that the content before OFFSET are all zeros
   lseek(fd, 0, SEEK_SET);
-  {
+  if (OFFSET != 0) {
     char actual[OFFSET]{};
     char expected[OFFSET]{};
     ret = read(fd, actual, OFFSET);
     assert(ret == OFFSET);
-    assert(memcmp(expected, actual, OFFSET));
+    CHECK_RESULT(expected, actual, OFFSET);
   }
 
   // check that content after OFFSET are written
@@ -52,6 +57,42 @@ int main(int argc, char* argv[]) {
     char expected[length]{};
     fill_buff(expected, length);
 
-    assert(memcmp(expected, actual, length) == 0);
+    CHECK_RESULT(expected, actual, length);
   }
+
+  return fd;
+}
+
+int main(int argc, char* argv[]) {
+  // everything block-aligned
+  test_rw<BLOCK_SIZE>();
+  test_rw<BLOCK_SIZE * 8>();
+  test_rw<BLOCK_SIZE, 2>();
+  test_rw<BLOCK_SIZE * 8, 2>();
+
+  // single-block write w/ block-aligned starting offset
+  test_rw<8>();
+  test_rw<64>();
+  test_rw<BLOCK_SIZE / 2>();
+
+  // single-block write w/o alignment
+  test_rw<8, 1, 8>();
+  test_rw<BLOCK_SIZE - 8, 1, 8>();
+  test_rw<8, 1, BLOCK_SIZE - 8>();
+  test_rw<BLOCK_SIZE / 2, 1, BLOCK_SIZE / 2>();
+  test_rw<8, BLOCK_SIZE / 8>();
+  test_rw<42, 13, 123>();
+
+  // multi-block write w/ block-aligned starting offset
+  test_rw<BLOCK_SIZE + 1>();
+  test_rw<BLOCK_SIZE * 16 + 1>();
+  test_rw<BLOCK_SIZE + 1, 1, BLOCK_SIZE * 2>();
+  test_rw<12345, 1, BLOCK_SIZE * 7>();
+
+  // multi-block write w/o alignment
+  test_rw<BLOCK_SIZE, 1, 8>();
+  test_rw<BLOCK_SIZE * 16 + 1, 1, BLOCK_SIZE - 1>();
+  test_rw<12345, 6, 7890>();
+
+  return 0;
 }
