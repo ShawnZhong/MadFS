@@ -49,12 +49,13 @@ class BlkTable {
   /**
    * Get the next tx to apply
    *
-   * @return a tuple containing the transaction index of the current tail and
-   * the log block corresponding to the transaction
+   * @param[out] tx_idx the index of the current transaction tail
+   * @param[out] tx_block the log block corresponding to the transaction
    */
-  [[nodiscard]] std::tuple<pmem::TxEntryIdx, pmem::TxLogBlock*> get_tail_tx()
-      const {
-    return {tail_tx_idx, tail_tx_block};
+  void get_tail_tx(pmem::TxEntryIdx& tx_idx,
+                   pmem::TxLogBlock*& tx_block) const {
+    tx_idx = tail_tx_idx;
+    tx_block = tail_tx_block;
   }
 
   /**

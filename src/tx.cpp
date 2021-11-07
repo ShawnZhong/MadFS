@@ -42,7 +42,22 @@ pmem::TxEntry TxMgr::try_commit(pmem::TxEntry entry, pmem::TxEntryIdx& tx_idx,
 
 // TODO: maybe reclaim the old blocks right after commit?
 void TxMgr::do_cow(const void* buf, size_t count, size_t offset) {
-  Tx tx(this, buf, count, offset);
+  // special case that we have everything aligned, no OCC
+  if (count % BLOCK_SIZE == 0 && offset % BLOCK_SIZE == 0) {
+    AlignedTx tx(this, buf, count, offset);
+    tx.do_cow();
+    return;
+  }
+
+  // another special case where range is within a single block
+  if ((offset >> BLOCK_SHIFT) == ((offset + count - 1) >> BLOCK_SHIFT)) {
+    SingleBlockTx tx(this, buf, count, offset);
+    tx.do_cow();
+    return;
+  }
+
+  // unaligned multi-block write
+  MultiBlockTx tx(this, buf, count, offset);
   tx.do_cow();
 }
 
@@ -167,24 +182,15 @@ TxMgr::Tx::Tx(TxMgr* tx_mgr, const void* buf, size_t count, size_t offset)
         // it's fine that we append log first as long we don't publish it by tx
       }()) {}
 
-void TxMgr::Tx::do_cow() {
-  // special case that we have everything aligned, no OCC
-  if (count % BLOCK_SIZE == 0 && offset % BLOCK_SIZE == 0) {
-    do_cow_aligned();
-    return;
-  }
+/*
+ * AlignedTx
+ */
 
-  // another special case where range is within a single block
-  if ((offset >> BLOCK_SHIFT) == ((offset + count - 1) >> BLOCK_SHIFT)) {
-    do_cow_single_block();
-    return;
-  }
+TxMgr::AlignedTx::AlignedTx(TxMgr* tx_mgr, const void* buf, size_t count,
+                            size_t offset)
+    : Tx(tx_mgr, buf, count, offset) {}
 
-  // unaligned multi-block write
-  do_cow_multiple_blocks();
-}
-
-void TxMgr::Tx::do_cow_aligned() const {
+void TxMgr::AlignedTx::do_cow() {
   // since everything is block-aligned, we can copy data directly
   memcpy(dst_blocks->data, buf, count);
 
@@ -192,7 +198,7 @@ void TxMgr::Tx::do_cow_aligned() const {
   persist_unfenced(dst_blocks, count);
 
   // make a local copy of the tx tail
-  auto [tail_tx_idx, tail_tx_block] = tx_mgr->blk_table->get_tail_tx();
+  tx_mgr->blk_table->get_tail_tx(tail_tx_idx, tail_tx_block);
 
   // make sure flush of block and log entry is done
   _mm_sfence();
@@ -202,148 +208,22 @@ void TxMgr::Tx::do_cow_aligned() const {
   tx_mgr->try_commit(entry, tail_tx_idx, tail_tx_block, /*cont_if_fail*/ true);
 }
 
-void TxMgr::Tx::do_cow_single_block() {
-  assert(num_blocks == 1);
+/*
+ * CoWTx
+ */
 
-  // local_offset is the starting offset within the block
-  const size_t local_offset = offset - begin_vidx * BLOCK_SIZE;
+TxMgr::CoWTx::CoWTx(TxMgr* tx_mgr, const void* buf, size_t count, size_t offset)
+    : Tx(tx_mgr, buf, count, offset),
+      entry(pmem::TxCommitEntry(num_blocks, begin_vidx, log_idx)),
+      begin_full_vidx(ALIGN_UP(offset, BLOCK_SIZE) >> BLOCK_SHIFT),
+      end_full_vidx(end_offset >> BLOCK_SHIFT),
+      num_full_blocks(end_full_vidx - begin_full_vidx),
+      copy_first(begin_full_vidx != begin_vidx),
+      copy_last(end_full_vidx != end_vidx) {}
 
-  // the tx entry to be committed
-  const pmem::TxCommitEntry entry(num_blocks, begin_vidx, log_idx);
-
-  // must acquire the tx tail before any get
-  auto [tail_tx_idx, tail_tx_block] = tx_mgr->blk_table->get_tail_tx();
-
-  // src block is the block to be copied over
-  pmem::Block* src_block = tx_mgr->get_data_block_from_vidx(begin_vidx);
-
-  bool copy = true;
-
-redo:
-  // copy data from the source block if src_block exists
-  if (src_block) memcpy(dst_blocks->data, src_block->data, BLOCK_SIZE);
-
-  // copy data from buf
-  memcpy(dst_blocks->data + local_offset, buf, count);
-
-  // persist the data
-  persist_fenced(dst_blocks, BLOCK_SIZE);
-
-retry:
-  // try to commit the tx entry
-  auto conflict_entry = tx_mgr->try_commit(entry, tail_tx_idx, tail_tx_block);
-  if (conflict_entry.is_empty()) return;  // success, no conflict
-
-  assert(copy);
-  if (handle_conflict(conflict_entry, tail_tx_idx, tail_tx_block, copy,
-                      begin_vidx, src_block))
-    goto redo;
-  else
-    goto retry;
-}
-
-void TxMgr::Tx::do_cow_multiple_blocks() {
-  // the index of the first virtual block that needs to be copied entirely
-  const VirtualBlockIdx begin_full_vidx =
-      ALIGN_UP(offset, BLOCK_SIZE) >> BLOCK_SHIFT;
-  // the index of the last virtual block that needs to be copied entirely
-  const VirtualBlockIdx end_full_vidx = end_offset >> BLOCK_SHIFT;
-
-  // number of bytes to be written in the beginning.
-  // If the offset is 4097, then this var should be 4095.
-  const size_t first_block_local_offset = ALIGN_UP(offset, BLOCK_SIZE) - offset;
-
-  // number of bytes to be written for the last block
-  // If the end_offset is 4097, then this var should be 1.
-  const size_t last_block_local_offset =
-      end_offset - ALIGN_DOWN(end_offset, BLOCK_SIZE);
-
-  // full blocks are blocks that can be written from buf directly without
-  // copying the src data
-  if (size_t num_full_blocks = end_full_vidx - begin_full_vidx;
-      num_full_blocks > 0) {
-    pmem::Block* full_blocks = dst_blocks + (begin_full_vidx - begin_vidx);
-    const size_t num_bytes = num_full_blocks << BLOCK_SHIFT;
-    memcpy(full_blocks->data, buf + first_block_local_offset, num_bytes);
-    persist_unfenced(full_blocks, num_bytes);
-  }
-
-  // whether copy the first/last block
-  bool copy_first = begin_full_vidx != begin_vidx;
-  bool copy_last = end_full_vidx != end_vidx;
-
-  // address of fisrt and last block (only set if copy_first/last is true)
-  pmem::Block* first_src_block;
-  pmem::Block* last_src_block;
-
-  // only get a snapshot of the tail when starting critical piece
-  auto [tail_tx_idx, tail_tx_block] = tx_mgr->blk_table->get_tail_tx();
-
-  if (copy_first) {
-    assert(begin_full_vidx - begin_vidx == 1);
-    first_src_block = tx_mgr->get_data_block_from_vidx(begin_vidx);
-  }
-  if (copy_last) {
-    assert(end_vidx - end_full_vidx == 1);
-    last_src_block = tx_mgr->get_data_block_from_vidx(end_full_vidx);
-  }
-
-  // the entry to be committed
-  const pmem::TxCommitEntry entry(num_blocks, begin_vidx, log_idx);
-
-redo:
-  // copy first block
-  if (copy_first) {
-    // copy the data from the source block if exits
-    if (first_src_block) memcpy(dst_blocks->data, first_src_block, BLOCK_SIZE);
-
-    // write data from the buf to the first block
-    char* dst = dst_blocks->data + BLOCK_SIZE - first_block_local_offset;
-    memcpy(dst, buf, first_block_local_offset);
-
-    persist_unfenced(dst_blocks, BLOCK_SIZE);
-  }
-
-  // copy last block
-  if (copy_last) {
-    pmem::Block* last_dst_block = dst_blocks + (end_full_vidx - begin_vidx);
-
-    // copy the data from the source block if exits
-    if (last_src_block)
-      memcpy(last_dst_block->data, last_src_block, BLOCK_SIZE);
-
-    // write data from the buf to the last block
-    const char* src = buf + (count - last_block_local_offset);
-    memcpy(last_dst_block->data, src, last_block_local_offset);
-
-    persist_unfenced(last_dst_block, BLOCK_SIZE);
-  }
-  _mm_sfence();
-
-retry:
-  // try to commit the transaction
-  auto conflict_entry = tx_mgr->try_commit(entry, tail_tx_idx, tail_tx_block);
-  if (conflict_entry.is_empty()) return;  // success
-
-  // recalculate copy_first/last to indicate what we care about
-  copy_first = begin_full_vidx != begin_vidx;
-  copy_last = end_full_vidx != end_vidx;
-
-  // handle_conflict will update copy_first/last according to indicate whether
-  // redo is needed
-  if (handle_conflict(conflict_entry, tail_tx_idx, tail_tx_block, copy_first,
-                      copy_last, begin_vidx, end_full_vidx, first_src_block,
-                      last_src_block))
-    goto redo;  // conflict is detected, redo copy
-  else
-    goto retry;  // we have moved to the new tail, retry commit
-}
-
-bool TxMgr::Tx::handle_conflict(
-    pmem::TxEntry curr_entry, pmem::TxEntryIdx& tail_tx_idx,
-    pmem::TxLogBlock*& tail_tx_block, bool& copy_first, bool& copy_last,
-    VirtualBlockIdx first_vidx, VirtualBlockIdx last_vidx,
-    pmem::Block*& first_src_block, pmem::Block*& last_src_block) {
+bool TxMgr::CoWTx::handle_conflict(pmem::TxEntry curr_entry,
+                                   VirtualBlockIdx first_vidx,
+                                   VirtualBlockIdx last_vidx = 0) {
   bool redo_first = false;
   bool redo_last = false;
   VirtualBlockIdx begin_vidx;
@@ -398,17 +278,125 @@ bool TxMgr::Tx::handle_conflict(
   return redo_first || redo_last;
 }
 
-bool TxMgr::Tx::handle_conflict(pmem::TxEntry curr_entry,
-                                pmem::TxEntryIdx& tail_tx_idx,
-                                pmem::TxLogBlock*& tail_tx_block, bool& copy,
-                                VirtualBlockIdx vidx, pmem::Block*& src_block) {
-  bool dummy_copy = false;
-  VirtualBlockIdx dummy_vidx = 0;
-  pmem::Block* dummy_src_block = nullptr;
+/*
+ * SingleBlockTx
+ */
 
-  return handle_conflict(curr_entry, tail_tx_idx, tail_tx_block, copy,
-                         dummy_copy, vidx, dummy_vidx, src_block,
-                         dummy_src_block);
+TxMgr::SingleBlockTx::SingleBlockTx(TxMgr* tx_mgr, const void* buf,
+                                    size_t count, size_t offset)
+    : CoWTx(tx_mgr, buf, count, offset),
+      local_offset(offset - begin_vidx * BLOCK_SIZE) {
+  assert(num_blocks == 1);
+  copy_last = false;
+}
+
+void TxMgr::SingleBlockTx::do_cow() {
+  // must acquire the tx tail before any get
+  tx_mgr->blk_table->get_tail_tx(tail_tx_idx, tail_tx_block);
+
+  // src block is the block to be copied over
+  // we only use first_* but not last_* because they are the same one
+  first_src_block = tx_mgr->get_data_block_from_vidx(begin_vidx);
+
+redo:
+  // copy data from the source block if src_block exists
+  if (first_src_block)
+    memcpy(dst_blocks->data, first_src_block->data, BLOCK_SIZE);
+
+  // copy data from buf
+  memcpy(dst_blocks->data + local_offset, buf, count);
+
+  // persist the data
+  persist_fenced(dst_blocks, BLOCK_SIZE);
+
+retry:
+  // try to commit the tx entry
+  auto conflict_entry = tx_mgr->try_commit(entry, tail_tx_idx, tail_tx_block);
+  if (conflict_entry.is_empty()) return;  // success, no conflict
+
+  assert(copy_first);
+  if (handle_conflict(conflict_entry, begin_vidx))
+    goto redo;
+  else
+    goto retry;
+}
+
+/*
+ * MultiBlockTx
+ */
+
+TxMgr::MultiBlockTx::MultiBlockTx(TxMgr* tx_mgr, const void* buf, size_t count,
+                                  size_t offset)
+    : CoWTx(tx_mgr, buf, count, offset),
+      first_block_local_offset(ALIGN_UP(offset, BLOCK_SIZE) - offset),
+      last_block_local_offset(end_offset - ALIGN_DOWN(end_offset, BLOCK_SIZE)) {
+}
+
+void TxMgr::MultiBlockTx::do_cow() {
+  // copy full blocks first
+  if (num_full_blocks > 0) {
+    pmem::Block* full_blocks = dst_blocks + (begin_full_vidx - begin_vidx);
+    const size_t num_bytes = num_full_blocks << BLOCK_SHIFT;
+    memcpy(full_blocks->data, buf + first_block_local_offset, num_bytes);
+    persist_unfenced(full_blocks, num_bytes);
+  }
+
+  // only get a snapshot of the tail when starting critical piece
+  tx_mgr->blk_table->get_tail_tx(tail_tx_idx, tail_tx_block);
+
+  if (copy_first) {
+    assert(begin_full_vidx - begin_vidx == 1);
+    first_src_block = tx_mgr->get_data_block_from_vidx(begin_vidx);
+  }
+  if (copy_last) {
+    assert(end_vidx - end_full_vidx == 1);
+    last_src_block = tx_mgr->get_data_block_from_vidx(end_full_vidx);
+  }
+
+redo:
+  // copy first block
+  if (copy_first) {
+    // copy the data from the source block if exits
+    if (first_src_block) memcpy(dst_blocks->data, first_src_block, BLOCK_SIZE);
+
+    // write data from the buf to the first block
+    char* dst = dst_blocks->data + BLOCK_SIZE - first_block_local_offset;
+    memcpy(dst, buf, first_block_local_offset);
+
+    persist_unfenced(dst_blocks, BLOCK_SIZE);
+  }
+
+  // copy last block
+  if (copy_last) {
+    pmem::Block* last_dst_block = dst_blocks + (end_full_vidx - begin_vidx);
+
+    // copy the data from the source block if exits
+    if (last_src_block)
+      memcpy(last_dst_block->data, last_src_block, BLOCK_SIZE);
+
+    // write data from the buf to the last block
+    const char* src = buf + (count - last_block_local_offset);
+    memcpy(last_dst_block->data, src, last_block_local_offset);
+
+    persist_unfenced(last_dst_block, BLOCK_SIZE);
+  }
+  _mm_sfence();
+
+retry:
+  // try to commit the transaction
+  auto conflict_entry = tx_mgr->try_commit(entry, tail_tx_idx, tail_tx_block);
+  if (conflict_entry.is_empty()) return;  // success
+
+  // recalculate copy_first/last to indicate what we care about
+  copy_first = begin_full_vidx != begin_vidx;
+  copy_last = end_full_vidx != end_vidx;
+
+  // handle_conflict will update copy_first/last according to indicate whether
+  // redo is needed
+  if (handle_conflict(conflict_entry, begin_vidx, end_full_vidx))
+    goto redo;  // conflict is detected, redo copy
+  else
+    goto retry;  // we have moved to the new tail, retry commit
 }
 
 }  // namespace ulayfs::dram
