@@ -4,20 +4,6 @@
 #include <iostream>
 
 #include "common.h"
-#include "layout.h"
-#include "lib.h"
-
-using namespace ulayfs;
-
-#define CHECK_RESULT(expected, actual, length)             \
-  do {                                                     \
-    if (memcmp(expected, actual, length) != 0) {           \
-      std::cerr << *file << "\n";                          \
-      std::cerr << "expected: \"" << (expected) << "\"\n"; \
-      std::cerr << "actual  : \"" << (actual) << "\"\n";   \
-      assert(false);                                       \
-    }                                                      \
-  } while (0)
 
 template <int NUM_BYTES, int NUM_ITER = 1, int OFFSET = 0>
 int test_rw() {
@@ -43,7 +29,7 @@ int test_rw() {
     char expected[OFFSET]{};
     ret = read(fd, actual, OFFSET);
     assert(ret == OFFSET);
-    CHECK_RESULT(expected, actual, OFFSET);
+    CHECK_RESULT(expected, actual, OFFSET, file);
   }
 
   // check that content after OFFSET are written
@@ -57,7 +43,7 @@ int test_rw() {
     char expected[length]{};
     fill_buff(expected, length);
 
-    CHECK_RESULT(expected, actual, length);
+    CHECK_RESULT(expected, actual, length, file);
   }
 
   return fd;
