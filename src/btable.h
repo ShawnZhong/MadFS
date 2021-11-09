@@ -74,13 +74,13 @@ class BlkTable {
   /**
    * Update the block table by applying the transactions
    */
-  void update(bool do_alloc = false) {
+  void update() {
     while (true) {
       auto tx_entry = tx_mgr->get_entry(tail_tx_idx, tail_tx_block);
       if (!tx_entry.is_valid()) break;
       if (tx_entry.is_commit()) apply_tx(tx_entry.commit_entry);
       // FIXME: handle race condition??
-      if (!tx_mgr->advance_tx_idx(tail_tx_idx, tail_tx_block, do_alloc)) break;
+      tx_mgr->advance_tx_idx(tail_tx_idx, tail_tx_block);
     }
   }
 

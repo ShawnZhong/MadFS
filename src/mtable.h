@@ -174,10 +174,8 @@ class MemTable {
 
     LogicalBlockIdx hugepage_idx = idx & ~GROW_UNIT_IN_BLOCK_MASK;
     LogicalBlockIdx hugepage_local_idx = idx & GROW_UNIT_IN_BLOCK_MASK;
-    if (auto it = table.find(hugepage_idx); it != table.end()) {
-      auto res = it->second + hugepage_local_idx;
-      return res;
-    }
+    if (auto it = table.find(hugepage_idx); it != table.end())
+      return it->second + hugepage_local_idx;
 
     // validate if this idx has real blocks allocated; do allocation if not
     validate(idx);

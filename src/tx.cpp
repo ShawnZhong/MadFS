@@ -36,7 +36,7 @@ pmem::TxEntry TxMgr::try_commit(pmem::TxEntry entry, pmem::TxEntryIdx& tx_idx,
       return conflict_entry;
     }
     if (!cont_if_fail) return conflict_entry;
-    advance_tx_idx(curr_idx, curr_block, /*do_alloc*/ true);
+    advance_tx_idx(curr_idx, curr_block);
   }
 }
 

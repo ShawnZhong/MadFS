@@ -85,11 +85,12 @@ struct TxBeginEntry {
 
 struct TxCommitEntry {
  private:
-  static constexpr int NUM_BLOCKS_SZ = 6;
-  static constexpr int BEGIN_VIRTUAL_IDX_SZ = 17;
+  static constexpr int NUM_BLOCKS_BITS = 6;
+  static constexpr int BEGIN_VIRTUAL_IDX_BITS = 17;
 
-  static constexpr int NUM_BLOCKS_MAX = (1 << NUM_BLOCKS_SZ) - 1;
-  static constexpr int BEGIN_VIRTUAL_IDX_MAX = (1 << BEGIN_VIRTUAL_IDX_SZ) - 1;
+  static constexpr int NUM_BLOCKS_MAX = (1 << NUM_BLOCKS_BITS) - 1;
+  static constexpr int BEGIN_VIRTUAL_IDX_MAX =
+      (1 << BEGIN_VIRTUAL_IDX_BITS) - 1;
 
   enum TxEntryType type : 1 = TxEntryType::TX_COMMIT;
 
@@ -97,8 +98,8 @@ struct TxCommitEntry {
 
  public:
   // optionally, set these bits so OCC conflict detection can be done inline
-  uint32_t num_blocks : NUM_BLOCKS_SZ;
-  uint32_t begin_virtual_idx : BEGIN_VIRTUAL_IDX_SZ;
+  uint32_t num_blocks : NUM_BLOCKS_BITS;
+  uint32_t begin_virtual_idx : BEGIN_VIRTUAL_IDX_BITS;
 
   // the first log entry for this transaction, 40 bits in size
   // The rest of the log entries are organized as a linked list
@@ -179,7 +180,7 @@ union TxEntry {
   static TxEntry try_append(TxEntry entries[], TxEntry entry, TxLocalIdx idx) {
     uint64_t expected = 0;
     if (__atomic_compare_exchange_n(&entries[idx].raw_bits, &expected,
-                                    entry.raw_bits, true, __ATOMIC_RELEASE,
+                                    entry.raw_bits, false, __ATOMIC_RELEASE,
                                     __ATOMIC_ACQUIRE))
       // only persist if it's the last entry in a cacheline
       if (is_last_entry_in_cacheline(idx)) persist_cl_fenced(&entries[idx]);
