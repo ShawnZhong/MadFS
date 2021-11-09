@@ -73,14 +73,24 @@ class BlkTable {
 
   /**
    * Update the block table by applying the transactions
+   *
+   * @param do_alloc whether we allow allocation when iterating the tx_idx.
+   * default is false, and only set to true when write permission is granted
    */
-  void update() {
+  void update(bool do_alloc = false) {
+    static bool last_entry_in_block = false;
+
+    // we have reached the last entry and the next block is not allocated yet
+    if (last_entry_in_block && tail_tx_block->get_next_tx_block() == 0) return;
+
     while (true) {
       auto tx_entry = tx_mgr->get_entry(tail_tx_idx, tail_tx_block);
       if (!tx_entry.is_valid()) break;
       if (tx_entry.is_commit()) apply_tx(tx_entry.commit_entry);
       // FIXME: handle race condition??
-      tx_mgr->advance_tx_idx(tail_tx_idx, tail_tx_block);
+      last_entry_in_block =
+          !(tx_mgr->advance_tx_idx(tail_tx_idx, tail_tx_block, do_alloc));
+      if (last_entry_in_block) break;
     }
   }
 

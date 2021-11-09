@@ -50,6 +50,8 @@ int test_rw() {
 }
 
 int main(int argc, char* argv[]) {
+  // test_rw<NUM_BYTES_PER_ITER, NUM_ITER, INIT_OFFSET>
+
   // everything block-aligned
   test_rw<BLOCK_SIZE>();
   test_rw<BLOCK_SIZE * 8>();
@@ -67,6 +69,7 @@ int main(int argc, char* argv[]) {
   test_rw<BLOCK_SIZE - 8, 1, 8>();
   test_rw<8, 1, BLOCK_SIZE - 8>();
   test_rw<BLOCK_SIZE / 2, 1, BLOCK_SIZE / 2>();
+  test_rw<8, NUM_INLINE_TX_ENTRY + NUM_TX_ENTRY + 1>();
   test_rw<8, BLOCK_SIZE / 8>();
   test_rw<42, 13, 123>();
 

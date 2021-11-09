@@ -36,7 +36,8 @@ pmem::TxEntry TxMgr::try_commit(pmem::TxEntry entry, pmem::TxEntryIdx& tx_idx,
       return conflict_entry;
     }
     if (!cont_if_fail) return conflict_entry;
-    advance_tx_idx(curr_idx, curr_block);
+    bool success = advance_tx_idx(curr_idx, curr_block, /*do_alloc*/ true);
+    assert(success);
   }
 }
 
@@ -137,7 +138,8 @@ std::ostream& operator<<(std::ostream& out, const TxMgr& tx_mgr) {
     out << "\t" << idx << " -> " << commit_entry << "\n";
     out << "\t\t" << commit_entry.log_entry_idx << " -> "
         << tx_mgr.get_log_entry_from_commit(commit_entry) << "\n";
-    tx_mgr.advance_tx_idx(idx, tx_log_block);
+    bool success = tx_mgr.advance_tx_idx(idx, tx_log_block, /*do_alloc*/ false);
+    if (!success) break;
   }
 
   return out;
@@ -269,7 +271,9 @@ bool TxMgr::CoWTx::handle_conflict(pmem::TxEntry curr_entry,
       // FIXME: there should not be any other one
       assert(0);
     }
-    tx_mgr->advance_tx_idx(tail_tx_idx, tail_tx_block);
+    bool success =
+        tx_mgr->advance_tx_idx(tail_tx_idx, tail_tx_block, /*do_alloc*/ false);
+    if (!success) break;
     curr_entry = tx_mgr->get_entry(tail_tx_idx, tail_tx_block);
   } while (curr_entry.is_valid());
 

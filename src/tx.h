@@ -45,11 +45,16 @@ class TxMgr {
    * @param[in,out] tx_idx the current index, will be changed to the next index
    * @param[in,out] tx_block output parameter, change to the TxLogBlock
    * corresponding to the next idx
-   * @return bool if advance succeed; if reach the end of a block, it may return
-   * false
+   * @param[in] do_alloc whether allocation is allowed when reaching the end of
+   * a block
+   *
+   * @return true on success; false when reaches the end of a block and do_alloc
+   * is false. The caller must check the return value to see if the advance is
+   * successful
    */
-  void advance_tx_idx(pmem::TxEntryIdx& tx_idx,
-                      pmem::TxLogBlock*& tx_block) const {
+  [[nodiscard]] bool advance_tx_idx(pmem::TxEntryIdx& tx_idx,
+                                    pmem::TxLogBlock*& tx_block,
+                                    bool do_alloc) const {
     assert(tx_idx.local_idx >= 0);
 
     bool is_inline = tx_idx.block_idx == 0;
@@ -58,6 +63,7 @@ class TxMgr {
     uint16_t capacity = is_inline ? NUM_INLINE_TX_ENTRY : NUM_TX_ENTRY;
     if (tx_idx.local_idx < capacity - 1) {
       tx_idx.local_idx++;
+      return true;
     }
 
     // get the index of the next block
@@ -66,6 +72,7 @@ class TxMgr {
 
     // check if the next index is valid; allocate the next block if allowed
     if (block_idx == 0) {
+      if (!do_alloc) return false;
       block_idx =
           is_inline ? alloc_next_block(meta) : alloc_next_block(tx_block);
     }
@@ -73,6 +80,7 @@ class TxMgr {
     tx_idx.block_idx = block_idx;
     tx_idx.local_idx = 0;
     tx_block = &mem_table->get_addr(tx_idx.block_idx)->tx_log_block;
+    return true;
   }
 
   /**
