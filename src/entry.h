@@ -146,7 +146,6 @@ union TxEntry {
   }
 
   [[nodiscard]] bool is_valid() const { return raw_bits != 0; }
-  [[nodiscard]] bool is_empty() const { return raw_bits == 0; }
 
   [[nodiscard]] static bool is_last_entry_in_cacheline(TxLocalIdx idx) {
     auto offset = 2 * sizeof(LogicalBlockIdx) + (idx + 1) * sizeof(TxEntry);

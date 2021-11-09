@@ -30,7 +30,7 @@ pmem::TxEntry TxMgr::try_commit(pmem::TxEntry entry, pmem::TxEntryIdx& tx_idx,
     pmem::TxEntry conflict_entry =
         is_inline ? meta->try_append(entry, curr_idx.local_idx)
                   : curr_block->try_append(entry, curr_idx.local_idx);
-    if (conflict_entry.is_empty()) {  // success
+    if (!conflict_entry.is_valid()) {  // success
       tx_idx = curr_idx;
       tx_block = curr_block;
       return conflict_entry;
@@ -312,7 +312,7 @@ redo:
 retry:
   // try to commit the tx entry
   auto conflict_entry = tx_mgr->try_commit(entry, tail_tx_idx, tail_tx_block);
-  if (conflict_entry.is_empty()) return;  // success, no conflict
+  if (!conflict_entry.is_valid()) return;  // success, no conflict
 
   assert(copy_first);
   if (handle_conflict(conflict_entry, begin_vidx))
@@ -385,7 +385,7 @@ redo:
 retry:
   // try to commit the transaction
   auto conflict_entry = tx_mgr->try_commit(entry, tail_tx_idx, tail_tx_block);
-  if (conflict_entry.is_empty()) return;  // success
+  if (!conflict_entry.is_valid()) return;  // success
 
   // recalculate copy_first/last to indicate what we care about
   copy_first = begin_full_vidx != begin_vidx;
