@@ -23,6 +23,7 @@ class BlkTable {
   // keep track of the next TxEntry to apply
   pmem::TxEntryIdx tail_tx_idx;
   pmem::TxLogBlock* tail_tx_block;
+  bool need_alloc;
 
  public:
   BlkTable() = default;
@@ -33,7 +34,8 @@ class BlkTable {
         log_mgr(log_mgr),
         tx_mgr(tx_mgr),
         tail_tx_idx(),
-        tail_tx_block(nullptr) {
+        tail_tx_block(nullptr),
+        need_alloc(false) {
     table.resize(16);
   }
 
@@ -78,19 +80,17 @@ class BlkTable {
    * default is false, and only set to true when write permission is granted
    */
   void update(bool do_alloc = false) {
-    static bool last_entry_in_block = false;
-
     // we have reached the last entry and the next block is not allocated yet
-    if (last_entry_in_block && tail_tx_block->get_next_tx_block() == 0) return;
+    if (need_alloc && tail_tx_block->get_next_tx_block() == 0) return;
 
     while (true) {
       auto tx_entry = tx_mgr->get_entry(tail_tx_idx, tail_tx_block);
       if (!tx_entry.is_valid()) break;
       if (tx_entry.is_commit()) apply_tx(tx_entry.commit_entry);
       // FIXME: handle race condition??
-      last_entry_in_block =
+      need_alloc =
           !(tx_mgr->advance_tx_idx(tail_tx_idx, tail_tx_block, do_alloc));
-      if (last_entry_in_block) break;
+      if (need_alloc) break;
     }
   }
 
