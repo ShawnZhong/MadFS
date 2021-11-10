@@ -28,8 +28,7 @@ class LogMgr {
   }
 
   const pmem::LogEntry* get_entry(pmem::LogEntryIdx idx) {
-    return &mem_table->get_addr(idx.block_idx)
-                ->log_entry_block.get(idx.local_idx);
+    return &mem_table->get(idx.block_idx)->log_entry_block.get(idx.local_idx);
   }
 
   // TODO: handle linked list
@@ -41,7 +40,7 @@ class LogMgr {
     free_list.pop_back();
 
     pmem::LogEntryBlock* block =
-        &mem_table->get_addr(idx.block_idx)->log_entry_block;
+        &mem_table->get(idx.block_idx)->log_entry_block;
     block->set(idx.local_idx, entry, fenced);
     return idx;
   }

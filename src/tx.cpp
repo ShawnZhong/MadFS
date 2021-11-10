@@ -65,7 +65,7 @@ void TxMgr::do_cow(const void* buf, size_t count, size_t offset) {
 
 pmem::Block* TxMgr::get_data_block_from_vidx(VirtualBlockIdx idx) const {
   LogicalBlockIdx logical_block_idx = blk_table->get(idx);
-  return mem_table->get_addr(logical_block_idx);
+  return mem_table->get(logical_block_idx);
 }
 
 void TxMgr::find_tail(pmem::TxEntryIdx& tx_idx,
@@ -83,7 +83,7 @@ void TxMgr::find_tail(pmem::TxEntryIdx& tx_idx,
     }
     curr_idx.block_idx = next_block_idx;
     curr_idx.local_idx = 0;
-    curr_block = &mem_table->get_addr(curr_idx.block_idx)->tx_block;
+    curr_block = &mem_table->get(curr_idx.block_idx)->tx_block;
   }
 
   if (!(next_block_idx = curr_block->get_next())) {
@@ -94,7 +94,7 @@ void TxMgr::find_tail(pmem::TxEntryIdx& tx_idx,
 retry:
   do {
     curr_idx.block_idx = next_block_idx;
-    curr_block = &(mem_table->get_addr(next_block_idx)->tx_block);
+    curr_block = &(mem_table->get(next_block_idx)->tx_block);
   } while ((next_block_idx = curr_block->get_next()));
 
   curr_idx.local_idx = curr_block->find_tail();
@@ -164,7 +164,7 @@ TxMgr::Tx::Tx(TxMgr* tx_mgr, const void* buf, size_t count, size_t offset)
       num_blocks(end_vidx - begin_vidx),
 
       dst_idx(tx_mgr->allocator->alloc(num_blocks)),
-      dst_blocks(tx_mgr->mem_table->get_addr(dst_idx)),
+      dst_blocks(tx_mgr->mem_table->get(dst_idx)),
 
       log_idx([&] {  // IIFE for complex initialization
         // for overwrite, "last_remaining" is zero;
@@ -254,7 +254,7 @@ bool TxMgr::CoWTx::handle_conflict(pmem::TxEntry curr_entry,
         }
         redo_first = true;
         LogicalBlockIdx lidx = begin_lidx + (first_vidx - begin_vidx);
-        first_src_block = tx_mgr->mem_table->get_addr(lidx);
+        first_src_block = tx_mgr->mem_table->get(lidx);
       }
       if (copy_last && begin_vidx <= last_vidx &&
           last_vidx < begin_vidx + num_blocks) {
@@ -265,7 +265,7 @@ bool TxMgr::CoWTx::handle_conflict(pmem::TxEntry curr_entry,
         }
         redo_last = true;
         LogicalBlockIdx lidx = begin_lidx + (last_vidx - begin_vidx);
-        last_src_block = tx_mgr->mem_table->get_addr(lidx);
+        last_src_block = tx_mgr->mem_table->get(lidx);
       }
     } else {
       // FIXME: there should not be any other one

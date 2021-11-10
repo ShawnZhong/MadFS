@@ -116,7 +116,7 @@ class TxMgr {
       }
       tx_idx.block_idx = block_idx;
       tx_idx.local_idx -= capacity;
-      tx_block = &mem_table->get_addr(tx_idx.block_idx)->tx_block;
+      tx_block = &mem_table->get(tx_idx.block_idx)->tx_block;
     }
     return true;
   }
@@ -125,8 +125,7 @@ class TxMgr {
   [[nodiscard]] pmem::LogEntry get_log_entry_from_commit(
       pmem::TxCommitEntry commit_entry) const {
     pmem::LogEntryBlock* log_block =
-        &mem_table->get_addr(commit_entry.log_entry_idx.block_idx)
-             ->log_entry_block;
+        &mem_table->get(commit_entry.log_entry_idx.block_idx)->log_entry_block;
     return log_block->get(commit_entry.log_entry_idx.local_idx);
   }
 

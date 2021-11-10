@@ -162,14 +162,14 @@ class MemTable {
    * the idx might pass Allocator's grow() to ensure there is a backing kernel
    * filesystem block
    *
-   * get_addr will then check if it has been mapped into the address space; if
-   * not, it does mapping first
+   * it will then check if it has been mapped into the address space; if not, it
+   * does mapping first
    *
    * @param idx the logical block index
    * @return the Block pointer if idx is not 0; nullptr for idx == 0, and the
    * caller should handle this case
    */
-  pmem::Block* get_addr(LogicalBlockIdx idx) {
+  pmem::Block* get(LogicalBlockIdx idx) {
     if (idx == 0) return nullptr;
 
     LogicalBlockIdx hugepage_idx = idx & ~GROW_UNIT_IN_BLOCK_MASK;
