@@ -292,7 +292,8 @@ union Block {
   TxBlock tx_block;
   LogEntryBlock log_entry_block;
   DataBlock data_block;
-  char data[BLOCK_SIZE];
+
+  char* data() { return data_block.data; }
 };
 
 static_assert(sizeof(MetaBlock) == BLOCK_SIZE,
