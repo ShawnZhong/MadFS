@@ -128,17 +128,17 @@ template LogicalBlockIdx TxMgr::alloc_next_block(pmem::TxLogBlock* block) const;
 std::ostream& operator<<(std::ostream& out, const TxMgr& tx_mgr) {
   out << "Transactions: \n";
 
-  pmem::TxEntryIdx idx{};
-  pmem::TxLogBlock* tx_log_block{nullptr};
+  pmem::TxEntryIdx tx_idx = {0, 0};
+  pmem::TxLogBlock* tx_block = nullptr;
 
   while (true) {
-    auto tx_entry = tx_mgr.get_entry_from_block(idx, tx_log_block);
+    auto tx_entry = tx_mgr.get_entry_from_block(tx_idx, tx_block);
     if (!tx_entry.is_valid()) break;
     auto commit_entry = tx_entry.commit_entry;
-    out << "\t" << idx << " -> " << commit_entry << "\n";
+    out << "\t" << tx_idx << " -> " << commit_entry << "\n";
     out << "\t\t" << commit_entry.log_entry_idx << " -> "
         << tx_mgr.get_log_entry_from_commit(commit_entry) << "\n";
-    bool success = tx_mgr.advance_tx_idx(idx, tx_log_block, /*do_alloc*/ false);
+    bool success = tx_mgr.advance_tx_idx(tx_idx, tx_block, /*do_alloc*/ false);
     if (!success) break;
   }
 
@@ -274,7 +274,7 @@ bool TxMgr::CoWTx::handle_conflict(pmem::TxEntry curr_entry,
     bool success =
         tx_mgr->advance_tx_idx(tail_tx_idx, tail_tx_block, /*do_alloc*/ false);
     if (!success) break;
-    curr_entry = tx_mgr->get_entry(tail_tx_idx, tail_tx_block);
+    curr_entry = tx_mgr->get_entry_from_block(tail_tx_idx, tail_tx_block);
   } while (curr_entry.is_valid());
 
   copy_first = redo_first;
