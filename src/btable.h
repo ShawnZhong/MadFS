@@ -1,12 +1,15 @@
 #pragma once
 
+#include <cstdint>
 #include <ostream>
 #include <unordered_map>
 
 #include "block.h"
+#include "idx.h"
 #include "layout.h"
 #include "log.h"
 #include "tx.h"
+#include "utils.h"
 
 namespace ulayfs::dram {
 
@@ -23,7 +26,6 @@ class BlkTable {
   // keep track of the next TxEntry to apply
   pmem::TxEntryIdx tail_tx_idx;
   pmem::TxLogBlock* tail_tx_block;
-  bool need_alloc;
 
  public:
   BlkTable() = default;
@@ -34,8 +36,7 @@ class BlkTable {
         log_mgr(log_mgr),
         tx_mgr(tx_mgr),
         tail_tx_idx(),
-        tail_tx_block(nullptr),
-        need_alloc(false) {
+        tail_tx_block(nullptr) {
     table.resize(16);
   }
 
@@ -80,17 +81,20 @@ class BlkTable {
    * default is false, and only set to true when write permission is granted
    */
   void update(bool do_alloc = false) {
-    // we have reached the last entry and the next block is not allocated yet
-    if (need_alloc && tail_tx_block->get_next_tx_block() == 0) return;
+    // it's possible that the previous update move idx to overflow state
+    if (!tx_mgr->handle_idx_overflow(tail_tx_idx, tail_tx_block, do_alloc)) {
+      // if still overflow, do_alloc must be unset
+      assert(!do_alloc);
+      // if still overflow, we must have reached the tail already
+      return;
+    }
 
     while (true) {
-      auto tx_entry = tx_mgr->get_entry(tail_tx_idx, tail_tx_block);
+      auto tx_entry = tx_mgr->get_entry_from_block(tail_tx_idx, tail_tx_block);
       if (!tx_entry.is_valid()) break;
       if (tx_entry.is_commit()) apply_tx(tx_entry.commit_entry);
       // FIXME: handle race condition??
-      need_alloc =
-          !(tx_mgr->advance_tx_idx(tail_tx_idx, tail_tx_block, do_alloc));
-      if (need_alloc) break;
+      if (!tx_mgr->advance_tx_idx(tail_tx_idx, tail_tx_block, do_alloc)) break;
     }
   }
 

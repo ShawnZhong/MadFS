@@ -22,8 +22,9 @@ pmem::TxEntry TxMgr::try_commit(pmem::TxEntry entry, pmem::TxEntryIdx& tx_idx,
   pmem::TxEntryIdx curr_idx = tx_idx;
   pmem::TxLogBlock* curr_block = tx_block;
 
-  bool is_inline = curr_idx.block_idx == 0;
+  handle_idx_overflow(tx_idx, tx_block, true);
 
+  bool is_inline = curr_idx.block_idx == 0;
   assert(is_inline == (curr_block == nullptr));
 
   while (true) {
@@ -138,8 +139,7 @@ std::ostream& operator<<(std::ostream& out, const TxMgr& tx_mgr) {
     out << "\t" << tx_idx << " -> " << commit_entry << "\n";
     out << "\t\t" << commit_entry.log_entry_idx << " -> "
         << tx_mgr.get_log_entry_from_commit(commit_entry) << "\n";
-    bool success = tx_mgr.advance_tx_idx(tx_idx, tx_block, /*do_alloc*/ false);
-    if (!success) break;
+    if (!tx_mgr.advance_tx_idx(tx_idx, tx_block, /*do_alloc*/ false)) break;
   }
 
   return out;

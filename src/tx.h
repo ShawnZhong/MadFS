@@ -7,8 +7,10 @@
 #include "block.h"
 #include "entry.h"
 #include "idx.h"
+#include "layout.h"
 #include "log.h"
 #include "mtable.h"
+#include "utils.h"
 
 namespace ulayfs::dram {
 
@@ -49,46 +51,25 @@ class TxMgr {
    * a block
    *
    * @return true on success; false when reaches the end of a block and do_alloc
-   * is false. The caller must check the return value to see if the advance is
-   * successful
+   * is false. The advance would happen anyway but in the case of false, it is
+   * in a overflow state
    */
   [[nodiscard]] bool advance_tx_idx(pmem::TxEntryIdx& tx_idx,
                                     pmem::TxLogBlock*& tx_block,
                                     bool do_alloc) const {
     assert(tx_idx.local_idx >= 0);
-
-    bool is_inline = tx_idx.block_idx == 0;
-
-    // if next index is within the same block, just increment local index
-    uint16_t capacity = is_inline ? NUM_INLINE_TX_ENTRY : NUM_TX_ENTRY;
-    if (tx_idx.local_idx < capacity - 1) {
-      tx_idx.local_idx++;
-      return true;
-    }
-
-    // get the index of the next block
-    LogicalBlockIdx block_idx =
-        is_inline ? meta->get_next_tx_block() : tx_block->get_next_tx_block();
-
-    // check if the next index is valid; allocate the next block if allowed
-    if (block_idx == 0) {
-      if (!do_alloc) return false;
-      block_idx =
-          is_inline ? alloc_next_block(meta) : alloc_next_block(tx_block);
-    }
-
-    tx_idx.block_idx = block_idx;
-    tx_idx.local_idx = 0;
-    tx_block = &mem_table->get_addr(tx_idx.block_idx)->tx_log_block;
-    return true;
+    tx_idx.local_idx++;
+    return handle_idx_overflow(tx_idx, tx_block, do_alloc);
   }
 
   /**
-   * @return the current transaction entry
+   * Read the entry from the MetaBlock or TxLogBlock
    */
-  [[nodiscard]] pmem::TxEntry get_entry(pmem::TxEntryIdx tx_idx,
-                                        pmem::TxLogBlock* tx_block) const {
-    return get_entry_from_block(tx_idx, tx_block);
+  [[nodiscard]] pmem::TxEntry get_entry_from_block(
+      pmem::TxEntryIdx idx, pmem::TxLogBlock* tx_log_block) const {
+    const auto [block_idx, local_idx] = idx;
+    if (block_idx == 0) return meta->get_tx_entry(local_idx);
+    return tx_log_block->get(local_idx);
   }
 
   /**
@@ -109,17 +90,37 @@ class TxMgr {
    */
   void do_cow(const void* buf, size_t count, size_t offset);
 
- private:
   /**
-   * Read the entry from the MetaBlock or TxLogBlock
+   * @tparam B MetaBlock or TxLogBlock
+   * @param block the block that needs a next block to be allocated
+   * @return the block id of the allocated block
    */
-  [[nodiscard]] pmem::TxEntry get_entry_from_block(
-      pmem::TxEntryIdx idx, pmem::TxLogBlock* tx_log_block) const {
-    const auto [block_idx, local_idx] = idx;
-    if (block_idx == 0) return meta->get_tx_entry(local_idx);
-    return tx_log_block->get(local_idx);
+  template <class B>
+  LogicalBlockIdx alloc_next_block(B* block) const;
+
+  /**
+   * If the given idx is in an overflow state, update it if allowed. Return if
+   * it's in a non-overflow state now
+   */
+  bool handle_idx_overflow(pmem::TxEntryIdx& tx_idx,
+                           pmem::TxLogBlock*& tx_block, bool do_alloc) const {
+    const bool is_inline = tx_idx.block_idx == 0;
+    uint16_t capacity = is_inline ? NUM_INLINE_TX_ENTRY : NUM_TX_ENTRY;
+    if (unlikely(tx_idx.local_idx >= capacity)) {
+      LogicalBlockIdx block_idx = tx_block->get_next_tx_block();
+      if (block_idx == 0) {
+        if (!do_alloc) return false;
+        block_idx =
+            is_inline ? alloc_next_block(meta) : alloc_next_block(tx_block);
+      }
+      tx_idx.block_idx = block_idx;
+      tx_idx.local_idx -= capacity;
+      tx_block = &mem_table->get_addr(tx_idx.block_idx)->tx_log_block;
+    }
+    return true;
   }
 
+ private:
   [[nodiscard]] pmem::LogEntry get_log_entry_from_commit(
       pmem::TxCommitEntry commit_entry) const {
     pmem::LogEntryBlock* log_block =
@@ -137,14 +138,6 @@ class TxMgr {
    */
   [[nodiscard]] pmem::Block* get_data_block_from_vidx(
       VirtualBlockIdx idx) const;
-
-  /**
-   * @tparam B MetaBlock or TxLogBlock
-   * @param block the block that needs a next block to be allocated
-   * @return the block id of the allocated block
-   */
-  template <class B>
-  LogicalBlockIdx alloc_next_block(B* block) const;
 
   /**
    * Move along the linked list of TxLogBlock and find the tail. The returned
