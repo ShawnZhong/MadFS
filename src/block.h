@@ -71,22 +71,21 @@ class TxLogBlock : public BaseBlock {
   TxEntry tx_entries[NUM_TX_ENTRY];
 
  public:
-  TxLocalIdx try_append(TxBeginEntry begin_entry, TxLocalIdx hint_tail = 0) {
-    return TxEntry::try_append<NUM_TX_ENTRY>(tx_entries, begin_entry,
-                                             hint_tail);
+  TxLocalIdx find_tail(TxLocalIdx hint = 0) {
+    return TxEntry::find_tail<NUM_TX_ENTRY>(tx_entries, hint);
   }
 
-  TxLocalIdx try_append(TxCommitEntry commit_entry, TxLocalIdx hint_tail = 0) {
-    // FIXME: this one is actually wrong. In OCC, we have to verify there is no
-    // new transaction overlap with our range
-    return TxEntry::try_append<NUM_TX_ENTRY>(tx_entries, commit_entry,
-                                             hint_tail);
+  TxEntry try_append(TxEntry entry, TxLocalIdx idx) {
+    return TxEntry::try_append(tx_entries, entry, idx);
   }
 
-  TxEntry get(TxLocalIdx idx) {
+  [[nodiscard]] TxEntry get(TxLocalIdx idx) {
     assert(idx >= 0 && idx < NUM_TX_ENTRY);
     return tx_entries[idx];
   }
+
+  [[nodiscard]] LogicalBlockIdx get_next() { return next; }
+  [[nodiscard]] LogicalBlockIdx get_prev() { return prev; }
 
   [[nodiscard]] LogicalBlockIdx get_next_tx_block() const { return next; }
 
@@ -114,17 +113,14 @@ class LogEntryBlock : public BaseBlock {
   }
 
   // TODO: linked list
-  void set(LogLocalIdx idx, LogOp op, VirtualBlockIdx begin_virtual_idx,
-           LogicalBlockIdx begin_logical_idx, uint8_t num_blocks,
-           uint16_t last_remaining) {
-    log_entries[idx].op = op;
-    log_entries[idx].last_remaining = last_remaining;
-    log_entries[idx].num_blocks = num_blocks;
-    log_entries[idx].begin_virtual_idx = begin_virtual_idx;
-    log_entries[idx].begin_logical_idx = begin_logical_idx;
-    // log_entries[idx].next.block_idx = 0;
-    // log_entries[idx].next.local_idx = 0;
-    persist_cl_fenced(&log_entries[idx]);
+  void set(LogLocalIdx idx, pmem::LogEntry entry, bool fenced = true,
+           bool flushed = true) {
+    log_entries[idx] = entry;
+    if (!flushed) return;
+    if (fenced)
+      persist_cl_fenced(&log_entries[idx]);
+    else
+      persist_cl_unfenced(&log_entries[idx]);
   }
 };
 
@@ -271,15 +267,12 @@ class MetaBlock : public BaseBlock {
     return Bitmap::alloc_batch(inline_bitmaps, NUM_INLINE_BITMAP, hint);
   }
 
-  TxLocalIdx try_append_tx(TxBeginEntry begin_entry, TxLocalIdx hint_tail = 0) {
-    return TxEntry::try_append<NUM_INLINE_TX_ENTRY>(inline_tx_entries,
-                                                    begin_entry, hint_tail);
+  TxLocalIdx find_tail(TxLocalIdx hint = 0) {
+    return TxEntry::find_tail<NUM_INLINE_TX_ENTRY>(inline_tx_entries, hint);
   }
 
-  TxLocalIdx try_append_tx(TxCommitEntry commit_entry,
-                           TxLocalIdx hint_tail = 0) {
-    return TxEntry::try_append<NUM_INLINE_TX_ENTRY>(inline_tx_entries,
-                                                    commit_entry, hint_tail);
+  TxEntry try_append(TxEntry entry, TxLocalIdx idx) {
+    return TxEntry::try_append(inline_tx_entries, entry, idx);
   }
 
   friend std::ostream& operator<<(std::ostream& out, const MetaBlock& block) {

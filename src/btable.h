@@ -1,12 +1,15 @@
 #pragma once
 
+#include <cstdint>
 #include <ostream>
 #include <unordered_map>
 
 #include "block.h"
+#include "idx.h"
 #include "layout.h"
 #include "log.h"
 #include "tx.h"
+#include "utils.h"
 
 namespace ulayfs::dram {
 
@@ -20,11 +23,20 @@ class BlkTable {
 
   std::vector<LogicalBlockIdx> table;
 
+  // keep track of the next TxEntry to apply
+  pmem::TxEntryIdx tail_tx_idx;
+  pmem::TxLogBlock* tail_tx_block;
+
  public:
   BlkTable() = default;
   explicit BlkTable(pmem::MetaBlock* meta, MemTable* mem_table, LogMgr* log_mgr,
                     TxMgr* tx_mgr)
-      : meta(meta), mem_table(mem_table), log_mgr(log_mgr), tx_mgr(tx_mgr) {
+      : meta(meta),
+        mem_table(mem_table),
+        log_mgr(log_mgr),
+        tx_mgr(tx_mgr),
+        tail_tx_idx(),
+        tail_tx_block(nullptr) {
     table.resize(16);
   }
 
@@ -35,6 +47,18 @@ class BlkTable {
 
   LogicalBlockIdx get(VirtualBlockIdx virtual_block_idx) {
     return table[virtual_block_idx];
+  }
+
+  /**
+   * Get the next tx to apply
+   *
+   * @param[out] tx_idx the index of the current transaction tail
+   * @param[out] tx_block the log block corresponding to the transaction
+   */
+  void get_tail_tx(pmem::TxEntryIdx& tx_idx,
+                   pmem::TxLogBlock*& tx_block) const {
+    tx_idx = tail_tx_idx;
+    tx_block = tail_tx_block;
   }
 
   /**
@@ -52,13 +76,25 @@ class BlkTable {
 
   /**
    * Update the block table by applying the transactions
+   *
+   * @param do_alloc whether we allow allocation when iterating the tx_idx.
+   * default is false, and only set to true when write permission is granted
    */
-  void update() {
+  void update(bool do_alloc = false) {
+    // it's possible that the previous update move idx to overflow state
+    if (!tx_mgr->handle_idx_overflow(tail_tx_idx, tail_tx_block, do_alloc)) {
+      // if still overflow, do_alloc must be unset
+      assert(!do_alloc);
+      // if still overflow, we must have reached the tail already
+      return;
+    }
+
     while (true) {
-      auto tx_entry = tx_mgr->get_entry();
+      auto tx_entry = tx_mgr->get_entry_from_block(tail_tx_idx, tail_tx_block);
       if (!tx_entry.is_valid()) break;
       if (tx_entry.is_commit()) apply_tx(tx_entry.commit_entry);
-      tx_mgr->advance();
+      // FIXME: handle race condition??
+      if (!tx_mgr->advance_tx_idx(tail_tx_idx, tail_tx_block, do_alloc)) break;
     }
   }
 
