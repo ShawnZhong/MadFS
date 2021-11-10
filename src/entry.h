@@ -20,8 +20,8 @@ struct __attribute__((packed)) LogEntryIdx {
   LogLocalIdx local_idx : 8;
 
   friend std::ostream& operator<<(std::ostream& out, const LogEntryIdx& idx) {
-    out << "{ block_idx = " << idx.block_idx
-        << ", local_idx = " << unsigned(idx.local_idx) << " }";
+    out << "LogEntryIdx{" << idx.block_idx << "," << unsigned(idx.local_idx)
+        << "}";
     return out;
   }
 };
@@ -48,8 +48,7 @@ struct TxEntryIdx {
   bool operator>=(const TxEntryIdx& rhs) const { return !(*this < rhs); }
 
   friend std::ostream& operator<<(std::ostream& out, const TxEntryIdx& idx) {
-    out << "{ block_idx = " << idx.block_idx
-        << ", local_idx = " << idx.local_idx << " }";
+    out << "TxEntryIdx{" << idx.block_idx << "," << idx.local_idx << "}";
     return out;
   }
 };
@@ -85,11 +84,22 @@ struct TxBeginEntry {
 };
 
 struct TxCommitEntry {
+ private:
+  static constexpr int NUM_BLOCKS_BITS = 6;
+  static constexpr int BEGIN_VIRTUAL_IDX_BITS = 17;
+
+  static constexpr int NUM_BLOCKS_MAX = (1 << NUM_BLOCKS_BITS) - 1;
+  static constexpr int BEGIN_VIRTUAL_IDX_MAX =
+      (1 << BEGIN_VIRTUAL_IDX_BITS) - 1;
+
   enum TxEntryType type : 1 = TxEntryType::TX_COMMIT;
 
+  friend union TxEntry;
+
+ public:
   // optionally, set these bits so OCC conflict detection can be done inline
-  uint32_t num_blocks : 6;
-  uint32_t begin_virtual_idx : 17;
+  uint32_t num_blocks : NUM_BLOCKS_BITS;
+  uint32_t begin_virtual_idx : BEGIN_VIRTUAL_IDX_BITS;
 
   // the first log entry for this transaction, 40 bits in size
   // The rest of the log entries are organized as a linked list
@@ -100,27 +110,28 @@ struct TxCommitEntry {
   TxCommitEntry(uint32_t num_blocks, uint32_t begin_virtual_idx,
                 LogEntryIdx log_entry_idx)
       : num_blocks(0), begin_virtual_idx(0), log_entry_idx(log_entry_idx) {
-    if (num_blocks < (1 << 6) && begin_virtual_idx < (1 << 17)) {
-      this->num_blocks = num_blocks;
-      this->begin_virtual_idx = begin_virtual_idx;
-    }
+    assert(num_blocks <= NUM_BLOCKS_MAX);
+    assert(begin_virtual_idx <= BEGIN_VIRTUAL_IDX_MAX);
+    this->num_blocks = num_blocks;
+    this->begin_virtual_idx = begin_virtual_idx;
   }
 
   friend std::ostream& operator<<(std::ostream& out,
                                   const TxCommitEntry& entry) {
-    out << "TX_COMMIT "
-        << "{ num_blocks: " << entry.num_blocks
-        << ", begin_virtual_idx: " << entry.begin_virtual_idx
-        << ", log_entry_idx: " << entry.log_entry_idx << " }";
+    out << "TxCommitEntry{n_blk=" << entry.num_blocks
+        << ", vidx=" << entry.begin_virtual_idx << "}";
     return out;
   }
 };
 
 union TxEntry {
+ private:
+  uint64_t raw_bits;
+
+ public:
   // WARN: begin_entry is deprecated
   TxBeginEntry begin_entry;
   TxCommitEntry commit_entry;
-  uint64_t raw_bits;
 
   TxEntry(){};
   TxEntry(uint64_t raw_bits) : raw_bits(raw_bits) {}
@@ -160,15 +171,12 @@ union TxEntry {
    * try to append an entry to a slot in an array of TxEntry; fail if the slot
    * is taken (likely due to a race condition)
    *
-   * @tparam NUM_ENTRIES the total number of entries in the array
    * @param entries a pointer to an array of tx entries
    * @param entry the entry to append
    * @param hint hint to start the search
-   * @return if success, return 0; otherwise, return the entry on the slot (in
-   * raw bits)
+   * @return if success, return 0; otherwise, return the entry on the slot
    */
-  template <uint16_t NUM_ENTRIES>
-  static uint64_t try_append(TxEntry entries[], TxEntry entry, TxLocalIdx idx) {
+  static TxEntry try_append(TxEntry entries[], TxEntry entry, TxLocalIdx idx) {
     uint64_t expected = 0;
     if (__atomic_compare_exchange_n(&entries[idx].raw_bits, &expected,
                                     entry.raw_bits, false, __ATOMIC_RELEASE,
@@ -221,6 +229,15 @@ struct LogEntry {
   // to the virtual blocks [virtual_idx, virtual_idx + num_blocks)
   VirtualBlockIdx begin_virtual_idx;
   LogicalBlockIdx begin_logical_idx;
+
+  friend std::ostream& operator<<(std::ostream& out, const LogEntry& entry) {
+    out << "LogEntry{";
+    out << "vidx=" << entry.begin_virtual_idx << ", ";
+    out << "lidx=" << entry.begin_logical_idx << ", ";
+    out << "n_blk=" << unsigned(entry.num_blocks);
+    out << "}";
+    return out;
+  }
 };
 
 static_assert(sizeof(LogEntry) == 16, "LogEntry must of size 16 bytes");

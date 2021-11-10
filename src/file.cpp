@@ -51,12 +51,15 @@ File::~File() { mem_table.unmap(); }
 
 ssize_t File::pwrite(const void* buf, size_t count, size_t offset) {
   if (count == 0) return 0;
-  blk_table.update();
+  // we allow (and only allow) allocation here since the index of the next tx
+  // entry needs to be valid so that we have a slot to start from
+  blk_table.update(/*do_alloc*/ true);
   tx_mgr.do_cow(buf, count, offset);
   return static_cast<ssize_t>(count);
 }
 
 ssize_t File::pread(void* buf, size_t count, off_t offset) {
+  blk_table.update();
   VirtualBlockIdx virtual_idx = offset >> BLOCK_SHIFT;
 
   uint64_t local_offset = offset - virtual_idx * BLOCK_SIZE;

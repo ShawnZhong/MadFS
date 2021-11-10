@@ -1,12 +1,15 @@
 #pragma once
 
+#include <cstdint>
 #include <ostream>
 #include <unordered_map>
 
 #include "block.h"
+#include "idx.h"
 #include "layout.h"
 #include "log.h"
 #include "tx.h"
+#include "utils.h"
 
 namespace ulayfs::dram {
 
@@ -47,9 +50,10 @@ class BlkTable {
   }
 
   /**
-   * @brief Get the next tx to apply (by reference)
+   * Get the next tx to apply
    *
-   * @return pmem::TxEntryIdx
+   * @param[out] tx_idx the index of the current transaction tail
+   * @param[out] tx_block the log block corresponding to the transaction
    */
   void get_tail_tx(pmem::TxEntryIdx& tx_idx,
                    pmem::TxLogBlock*& tx_block) const {
@@ -72,14 +76,25 @@ class BlkTable {
 
   /**
    * Update the block table by applying the transactions
+   *
+   * @param do_alloc whether we allow allocation when iterating the tx_idx.
+   * default is false, and only set to true when write permission is granted
    */
-  void update() {
+  void update(bool do_alloc = false) {
+    // it's possible that the previous update move idx to overflow state
+    if (!tx_mgr->handle_idx_overflow(tail_tx_idx, tail_tx_block, do_alloc)) {
+      // if still overflow, do_alloc must be unset
+      assert(!do_alloc);
+      // if still overflow, we must have reached the tail already
+      return;
+    }
+
     while (true) {
-      auto tx_entry = tx_mgr->get_entry(tail_tx_idx, tail_tx_block);
+      auto tx_entry = tx_mgr->get_entry_from_block(tail_tx_idx, tail_tx_block);
       if (!tx_entry.is_valid()) break;
       if (tx_entry.is_commit()) apply_tx(tx_entry.commit_entry);
       // FIXME: handle race condition??
-      if (!tx_mgr->advance_tx_idx(tail_tx_idx, tail_tx_block, false)) break;
+      if (!tx_mgr->advance_tx_idx(tail_tx_idx, tail_tx_block, do_alloc)) break;
     }
   }
 
