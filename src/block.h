@@ -65,7 +65,7 @@ class BitmapBlock : public BaseBlock {
   }
 };
 
-class TxLogBlock : public BaseBlock {
+class TxBlock : public BaseBlock {
   LogicalBlockIdx prev;
   LogicalBlockIdx next;
   TxEntry tx_entries[NUM_TX_ENTRY];
@@ -144,7 +144,7 @@ class MetaBlock : public BaseBlock {
       LogicalBlockIdx next_tx_block;
 
       // hint to find tx log tail; not necessarily up-to-date
-      TxEntryIdx tx_log_tail;
+      TxEntryIdx tx_tail;
     };
 
     // padding avoid cache line contention
@@ -233,9 +233,9 @@ class MetaBlock : public BaseBlock {
     return success;
   }
 
-  void set_tx_log_tail(TxEntryIdx tx_log_tail) {
-    if (tx_log_tail <= this->tx_log_tail) return;
-    this->tx_log_tail = tx_log_tail;
+  void set_tx_tail(TxEntryIdx tx_tail) {
+    if (tx_tail <= this->tx_tail) return;
+    this->tx_tail = tx_tail;
     persist_cl_fenced(&cl1);
   }
 
@@ -243,7 +243,7 @@ class MetaBlock : public BaseBlock {
   [[nodiscard]] LogicalBlockIdx get_next_tx_block() const {
     return next_tx_block;
   }
-  [[nodiscard]] TxEntryIdx get_tx_log_tail() const { return tx_log_tail; }
+  [[nodiscard]] TxEntryIdx get_tx_tail() const { return tx_tail; }
 
   [[nodiscard]] TxEntry get_tx_entry(TxLocalIdx idx) const {
     assert(idx >= 0 && idx < NUM_INLINE_TX_ENTRY);
@@ -281,7 +281,7 @@ class MetaBlock : public BaseBlock {
     out << "\tfilesize: " << block.file_size << "\n";
     out << "\tnum_blocks: " << block.num_blocks << "\n";
     out << "\tnext_tx_block: " << block.next_tx_block << "\n";
-    out << "\ttx_log_tail: " << block.tx_log_tail << "\n";
+    out << "\ttx_tail: " << block.tx_tail << "\n";
     return out;
   }
 };
@@ -289,7 +289,7 @@ class MetaBlock : public BaseBlock {
 union Block {
   MetaBlock meta_block;
   BitmapBlock bitmap_block;
-  TxLogBlock tx_log_block;
+  TxBlock tx_block;
   LogEntryBlock log_entry_block;
   DataBlock data_block;
   char data[BLOCK_SIZE];
@@ -299,8 +299,8 @@ static_assert(sizeof(MetaBlock) == BLOCK_SIZE,
               "MetaBlock must be of size BLOCK_SIZE");
 static_assert(sizeof(BitmapBlock) == BLOCK_SIZE,
               "BitmapBlock must be of size BLOCK_SIZE");
-static_assert(sizeof(TxLogBlock) == BLOCK_SIZE,
-              "TxLogBlock must be of size BLOCK_SIZE");
+static_assert(sizeof(TxBlock) == BLOCK_SIZE,
+              "TxBlock must be of size BLOCK_SIZE");
 static_assert(sizeof(LogEntryBlock) == BLOCK_SIZE,
               "LogEntryBlock must be of size BLOCK_SIZE");
 static_assert(sizeof(DataBlock) == BLOCK_SIZE,
