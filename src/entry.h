@@ -39,13 +39,6 @@ struct TxEntryIdx {
     return block_idx == rhs.block_idx && local_idx == rhs.local_idx;
   }
   bool operator!=(const TxEntryIdx& rhs) const { return !(rhs == *this); }
-  bool operator<(const TxEntryIdx& rhs) const {
-    return std::tie(block_idx, local_idx) <
-           std::tie(rhs.block_idx, rhs.local_idx);
-  }
-  bool operator>(const TxEntryIdx& rhs) const { return rhs < *this; }
-  bool operator<=(const TxEntryIdx& rhs) const { return !(rhs < *this); }
-  bool operator>=(const TxEntryIdx& rhs) const { return !(*this < rhs); }
 
   friend std::ostream& operator<<(std::ostream& out, const TxEntryIdx& idx) {
     out << "TxEntryIdx{" << idx.block_idx << "," << idx.local_idx << "}";

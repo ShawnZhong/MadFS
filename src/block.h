@@ -234,7 +234,6 @@ class MetaBlock : public BaseBlock {
   }
 
   void set_tx_tail(TxEntryIdx tx_tail) {
-    if (tx_tail <= this->tx_tail) return;
     this->tx_tail = tx_tail;
     persist_cl_fenced(&cl1);
   }
