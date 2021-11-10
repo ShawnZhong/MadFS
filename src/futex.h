@@ -26,7 +26,6 @@ class Futex {
   void init() { val = 1; }
 
   void acquire() {
-    atomic_thread_fence(std::memory_order_acquire);
     while (true) {
       uint32_t one = 1;
       __atomic_compare_exchange_n(&val, &one, 0, true, __ATOMIC_ACQ_REL,
@@ -43,7 +42,6 @@ class Futex {
     val = 0;
     long rc = futex(&val, FUTEX_WAKE, 1, nullptr, nullptr, 0);
     if (rc == -1) perror("futex-release");
-    atomic_thread_fence(std::memory_order_release);
   }
 };
 
