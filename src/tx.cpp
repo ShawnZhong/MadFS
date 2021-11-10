@@ -194,7 +194,7 @@ TxMgr::AlignedTx::AlignedTx(TxMgr* tx_mgr, const void* buf, size_t count,
 
 void TxMgr::AlignedTx::do_cow() {
   // since everything is block-aligned, we can copy data directly
-  memcpy(dst_blocks->data, buf, count);
+  memcpy(dst_blocks->data(), buf, count);
 
   // we have unfenced here because log_mgr's append will do fence
   persist_unfenced(dst_blocks, count);
@@ -305,10 +305,10 @@ void TxMgr::SingleBlockTx::do_cow() {
 redo:
   // copy data from the source block if src_block exists
   if (first_src_block)
-    memcpy(dst_blocks->data, first_src_block->data, BLOCK_SIZE);
+    memcpy(dst_blocks->data(), first_src_block->data(), BLOCK_SIZE);
 
   // copy data from buf
-  memcpy(dst_blocks->data + local_offset, buf, count);
+  memcpy(dst_blocks->data() + local_offset, buf, count);
 
   // persist the data
   persist_fenced(dst_blocks, BLOCK_SIZE);
@@ -341,7 +341,7 @@ void TxMgr::MultiBlockTx::do_cow() {
   if (num_full_blocks > 0) {
     pmem::Block* full_blocks = dst_blocks + (begin_full_vidx - begin_vidx);
     const size_t num_bytes = num_full_blocks << BLOCK_SHIFT;
-    memcpy(full_blocks->data, buf + first_block_local_offset, num_bytes);
+    memcpy(full_blocks->data(), buf + first_block_local_offset, num_bytes);
     persist_unfenced(full_blocks, num_bytes);
   }
 
@@ -361,10 +361,11 @@ redo:
   // copy first block
   if (copy_first) {
     // copy the data from the source block if exits
-    if (first_src_block) memcpy(dst_blocks->data, first_src_block, BLOCK_SIZE);
+    if (first_src_block)
+      memcpy(dst_blocks->data(), first_src_block, BLOCK_SIZE);
 
     // write data from the buf to the first block
-    char* dst = dst_blocks->data + BLOCK_SIZE - first_block_local_offset;
+    char* dst = dst_blocks->data() + BLOCK_SIZE - first_block_local_offset;
     memcpy(dst, buf, first_block_local_offset);
 
     persist_unfenced(dst_blocks, BLOCK_SIZE);
@@ -376,11 +377,11 @@ redo:
 
     // copy the data from the source block if exits
     if (last_src_block)
-      memcpy(last_dst_block->data, last_src_block, BLOCK_SIZE);
+      memcpy(last_dst_block->data(), last_src_block, BLOCK_SIZE);
 
     // write data from the buf to the last block
     const char* src = buf + (count - last_block_local_offset);
-    memcpy(last_dst_block->data, src, last_block_local_offset);
+    memcpy(last_dst_block->data(), src, last_block_local_offset);
 
     persist_unfenced(last_dst_block, BLOCK_SIZE);
   }
