@@ -107,4 +107,10 @@ class BlkTable {
     return out;
   }
 };
+
+template <typename M>
+pmem::Block* mgr_vidx_to_addr(const M* mgr, VirtualBlockIdx idx) {
+  return mgr->mem_table->get(mgr->blk_table->get(idx));
+}
+
 }  // namespace ulayfs::dram

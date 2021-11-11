@@ -129,15 +129,18 @@ class TxMgr {
     return log_block->get(commit_entry.log_entry_idx.local_idx);
   }
 
+  // allow this template function to access mem/blk_table for vidx_to_addr
+  template <typename M>
+  friend pmem::Block* mgr_vidx_to_addr(const M* mgr, VirtualBlockIdx idx);
+
   /**
    * Given a virtual block index, return a write-only data pointer
    *
-   * @param idx the virtual block index for a data block
+   * @param vidx the virtual block index for a data block
    * @return the char pointer pointing to the memory location of the data block.
    * nullptr returned if the block is not allocated yet (e.g., a hole)
    */
-  [[nodiscard]] pmem::Block* get_data_block_from_vidx(
-      VirtualBlockIdx idx) const;
+  [[nodiscard]] pmem::Block* vidx_to_addr(VirtualBlockIdx vidx) const;
 
   /**
    * Move along the linked list of TxBlock and find the tail. The returned

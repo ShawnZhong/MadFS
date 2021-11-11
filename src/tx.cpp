@@ -63,9 +63,8 @@ void TxMgr::do_cow(const void* buf, size_t count, size_t offset) {
   tx.do_cow();
 }
 
-pmem::Block* TxMgr::get_data_block_from_vidx(VirtualBlockIdx idx) const {
-  LogicalBlockIdx logical_block_idx = blk_table->get(idx);
-  return mem_table->get(logical_block_idx);
+pmem::Block* TxMgr::vidx_to_addr(VirtualBlockIdx vidx) const {
+  return mgr_vidx_to_addr<TxMgr>(this, vidx);
 }
 
 void TxMgr::find_tail(pmem::TxEntryIdx& tx_idx,
@@ -300,7 +299,7 @@ void TxMgr::SingleBlockTx::do_cow() {
 
   // src block is the block to be copied over
   // we only use first_* but not last_* because they are the same one
-  first_src_block = tx_mgr->get_data_block_from_vidx(begin_vidx);
+  first_src_block = tx_mgr->vidx_to_addr(begin_vidx);
 
 redo:
   // copy data from the source block if src_block exists
@@ -350,11 +349,11 @@ void TxMgr::MultiBlockTx::do_cow() {
 
   if (copy_first) {
     assert(begin_full_vidx - begin_vidx == 1);
-    first_src_block = tx_mgr->get_data_block_from_vidx(begin_vidx);
+    first_src_block = tx_mgr->vidx_to_addr(begin_vidx);
   }
   if (copy_last) {
     assert(end_vidx - end_full_vidx == 1);
-    last_src_block = tx_mgr->get_data_block_from_vidx(end_full_vidx);
+    last_src_block = tx_mgr->vidx_to_addr(end_full_vidx);
   }
 
 redo:
