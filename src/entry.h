@@ -9,71 +9,9 @@
 
 namespace ulayfs::pmem {
 
-/**
- * A log entry is identified by the index of the LogEntryBlock and the local
- * index within the block
- *
- * 5 bytes (40 bits) in size
- */
-struct __attribute__((packed)) LogEntryIdx {
-  LogicalBlockIdx block_idx;
-  LogLocalIdx local_idx : 8;
-
-  friend std::ostream& operator<<(std::ostream& out, const LogEntryIdx& idx) {
-    out << "LogEntryIdx{" << idx.block_idx << "," << unsigned(idx.local_idx)
-        << "}";
-    return out;
-  }
-};
-
-static_assert(sizeof(LogEntryIdx) == 5, "LogEntryIdx must of size 5 bytes");
-
-/**
- * A transaction entry is identified by the block index and the local index
- */
-struct TxEntryIdx {
-  LogicalBlockIdx block_idx;
-  TxLocalIdx local_idx;
-
-  bool operator==(const TxEntryIdx& rhs) const {
-    return block_idx == rhs.block_idx && local_idx == rhs.local_idx;
-  }
-  bool operator!=(const TxEntryIdx& rhs) const { return !(rhs == *this); }
-
-  friend std::ostream& operator<<(std::ostream& out, const TxEntryIdx& idx) {
-    out << "TxEntryIdx{" << idx.block_idx << "," << idx.local_idx << "}";
-    return out;
-  }
-};
-
-static_assert(sizeof(TxEntryIdx) == 8, "TxEntryIdx must be 64 bits");
-
 enum class TxEntryType : bool {
   TX_BEGIN = false,
   TX_COMMIT = true,
-};
-
-struct TxBeginEntry {
-  enum TxEntryType type : 1 = TxEntryType::TX_BEGIN;
-
-  VirtualBlockIdx block_idx_start : 31;
-  VirtualBlockIdx block_idx_end;
-
-  /**
-   * Construct a tx begin_tx entry for the range
-   * [block_idx_start, block_idx_start + num_blocks]
-   */
-  explicit TxBeginEntry(VirtualBlockIdx block_idx_start, uint32_t num_blocks)
-      : block_idx_start(block_idx_start) {
-    block_idx_end = block_idx_start + num_blocks;
-  }
-
-  friend std::ostream& operator<<(std::ostream& os, const TxBeginEntry& entry) {
-    os << "TX_BEGIN "
-       << "{ block_idx_start = " << entry.block_idx_start
-       << ", block_idx_end: " << entry.block_idx_end << " }";
-    return os;
-  }
 };
 
 struct TxCommitEntry {
@@ -123,17 +61,12 @@ union TxEntry {
 
  public:
   // WARN: begin_entry is deprecated
-  TxBeginEntry begin_entry;
   TxCommitEntry commit_entry;
 
   TxEntry(){};
   TxEntry(uint64_t raw_bits) : raw_bits(raw_bits) {}
-  TxEntry(TxBeginEntry begin_entry) : begin_entry(begin_entry) {}
   TxEntry(TxCommitEntry commit_entry) : commit_entry(commit_entry) {}
 
-  [[nodiscard]] bool is_begin() const {
-    return begin_entry.type == TxEntryType::TX_BEGIN;
-  }
   [[nodiscard]] bool is_commit() const {
     return commit_entry.type == TxEntryType::TX_COMMIT;
   }
@@ -182,16 +115,12 @@ union TxEntry {
   }
 
   friend std::ostream& operator<<(std::ostream& out, const TxEntry& tx_entry) {
-    if (tx_entry.is_begin())
-      out << tx_entry.begin_entry;
-    else if (tx_entry.is_commit())
-      out << tx_entry.commit_entry;
+    if (tx_entry.is_commit()) out << tx_entry.commit_entry;
     return out;
   }
 };
 
 static_assert(sizeof(TxEntry) == 8, "TxEntry must be 64 bits");
-static_assert(sizeof(TxBeginEntry) == 8, "TxEntry must be 64 bits");
 static_assert(sizeof(TxCommitEntry) == 8, "TxEntry must be 64 bits");
 
 enum class LogOp {

@@ -54,7 +54,7 @@ class TxMgr {
    * is false. The advance would happen anyway but in the case of false, it is
    * in a overflow state
    */
-  [[nodiscard]] bool advance_tx_idx(pmem::TxEntryIdx& tx_idx,
+  [[nodiscard]] bool advance_tx_idx(TxEntryIdx& tx_idx,
                                     pmem::TxBlock*& tx_block,
                                     bool do_alloc) const {
     assert(tx_idx.local_idx >= 0);
@@ -66,7 +66,7 @@ class TxMgr {
    * Read the entry from the MetaBlock or TxBlock
    */
   [[nodiscard]] pmem::TxEntry get_entry_from_block(
-      pmem::TxEntryIdx idx, pmem::TxBlock* tx_block) const {
+      TxEntryIdx idx, pmem::TxBlock* tx_block) const {
     const auto [block_idx, local_idx] = idx;
     if (block_idx == 0) return meta->get_tx_entry(local_idx);
     return tx_block->get(local_idx);
@@ -82,7 +82,7 @@ class TxMgr {
    * @param[in] cont_if_fail whether continue to the next tx entry if fail
    * @return empty entry on success; conflict entry otherwise
    */
-  pmem::TxEntry try_commit(pmem::TxEntry entry, pmem::TxEntryIdx& tx_idx,
+  pmem::TxEntry try_commit(pmem::TxEntry entry, TxEntryIdx& tx_idx,
                            pmem::TxBlock*& tx_block, bool cont_if_fail);
 
   /**
@@ -102,7 +102,7 @@ class TxMgr {
    * If the given idx is in an overflow state, update it if allowed. Return if
    * it's in a non-overflow state now
    */
-  bool handle_idx_overflow(pmem::TxEntryIdx& tx_idx, pmem::TxBlock*& tx_block,
+  bool handle_idx_overflow(TxEntryIdx& tx_idx, pmem::TxBlock*& tx_block,
                            bool do_alloc) const {
     const bool is_inline = tx_idx.block_idx == 0;
     uint16_t capacity = is_inline ? NUM_INLINE_TX_ENTRY : NUM_TX_ENTRY;
@@ -116,7 +116,7 @@ class TxMgr {
       }
       tx_idx.block_idx = block_idx;
       tx_idx.local_idx -= capacity;
-      tx_block = &mem_table->get_addr(tx_idx.block_idx)->tx_block;
+      tx_block = &mem_table->get(tx_idx.block_idx)->tx_block;
     }
     return true;
   }
@@ -125,20 +125,22 @@ class TxMgr {
   [[nodiscard]] pmem::LogEntry get_log_entry_from_commit(
       pmem::TxCommitEntry commit_entry) const {
     pmem::LogEntryBlock* log_block =
-        &mem_table->get_addr(commit_entry.log_entry_idx.block_idx)
-             ->log_entry_block;
+        &mem_table->get(commit_entry.log_entry_idx.block_idx)->log_entry_block;
     return log_block->get(commit_entry.log_entry_idx.local_idx);
   }
+
+  // allow this template function to access mem/blk_table for vidx_to_addr
+  template <typename M>
+  friend pmem::Block* mgr_vidx_to_addr(const M* mgr, VirtualBlockIdx idx);
 
   /**
    * Given a virtual block index, return a write-only data pointer
    *
-   * @param idx the virtual block index for a data block
+   * @param vidx the virtual block index for a data block
    * @return the char pointer pointing to the memory location of the data block.
    * nullptr returned if the block is not allocated yet (e.g., a hole)
    */
-  [[nodiscard]] pmem::Block* get_data_block_from_vidx(
-      VirtualBlockIdx idx) const;
+  [[nodiscard]] pmem::Block* vidx_to_addr(VirtualBlockIdx vidx) const;
 
   /**
    * Move along the linked list of TxBlock and find the tail. The returned
@@ -146,7 +148,7 @@ class TxMgr {
    * allocated. If the end of TxBlock is reached, just return NUM_TX_ENTRY as
    * the TxLocalIdx.
    */
-  void find_tail(pmem::TxEntryIdx& curr_idx, pmem::TxBlock*& curr_block) const;
+  void find_tail(TxEntryIdx& curr_idx, pmem::TxBlock*& curr_block) const;
 
  public:
   friend std::ostream& operator<<(std::ostream& out, const TxMgr& tx_mgr);
@@ -193,14 +195,14 @@ class TxMgr::Tx {
   pmem::Block* const dst_blocks;
 
   // the index of the current log entry
-  const pmem::LogEntryIdx log_idx;
+  const LogEntryIdx log_idx;
 
   /*
    * Mutable states
    */
 
   // the index of the current transaction tail
-  pmem::TxEntryIdx tail_tx_idx;
+  TxEntryIdx tail_tx_idx;
   // the log block corresponding to the transaction
   pmem::TxBlock* tail_tx_block;
 };

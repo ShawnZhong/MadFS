@@ -16,10 +16,10 @@ namespace ulayfs::dram {
  * TxMgr
  */
 
-pmem::TxEntry TxMgr::try_commit(pmem::TxEntry entry, pmem::TxEntryIdx& tx_idx,
+pmem::TxEntry TxMgr::try_commit(pmem::TxEntry entry, TxEntryIdx& tx_idx,
                                 pmem::TxBlock*& tx_block,
                                 bool cont_if_fail = false) {
-  pmem::TxEntryIdx curr_idx = tx_idx;
+  TxEntryIdx curr_idx = tx_idx;
   pmem::TxBlock* curr_block = tx_block;
 
   handle_idx_overflow(tx_idx, tx_block, true);
@@ -63,14 +63,12 @@ void TxMgr::do_cow(const void* buf, size_t count, size_t offset) {
   tx.do_cow();
 }
 
-pmem::Block* TxMgr::get_data_block_from_vidx(VirtualBlockIdx idx) const {
-  LogicalBlockIdx logical_block_idx = blk_table->get(idx);
-  return mem_table->get_addr(logical_block_idx);
+pmem::Block* TxMgr::vidx_to_addr(VirtualBlockIdx vidx) const {
+  return mgr_vidx_to_addr<TxMgr>(this, vidx);
 }
 
-void TxMgr::find_tail(pmem::TxEntryIdx& tx_idx,
-                      pmem::TxBlock*& tx_block) const {
-  pmem::TxEntryIdx& curr_idx = tx_idx;
+void TxMgr::find_tail(TxEntryIdx& tx_idx, pmem::TxBlock*& tx_block) const {
+  TxEntryIdx& curr_idx = tx_idx;
   pmem::TxBlock*& curr_block = tx_block;
   LogicalBlockIdx next_block_idx;
   assert((curr_idx.block_idx == 0) == (curr_block == nullptr));
@@ -83,7 +81,7 @@ void TxMgr::find_tail(pmem::TxEntryIdx& tx_idx,
     }
     curr_idx.block_idx = next_block_idx;
     curr_idx.local_idx = 0;
-    curr_block = &mem_table->get_addr(curr_idx.block_idx)->tx_block;
+    curr_block = &mem_table->get(curr_idx.block_idx)->tx_block;
   }
 
   if (!(next_block_idx = curr_block->get_next())) {
@@ -94,7 +92,7 @@ void TxMgr::find_tail(pmem::TxEntryIdx& tx_idx,
 retry:
   do {
     curr_idx.block_idx = next_block_idx;
-    curr_block = &(mem_table->get_addr(next_block_idx)->tx_block);
+    curr_block = &(mem_table->get(next_block_idx)->tx_block);
   } while ((next_block_idx = curr_block->get_next()));
 
   curr_idx.local_idx = curr_block->find_tail();
@@ -129,7 +127,7 @@ template LogicalBlockIdx TxMgr::alloc_next_block(pmem::TxBlock* block) const;
 std::ostream& operator<<(std::ostream& out, const TxMgr& tx_mgr) {
   out << "Transactions: \n";
 
-  pmem::TxEntryIdx tx_idx = {0, 0};
+  TxEntryIdx tx_idx = {0, 0};
   pmem::TxBlock* tx_block = nullptr;
 
   while (true) {
@@ -164,7 +162,7 @@ TxMgr::Tx::Tx(TxMgr* tx_mgr, const void* buf, size_t count, size_t offset)
       num_blocks(end_vidx - begin_vidx),
 
       dst_idx(tx_mgr->allocator->alloc(num_blocks)),
-      dst_blocks(tx_mgr->mem_table->get_addr(dst_idx)),
+      dst_blocks(tx_mgr->mem_table->get(dst_idx)),
 
       log_idx([&] {  // IIFE for complex initialization
         // for overwrite, "last_remaining" is zero;
@@ -194,7 +192,7 @@ TxMgr::AlignedTx::AlignedTx(TxMgr* tx_mgr, const void* buf, size_t count,
 
 void TxMgr::AlignedTx::do_cow() {
   // since everything is block-aligned, we can copy data directly
-  memcpy(dst_blocks->data, buf, count);
+  memcpy(dst_blocks->data(), buf, count);
 
   // we have unfenced here because log_mgr's append will do fence
   persist_unfenced(dst_blocks, count);
@@ -254,7 +252,7 @@ bool TxMgr::CoWTx::handle_conflict(pmem::TxEntry curr_entry,
         }
         redo_first = true;
         LogicalBlockIdx lidx = begin_lidx + (first_vidx - begin_vidx);
-        first_src_block = tx_mgr->mem_table->get_addr(lidx);
+        first_src_block = tx_mgr->mem_table->get(lidx);
       }
       if (copy_last && begin_vidx <= last_vidx &&
           last_vidx < begin_vidx + num_blocks) {
@@ -265,7 +263,7 @@ bool TxMgr::CoWTx::handle_conflict(pmem::TxEntry curr_entry,
         }
         redo_last = true;
         LogicalBlockIdx lidx = begin_lidx + (last_vidx - begin_vidx);
-        last_src_block = tx_mgr->mem_table->get_addr(lidx);
+        last_src_block = tx_mgr->mem_table->get(lidx);
       }
     } else {
       // FIXME: there should not be any other one
@@ -300,15 +298,15 @@ void TxMgr::SingleBlockTx::do_cow() {
 
   // src block is the block to be copied over
   // we only use first_* but not last_* because they are the same one
-  first_src_block = tx_mgr->get_data_block_from_vidx(begin_vidx);
+  first_src_block = tx_mgr->vidx_to_addr(begin_vidx);
 
 redo:
   // copy data from the source block if src_block exists
   if (first_src_block)
-    memcpy(dst_blocks->data, first_src_block->data, BLOCK_SIZE);
+    memcpy(dst_blocks->data(), first_src_block->data(), BLOCK_SIZE);
 
   // copy data from buf
-  memcpy(dst_blocks->data + local_offset, buf, count);
+  memcpy(dst_blocks->data() + local_offset, buf, count);
 
   // persist the data
   persist_fenced(dst_blocks, BLOCK_SIZE);
@@ -341,7 +339,7 @@ void TxMgr::MultiBlockTx::do_cow() {
   if (num_full_blocks > 0) {
     pmem::Block* full_blocks = dst_blocks + (begin_full_vidx - begin_vidx);
     const size_t num_bytes = num_full_blocks << BLOCK_SHIFT;
-    memcpy(full_blocks->data, buf + first_block_local_offset, num_bytes);
+    memcpy(full_blocks->data(), buf + first_block_local_offset, num_bytes);
     persist_unfenced(full_blocks, num_bytes);
   }
 
@@ -350,21 +348,22 @@ void TxMgr::MultiBlockTx::do_cow() {
 
   if (copy_first) {
     assert(begin_full_vidx - begin_vidx == 1);
-    first_src_block = tx_mgr->get_data_block_from_vidx(begin_vidx);
+    first_src_block = tx_mgr->vidx_to_addr(begin_vidx);
   }
   if (copy_last) {
     assert(end_vidx - end_full_vidx == 1);
-    last_src_block = tx_mgr->get_data_block_from_vidx(end_full_vidx);
+    last_src_block = tx_mgr->vidx_to_addr(end_full_vidx);
   }
 
 redo:
   // copy first block
   if (copy_first) {
     // copy the data from the source block if exits
-    if (first_src_block) memcpy(dst_blocks->data, first_src_block, BLOCK_SIZE);
+    if (first_src_block)
+      memcpy(dst_blocks->data(), first_src_block, BLOCK_SIZE);
 
     // write data from the buf to the first block
-    char* dst = dst_blocks->data + BLOCK_SIZE - first_block_local_offset;
+    char* dst = dst_blocks->data() + BLOCK_SIZE - first_block_local_offset;
     memcpy(dst, buf, first_block_local_offset);
 
     persist_unfenced(dst_blocks, BLOCK_SIZE);
@@ -376,11 +375,11 @@ redo:
 
     // copy the data from the source block if exits
     if (last_src_block)
-      memcpy(last_dst_block->data, last_src_block, BLOCK_SIZE);
+      memcpy(last_dst_block->data(), last_src_block, BLOCK_SIZE);
 
     // write data from the buf to the last block
     const char* src = buf + (count - last_block_local_offset);
-    memcpy(last_dst_block->data, src, last_block_local_offset);
+    memcpy(last_dst_block->data(), src, last_block_local_offset);
 
     persist_unfenced(last_dst_block, BLOCK_SIZE);
   }
