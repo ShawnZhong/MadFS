@@ -16,10 +16,10 @@ namespace ulayfs::dram {
  * TxMgr
  */
 
-pmem::TxEntry TxMgr::try_commit(pmem::TxEntry entry, pmem::TxEntryIdx& tx_idx,
+pmem::TxEntry TxMgr::try_commit(pmem::TxEntry entry, TxEntryIdx& tx_idx,
                                 pmem::TxBlock*& tx_block,
                                 bool cont_if_fail = false) {
-  pmem::TxEntryIdx curr_idx = tx_idx;
+  TxEntryIdx curr_idx = tx_idx;
   pmem::TxBlock* curr_block = tx_block;
 
   handle_idx_overflow(tx_idx, tx_block, true);
@@ -67,9 +67,8 @@ pmem::Block* TxMgr::vidx_to_addr(VirtualBlockIdx vidx) const {
   return mgr_vidx_to_addr<TxMgr>(this, vidx);
 }
 
-void TxMgr::find_tail(pmem::TxEntryIdx& tx_idx,
-                      pmem::TxBlock*& tx_block) const {
-  pmem::TxEntryIdx& curr_idx = tx_idx;
+void TxMgr::find_tail(TxEntryIdx& tx_idx, pmem::TxBlock*& tx_block) const {
+  TxEntryIdx& curr_idx = tx_idx;
   pmem::TxBlock*& curr_block = tx_block;
   LogicalBlockIdx next_block_idx;
   assert((curr_idx.block_idx == 0) == (curr_block == nullptr));
@@ -128,7 +127,7 @@ template LogicalBlockIdx TxMgr::alloc_next_block(pmem::TxBlock* block) const;
 std::ostream& operator<<(std::ostream& out, const TxMgr& tx_mgr) {
   out << "Transactions: \n";
 
-  pmem::TxEntryIdx tx_idx = {0, 0};
+  TxEntryIdx tx_idx = {0, 0};
   pmem::TxBlock* tx_block = nullptr;
 
   while (true) {
