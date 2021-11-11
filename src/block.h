@@ -234,7 +234,6 @@ class MetaBlock : public BaseBlock {
   }
 
   void set_tx_tail(TxEntryIdx tx_tail) {
-    if (tx_tail <= this->tx_tail) return;
     this->tx_tail = tx_tail;
     persist_cl_fenced(&cl1);
   }
@@ -292,7 +291,8 @@ union Block {
   TxBlock tx_block;
   LogEntryBlock log_entry_block;
   DataBlock data_block;
-  char data[BLOCK_SIZE];
+
+  char* data() { return data_block.data; }
 };
 
 static_assert(sizeof(MetaBlock) == BLOCK_SIZE,

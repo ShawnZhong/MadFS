@@ -146,7 +146,7 @@ const char* File::get_ro_data_ptr(VirtualBlockIdx virtual_block_idx) {
     return empty_block;
   }
   auto block = mem_table.get(logical_block_idx);
-  return block->data;
+  return block->data();
 }
 
 std::ostream& operator<<(std::ostream& out, const File& f) {
