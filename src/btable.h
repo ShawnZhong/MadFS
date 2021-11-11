@@ -45,7 +45,7 @@ class BlkTable {
     table[virtual_block_idx] = logical_block_idx;
   }
 
-  LogicalBlockIdx get(VirtualBlockIdx virtual_block_idx) {
+  LogicalBlockIdx get(VirtualBlockIdx virtual_block_idx) const {
     return table[virtual_block_idx];
   }
 
@@ -108,9 +108,13 @@ class BlkTable {
   }
 };
 
-template <typename M>
-pmem::Block* mgr_vidx_to_addr(const M* mgr, VirtualBlockIdx idx) {
-  return mgr->mem_table->get(mgr->blk_table->get(idx));
+/**
+ * A sugar function to map vidx to addr
+ */
+static inline pmem::Block* tables_vidx_to_addr(MemTable* mem_table,
+                                               const BlkTable* blk_table,
+                                               VirtualBlockIdx idx) {
+  return mem_table->get(blk_table->get(idx));
 }
 
 }  // namespace ulayfs::dram

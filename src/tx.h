@@ -129,10 +129,6 @@ class TxMgr {
     return log_block->get(commit_entry.log_entry_idx.local_idx);
   }
 
-  // allow this template function to access mem/blk_table for vidx_to_addr
-  template <typename M>
-  friend pmem::Block* mgr_vidx_to_addr(const M* mgr, VirtualBlockIdx idx);
-
   /**
    * Given a virtual block index, return a write-only data pointer
    *
