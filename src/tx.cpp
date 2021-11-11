@@ -17,10 +17,10 @@ namespace ulayfs::dram {
  */
 
 pmem::TxEntry TxMgr::try_commit(pmem::TxEntry entry, pmem::TxEntryIdx& tx_idx,
-                                pmem::TxLogBlock*& tx_block,
+                                pmem::TxBlock*& tx_block,
                                 bool cont_if_fail = false) {
   pmem::TxEntryIdx curr_idx = tx_idx;
-  pmem::TxLogBlock* curr_block = tx_block;
+  pmem::TxBlock* curr_block = tx_block;
 
   handle_idx_overflow(tx_idx, tx_block, true);
 
@@ -69,9 +69,9 @@ pmem::Block* TxMgr::get_data_block_from_vidx(VirtualBlockIdx idx) const {
 }
 
 void TxMgr::find_tail(pmem::TxEntryIdx& tx_idx,
-                      pmem::TxLogBlock*& tx_block) const {
+                      pmem::TxBlock*& tx_block) const {
   pmem::TxEntryIdx& curr_idx = tx_idx;
-  pmem::TxLogBlock*& curr_block = tx_block;
+  pmem::TxBlock*& curr_block = tx_block;
   LogicalBlockIdx next_block_idx;
   assert((curr_idx.block_idx == 0) == (curr_block == nullptr));
 
@@ -83,7 +83,7 @@ void TxMgr::find_tail(pmem::TxEntryIdx& tx_idx,
     }
     curr_idx.block_idx = next_block_idx;
     curr_idx.local_idx = 0;
-    curr_block = &mem_table->get_addr(curr_idx.block_idx)->tx_log_block;
+    curr_block = &mem_table->get_addr(curr_idx.block_idx)->tx_block;
   }
 
   if (!(next_block_idx = curr_block->get_next())) {
@@ -94,7 +94,7 @@ void TxMgr::find_tail(pmem::TxEntryIdx& tx_idx,
 retry:
   do {
     curr_idx.block_idx = next_block_idx;
-    curr_block = &(mem_table->get_addr(next_block_idx)->tx_log_block);
+    curr_block = &(mem_table->get_addr(next_block_idx)->tx_block);
   } while ((next_block_idx = curr_block->get_next()));
 
   curr_idx.local_idx = curr_block->find_tail();
@@ -124,13 +124,13 @@ LogicalBlockIdx TxMgr::alloc_next_block(B* block) const {
 
 // explicit template instantiations
 template LogicalBlockIdx TxMgr::alloc_next_block(pmem::MetaBlock* block) const;
-template LogicalBlockIdx TxMgr::alloc_next_block(pmem::TxLogBlock* block) const;
+template LogicalBlockIdx TxMgr::alloc_next_block(pmem::TxBlock* block) const;
 
 std::ostream& operator<<(std::ostream& out, const TxMgr& tx_mgr) {
   out << "Transactions: \n";
 
   pmem::TxEntryIdx tx_idx = {0, 0};
-  pmem::TxLogBlock* tx_block = nullptr;
+  pmem::TxBlock* tx_block = nullptr;
 
   while (true) {
     auto tx_entry = tx_mgr.get_entry_from_block(tx_idx, tx_block);
