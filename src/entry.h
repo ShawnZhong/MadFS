@@ -14,29 +14,6 @@ enum class TxEntryType : bool {
   TX_COMMIT = true,
 };
 
-struct TxBeginEntry {
-  enum TxEntryType type : 1 = TxEntryType::TX_BEGIN;
-
-  VirtualBlockIdx block_idx_start : 31;
-  VirtualBlockIdx block_idx_end;
-
-  /**
-   * Construct a tx begin_tx entry for the range
-   * [block_idx_start, block_idx_start + num_blocks]
-   */
-  explicit TxBeginEntry(VirtualBlockIdx block_idx_start, uint32_t num_blocks)
-      : block_idx_start(block_idx_start) {
-    block_idx_end = block_idx_start + num_blocks;
-  }
-
-  friend std::ostream& operator<<(std::ostream& os, const TxBeginEntry& entry) {
-    os << "TX_BEGIN "
-       << "{ block_idx_start = " << entry.block_idx_start
-       << ", block_idx_end: " << entry.block_idx_end << " }";
-    return os;
-  }
-};
-
 struct TxCommitEntry {
  private:
   static constexpr int NUM_BLOCKS_BITS = 6;
@@ -84,17 +61,12 @@ union TxEntry {
 
  public:
   // WARN: begin_entry is deprecated
-  TxBeginEntry begin_entry;
   TxCommitEntry commit_entry;
 
   TxEntry(){};
   TxEntry(uint64_t raw_bits) : raw_bits(raw_bits) {}
-  TxEntry(TxBeginEntry begin_entry) : begin_entry(begin_entry) {}
   TxEntry(TxCommitEntry commit_entry) : commit_entry(commit_entry) {}
 
-  [[nodiscard]] bool is_begin() const {
-    return begin_entry.type == TxEntryType::TX_BEGIN;
-  }
   [[nodiscard]] bool is_commit() const {
     return commit_entry.type == TxEntryType::TX_COMMIT;
   }
@@ -143,16 +115,12 @@ union TxEntry {
   }
 
   friend std::ostream& operator<<(std::ostream& out, const TxEntry& tx_entry) {
-    if (tx_entry.is_begin())
-      out << tx_entry.begin_entry;
-    else if (tx_entry.is_commit())
-      out << tx_entry.commit_entry;
+    if (tx_entry.is_commit()) out << tx_entry.commit_entry;
     return out;
   }
 };
 
 static_assert(sizeof(TxEntry) == 8, "TxEntry must be 64 bits");
-static_assert(sizeof(TxBeginEntry) == 8, "TxEntry must be 64 bits");
 static_assert(sizeof(TxCommitEntry) == 8, "TxEntry must be 64 bits");
 
 enum class LogOp {
