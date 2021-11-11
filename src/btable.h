@@ -24,7 +24,7 @@ class BlkTable {
   std::vector<LogicalBlockIdx> table;
 
   // keep track of the next TxEntry to apply
-  pmem::TxEntryIdx tail_tx_idx;
+  TxEntryIdx tail_tx_idx;
   pmem::TxBlock* tail_tx_block;
 
  public:
@@ -55,7 +55,7 @@ class BlkTable {
    * @param[out] tx_idx the index of the current transaction tail
    * @param[out] tx_block the log block corresponding to the transaction
    */
-  void get_tail_tx(pmem::TxEntryIdx& tx_idx, pmem::TxBlock*& tx_block) const {
+  void get_tail_tx(TxEntryIdx& tx_idx, pmem::TxBlock*& tx_block) const {
     tx_idx = tail_tx_idx;
     tx_block = tail_tx_block;
   }

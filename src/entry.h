@@ -9,45 +9,6 @@
 
 namespace ulayfs::pmem {
 
-/**
- * A log entry is identified by the index of the LogEntryBlock and the local
- * index within the block
- *
- * 5 bytes (40 bits) in size
- */
-struct __attribute__((packed)) LogEntryIdx {
-  LogicalBlockIdx block_idx;
-  LogLocalIdx local_idx : 8;
-
-  friend std::ostream& operator<<(std::ostream& out, const LogEntryIdx& idx) {
-    out << "LogEntryIdx{" << idx.block_idx << "," << unsigned(idx.local_idx)
-        << "}";
-    return out;
-  }
-};
-
-static_assert(sizeof(LogEntryIdx) == 5, "LogEntryIdx must of size 5 bytes");
-
-/**
- * A transaction entry is identified by the block index and the local index
- */
-struct TxEntryIdx {
-  LogicalBlockIdx block_idx;
-  TxLocalIdx local_idx;
-
-  bool operator==(const TxEntryIdx& rhs) const {
-    return block_idx == rhs.block_idx && local_idx == rhs.local_idx;
-  }
-  bool operator!=(const TxEntryIdx& rhs) const { return !(rhs == *this); }
-
-  friend std::ostream& operator<<(std::ostream& out, const TxEntryIdx& idx) {
-    out << "TxEntryIdx{" << idx.block_idx << "," << idx.local_idx << "}";
-    return out;
-  }
-};
-
-static_assert(sizeof(TxEntryIdx) == 8, "TxEntryIdx must be 64 bits");
-
 enum class TxEntryType : bool {
   TX_BEGIN = false,
   TX_COMMIT = true,

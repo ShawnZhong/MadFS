@@ -18,7 +18,7 @@ class LogMgr {
   Allocator* allocator;
   MemTable* mem_table;
 
-  std::vector<pmem::LogEntryIdx> free_list;
+  std::vector<LogEntryIdx> free_list;
 
  public:
   LogMgr() = default;
@@ -27,16 +27,16 @@ class LogMgr {
     free_list.reserve(NUM_LOG_ENTRY);
   }
 
-  const pmem::LogEntry* get_entry(pmem::LogEntryIdx idx) {
+  const pmem::LogEntry* get_entry(LogEntryIdx idx) {
     return &mem_table->get(idx.block_idx)->log_entry_block.get(idx.local_idx);
   }
 
   // TODO: handle linked list
   // TODO: avoid using the same cacheline for the next op, but use same
   // cacheline for linked list
-  pmem::LogEntryIdx append(pmem::LogEntry entry, bool fenced = true) {
+  LogEntryIdx append(pmem::LogEntry entry, bool fenced = true) {
     if (free_list.empty()) alloc();
-    pmem::LogEntryIdx idx = free_list.back();
+    LogEntryIdx idx = free_list.back();
     free_list.pop_back();
 
     pmem::LogEntryBlock* block =

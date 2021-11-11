@@ -54,7 +54,7 @@ class TxMgr {
    * is false. The advance would happen anyway but in the case of false, it is
    * in a overflow state
    */
-  [[nodiscard]] bool advance_tx_idx(pmem::TxEntryIdx& tx_idx,
+  [[nodiscard]] bool advance_tx_idx(TxEntryIdx& tx_idx,
                                     pmem::TxBlock*& tx_block,
                                     bool do_alloc) const {
     assert(tx_idx.local_idx >= 0);
@@ -66,7 +66,7 @@ class TxMgr {
    * Read the entry from the MetaBlock or TxBlock
    */
   [[nodiscard]] pmem::TxEntry get_entry_from_block(
-      pmem::TxEntryIdx idx, pmem::TxBlock* tx_block) const {
+      TxEntryIdx idx, pmem::TxBlock* tx_block) const {
     const auto [block_idx, local_idx] = idx;
     if (block_idx == 0) return meta->get_tx_entry(local_idx);
     return tx_block->get(local_idx);
@@ -82,7 +82,7 @@ class TxMgr {
    * @param[in] cont_if_fail whether continue to the next tx entry if fail
    * @return empty entry on success; conflict entry otherwise
    */
-  pmem::TxEntry try_commit(pmem::TxEntry entry, pmem::TxEntryIdx& tx_idx,
+  pmem::TxEntry try_commit(pmem::TxEntry entry, TxEntryIdx& tx_idx,
                            pmem::TxBlock*& tx_block, bool cont_if_fail);
 
   /**
@@ -102,7 +102,7 @@ class TxMgr {
    * If the given idx is in an overflow state, update it if allowed. Return if
    * it's in a non-overflow state now
    */
-  bool handle_idx_overflow(pmem::TxEntryIdx& tx_idx, pmem::TxBlock*& tx_block,
+  bool handle_idx_overflow(TxEntryIdx& tx_idx, pmem::TxBlock*& tx_block,
                            bool do_alloc) const {
     const bool is_inline = tx_idx.block_idx == 0;
     uint16_t capacity = is_inline ? NUM_INLINE_TX_ENTRY : NUM_TX_ENTRY;
@@ -148,7 +148,7 @@ class TxMgr {
    * allocated. If the end of TxBlock is reached, just return NUM_TX_ENTRY as
    * the TxLocalIdx.
    */
-  void find_tail(pmem::TxEntryIdx& curr_idx, pmem::TxBlock*& curr_block) const;
+  void find_tail(TxEntryIdx& curr_idx, pmem::TxBlock*& curr_block) const;
 
  public:
   friend std::ostream& operator<<(std::ostream& out, const TxMgr& tx_mgr);
@@ -195,14 +195,14 @@ class TxMgr::Tx {
   pmem::Block* const dst_blocks;
 
   // the index of the current log entry
-  const pmem::LogEntryIdx log_idx;
+  const LogEntryIdx log_idx;
 
   /*
    * Mutable states
    */
 
   // the index of the current transaction tail
-  pmem::TxEntryIdx tail_tx_idx;
+  TxEntryIdx tail_tx_idx;
   // the log block corresponding to the transaction
   pmem::TxBlock* tail_tx_block;
 };
