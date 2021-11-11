@@ -64,7 +64,7 @@ void TxMgr::do_write(const void* buf, size_t count, size_t offset) {
 }
 
 pmem::Block* TxMgr::vidx_to_addr(VirtualBlockIdx vidx) const {
-  return mgr_vidx_to_addr<TxMgr>(this, vidx);
+  return tables_vidx_to_addr(this->mem_table, this->blk_table, vidx);
 }
 
 void TxMgr::find_tail(TxEntryIdx& tx_idx, pmem::TxBlock*& tx_block) const {
