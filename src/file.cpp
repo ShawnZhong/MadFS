@@ -54,7 +54,7 @@ ssize_t File::pwrite(const void* buf, size_t count, size_t offset) {
   // we allow (and only allow) allocation here since the index of the next tx
   // entry needs to be valid so that we have a slot to start from
   blk_table.update(/*do_alloc*/ true);
-  tx_mgr.do_cow(buf, count, offset);
+  tx_mgr.do_write(buf, count, offset);
   return static_cast<ssize_t>(count);
 }
 

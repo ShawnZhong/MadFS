@@ -43,24 +43,24 @@ pmem::TxEntry TxMgr::try_commit(pmem::TxEntry entry, TxEntryIdx& tx_idx,
 }
 
 // TODO: maybe reclaim the old blocks right after commit?
-void TxMgr::do_cow(const void* buf, size_t count, size_t offset) {
+void TxMgr::do_write(const void* buf, size_t count, size_t offset) {
   // special case that we have everything aligned, no OCC
   if (count % BLOCK_SIZE == 0 && offset % BLOCK_SIZE == 0) {
     AlignedTx tx(this, buf, count, offset);
-    tx.do_cow();
+    tx.do_write();
     return;
   }
 
   // another special case where range is within a single block
   if ((offset >> BLOCK_SHIFT) == ((offset + count - 1) >> BLOCK_SHIFT)) {
     SingleBlockTx tx(this, buf, count, offset);
-    tx.do_cow();
+    tx.do_write();
     return;
   }
 
   // unaligned multi-block write
   MultiBlockTx tx(this, buf, count, offset);
-  tx.do_cow();
+  tx.do_write();
 }
 
 pmem::Block* TxMgr::vidx_to_addr(VirtualBlockIdx vidx) const {
@@ -190,7 +190,7 @@ TxMgr::AlignedTx::AlignedTx(TxMgr* tx_mgr, const void* buf, size_t count,
                             size_t offset)
     : Tx(tx_mgr, buf, count, offset) {}
 
-void TxMgr::AlignedTx::do_cow() {
+void TxMgr::AlignedTx::do_write() {
   // since everything is block-aligned, we can copy data directly
   memcpy(dst_blocks->data(), buf, count);
 
@@ -292,7 +292,7 @@ TxMgr::SingleBlockTx::SingleBlockTx(TxMgr* tx_mgr, const void* buf,
   copy_last = false;
 }
 
-void TxMgr::SingleBlockTx::do_cow() {
+void TxMgr::SingleBlockTx::do_write() {
   // must acquire the tx tail before any get
   tx_mgr->blk_table->get_tail_tx(tail_tx_idx, tail_tx_block);
 
@@ -334,7 +334,7 @@ TxMgr::MultiBlockTx::MultiBlockTx(TxMgr* tx_mgr, const void* buf, size_t count,
       last_block_local_offset(end_offset - ALIGN_DOWN(end_offset, BLOCK_SIZE)) {
 }
 
-void TxMgr::MultiBlockTx::do_cow() {
+void TxMgr::MultiBlockTx::do_write() {
   // copy full blocks first
   if (num_full_blocks > 0) {
     pmem::Block* full_blocks = dst_blocks + (begin_full_vidx - begin_vidx);

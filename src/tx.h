@@ -88,7 +88,7 @@ class TxMgr {
   /**
    * Same argurments as pwrite
    */
-  void do_cow(const void* buf, size_t count, size_t offset);
+  void do_write(const void* buf, size_t count, size_t offset);
 
   /**
    * @tparam B MetaBlock or TxBlock
@@ -210,7 +210,7 @@ class TxMgr::Tx {
 class TxMgr::AlignedTx : public TxMgr::Tx {
  public:
   AlignedTx(TxMgr* tx_mgr, const void* buf, size_t count, size_t offset);
-  void do_cow();
+  void do_write();
 };
 
 class TxMgr::CoWTx : public TxMgr::Tx {
@@ -269,7 +269,7 @@ class TxMgr::CoWTx : public TxMgr::Tx {
 class TxMgr::SingleBlockTx : public TxMgr::CoWTx {
  public:
   SingleBlockTx(TxMgr* tx_mgr, const void* buf, size_t count, size_t offset);
-  void do_cow();
+  void do_write();
 
  private:
   // the starting offset within the block
@@ -279,7 +279,7 @@ class TxMgr::SingleBlockTx : public TxMgr::CoWTx {
 class TxMgr::MultiBlockTx : public TxMgr::CoWTx {
  public:
   MultiBlockTx(TxMgr* tx_mgr, const void* buf, size_t count, size_t offset);
-  void do_cow();
+  void do_write();
 
  private:
   // number of bytes to be written in the beginning.
