@@ -160,11 +160,18 @@ class TxMgr {
    * @param[in] curr_entry the last entry returned by try_commit; this should be
    * what dereferenced from tail_tx_idx, and we only take it to avoid one more
    * dereference to some shared memory
-   *
    * @param[in] first_vidx the first block's virtual idx; ignored if !copy_first
    * @param[in] last_vidx the last block's virtual idx; ignored if !copy_last
-   *
-   *
+   * @param[in,out] tail_tx_idx current tail index
+   * @param[in,out] tail_tx_block current tail block
+   * @param[in] is_range whether it is range conflict: if false, only handle the
+   * conflict with the first/last; if true, any conflict in the range will be
+   * handled
+   * @param[out] redo_first whether redo the first; only valid if !is_range
+   * @param[out] redo_last whether redo the lsat; only valid if !is_range
+   * @param[out] first_lidx if redo_first, which logical block to copy from
+   * @param[out] last_lidx if redo_last, which logical block to copy from
+   * @param[out] redo_image if is_range and need redo, copy from the image
    * @return true if needs redo; false otherwise
    */
   bool handle_conflict(pmem::TxEntry curr_entry, VirtualBlockIdx first_vidx,
