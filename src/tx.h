@@ -137,13 +137,16 @@ class TxMgr {
   }
 
   /**
-   * Given a virtual block index, return a write-only data pointer
-   *
-   * @param vidx the virtual block index for a data block
-   * @return the char pointer pointing to the memory location of the data block.
-   * nullptr returned if the block is not allocated yet (e.g., a hole)
+   * Return a write-only pointer to the block given a virtual block index
+   * A nullptr is returned if the block is not allocated yet (e.g., a hole)
    */
-  [[nodiscard]] pmem::Block* vidx_to_addr(VirtualBlockIdx vidx) const;
+  [[nodiscard]] pmem::Block* vidx_to_wo_addr(VirtualBlockIdx vidx) const;
+
+  /**
+   * Return a read-only pointer to the block given a virtual block index
+   * An empty block is returned if the block is not allocated yet (e.g., a hole)
+   */
+  [[nodiscard]] const pmem::Block* vidx_to_ro_addr(VirtualBlockIdx vidx) const;
 
   /**
    * Move along the linked list of TxBlock and find the tail. The returned
