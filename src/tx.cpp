@@ -50,7 +50,7 @@ ssize_t TxMgr::do_read(char* buf, size_t count, size_t offset) {
   if (first_block_size > count) first_block_size = count;
 
   VirtualBlockIdx curr_vidx;
-  pmem::Block* curr_block;
+  const pmem::Block* curr_block;
   pmem::TxEntry curr_entry;
   size_t buf_offset;
 
@@ -62,13 +62,14 @@ ssize_t TxMgr::do_read(char* buf, size_t count, size_t offset) {
 
   // first handle the first block (which might not be full block)
   curr_block = vidx_to_addr(begin_vidx);
-  memcpy(buf, curr_block + first_block_local_offset, first_block_size);
+  memcpy(buf, curr_block->data_ro() + first_block_local_offset,
+         first_block_size);
   buf_offset = first_block_size;
 
   // then handle middle full blocks (which might not exist)
   for (curr_vidx = begin_vidx + 1; curr_vidx < end_vidx - 1; ++curr_vidx) {
     curr_block = vidx_to_addr(curr_vidx);
-    memcpy(buf + buf_offset, curr_block, BLOCK_SIZE);
+    memcpy(buf + buf_offset, curr_block->data_ro(), BLOCK_SIZE);
     buf_offset += BLOCK_SIZE;
   }
 
@@ -76,7 +77,7 @@ ssize_t TxMgr::do_read(char* buf, size_t count, size_t offset) {
   if (begin_vidx != end_vidx - 1) {
     assert(curr_vidx == end_vidx - 1);
     curr_block = vidx_to_addr(curr_vidx);
-    memcpy(buf + buf_offset, curr_block, count - buf_offset);
+    memcpy(buf + buf_offset, curr_block->data_ro(), count - buf_offset);
   }
 
   do {
@@ -98,7 +99,8 @@ ssize_t TxMgr::do_read(char* buf, size_t count, size_t offset) {
     redo_lidx = redo_image[0];
     if (redo_lidx) {
       curr_block = mem_table->get(redo_lidx);
-      memcpy(buf, curr_block + first_block_local_offset, first_block_size);
+      memcpy(buf, curr_block->data_ro() + first_block_local_offset,
+             first_block_size);
     }
     buf_offset = first_block_size;
 
@@ -107,7 +109,7 @@ ssize_t TxMgr::do_read(char* buf, size_t count, size_t offset) {
       redo_lidx = redo_image[curr_vidx - begin_vidx];
       if (redo_lidx) {
         curr_block = mem_table->get(redo_lidx);
-        memcpy(buf + buf_offset, curr_block, BLOCK_SIZE);
+        memcpy(buf + buf_offset, curr_block->data_ro(), BLOCK_SIZE);
       }
       buf_offset += BLOCK_SIZE;
     }
@@ -117,7 +119,7 @@ ssize_t TxMgr::do_read(char* buf, size_t count, size_t offset) {
       redo_lidx = redo_image[curr_vidx - begin_vidx];
       if (redo_lidx) {
         curr_block = mem_table->get(redo_lidx);
-        memcpy(buf + buf_offset, curr_block, count - buf_offset);
+        memcpy(buf + buf_offset, curr_block->data_ro(), count - buf_offset);
       }
     }
 
@@ -400,7 +402,7 @@ void TxMgr::SingleBlockTx::do_write() {
 
 redo:
   // copy original data
-  memcpy(dst_blocks->data(), tx_mgr->mem_table->get(src_first_lidx)->data(),
+  memcpy(dst_blocks->data(), tx_mgr->mem_table->get(src_first_lidx)->data_ro(),
          BLOCK_SIZE);
   // copy data from buf
   memcpy(dst_blocks->data() + local_offset, buf, count);
@@ -459,8 +461,8 @@ redo:
   // copy first block
   if (copy_first) {
     // copy the data from the source block if exits
-    memcpy(dst_blocks->data(), tx_mgr->mem_table->get(src_first_lidx)->data(),
-           BLOCK_SIZE);
+    memcpy(dst_blocks->data(),
+           tx_mgr->mem_table->get(src_first_lidx)->data_ro(), BLOCK_SIZE);
 
     // write data from the buf to the first block
     char* dst = dst_blocks->data() + BLOCK_SIZE - first_block_local_offset;
@@ -475,7 +477,7 @@ redo:
 
     // copy the data from the source block if exits
     memcpy(last_dst_block->data(),
-           tx_mgr->mem_table->get(src_last_lidx)->data(), BLOCK_SIZE);
+           tx_mgr->mem_table->get(src_last_lidx)->data_ro(), BLOCK_SIZE);
 
     // write data from the buf to the last block
     const char* src = buf + (count - last_block_local_offset);

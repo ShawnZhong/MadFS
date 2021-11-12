@@ -293,6 +293,7 @@ union Block {
   DataBlock data_block;
 
   char* data() { return data_block.data; }
+  const char* data_ro() const { return data_block.data; }
 };
 
 static_assert(sizeof(MetaBlock) == BLOCK_SIZE,
