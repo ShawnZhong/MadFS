@@ -2,6 +2,7 @@
 
 #include <cstddef>
 #include <ostream>
+#include <vector>
 
 #include "alloc.h"
 #include "block.h"
@@ -42,6 +43,16 @@ class TxMgr {
         blk_table(blk_table) {}
 
   /**
+   * Same argurments as pwrite
+   */
+  void do_write(const char* buf, size_t count, size_t offset);
+
+  /**
+   * Same argurments as pread
+   */
+  ssize_t do_read(char* buf, size_t count, size_t offset);
+
+  /**
    * Move to the next transaction entry
    *
    * @param[in,out] tx_idx the current index, will be changed to the next index
@@ -68,6 +79,7 @@ class TxMgr {
   [[nodiscard]] pmem::TxEntry get_entry_from_block(
       TxEntryIdx idx, pmem::TxBlock* tx_block) const {
     const auto [block_idx, local_idx] = idx;
+    assert(local_idx < (block_idx == 0 ? NUM_INLINE_TX_ENTRY : NUM_TX_ENTRY));
     if (block_idx == 0) return meta->get_tx_entry(local_idx);
     return tx_block->get(local_idx);
   }
@@ -84,11 +96,6 @@ class TxMgr {
    */
   pmem::TxEntry try_commit(pmem::TxEntry entry, TxEntryIdx& tx_idx,
                            pmem::TxBlock*& tx_block, bool cont_if_fail);
-
-  /**
-   * Same argurments as pwrite
-   */
-  void do_write(const void* buf, size_t count, size_t offset);
 
   /**
    * @tparam B MetaBlock or TxBlock
@@ -146,6 +153,27 @@ class TxMgr {
    */
   void find_tail(TxEntryIdx& curr_idx, pmem::TxBlock*& curr_block) const;
 
+  /**
+   * Move to the real tx and update first/last_src_block to indicate whether to
+   * redo
+   *
+   * @param[in] curr_entry the last entry returned by try_commit; this should be
+   * what dereferenced from tail_tx_idx, and we only take it to avoid one more
+   * dereference to some shared memory
+   *
+   * @param[in] first_vidx the first block's virtual idx; ignored if !copy_first
+   * @param[in] last_vidx the last block's virtual idx; ignored if !copy_last
+   *
+   *
+   * @return true if needs redo; false otherwise
+   */
+  bool handle_conflict(pmem::TxEntry curr_entry, VirtualBlockIdx first_vidx,
+                       VirtualBlockIdx last_vidx, TxEntryIdx& tail_tx_idx,
+                       pmem::TxBlock*& tail_tx_block, bool is_range,
+                       bool* redo_first, bool* redo_last,
+                       LogicalBlockIdx* first_lidx, LogicalBlockIdx* last_lidx,
+                       std::vector<LogicalBlockIdx>* redo_image);
+
  public:
   friend std::ostream& operator<<(std::ostream& out, const TxMgr& tx_mgr);
 };
@@ -155,7 +183,7 @@ class TxMgr {
  */
 class TxMgr::Tx {
  public:
-  Tx(TxMgr* tx_mgr, const void* buf, size_t count, size_t offset);
+  Tx(TxMgr* tx_mgr, const char* buf, size_t count, size_t offset);
 
  protected:
   // pointer to the outer class
@@ -205,13 +233,13 @@ class TxMgr::Tx {
 
 class TxMgr::AlignedTx : public TxMgr::Tx {
  public:
-  AlignedTx(TxMgr* tx_mgr, const void* buf, size_t count, size_t offset);
+  AlignedTx(TxMgr* tx_mgr, const char* buf, size_t count, size_t offset);
   void do_write();
 };
 
 class TxMgr::CoWTx : public TxMgr::Tx {
  protected:
-  CoWTx(TxMgr* tx_mgr, const void* buf, size_t count, size_t offset);
+  CoWTx(TxMgr* tx_mgr, const char* buf, size_t count, size_t offset);
 
   // the tx entry to be committed
   const pmem::TxCommitEntry entry;
@@ -239,32 +267,15 @@ class TxMgr::CoWTx : public TxMgr::Tx {
   // whether copy the last block
   bool copy_last;
 
-  // address of the first block to be copied (only set if copy_first is true)
-  pmem::Block* first_src_block;
-  // address of the last block to be copied (only set if copy_last is true)
-  pmem::Block* last_src_block;
-
-  /**
-   * Move to the real tx and update first/last_src_block to indicate whether to
-   * redo
-   *
-   * @param[in] curr_entry the last entry returned by try_commit; this should be
-   * what dereferenced from tail_tx_idx, and we only take it to avoid one more
-   * dereference to some shared memory
-   *
-   * @param[in] first_vidx the first block's virtual idx; ignored if !copy_first
-   * @param[in] last_vidx the last block's virtual idx; ignored if !copy_last
-   *
-   *
-   * @return true if needs redo; false otherwise
-   */
-  bool handle_conflict(pmem::TxEntry curr_entry, VirtualBlockIdx first_vidx,
-                       VirtualBlockIdx last_vidx);
+  // if copy_first, which logical block to copy from
+  LogicalBlockIdx src_first_lidx;
+  // if copy_last, which logical block to copy from
+  LogicalBlockIdx src_last_lidx;
 };
 
 class TxMgr::SingleBlockTx : public TxMgr::CoWTx {
  public:
-  SingleBlockTx(TxMgr* tx_mgr, const void* buf, size_t count, size_t offset);
+  SingleBlockTx(TxMgr* tx_mgr, const char* buf, size_t count, size_t offset);
   void do_write();
 
  private:
@@ -274,7 +285,7 @@ class TxMgr::SingleBlockTx : public TxMgr::CoWTx {
 
 class TxMgr::MultiBlockTx : public TxMgr::CoWTx {
  public:
-  MultiBlockTx(TxMgr* tx_mgr, const void* buf, size_t count, size_t offset);
+  MultiBlockTx(TxMgr* tx_mgr, const char* buf, size_t count, size_t offset);
   void do_write();
 
  private:

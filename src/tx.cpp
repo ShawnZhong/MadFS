@@ -1,6 +1,8 @@
 #include "tx.h"
 
 #include <cstddef>
+#include <cstring>
+#include <vector>
 
 #include "block.h"
 #include "btable.h"
@@ -15,6 +17,117 @@ namespace ulayfs::dram {
 /*
  * TxMgr
  */
+
+// TODO: maybe reclaim the old blocks right after commit?
+void TxMgr::do_write(const char* buf, size_t count, size_t offset) {
+  // special case that we have everything aligned, no OCC
+  if (count % BLOCK_SIZE == 0 && offset % BLOCK_SIZE == 0) {
+    AlignedTx tx(this, buf, count, offset);
+    tx.do_write();
+    return;
+  }
+
+  // another special case where range is within a single block
+  if ((offset >> BLOCK_SHIFT) == ((offset + count - 1) >> BLOCK_SHIFT)) {
+    SingleBlockTx tx(this, buf, count, offset);
+    tx.do_write();
+    return;
+  }
+
+  // unaligned multi-block write
+  MultiBlockTx tx(this, buf, count, offset);
+  tx.do_write();
+}
+
+// TODO: handle read reaching EOF
+// TODO: more fancy handle_conflict strategy
+ssize_t TxMgr::do_read(char* buf, size_t count, size_t offset) {
+  size_t end_offset = offset + count;
+  VirtualBlockIdx begin_vidx = offset >> BLOCK_SHIFT;
+  VirtualBlockIdx end_vidx = ALIGN_UP(end_offset, BLOCK_SIZE) >> BLOCK_SHIFT;
+  size_t first_block_local_offset = ALIGN_UP(offset, BLOCK_SIZE) - offset;
+  size_t first_block_size = BLOCK_SIZE - first_block_local_offset;
+  if (first_block_size > count) first_block_size = count;
+
+  VirtualBlockIdx curr_vidx;
+  pmem::Block* curr_block;
+  pmem::TxEntry curr_entry;
+  size_t buf_offset;
+
+  std::vector<LogicalBlockIdx> redo_image(end_vidx - begin_vidx, 0);
+
+  TxEntryIdx tail_tx_idx;
+  pmem::TxBlock* tail_tx_block;
+  blk_table->get_tail_tx(tail_tx_idx, tail_tx_block);
+
+  // first handle the first block (which might not be full block)
+  curr_block = vidx_to_addr(begin_vidx);
+  memcpy(buf, curr_block + first_block_local_offset, first_block_size);
+  buf_offset = first_block_size;
+
+  // then handle middle full blocks (which might not exist)
+  for (curr_vidx = begin_vidx + 1; curr_vidx < end_vidx - 1; ++curr_vidx) {
+    curr_block = vidx_to_addr(curr_vidx);
+    memcpy(buf + buf_offset, curr_block, BLOCK_SIZE);
+    buf_offset += BLOCK_SIZE;
+  }
+
+  // if we have multiple blocks to read
+  if (begin_vidx != end_vidx - 1) {
+    assert(curr_vidx == end_vidx - 1);
+    curr_block = vidx_to_addr(curr_vidx);
+    memcpy(buf + buf_offset, curr_block, count - buf_offset);
+  }
+
+  do {
+    // check the tail is still tail
+    if (!handle_idx_overflow(tail_tx_idx, tail_tx_block, false)) goto done;
+    curr_entry = get_entry_from_block(tail_tx_idx, tail_tx_block);
+    if (!curr_entry.is_valid()) goto done;
+
+    // then scan the log and build redo_image; if no redo needed, we are done
+    if (!handle_conflict(curr_entry, begin_vidx, end_vidx - 1, tail_tx_idx,
+                         tail_tx_block, /*is_range*/ true, nullptr, nullptr,
+                         nullptr, nullptr, &redo_image))
+      goto done;
+
+    // redo:
+    LogicalBlockIdx redo_lidx;
+
+    // first handle the first block (which might not be full block)
+    redo_lidx = redo_image[0];
+    if (redo_lidx) {
+      curr_block = mem_table->get(redo_lidx);
+      memcpy(buf, curr_block + first_block_local_offset, first_block_size);
+    }
+    buf_offset = first_block_size;
+
+    // then handle middle full blocks (which might not exist)
+    for (curr_vidx = begin_vidx + 1; curr_vidx < end_vidx - 1; ++curr_vidx) {
+      redo_lidx = redo_image[curr_vidx - begin_vidx];
+      if (redo_lidx) {
+        curr_block = mem_table->get(redo_lidx);
+        memcpy(buf + buf_offset, curr_block, BLOCK_SIZE);
+      }
+      buf_offset += BLOCK_SIZE;
+    }
+
+    // if we have multiple blocks to read
+    if (begin_vidx != end_vidx - 1) {
+      redo_lidx = redo_image[curr_vidx - begin_vidx];
+      if (redo_lidx) {
+        curr_block = mem_table->get(redo_lidx);
+        memcpy(buf + buf_offset, curr_block, count - buf_offset);
+      }
+    }
+
+    // reset redo_image
+    std::fill(redo_image.begin(), redo_image.end(), 0);
+  } while (true);
+
+done:
+  return count;
+}
 
 pmem::TxEntry TxMgr::try_commit(pmem::TxEntry entry, TxEntryIdx& tx_idx,
                                 pmem::TxBlock*& tx_block,
@@ -40,27 +153,6 @@ pmem::TxEntry TxMgr::try_commit(pmem::TxEntry entry, TxEntryIdx& tx_idx,
     bool success = advance_tx_idx(curr_idx, curr_block, /*do_alloc*/ true);
     assert(success);
   }
-}
-
-// TODO: maybe reclaim the old blocks right after commit?
-void TxMgr::do_write(const void* buf, size_t count, size_t offset) {
-  // special case that we have everything aligned, no OCC
-  if (count % BLOCK_SIZE == 0 && offset % BLOCK_SIZE == 0) {
-    AlignedTx tx(this, buf, count, offset);
-    tx.do_write();
-    return;
-  }
-
-  // another special case where range is within a single block
-  if ((offset >> BLOCK_SHIFT) == ((offset + count - 1) >> BLOCK_SHIFT)) {
-    SingleBlockTx tx(this, buf, count, offset);
-    tx.do_write();
-    return;
-  }
-
-  // unaligned multi-block write
-  MultiBlockTx tx(this, buf, count, offset);
-  tx.do_write();
 }
 
 pmem::Block* TxMgr::vidx_to_addr(VirtualBlockIdx vidx) const {
@@ -106,6 +198,75 @@ done:
   tx_block = curr_block;
 };
 
+bool TxMgr::handle_conflict(pmem::TxEntry curr_entry,
+                            VirtualBlockIdx first_vidx,
+                            VirtualBlockIdx last_vidx, TxEntryIdx& tail_tx_idx,
+                            pmem::TxBlock*& tail_tx_block, bool is_range,
+                            bool* redo_first, bool* redo_last,
+                            LogicalBlockIdx* first_lidx,
+                            LogicalBlockIdx* last_lidx,
+                            std::vector<LogicalBlockIdx>* redo_image) {
+  // `le` prefix stands for "log entry", meaning read from log entry
+  VirtualBlockIdx le_first_vidx, le_last_vidx;
+  LogicalBlockIdx le_begin_lidx;
+  VirtualBlockIdx overlap_first_vidx, overlap_last_vidx;
+  uint32_t num_blocks;
+  bool need_redo = false;
+
+  do {
+    // TODO: handle linked list
+    if (curr_entry.is_commit()) {
+      le_begin_lidx = 0;
+      num_blocks = curr_entry.commit_entry.num_blocks;
+      if (num_blocks) {  // inline tx
+        le_first_vidx = curr_entry.commit_entry.begin_virtual_idx;
+      } else {  // dereference log_entry_idx
+        pmem::LogEntry log_entry =
+            get_log_entry_from_commit(curr_entry.commit_entry);
+        num_blocks = log_entry.num_blocks;
+        le_first_vidx = log_entry.begin_virtual_idx;
+        le_begin_lidx = log_entry.begin_logical_idx;
+      }
+      le_last_vidx = le_first_vidx + num_blocks - 1;
+      if (last_vidx < le_first_vidx || first_vidx > le_last_vidx) goto next;
+
+      overlap_first_vidx =
+          le_first_vidx > first_vidx ? le_first_vidx : first_vidx;
+      overlap_last_vidx = le_last_vidx < last_vidx ? le_last_vidx : last_vidx;
+
+      need_redo = true;
+      if (le_begin_lidx == 0)  // lazy dereference log idx
+        le_begin_lidx = get_log_entry_from_commit(curr_entry.commit_entry)
+                            .begin_logical_idx;
+
+      if (is_range) {
+        for (VirtualBlockIdx vidx = overlap_first_vidx;
+             vidx <= overlap_last_vidx; ++vidx) {
+          auto offset = vidx - first_vidx;
+          (*redo_image)[offset] = le_begin_lidx + offset;
+        }
+      } else {
+        if (overlap_first_vidx == first_vidx) {
+          *redo_first = true;
+          *first_lidx = first_vidx + le_begin_lidx - le_first_vidx;
+        }
+        if (overlap_last_vidx == last_vidx) {
+          *redo_last = true;
+          *last_lidx = last_vidx + le_begin_lidx - le_first_vidx;
+        }
+      }
+    } else {
+      // FIXME: there should not be any other one
+      assert(0);
+    }
+  next:
+    if (!advance_tx_idx(tail_tx_idx, tail_tx_block, /*do_alloc*/ false)) break;
+    curr_entry = get_entry_from_block(tail_tx_idx, tail_tx_block);
+  } while (curr_entry.is_valid());
+
+  return need_redo;
+}
+
 template <class B>
 LogicalBlockIdx TxMgr::alloc_next_block(B* block) const {
   // allocate the next block
@@ -147,11 +308,11 @@ std::ostream& operator<<(std::ostream& out, const TxMgr& tx_mgr) {
  * Tx
  */
 
-TxMgr::Tx::Tx(TxMgr* tx_mgr, const void* buf, size_t count, size_t offset)
+TxMgr::Tx::Tx(TxMgr* tx_mgr, const char* buf, size_t count, size_t offset)
     : tx_mgr(tx_mgr),
 
       // input properties
-      buf(static_cast<const char*>(buf)),
+      buf(buf),
       count(count),
       offset(offset),
 
@@ -186,23 +347,17 @@ TxMgr::Tx::Tx(TxMgr* tx_mgr, const void* buf, size_t count, size_t offset)
  * AlignedTx
  */
 
-TxMgr::AlignedTx::AlignedTx(TxMgr* tx_mgr, const void* buf, size_t count,
+TxMgr::AlignedTx::AlignedTx(TxMgr* tx_mgr, const char* buf, size_t count,
                             size_t offset)
     : Tx(tx_mgr, buf, count, offset) {}
 
 void TxMgr::AlignedTx::do_write() {
   // since everything is block-aligned, we can copy data directly
   memcpy(dst_blocks->data(), buf, count);
-
-  // we have unfenced here because log_mgr's append will do fence
-  persist_unfenced(dst_blocks, count);
+  persist_fenced(dst_blocks, count);
 
   // make a local copy of the tx tail
   tx_mgr->blk_table->get_tail_tx(tail_tx_idx, tail_tx_block);
-
-  // make sure flush of block and log entry is done
-  _mm_sfence();
-
   // commit the transaction, it's fine if the tx fails due to race condition
   pmem::TxCommitEntry entry(num_blocks, begin_vidx, log_idx);
   tx_mgr->try_commit(entry, tail_tx_idx, tail_tx_block, /*cont_if_fail*/ true);
@@ -212,79 +367,22 @@ void TxMgr::AlignedTx::do_write() {
  * CoWTx
  */
 
-TxMgr::CoWTx::CoWTx(TxMgr* tx_mgr, const void* buf, size_t count, size_t offset)
+TxMgr::CoWTx::CoWTx(TxMgr* tx_mgr, const char* buf, size_t count, size_t offset)
     : Tx(tx_mgr, buf, count, offset),
       entry(pmem::TxCommitEntry(num_blocks, begin_vidx, log_idx)),
       begin_full_vidx(ALIGN_UP(offset, BLOCK_SIZE) >> BLOCK_SHIFT),
       end_full_vidx(end_offset >> BLOCK_SHIFT),
       num_full_blocks(end_full_vidx - begin_full_vidx),
       copy_first(begin_full_vidx != begin_vidx),
-      copy_last(end_full_vidx != end_vidx) {}
-
-bool TxMgr::CoWTx::handle_conflict(pmem::TxEntry curr_entry,
-                                   VirtualBlockIdx first_vidx,
-                                   VirtualBlockIdx last_vidx = 0) {
-  bool redo_first = false;
-  bool redo_last = false;
-  VirtualBlockIdx begin_vidx;
-  uint32_t num_blocks;
-
-  do {
-    // TODO: handle linked list
-    if (curr_entry.is_commit()) {
-      LogicalBlockIdx begin_lidx = 0;
-      num_blocks = curr_entry.commit_entry.num_blocks;
-      if (num_blocks) {  // inline tx
-        begin_vidx = curr_entry.commit_entry.begin_virtual_idx;
-      } else {  // dereference log_entry_idx
-        pmem::LogEntry log_entry =
-            tx_mgr->get_log_entry_from_commit(curr_entry.commit_entry);
-        num_blocks = log_entry.num_blocks;
-        begin_vidx = log_entry.begin_virtual_idx;
-        begin_lidx = log_entry.begin_logical_idx;
-      }
-      if (copy_first && begin_vidx <= first_vidx &&
-          first_vidx < begin_vidx + num_blocks) {
-        if (begin_lidx == 0) {  // lazy dereference log idx
-          pmem::LogEntry log_entry =
-              tx_mgr->get_log_entry_from_commit(curr_entry.commit_entry);
-          begin_lidx = log_entry.begin_logical_idx;
-        }
-        redo_first = true;
-        LogicalBlockIdx lidx = begin_lidx + (first_vidx - begin_vidx);
-        first_src_block = tx_mgr->mem_table->get(lidx);
-      }
-      if (copy_last && begin_vidx <= last_vidx &&
-          last_vidx < begin_vidx + num_blocks) {
-        if (begin_lidx == 0) {  // lazy dereference log idx
-          pmem::LogEntry log_entry =
-              tx_mgr->get_log_entry_from_commit(curr_entry.commit_entry);
-          begin_lidx = log_entry.begin_logical_idx;
-        }
-        redo_last = true;
-        LogicalBlockIdx lidx = begin_lidx + (last_vidx - begin_vidx);
-        last_src_block = tx_mgr->mem_table->get(lidx);
-      }
-    } else {
-      // FIXME: there should not be any other one
-      assert(0);
-    }
-    bool success =
-        tx_mgr->advance_tx_idx(tail_tx_idx, tail_tx_block, /*do_alloc*/ false);
-    if (!success) break;
-    curr_entry = tx_mgr->get_entry_from_block(tail_tx_idx, tail_tx_block);
-  } while (curr_entry.is_valid());
-
-  copy_first = redo_first;
-  copy_last = redo_last;
-  return redo_first || redo_last;
-}
+      copy_last(end_full_vidx != end_vidx),
+      src_first_lidx(0),
+      src_last_lidx(0) {}
 
 /*
  * SingleBlockTx
  */
 
-TxMgr::SingleBlockTx::SingleBlockTx(TxMgr* tx_mgr, const void* buf,
+TxMgr::SingleBlockTx::SingleBlockTx(TxMgr* tx_mgr, const char* buf,
                                     size_t count, size_t offset)
     : CoWTx(tx_mgr, buf, count, offset),
       local_offset(offset - begin_vidx * BLOCK_SIZE) {
@@ -298,13 +396,12 @@ void TxMgr::SingleBlockTx::do_write() {
 
   // src block is the block to be copied over
   // we only use first_* but not last_* because they are the same one
-  first_src_block = tx_mgr->vidx_to_addr(begin_vidx);
+  src_first_lidx = tx_mgr->blk_table->get(begin_vidx);
 
 redo:
-  // copy data from the source block if src_block exists
-  if (first_src_block)
-    memcpy(dst_blocks->data(), first_src_block->data(), BLOCK_SIZE);
-
+  // copy original data
+  memcpy(dst_blocks->data(), tx_mgr->mem_table->get(src_first_lidx)->data(),
+         BLOCK_SIZE);
   // copy data from buf
   memcpy(dst_blocks->data() + local_offset, buf, count);
 
@@ -316,8 +413,11 @@ retry:
   auto conflict_entry = tx_mgr->try_commit(entry, tail_tx_idx, tail_tx_block);
   if (!conflict_entry.is_valid()) return;  // success, no conflict
 
-  assert(copy_first);
-  if (handle_conflict(conflict_entry, begin_vidx))
+  // we just treat begin_vidx as both first and last vidx
+  if (tx_mgr->handle_conflict(conflict_entry, begin_vidx, begin_vidx,
+                              tail_tx_idx, tail_tx_block, /*is_range*/ false,
+                              &copy_first, &copy_last, &src_first_lidx,
+                              &src_last_lidx, nullptr))
     goto redo;
   else
     goto retry;
@@ -327,7 +427,7 @@ retry:
  * MultiBlockTx
  */
 
-TxMgr::MultiBlockTx::MultiBlockTx(TxMgr* tx_mgr, const void* buf, size_t count,
+TxMgr::MultiBlockTx::MultiBlockTx(TxMgr* tx_mgr, const char* buf, size_t count,
                                   size_t offset)
     : CoWTx(tx_mgr, buf, count, offset),
       first_block_local_offset(ALIGN_UP(offset, BLOCK_SIZE) - offset),
@@ -348,19 +448,19 @@ void TxMgr::MultiBlockTx::do_write() {
 
   if (copy_first) {
     assert(begin_full_vidx - begin_vidx == 1);
-    first_src_block = tx_mgr->vidx_to_addr(begin_vidx);
+    src_first_lidx = tx_mgr->blk_table->get(begin_vidx);
   }
   if (copy_last) {
     assert(end_vidx - end_full_vidx == 1);
-    last_src_block = tx_mgr->vidx_to_addr(end_full_vidx);
+    src_last_lidx = tx_mgr->blk_table->get(end_full_vidx);
   }
 
 redo:
   // copy first block
   if (copy_first) {
     // copy the data from the source block if exits
-    if (first_src_block)
-      memcpy(dst_blocks->data(), first_src_block, BLOCK_SIZE);
+    memcpy(dst_blocks->data(), tx_mgr->mem_table->get(src_first_lidx)->data(),
+           BLOCK_SIZE);
 
     // write data from the buf to the first block
     char* dst = dst_blocks->data() + BLOCK_SIZE - first_block_local_offset;
@@ -374,8 +474,8 @@ redo:
     pmem::Block* last_dst_block = dst_blocks + (end_full_vidx - begin_vidx);
 
     // copy the data from the source block if exits
-    if (last_src_block)
-      memcpy(last_dst_block->data(), last_src_block, BLOCK_SIZE);
+    memcpy(last_dst_block->data(),
+           tx_mgr->mem_table->get(src_last_lidx)->data(), BLOCK_SIZE);
 
     // write data from the buf to the last block
     const char* src = buf + (count - last_block_local_offset);
@@ -396,7 +496,10 @@ retry:
 
   // handle_conflict will update copy_first/last according to indicate whether
   // redo is needed
-  if (handle_conflict(conflict_entry, begin_vidx, end_full_vidx))
+  if (tx_mgr->handle_conflict(conflict_entry, begin_vidx, end_full_vidx,
+                              tail_tx_idx, tail_tx_block, /*is_range*/ false,
+                              &copy_first, &copy_last, &src_first_lidx,
+                              &src_last_lidx, nullptr))
     goto redo;  // conflict is detected, redo copy
   else
     goto retry;  // we have moved to the new tail, retry commit
