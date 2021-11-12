@@ -40,37 +40,13 @@ class BlkTable {
     table.resize(16);
   }
 
-  void put(VirtualBlockIdx virtual_block_idx,
-           LogicalBlockIdx logical_block_idx) {
-    table[virtual_block_idx] = logical_block_idx;
-  }
-
-  LogicalBlockIdx get(VirtualBlockIdx virtual_block_idx) const {
+  /**
+   * @return the logical block index corresponding the the virtual block index
+   *  0 is returned if the virtual block index is not allocated yet
+   */
+  [[nodiscard]] LogicalBlockIdx get(VirtualBlockIdx virtual_block_idx) const {
+    if (virtual_block_idx >= table.size()) return 0;
     return table[virtual_block_idx];
-  }
-
-  /**
-   * Get the next tx to apply
-   *
-   * @param[out] tx_idx the index of the current transaction tail
-   * @param[out] tx_block the log block corresponding to the transaction
-   */
-  void get_tail_tx(TxEntryIdx& tx_idx, pmem::TxBlock*& tx_block) const {
-    tx_idx = tail_tx_idx;
-    tx_block = tail_tx_block;
-  }
-
-  /**
-   * Apply a transaction to the block table
-   */
-  void apply_tx(pmem::TxCommitEntry tx_commit_entry) {
-    auto log_entry_idx = tx_commit_entry.log_entry_idx;
-    auto log_entry = log_mgr->get_entry(log_entry_idx);
-    // TODO: linked list
-    if (table.size() < log_entry->begin_virtual_idx + log_entry->num_blocks)
-      table.resize(table.size() * 2);
-    for (uint32_t i = 0; i < log_entry->num_blocks; ++i)
-      put(log_entry->begin_virtual_idx + i, log_entry->begin_logical_idx + i);
   }
 
   /**
@@ -95,6 +71,32 @@ class BlkTable {
       // FIXME: handle race condition??
       if (!tx_mgr->advance_tx_idx(tail_tx_idx, tail_tx_block, do_alloc)) break;
     }
+  }
+
+  /**
+   * Get the next tx to apply
+   *
+   * @param[out] tx_idx the index of the current transaction tail
+   * @param[out] tx_block the log block corresponding to the transaction
+   */
+  void get_tail_tx(TxEntryIdx& tx_idx, pmem::TxBlock*& tx_block) const {
+    tx_idx = tail_tx_idx;
+    tx_block = tail_tx_block;
+  }
+
+ private:
+  /**
+   * Apply a transaction to the block table
+   */
+  void apply_tx(pmem::TxCommitEntry tx_commit_entry) {
+    auto log_entry_idx = tx_commit_entry.log_entry_idx;
+    auto log_entry = log_mgr->get_entry(log_entry_idx);
+    // TODO: linked list
+    if (table.size() <= log_entry->begin_virtual_idx + log_entry->num_blocks)
+      table.resize(table.size() * 2);
+    for (uint32_t i = 0; i < log_entry->num_blocks; ++i)
+      table[log_entry->begin_virtual_idx + i] =
+          log_entry->begin_logical_idx + i;
   }
 
   friend std::ostream& operator<<(std::ostream& out, const BlkTable& b) {

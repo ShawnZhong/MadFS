@@ -54,33 +54,15 @@ ssize_t File::pwrite(const void* buf, size_t count, size_t offset) {
   // we allow (and only allow) allocation here since the index of the next tx
   // entry needs to be valid so that we have a slot to start from
   blk_table.update(/*do_alloc*/ true);
-  tx_mgr.do_write(buf, count, offset);
+  tx_mgr.do_write(static_cast<const char*>(buf), count, offset);
+  // TODO: handle write fails i.e. return value != count
   return static_cast<ssize_t>(count);
 }
 
 ssize_t File::pread(void* buf, size_t count, off_t offset) {
+  if (count == 0) return 0;
   blk_table.update();
-  VirtualBlockIdx virtual_idx = offset >> BLOCK_SHIFT;
-
-  uint64_t local_offset = offset - virtual_idx * BLOCK_SIZE;
-  uint32_t num_blocks =
-      ALIGN_UP(count + local_offset, BLOCK_SIZE) >> BLOCK_SHIFT;
-  uint16_t last_remaining = num_blocks * BLOCK_SIZE - count - local_offset;
-
-  char* dst = static_cast<char*>(buf);
-  for (size_t i = 0; i < num_blocks; ++i) {
-    size_t num_bytes = BLOCK_SIZE;
-    if (i == 0) num_bytes -= local_offset;
-    if (i == num_blocks - 1) num_bytes -= last_remaining;
-
-    const char* ptr = get_ro_data_ptr(virtual_idx + i);
-    const char* src = i == 0 ? ptr + local_offset : ptr;
-
-    memcpy(dst, src, num_bytes);
-    dst += num_bytes;
-  }
-
-  return static_cast<ssize_t>(count);
+  return tx_mgr.do_read(static_cast<char*>(buf), count, offset);
 }
 
 off_t File::lseek(off_t offset, int whence) {
@@ -136,17 +118,6 @@ ssize_t File::read(void* buf, size_t count) {
                                         __ATOMIC_ACQ_REL, __ATOMIC_RELAXED));
 
   return pread(buf, count, old_off);
-}
-
-const char* File::get_ro_data_ptr(VirtualBlockIdx virtual_block_idx) {
-  static char empty_block[BLOCK_SIZE]{};
-  auto logical_block_idx = blk_table.get(virtual_block_idx);
-  if (logical_block_idx == 0) {
-    INFO("Virtual block %d is a hole block", virtual_block_idx);
-    return empty_block;
-  }
-  auto block = mem_table.get(logical_block_idx);
-  return block->data();
 }
 
 std::ostream& operator<<(std::ostream& out, const File& f) {
