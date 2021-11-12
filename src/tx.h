@@ -146,7 +146,7 @@ class TxMgr {
    * Return a read-only pointer to the block given a virtual block index
    * An empty block is returned if the block is not allocated yet (e.g., a hole)
    */
-  [[nodiscard]] const pmem::Block* vidx_to_ro_addr(VirtualBlockIdx vidx) const;
+  [[nodiscard]] const pmem::Block* vidx_to_addr_ro(VirtualBlockIdx vidx) const;
 
   /**
    * Move along the linked list of TxBlock and find the tail. The returned
