@@ -402,8 +402,9 @@ void TxMgr::SingleBlockTx::do_write() {
 
 redo:
   // copy original data
-  memcpy(dst_blocks->data(), tx_mgr->mem_table->get(src_first_lidx)->data_ro(),
-         BLOCK_SIZE);
+  if (src_first_lidx)  // TODO: handle src_first_lidx == 0
+    memcpy(dst_blocks->data(),
+           tx_mgr->mem_table->get(src_first_lidx)->data_ro(), BLOCK_SIZE);
   // copy data from buf
   memcpy(dst_blocks->data() + local_offset, buf, count);
 
@@ -461,8 +462,9 @@ redo:
   // copy first block
   if (copy_first) {
     // copy the data from the source block if exits
-    memcpy(dst_blocks->data(),
-           tx_mgr->mem_table->get(src_first_lidx)->data_ro(), BLOCK_SIZE);
+    if (src_first_lidx)  // TODO: handle src_first_lidx == 0
+      memcpy(dst_blocks->data(),
+             tx_mgr->mem_table->get(src_first_lidx)->data_ro(), BLOCK_SIZE);
 
     // write data from the buf to the first block
     char* dst = dst_blocks->data() + BLOCK_SIZE - first_block_local_offset;
@@ -476,8 +478,9 @@ redo:
     pmem::Block* last_dst_block = dst_blocks + (end_full_vidx - begin_vidx);
 
     // copy the data from the source block if exits
-    memcpy(last_dst_block->data(),
-           tx_mgr->mem_table->get(src_last_lidx)->data_ro(), BLOCK_SIZE);
+    if (src_last_lidx)  // TODO: handle src_last_lidx == 0
+      memcpy(last_dst_block->data(),
+             tx_mgr->mem_table->get(src_last_lidx)->data_ro(), BLOCK_SIZE);
 
     // write data from the buf to the last block
     const char* src = buf + (count - last_block_local_offset);

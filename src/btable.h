@@ -46,6 +46,7 @@ class BlkTable {
   }
 
   LogicalBlockIdx get(VirtualBlockIdx virtual_block_idx) const {
+    assert(virtual_block_idx < table.size());
     return table[virtual_block_idx];
   }
 
