@@ -45,7 +45,7 @@ ssize_t TxMgr::do_read(char* buf, size_t count, size_t offset) {
   size_t end_offset = offset + count;
   VirtualBlockIdx begin_vidx = offset >> BLOCK_SHIFT;
   VirtualBlockIdx end_vidx = ALIGN_UP(end_offset, BLOCK_SIZE) >> BLOCK_SHIFT;
-  size_t first_block_local_offset = ALIGN_UP(offset, BLOCK_SIZE) - offset;
+  size_t first_block_local_offset = offset & (BLOCK_SIZE - 1);
   size_t first_block_size = BLOCK_SIZE - first_block_local_offset;
   if (first_block_size > count) first_block_size = count;
 
@@ -61,14 +61,14 @@ ssize_t TxMgr::do_read(char* buf, size_t count, size_t offset) {
   blk_table->get_tail_tx(tail_tx_idx, tail_tx_block);
 
   // first handle the first block (which might not be full block)
-  curr_block = vidx_to_addr(begin_vidx);
+  curr_block = vidx_to_addr_ro(begin_vidx);
   memcpy(buf, curr_block->data_ro() + first_block_local_offset,
          first_block_size);
   buf_offset = first_block_size;
 
   // then handle middle full blocks (which might not exist)
   for (curr_vidx = begin_vidx + 1; curr_vidx < end_vidx - 1; ++curr_vidx) {
-    curr_block = vidx_to_addr(curr_vidx);
+    curr_block = vidx_to_addr_ro(curr_vidx);
     memcpy(buf + buf_offset, curr_block->data_ro(), BLOCK_SIZE);
     buf_offset += BLOCK_SIZE;
   }
@@ -76,7 +76,7 @@ ssize_t TxMgr::do_read(char* buf, size_t count, size_t offset) {
   // if we have multiple blocks to read
   if (begin_vidx != end_vidx - 1) {
     assert(curr_vidx == end_vidx - 1);
-    curr_block = vidx_to_addr(curr_vidx);
+    curr_block = vidx_to_addr_ro(curr_vidx);
     memcpy(buf + buf_offset, curr_block->data_ro(), count - buf_offset);
   }
 
@@ -157,8 +157,16 @@ pmem::TxEntry TxMgr::try_commit(pmem::TxEntry entry, TxEntryIdx& tx_idx,
   }
 }
 
-pmem::Block* TxMgr::vidx_to_addr(VirtualBlockIdx vidx) const {
+pmem::Block* TxMgr::vidx_to_addr_rw(VirtualBlockIdx vidx) const {
   return tables_vidx_to_addr(this->mem_table, this->blk_table, vidx);
+}
+
+const pmem::Block* TxMgr::vidx_to_addr_ro(VirtualBlockIdx vidx) const {
+  static const char empty_block[BLOCK_SIZE]{};
+
+  LogicalBlockIdx lidx = this->blk_table->get(vidx);
+  if (lidx == 0) return reinterpret_cast<const pmem::Block*>(&empty_block);
+  return this->mem_table->get(lidx);
 }
 
 void TxMgr::find_tail(TxEntryIdx& tx_idx, pmem::TxBlock*& tx_block) const {
