@@ -66,12 +66,20 @@ execute_process(
     OUTPUT_VARIABLE GIT_BRANCH
     OUTPUT_STRIP_TRAILING_WHITESPACE)
 
+if (NOT GIT_BRANCH)
+    set(GIT_BRANCH Unknown)
+endif ()
+
 # get the latest commit hash
 execute_process(
     COMMAND git rev-parse HEAD
     WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}
     OUTPUT_VARIABLE GIT_COMMIT_HASH
     OUTPUT_STRIP_TRAILING_WHITESPACE)
+
+if (NOT GIT_COMMIT_HASH)
+    set(GIT_COMMIT_HASH Unknown)
+endif ()
 
 configure_file("src/config.h.in" "config.h")
 
