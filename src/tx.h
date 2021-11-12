@@ -140,7 +140,7 @@ class TxMgr {
    * Return a write-only pointer to the block given a virtual block index
    * A nullptr is returned if the block is not allocated yet (e.g., a hole)
    */
-  [[nodiscard]] pmem::Block* vidx_to_wo_addr(VirtualBlockIdx vidx) const;
+  [[nodiscard]] pmem::Block* vidx_to_addr_rw(VirtualBlockIdx vidx) const;
 
   /**
    * Return a read-only pointer to the block given a virtual block index

@@ -157,7 +157,7 @@ pmem::TxEntry TxMgr::try_commit(pmem::TxEntry entry, TxEntryIdx& tx_idx,
   }
 }
 
-pmem::Block* TxMgr::vidx_to_wo_addr(VirtualBlockIdx vidx) const {
+pmem::Block* TxMgr::vidx_to_addr_rw(VirtualBlockIdx vidx) const {
   return tables_vidx_to_addr(this->mem_table, this->blk_table, vidx);
 }
 
