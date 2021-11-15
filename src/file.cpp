@@ -35,6 +35,14 @@ File::File(const char* pathname, int flags, mode_t mode)
   }
 
   mem_table = MemTable(fd, stat_buf.st_size);
+
+  // open shared memory after the file is mmap'ed to update the bitmap as
+  // necessary.
+  if (open_shm(&stat_buf)) {
+    WARN("Failed to open shared memory. Fall back to syscall");
+    return;
+  }
+
   meta = mem_table.get_meta();
   allocator = Allocator(fd, meta, &mem_table);
   log_mgr = LogMgr(meta, &allocator, &mem_table);
@@ -48,6 +56,42 @@ File::File(const char* pathname, int flags, mode_t mode)
 }
 
 File::~File() { mem_table.unmap(); }
+
+int File::open_shm(const struct stat* stat) {
+  // TODO: enable dynamically grow bitmap
+  size_t shm_size = 8 * BLOCK_SIZE;
+  std::stringstream shm_name;
+  shm_name << "/ulayfs_" << stat->st_ino << stat->st_ctim.tv_sec
+           << stat->st_ctim.tv_nsec;
+  shm_fd = shm_open(const_cast<char*>(shm_name.str().c_str()), O_RDWR, 00600);
+  bool open_succ = shm_fd >= 0;
+
+  // If the shared memory corresponding to this file is not present, create it
+  if (!open_succ) {
+    shm_fd = shm_open(const_cast<char*>(shm_name.str().c_str()),
+                      O_RDWR | O_CREAT | O_EXCL, 00600);
+    if (shm_fd < 0) return -1;
+    if (fchmod(shm_fd, stat->st_mode)) return -1;
+    if (fchown(shm_fd, stat->st_uid, stat->st_gid)) return -1;
+  }
+
+  void* shm = posix::mmap(nullptr, shm_size, PROT_READ | PROT_WRITE,
+                          MAP_SHARED_VALIDATE | MAP_SYNC, shm_fd, 0);
+  if (shm == MAP_FAILED) return -1;
+  bitmap_lock = static_cast<std::mutex*>(shm);
+  auto bitmap_start =
+      ALIGN_UP(reinterpret_cast<std::uintptr_t>(shm) + sizeof(*bitmap_lock), 8);
+  bitmap = reinterpret_cast<pmem::Bitmap*>(bitmap_start);
+
+  // Initialize the shared memory on first opening
+  if (!open_succ) {
+    bitmap_lock->lock();
+    // TODO: initialize bitmap by scanning the file
+    bitmap_lock->unlock();
+  }
+
+  return 0;
+}
 
 ssize_t File::pwrite(const void* buf, size_t count, size_t offset) {
   if (count == 0) return 0;

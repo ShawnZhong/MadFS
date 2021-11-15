@@ -32,6 +32,7 @@ LogicalBlockIdx Allocator::alloc(uint32_t num_blocks) {
     }
   }
 
+  // TODO: move bitmap to DRAM here
   // then we have to allocate from global bitmaps
   if (recent_bitmap_block_id == 0) {
     recent_bitmap_local_idx = meta->inline_alloc_batch(recent_bitmap_local_idx);

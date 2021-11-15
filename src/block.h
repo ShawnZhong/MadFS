@@ -285,6 +285,7 @@ class MetaBlock : public BaseBlock {
   }
 };
 
+// TODO: we no longer have bitmap_block in PMEM
 union Block {
   MetaBlock meta_block;
   BitmapBlock bitmap_block;

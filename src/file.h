@@ -1,6 +1,8 @@
 #pragma once
 
 #include <iostream>
+#include <mutex>
+#include <sstream>
 #include <stdexcept>
 
 #include "alloc.h"
@@ -30,6 +32,11 @@ class File {
   BlkTable blk_table;
   LogMgr log_mgr;
   TxMgr tx_mgr;
+
+  // These fields are shared across processes
+  int shm_fd;
+  std::mutex* bitmap_lock;
+  pmem::Bitmap* bitmap;
 
  public:
   File(const char* pathname, int flags, mode_t mode);
@@ -74,6 +81,8 @@ class File {
    * block. An empty block if the block is not allocated yet (e.g., a hole)
    */
   const char* get_ro_data_ptr(VirtualBlockIdx virtual_block_idx);
+
+  int open_shm(const struct stat* stat);
 
  public:
   friend std::ostream& operator<<(std::ostream& out, const File& f);

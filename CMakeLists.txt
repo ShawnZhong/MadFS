@@ -34,7 +34,7 @@ add_library(ulayfs SHARED
     src/tx.h src/tx.cpp
     src/utils.h
     )
-target_link_libraries(ulayfs dl)
+target_link_libraries(ulayfs dl rt)
 
 # enable link time optimization
 set_property(TARGET ulayfs PROPERTY INTERPROCEDURAL_OPTIMIZATION TRUE)

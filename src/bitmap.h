@@ -15,6 +15,7 @@ constexpr static uint32_t BITMAP_CAPACITY = 1 << BITMAP_CAPACITY_SHIFT;
 
 namespace pmem {
 // All member functions are thread-safe and require no locks
+// TODO: move to namespace dram
 class Bitmap {
  private:
   uint64_t bitmap;
