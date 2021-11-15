@@ -27,7 +27,7 @@ add_library(ulayfs SHARED
     src/futex.h
     src/layout.h
     src/lib.h src/lib.cpp
-    src/log.h
+    src/log.h src/log.cpp
     src/mtable.h
     src/params.h
     src/posix.h
