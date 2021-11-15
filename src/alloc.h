@@ -12,10 +12,15 @@
 namespace ulayfs::dram {
 
 // per-thread data structure
+// TODO: change allocator to track dram bitmap
 class Allocator {
   int fd;
   pmem::MetaBlock* meta;
   MemTable* mem_table;
+
+  // dram bitmap
+  pmem::Bitmap* bitmap;
+  pthread_mutex_t* bitmap_lock;
 
   // this local free_list maintains blocks allocated from the global free_list
   // and not used yet; pair: <size, idx>
@@ -34,10 +39,13 @@ class Allocator {
 
  public:
   Allocator() = default;
-  Allocator(int fd, pmem::MetaBlock* meta, MemTable* mem_table)
+  Allocator(int fd, pmem::MetaBlock* meta, MemTable* mem_table,
+            pmem::Bitmap* bitmap, pthread_mutex_t* bitmap_lock)
       : fd(fd),
         meta(meta),
         mem_table(mem_table),
+        bitmap(bitmap),
+        bitmap_lock(bitmap_lock),
         recent_bitmap_block_id(),
         recent_bitmap_local_idx() {
     free_list.reserve(64);
@@ -52,6 +60,15 @@ class Allocator {
    * Free the blocks in the range [block_idx, block_idx + num_blocks)
    */
   void free(LogicalBlockIdx block_idx, uint32_t num_blocks);
+
+  /**
+   * Mark the logical block as allocated. This is not thread safe and should
+   * only be used on startup if the bitmap is newly created.
+   */
+  void set_allocated(LogicalBlockIdx block_idx) {
+    bitmap[block_idx >> BITMAP_CAPACITY_SHIFT].set_allocated(
+        block_idx & (BITMAP_CAPACITY - 1));
+  }
 };
 
 }  // namespace ulayfs::dram

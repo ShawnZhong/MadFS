@@ -33,10 +33,7 @@ class File {
   LogMgr log_mgr;
   TxMgr tx_mgr;
 
-  // These fields are shared across processes
   int shm_fd;
-  std::mutex* bitmap_lock;
-  pmem::Bitmap* bitmap;
 
  public:
   File(const char* pathname, int flags, mode_t mode);
@@ -82,7 +79,14 @@ class File {
    */
   const char* get_ro_data_ptr(VirtualBlockIdx virtual_block_idx);
 
-  int open_shm(const struct stat* stat);
+  /**
+   * Open the shared memory object corresponding to this file.
+   *
+   * @return Return -1 on failure. Return 0 if the shared memory object is newly
+   * created (initialization needed) and return 1 otherwise.
+   */
+  int open_shm(const struct stat* stat, pmem::Bitmap** bitmap,
+               pthread_mutex_t** bitmap_lock);
 
  public:
   friend std::ostream& operator<<(std::ostream& out, const File& f);
