@@ -112,8 +112,7 @@ class LogEntryBlock : public BaseBlock {
     return &log_entries[idx];
   }
 
-  void persist(LogLocalIdx start_idx, LogLocalIdx end_idx,
-               bool fenced = true) {
+  void persist(LogLocalIdx start_idx, LogLocalIdx end_idx, bool fenced = true) {
     start_idx = ALIGN_DOWN(start_idx, NUM_LOG_ENTRY_CACHELINE);
     for (auto idx = start_idx; idx < end_idx; idx += NUM_LOG_ENTRY_CACHELINE) {
       if (fenced)

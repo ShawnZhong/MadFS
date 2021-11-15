@@ -30,8 +30,12 @@ class LogMgr {
  public:
   LogMgr() = default;
   LogMgr(pmem::MetaBlock* meta, Allocator* allocator, MemTable* mem_table)
-      : meta(meta), allocator(allocator), mem_table(mem_table),
-        log_blocks(), curr_block(nullptr), free_local_idx(NUM_LOG_ENTRY) {}
+      : meta(meta),
+        allocator(allocator),
+        mem_table(mem_table),
+        log_blocks(),
+        curr_block(nullptr),
+        free_local_idx(NUM_LOG_ENTRY) {}
 
   const pmem::LogEntry* get_entry(LogEntryIdx idx) {
     return mem_table->get(idx.block_idx)->log_entry_block.get(idx.local_idx);
@@ -61,8 +65,7 @@ class LogMgr {
    */
   void get_coverage(LogEntryIdx first_head_idx, bool need_logical_idxs,
                     VirtualBlockIdx& begin_virtual_idx, uint32_t& num_blocks,
-                    std::vector<
-                        LogicalBlockIdx>* begin_logical_idxs = nullptr);
+                    std::vector<LogicalBlockIdx>* begin_logical_idxs = nullptr);
 
   // TODO: handle writev requests
   /**
@@ -93,8 +96,7 @@ class LogMgr {
       log_blocks.push_back(idx);
       curr_block = &mem_table->get(idx)->log_entry_block;
       free_local_idx = 0;
-      if (prev_head_entry)
-        prev_head_entry->next.next_block_idx = idx;
+      if (prev_head_entry) prev_head_entry->next.next_block_idx = idx;
     } else {
       if (prev_head_entry)
         prev_head_entry->next.next_local_idx = free_local_idx;
@@ -112,9 +114,7 @@ class LogMgr {
     return &alloc_entry(prev_head_entry)->head_entry;
   }
 
-  pmem::LogBodyEntry* alloc_body_entry() {
-    return &alloc_entry()->body_entry;
-  }
+  pmem::LogBodyEntry* alloc_body_entry() { return &alloc_entry()->body_entry; }
 
   /**
    * get the number of free entries in the current LogBlock

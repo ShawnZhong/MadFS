@@ -14,8 +14,8 @@ namespace ulayfs::dram {
 
 void LogMgr::get_coverage(LogEntryIdx first_head_idx, bool need_logical_idxs,
                           VirtualBlockIdx& begin_virtual_idx,
-                          uint32_t& num_blocks, std::vector<
-                              LogicalBlockIdx>* begin_logical_idxs) {
+                          uint32_t& num_blocks,
+                          std::vector<LogicalBlockIdx>* begin_logical_idxs) {
   LogEntryIdx idx = first_head_idx;
   const pmem::LogHeadEntry* head_entry = get_head_entry(first_head_idx);
 
@@ -28,7 +28,6 @@ void LogMgr::get_coverage(LogEntryIdx first_head_idx, bool need_logical_idxs,
 
   num_blocks = 0;
   while (head_entry != nullptr) {
-
     if (num_blocks == 0) {
       idx.local_idx++;
       const pmem::LogBodyEntry* body_entry = get_body_entry(idx);
@@ -56,12 +55,10 @@ void LogMgr::get_coverage(LogEntryIdx first_head_idx, bool need_logical_idxs,
   }
 }
 
-LogEntryIdx LogMgr::append(pmem::LogOp op, uint16_t leftover_bytes,
-                           uint32_t total_blocks,
-                           VirtualBlockIdx begin_virtual_idx,
-                           const std::vector<
-                                LogicalBlockIdx>& begin_logical_idxs,
-                           bool fenced) {
+LogEntryIdx LogMgr::append(
+    pmem::LogOp op, uint16_t leftover_bytes, uint32_t total_blocks,
+    VirtualBlockIdx begin_virtual_idx,
+    const std::vector<LogicalBlockIdx>& begin_logical_idxs, bool fenced) {
   pmem::LogHeadEntry* head_entry = alloc_head_entry();
   LogEntryIdx first_head_idx =
       LogEntryIdx{log_blocks.back(), LogLocalIdx(free_local_idx - 1)};
@@ -92,11 +89,11 @@ LogEntryIdx LogMgr::append(pmem::LogOp op, uint16_t leftover_bytes,
       PANIC_IF(now_logical_idx_off >= begin_logical_idxs.size(),
                "begin_logical_idxs vector not long enough");
       body_entry->begin_virtual_idx = now_virtual_idx;
-      body_entry->begin_logical_idx =
-          begin_logical_idxs[now_logical_idx_off++];
+      body_entry->begin_logical_idx = begin_logical_idxs[now_logical_idx_off++];
       now_virtual_idx += MAX_BLOCKS_PER_BODY;
-      num_blocks = num_blocks <= MAX_BLOCKS_PER_BODY ? 0
-                   : num_blocks - MAX_BLOCKS_PER_BODY;
+      num_blocks = num_blocks <= MAX_BLOCKS_PER_BODY
+                       ? 0
+                       : num_blocks - MAX_BLOCKS_PER_BODY;
     }
 
     // FIXME: better debugging message when future implementation is done
@@ -114,4 +111,4 @@ LogEntryIdx LogMgr::append(pmem::LogOp op, uint16_t leftover_bytes,
   return first_head_idx;
 }
 
-}   // namespace ulayfs::dram
+}  // namespace ulayfs::dram
