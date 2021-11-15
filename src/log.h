@@ -157,6 +157,11 @@ class LogMgr {
                      : num_blocks - MAX_BLOCKS_PER_BODY;
       }
 
+      // FIXME: better debugging message when future implementation is done
+      std::ostringstream osstream;
+      osstream << *head_entry;
+      DEBUG("new head entry %s", osstream.str().c_str());
+
       curr_block->persist(persist_start_idx, free_local_idx, fenced);
       if (head_entry->overflow)
         head_entry = alloc_head_entry(head_entry);
