@@ -107,20 +107,20 @@ class LogEntryBlock : public BaseBlock {
   LogEntry log_entries[NUM_LOG_ENTRY];
 
  public:
-  [[nodiscard]] const LogEntry& get(LogLocalIdx idx) {
+  [[nodiscard]] LogEntry* get(LogLocalIdx idx) {
     assert(idx >= 0 && idx < NUM_LOG_ENTRY);
-    return log_entries[idx];
+    return &log_entries[idx];
   }
 
-  // TODO: linked list
-  void set(LogLocalIdx idx, pmem::LogEntry entry, bool fenced = true,
-           bool flushed = true) {
-    log_entries[idx] = entry;
-    if (!flushed) return;
-    if (fenced)
-      persist_cl_fenced(&log_entries[idx]);
-    else
-      persist_cl_unfenced(&log_entries[idx]);
+  void persist(LogLocalIdx start_idx, LogLocalIdx end_idx,
+               bool fenced = true) {
+    start_idx = ALIGN_DOWN(start_idx, NUM_LOG_ENTRY_CACHELINE);
+    for (auto idx = start_idx; idx < end_idx; idx += NUM_LOG_ENTRY_CACHELINE) {
+      if (fenced)
+        persist_cl_fenced(&log_entries[idx]);
+      else
+        persist_cl_unfenced(&log_entries[idx]);
+    }
   }
 };
 

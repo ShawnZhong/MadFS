@@ -85,18 +85,37 @@ class BlkTable {
   }
 
  private:
+  // TODO: handle writev requests
   /**
    * Apply a transaction to the block table
    */
   void apply_tx(pmem::TxCommitEntry tx_commit_entry) {
     auto log_entry_idx = tx_commit_entry.log_entry_idx;
-    auto log_entry = log_mgr->get_entry(log_entry_idx);
-    // TODO: linked list
-    if (table.size() <= log_entry->begin_virtual_idx + log_entry->num_blocks)
+
+    uint32_t num_blocks;
+    VirtualBlockIdx begin_virtual_idx;
+    std::vector<LogicalBlockIdx> begin_logical_idxs;
+    log_mgr->get_coverage(log_entry_idx, /* need_logical_idxs */ true,
+                          begin_virtual_idx, num_blocks, &begin_logical_idxs);
+
+    size_t now_logical_idx_off = 0;
+    VirtualBlockIdx now_virtual_idx = begin_virtual_idx;
+    VirtualBlockIdx end_virtual_idx = begin_virtual_idx + num_blocks;
+    if (table.size() <= end_virtual_idx)
       table.resize(table.size() * 2);
-    for (uint32_t i = 0; i < log_entry->num_blocks; ++i)
-      table[log_entry->begin_virtual_idx + i] =
-          log_entry->begin_logical_idx + i;
+
+    while (now_virtual_idx < end_virtual_idx) {
+      uint16_t chunk_blocks =
+          end_virtual_idx > now_virtual_idx + MAX_BLOCKS_PER_BODY
+          ? MAX_BLOCKS_PER_BODY
+          : end_virtual_idx - now_virtual_idx;
+      for (uint32_t i = 0; i < chunk_blocks; ++i) {
+        table[now_virtual_idx + i] =
+            begin_logical_idxs[now_logical_idx_off] + i;
+      }
+      now_virtual_idx += chunk_blocks;
+      now_logical_idx_off++;
+    }
   }
 
   friend std::ostream& operator<<(std::ostream& out, const BlkTable& b) {

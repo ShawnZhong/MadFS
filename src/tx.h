@@ -129,13 +129,6 @@ class TxMgr {
   }
 
  private:
-  [[nodiscard]] pmem::LogEntry get_log_entry_from_commit(
-      pmem::TxCommitEntry commit_entry) const {
-    pmem::LogEntryBlock* log_block =
-        &mem_table->get(commit_entry.log_entry_idx.block_idx)->log_entry_block;
-    return log_block->get(commit_entry.log_entry_idx.local_idx);
-  }
-
   /**
    * Return a write-only pointer to the block given a virtual block index
    * A nullptr is returned if the block is not allocated yet (e.g., a hole)
@@ -228,7 +221,8 @@ class TxMgr::Tx {
   // the pointer to the destination data block
   pmem::Block* const dst_blocks;
 
-  // the index of the current log entry
+  // the index of the first LogHeadEntry, can be used to locate the whole
+  // group of log entries for this transaction
   const LogEntryIdx log_idx;
 
   /*

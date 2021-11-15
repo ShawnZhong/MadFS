@@ -13,7 +13,7 @@ using VirtualBlockIdx = uint32_t;
 // local index within a block; this can be -1 to indicate an error
 using BitmapLocalIdx = int16_t;
 using TxLocalIdx = int16_t;
-// Note: LogLocalIdx will persist and the valid range is [0, 255]
+// Note: LogLocalIdx will persist and the valid range is [0, 512]
 using LogLocalIdx = uint16_t;
 
 // identifier of bitmap blocks; checkout BitmapBlock's doc to see more
@@ -27,7 +27,7 @@ using BitmapBlockId = uint32_t;
  */
 struct __attribute__((packed)) LogEntryIdx {
   LogicalBlockIdx block_idx;
-  LogLocalIdx local_idx : 8;
+  LogLocalIdx local_idx;
 
   friend std::ostream& operator<<(std::ostream& out, const LogEntryIdx& idx) {
     out << "LogEntryIdx{" << idx.block_idx << "," << unsigned(idx.local_idx)
@@ -36,7 +36,7 @@ struct __attribute__((packed)) LogEntryIdx {
   }
 };
 
-static_assert(sizeof(LogEntryIdx) == 5, "LogEntryIdx must of size 5 bytes");
+static_assert(sizeof(LogEntryIdx) == 6, "LogEntryIdx must be 48 bits");
 
 /**
  * A transaction entry is identified by the block index and the local index

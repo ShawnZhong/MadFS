@@ -224,18 +224,17 @@ bool TxMgr::handle_conflict(pmem::TxEntry curr_entry,
   bool need_redo = false;
 
   do {
-    // TODO: handle linked list
+    // TODO: implement the case where num_blocks is over 64 and there
+    //       are multiple begin_logical_idxs
+    // TODO: handle writev requests
     if (curr_entry.is_commit()) {
       le_begin_lidx = 0;
       num_blocks = curr_entry.commit_entry.num_blocks;
       if (num_blocks) {  // inline tx
         le_first_vidx = curr_entry.commit_entry.begin_virtual_idx;
       } else {  // dereference log_entry_idx
-        pmem::LogEntry log_entry =
-            get_log_entry_from_commit(curr_entry.commit_entry);
-        num_blocks = log_entry.num_blocks;
-        le_first_vidx = log_entry.begin_virtual_idx;
-        le_begin_lidx = log_entry.begin_logical_idx;
+        log_mgr->get_coverage(curr_entry.commit_entry.log_entry_idx,
+                              false, le_first_vidx, num_blocks);
       }
       le_last_vidx = le_first_vidx + num_blocks - 1;
       if (last_vidx < le_first_vidx || first_vidx > le_last_vidx) goto next;
@@ -245,9 +244,13 @@ bool TxMgr::handle_conflict(pmem::TxEntry curr_entry,
       overlap_last_vidx = le_last_vidx < last_vidx ? le_last_vidx : last_vidx;
 
       need_redo = true;
-      if (le_begin_lidx == 0)  // lazy dereference log idx
-        le_begin_lidx = get_log_entry_from_commit(curr_entry.commit_entry)
-                            .begin_logical_idx;
+      if (le_begin_lidx == 0) {   // lazy dereference log idx
+        std::vector<LogicalBlockIdx> le_begin_lidxs;
+        log_mgr->get_coverage(curr_entry.commit_entry.log_entry_idx,
+                              true, le_first_vidx, num_blocks,
+                              &le_begin_lidxs);
+        le_begin_lidx = le_begin_lidxs.front();
+      }
 
       if (is_range) {
         for (VirtualBlockIdx vidx = overlap_first_vidx;
@@ -307,7 +310,8 @@ std::ostream& operator<<(std::ostream& out, const TxMgr& tx_mgr) {
     auto commit_entry = tx_entry.commit_entry;
     out << "\t" << tx_idx << " -> " << commit_entry << "\n";
     out << "\t\t" << commit_entry.log_entry_idx << " -> "
-        << tx_mgr.get_log_entry_from_commit(commit_entry) << "\n";
+        << tx_mgr.log_mgr->get_entry(commit_entry.log_entry_idx)
+               ->head_entry << "\n";
     if (!tx_mgr.advance_tx_idx(tx_idx, tx_block, /*do_alloc*/ false)) break;
   }
 
@@ -336,20 +340,20 @@ TxMgr::Tx::Tx(TxMgr* tx_mgr, const char* buf, size_t count, size_t offset)
       dst_blocks(tx_mgr->mem_table->get(dst_idx)),
 
       log_idx([&] {  // IIFE for complex initialization
-        // for overwrite, "last_remaining" is zero;
-        // only in append we will care so
-        // TODO: handle linked list
-        pmem::LogEntry log_entry = {
-            pmem::LogOp::LOG_OVERWRITE,        // op
-            0,                                 // last_remaining
-            static_cast<uint8_t>(num_blocks),  // num_blocks
-            {},                                // next
-            begin_vidx,                        // begin_virtual_idx
-            dst_idx,                           // begin_logical_idx
-        };
-        // append log without fence because we only care flush completion before
-        // try_commit
-        return tx_mgr->log_mgr->append(log_entry, /* fenced */ false);
+        // TODO: implement the case where num_blocks is over 64 and there
+        //       are multiple begin_logical_idxs
+        // TODO: handle writev requests
+        // for overwrite, "leftover_bytes" is zero; only in append we care
+        // append log without fence because we only care flush completion
+        // before try_commit
+        return tx_mgr->log_mgr->append(
+            pmem::LogOp::LOG_OVERWRITE,   // op
+            0,                            // leftover_bytes
+            num_blocks,                   // total_blocks
+            begin_vidx,                   // begin_virtual_idx
+            {dst_idx},                    // begin_logical_idxs
+            false                         // fenced
+        );
         // it's fine that we append log first as long we don't publish it by tx
       }()) {}
 
