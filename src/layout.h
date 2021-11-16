@@ -52,10 +52,6 @@ constexpr static uint32_t BITMAP_BLOCK_CAPACITY =
 constexpr static uint32_t INLINE_BITMAP_CAPACITY =
     NUM_INLINE_BITMAP * BITMAP_CAPACITY;
 
-// how many log entries in a cacheline
-constexpr static uint8_t NUM_LOG_ENTRY_CACHELINE =
-    CACHELINE_SIZE / sizeof(pmem::LogEntry);
-
 // how many data blocks can be covered per CAS
 // TODO: put this constant somewhere else?
 constexpr static uint8_t MAX_BLOCKS_PER_BODY = 64;

@@ -12,7 +12,7 @@
 
 namespace ulayfs::dram {
 
-void LogMgr::get_coverage(LogEntryIdx first_head_idx, bool need_logical_idxs,
+void LogMgr::get_coverage(LogEntryIdx first_head_idx,
                           VirtualBlockIdx& begin_virtual_idx,
                           uint32_t& num_blocks,
                           std::vector<LogicalBlockIdx>* begin_logical_idxs) {
@@ -21,7 +21,7 @@ void LogMgr::get_coverage(LogEntryIdx first_head_idx, bool need_logical_idxs,
 
   // a head entry at the last slot of a LogBlock could have 0 body entries
   if (head_entry->num_blocks == 0) {
-    PANIC_IF(!head_entry->overflow, "should have overflow segment");
+    assert(head_entry->overflow);
     idx = LogEntryIdx{head_entry->next.next_block_idx, 0};
     head_entry = get_head_entry(idx);
   }
@@ -35,8 +35,7 @@ void LogMgr::get_coverage(LogEntryIdx first_head_idx, bool need_logical_idxs,
     }
 
     // now idx points to a body entry
-    if (need_logical_idxs) {
-      PANIC_IF(begin_logical_idxs == nullptr, "begin_logical_idxs is null");
+    if (begin_logical_idxs) {
       uint32_t segment_blocks = 0;
       while (segment_blocks < head_entry->num_blocks) {
         const pmem::LogBodyEntry* body_entry = get_body_entry(idx);
@@ -60,13 +59,12 @@ LogEntryIdx LogMgr::append(
     VirtualBlockIdx begin_virtual_idx,
     const std::vector<LogicalBlockIdx>& begin_logical_idxs, bool fenced) {
   pmem::LogHeadEntry* head_entry = alloc_head_entry();
-  LogEntryIdx first_head_idx =
-      LogEntryIdx{log_blocks.back(), LogLocalIdx(free_local_idx - 1)};
+  LogEntryIdx first_head_idx = LogEntryIdx{log_blocks.back(), last_local_idx()};
   VirtualBlockIdx now_virtual_idx = begin_virtual_idx;
   size_t now_logical_idx_off = 0;
 
   while (head_entry != nullptr) {
-    LogLocalIdx persist_start_idx = LogLocalIdx(free_local_idx - 1);
+    LogLocalIdx persist_start_idx = last_local_idx();
     head_entry->op = op;
 
     uint32_t num_blocks = total_blocks;
@@ -86,8 +84,7 @@ LogEntryIdx LogMgr::append(
     // populate body entries until done or until current LogBlock filled up
     while (num_blocks > 0) {
       pmem::LogBodyEntry* body_entry = alloc_body_entry();
-      PANIC_IF(now_logical_idx_off >= begin_logical_idxs.size(),
-               "begin_logical_idxs vector not long enough");
+      assert(now_logical_idx_off < begin_logical_idxs.size());
       body_entry->begin_virtual_idx = now_virtual_idx;
       body_entry->begin_logical_idx = begin_logical_idxs[now_logical_idx_off++];
       now_virtual_idx += MAX_BLOCKS_PER_BODY;
@@ -95,11 +92,6 @@ LogEntryIdx LogMgr::append(
                        ? 0
                        : num_blocks - MAX_BLOCKS_PER_BODY;
     }
-
-    // FIXME: better debugging message when future implementation is done
-    std::ostringstream osstream;
-    osstream << *head_entry;
-    DEBUG("new head entry %s", osstream.str().c_str());
 
     curr_block->persist(persist_start_idx, free_local_idx, fenced);
     if (head_entry->overflow)

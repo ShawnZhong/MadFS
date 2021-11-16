@@ -56,14 +56,15 @@ class LogMgr {
    * get total coverage of the group of log entries starting at the head at idx
    *
    * @param first_head_idx LogEntryIdx of the first head entry
-   * @param need_logical_idxs if true, returns a list of corresponding
-   *                          logical indices; pass true when applying the
-   *                          transaction, and pass false when checking OCC
    * @param[out] begin_virtual_idx begin_virtual_idx of the coverage
    * @param[out] num_blocks number of blocks in the coverage
-   * @param[out] begin_logical_idxs pointer to vector of logical indices
+   * @param[out] begin_logical_idxs pointer to vector of logical indices,
+   *                                if nonnull, pushes a list of corresponding
+   *                                logical indices; pass one when applying
+   *                                the transaction, and pass nullptr when
+   *                                first checking OCC
    */
-  void get_coverage(LogEntryIdx first_head_idx, bool need_logical_idxs,
+  void get_coverage(LogEntryIdx first_head_idx,
                     VirtualBlockIdx& begin_virtual_idx, uint32_t& num_blocks,
                     std::vector<LogicalBlockIdx>* begin_logical_idxs = nullptr);
 
@@ -102,7 +103,7 @@ class LogMgr {
         prev_head_entry->next.next_local_idx = free_local_idx;
     }
 
-    PANIC_IF(curr_block == nullptr, "curr_block is null");
+    assert(curr_block != nullptr);
     pmem::LogEntry* entry = curr_block->get(free_local_idx);
     free_local_idx++;
     return entry;
@@ -122,5 +123,10 @@ class LogMgr {
   [[nodiscard]] uint16_t num_free_entries() {
     return NUM_LOG_ENTRY - free_local_idx;
   }
+
+  /**
+   * get the last allocated entry's local index
+   */
+  [[nodiscard]] LogLocalIdx last_local_idx() { return free_local_idx - 1; }
 };
 }  // namespace ulayfs::dram

@@ -13,7 +13,7 @@ using VirtualBlockIdx = uint32_t;
 // local index within a block; this can be -1 to indicate an error
 using BitmapLocalIdx = int16_t;
 using TxLocalIdx = int16_t;
-// Note: LogLocalIdx will persist and the valid range is [0, 512]
+// Note: LogLocalIdx will persist and the valid range is [0, 511]
 using LogLocalIdx = uint16_t;
 
 // identifier of bitmap blocks; checkout BitmapBlock's doc to see more

@@ -113,13 +113,11 @@ class LogEntryBlock : public BaseBlock {
   }
 
   void persist(LogLocalIdx start_idx, LogLocalIdx end_idx, bool fenced = true) {
-    start_idx = ALIGN_DOWN(start_idx, NUM_LOG_ENTRY_CACHELINE);
-    for (auto idx = start_idx; idx < end_idx; idx += NUM_LOG_ENTRY_CACHELINE) {
-      if (fenced)
-        persist_cl_fenced(&log_entries[idx]);
-      else
-        persist_cl_unfenced(&log_entries[idx]);
-    }
+    size_t len = (end_idx - start_idx) * sizeof(LogEntry);
+    if (fenced)
+      persist_fenced(&log_entries[start_idx], len);
+    else
+      persist_unfenced(&log_entries[start_idx], len);
   }
 };
 

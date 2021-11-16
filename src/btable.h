@@ -95,8 +95,8 @@ class BlkTable {
     uint32_t num_blocks;
     VirtualBlockIdx begin_virtual_idx;
     std::vector<LogicalBlockIdx> begin_logical_idxs;
-    log_mgr->get_coverage(log_entry_idx, /* need_logical_idxs */ true,
-                          begin_virtual_idx, num_blocks, &begin_logical_idxs);
+    log_mgr->get_coverage(log_entry_idx, begin_virtual_idx, num_blocks,
+                          &begin_logical_idxs);
 
     size_t now_logical_idx_off = 0;
     VirtualBlockIdx now_virtual_idx = begin_virtual_idx;

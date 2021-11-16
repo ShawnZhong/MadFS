@@ -233,7 +233,7 @@ bool TxMgr::handle_conflict(pmem::TxEntry curr_entry,
       if (num_blocks) {  // inline tx
         le_first_vidx = curr_entry.commit_entry.begin_virtual_idx;
       } else {  // dereference log_entry_idx
-        log_mgr->get_coverage(curr_entry.commit_entry.log_entry_idx, false,
+        log_mgr->get_coverage(curr_entry.commit_entry.log_entry_idx,
                               le_first_vidx, num_blocks);
       }
       le_last_vidx = le_first_vidx + num_blocks - 1;
@@ -246,7 +246,7 @@ bool TxMgr::handle_conflict(pmem::TxEntry curr_entry,
       need_redo = true;
       if (le_begin_lidx == 0) {  // lazy dereference log idx
         std::vector<LogicalBlockIdx> le_begin_lidxs;
-        log_mgr->get_coverage(curr_entry.commit_entry.log_entry_idx, true,
+        log_mgr->get_coverage(curr_entry.commit_entry.log_entry_idx,
                               le_first_vidx, num_blocks, &le_begin_lidxs);
         le_begin_lidx = le_begin_lidxs.front();
       }
