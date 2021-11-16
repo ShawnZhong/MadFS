@@ -24,7 +24,6 @@ add_library(ulayfs SHARED
     src/btable.h
     src/entry.h
     src/file.h src/file.cpp
-    src/futex.h
     src/layout.h
     src/lib.h src/lib.cpp
     src/log.h
@@ -34,7 +33,7 @@ add_library(ulayfs SHARED
     src/tx.h src/tx.cpp
     src/utils.h
     )
-target_link_libraries(ulayfs dl)
+target_link_libraries(ulayfs dl pthread)
 
 # enable link time optimization
 set_property(TARGET ulayfs PROPERTY INTERPROCEDURAL_OPTIMIZATION TRUE)
@@ -90,8 +89,6 @@ include_directories(src)
 
 add_executable(test_basic test/test_basic.cpp test/common.h)
 target_link_libraries(test_basic ulayfs)
-
-add_executable(test_futex test/test_futex.cpp)
 
 add_executable(test_rw test/test_rw.cpp test/common.h)
 target_link_libraries(test_rw ulayfs)
