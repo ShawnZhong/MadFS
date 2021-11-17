@@ -33,7 +33,13 @@ add_library(ulayfs SHARED
     src/tx.h src/tx.cpp
     src/utils.h
     )
-target_link_libraries(ulayfs dl pthread)
+
+# external dependencies
+include(FetchContent)
+FetchContent_Declare(tbb URL https://github.com/oneapi-src/oneTBB/releases/download/v2021.4.0/oneapi-tbb-2021.4.0-lin.tgz)
+FetchContent_MakeAvailable(tbb)
+set(TBB_DIR ${tbb_SOURCE_DIR}/lib/cmake/tbb)
+find_package(TBB)
 
 # enable link time optimization
 set_property(TARGET ulayfs PROPERTY INTERPROCEDURAL_OPTIMIZATION TRUE)
