@@ -132,6 +132,10 @@ void __attribute__((constructor)) ulayfs_ctor() {
 /**
  * Called when the shared library is unloaded
  */
-void __attribute__((destructor)) ulayfs_dtor() {}
+void __attribute__((destructor)) ulayfs_dtor() {
+  for (auto& [fd, file] : files) {
+    delete file;
+  }
+}
 }  // extern "C"
 }  // namespace ulayfs

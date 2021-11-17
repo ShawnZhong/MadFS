@@ -63,6 +63,7 @@ int main(int argc, char* argv[]) {
   // everything block-aligned
   test({.num_bytes_per_iter = BLOCK_SIZE});
   test({.num_bytes_per_iter = BLOCK_SIZE * 8});
+  test({.num_bytes_per_iter = BLOCK_SIZE * 33});
   test({.num_bytes_per_iter = BLOCK_SIZE, .num_iter = 2});
   test({.num_bytes_per_iter = BLOCK_SIZE * 8, .num_iter = 2});
 
