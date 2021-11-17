@@ -38,9 +38,6 @@ jobs:
       - name: test_rw
         run: ./test_rw
 
-      - name: test_futex
-        run: ./test_futex
-
       - name: test_basic
         run: ./test_basic
 

@@ -1,5 +1,9 @@
 #pragma once
 
+#include <pthread.h>
+
+#include <cstring>
+
 #include "bitmap.h"
 #include "entry.h"
 #include "layout.h"
@@ -151,13 +155,12 @@ class MetaBlock : public BaseBlock {
     char cl1[CACHELINE_SIZE];
   };
 
-  // set futex to another cacheline to avoid futex's contention affect
-  // reading the metadata above
+  // move mutex to another cache line to avoid contention on reading the
+  // metadata above
   union {
     struct {
-      // address for futex to lock, 4 bytes in size
       // this lock is ONLY used for ftruncate
-      Futex meta_lock;
+      pthread_mutex_t mutex;
 
       // file size in bytes (logical size to users)
       // modifications to this usually requires meta_lock being held
@@ -192,9 +195,15 @@ class MetaBlock : public BaseBlock {
    */
   void init() {
     // the first block is always used (by MetaBlock itself)
-    meta_lock.init();
-    memcpy(signature, FILE_SIGNATURE, SIGNATURE_SIZE);
 
+    // initialize the mutex
+    pthread_mutexattr_t attr;
+    pthread_mutexattr_init(&attr);
+    pthread_mutexattr_setrobust(&attr, PTHREAD_MUTEX_ROBUST);
+    pthread_mutex_init(&mutex, &attr);
+
+    // initialize the signature
+    memcpy(signature, FILE_SIGNATURE, SIGNATURE_SIZE);
     persist_cl_fenced(&cl1);
   }
 
@@ -204,9 +213,19 @@ class MetaBlock : public BaseBlock {
   }
 
   // acquire/release meta lock (usually only during allocation)
-  // we don't need to call persistence since futex is robust to crash
-  void lock() { meta_lock.acquire(); }
-  void unlock() { meta_lock.release(); }
+  // we don't need to call persistence since mutex is robust to crash
+  void lock() {
+    int rc = pthread_mutex_lock(&mutex);
+    if (rc == EOWNERDEAD) {
+      WARN("Mutex owner died");
+      rc = pthread_mutex_consistent(&mutex);
+      PANIC_IF(rc != 0, "pthread_mutex_consistent failed");
+    }
+  }
+  void unlock() {
+    int rc = pthread_mutex_unlock(&mutex);
+    PANIC_IF(rc != 0, "Mutex unlock failed");
+  }
 
   /*
    * Getters and setters
