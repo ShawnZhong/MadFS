@@ -74,7 +74,7 @@ class BlkTable {
     while (true) {
       auto tx_entry = tx_mgr->get_entry_from_block(tail_tx_idx, tail_tx_block);
       if (!tx_entry.is_valid()) break;
-      if (tx_entry.is_commit()) apply_tx(tx_entry.commit_entry);
+      apply_tx(tx_entry);
       // FIXME: handle race condition??
       if (!tx_mgr->advance_tx_idx(tail_tx_idx, tail_tx_block, do_alloc)) break;
     }
@@ -104,7 +104,7 @@ class BlkTable {
   /**
    * Apply a transaction to the block table
    */
-  void apply_tx(pmem::TxCommitEntry tx_commit_entry) {
+  void apply_tx(pmem::TxEntry tx_commit_entry) {
     auto log_entry_idx = tx_commit_entry.log_entry_idx;
 
     uint32_t num_blocks;

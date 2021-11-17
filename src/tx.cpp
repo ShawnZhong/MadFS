@@ -227,49 +227,44 @@ bool TxMgr::handle_conflict(pmem::TxEntry curr_entry,
     // TODO: implement the case where num_blocks is over 64 and there
     //       are multiple begin_logical_idxs
     // TODO: handle writev requests
-    if (curr_entry.is_commit()) {
-      le_begin_lidx = 0;
-      num_blocks = curr_entry.commit_entry.num_blocks;
-      if (num_blocks) {  // inline tx
-        le_first_vidx = curr_entry.commit_entry.begin_virtual_idx;
-      } else {  // dereference log_entry_idx
-        log_mgr->get_coverage(curr_entry.commit_entry.log_entry_idx,
-                              le_first_vidx, num_blocks);
-      }
-      le_last_vidx = le_first_vidx + num_blocks - 1;
-      if (last_vidx < le_first_vidx || first_vidx > le_last_vidx) goto next;
+    le_begin_lidx = 0;
+    num_blocks = curr_entry.num_blocks;
+    if (num_blocks) {  // inline tx
+      le_first_vidx = curr_entry.begin_virtual_idx;
+    } else {  // dereference log_entry_idx
+      log_mgr->get_coverage(curr_entry.log_entry_idx, le_first_vidx,
+                            num_blocks);
+    }
+    le_last_vidx = le_first_vidx + num_blocks - 1;
+    if (last_vidx < le_first_vidx || first_vidx > le_last_vidx) goto next;
 
-      overlap_first_vidx =
-          le_first_vidx > first_vidx ? le_first_vidx : first_vidx;
-      overlap_last_vidx = le_last_vidx < last_vidx ? le_last_vidx : last_vidx;
+    overlap_first_vidx =
+        le_first_vidx > first_vidx ? le_first_vidx : first_vidx;
+    overlap_last_vidx = le_last_vidx < last_vidx ? le_last_vidx : last_vidx;
 
-      need_redo = true;
-      if (le_begin_lidx == 0) {  // lazy dereference log idx
-        std::vector<LogicalBlockIdx> le_begin_lidxs;
-        log_mgr->get_coverage(curr_entry.commit_entry.log_entry_idx,
-                              le_first_vidx, num_blocks, &le_begin_lidxs);
-        le_begin_lidx = le_begin_lidxs.front();
-      }
+    need_redo = true;
+    if (le_begin_lidx == 0) {  // lazy dereference log idx
+      std::vector<LogicalBlockIdx> le_begin_lidxs;
+      log_mgr->get_coverage(curr_entry.log_entry_idx, le_first_vidx, num_blocks,
+                            &le_begin_lidxs);
+      le_begin_lidx = le_begin_lidxs.front();
+    }
 
-      if (is_range) {
-        for (VirtualBlockIdx vidx = overlap_first_vidx;
-             vidx <= overlap_last_vidx; ++vidx) {
-          auto offset = vidx - first_vidx;
-          (*redo_image)[offset] = le_begin_lidx + offset;
-        }
-      } else {
-        if (overlap_first_vidx == first_vidx) {
-          *redo_first = true;
-          *first_lidx = first_vidx + le_begin_lidx - le_first_vidx;
-        }
-        if (overlap_last_vidx == last_vidx) {
-          *redo_last = true;
-          *last_lidx = last_vidx + le_begin_lidx - le_first_vidx;
-        }
+    if (is_range) {
+      for (VirtualBlockIdx vidx = overlap_first_vidx; vidx <= overlap_last_vidx;
+           ++vidx) {
+        auto offset = vidx - first_vidx;
+        (*redo_image)[offset] = le_begin_lidx + offset;
       }
     } else {
-      // FIXME: there should not be any other one
-      assert(0);
+      if (overlap_first_vidx == first_vidx) {
+        *redo_first = true;
+        *first_lidx = first_vidx + le_begin_lidx - le_first_vidx;
+      }
+      if (overlap_last_vidx == last_vidx) {
+        *redo_last = true;
+        *last_lidx = last_vidx + le_begin_lidx - le_first_vidx;
+      }
     }
   next:
     if (!advance_tx_idx(tail_tx_idx, tail_tx_block, /*do_alloc*/ false)) break;
@@ -306,11 +301,9 @@ std::ostream& operator<<(std::ostream& out, const TxMgr& tx_mgr) {
   while (true) {
     auto tx_entry = tx_mgr.get_entry_from_block(tx_idx, tx_block);
     if (!tx_entry.is_valid()) break;
-    auto commit_entry = tx_entry.commit_entry;
-    out << "\t" << tx_idx << " -> " << commit_entry << "\n";
-    out << "\t\t" << commit_entry.log_entry_idx << " -> "
-        << *(tx_mgr.log_mgr->get_head_entry(commit_entry.log_entry_idx))
-        << "\n";
+    out << "\t" << tx_idx << " -> " << tx_entry << "\n";
+    out << "\t\t" << tx_entry.log_entry_idx << " -> "
+        << *(tx_mgr.log_mgr->get_head_entry(tx_entry.log_entry_idx)) << "\n";
     if (!tx_mgr.advance_tx_idx(tx_idx, tx_block, /*do_alloc*/ false)) break;
   }
 
@@ -369,7 +362,7 @@ void TxMgr::AlignedTx::do_write() {
   // make a local copy of the tx tail
   tx_mgr->blk_table->get_tail_tx(tail_tx_idx, tail_tx_block);
   // commit the transaction, it's fine if the tx fails due to race condition
-  pmem::TxCommitEntry entry(num_blocks, begin_vidx, log_idx);
+  pmem::TxEntry entry(num_blocks, begin_vidx, log_idx);
   tx_mgr->try_commit(entry, tail_tx_idx, tail_tx_block, /*cont_if_fail*/ true);
 }
 
@@ -379,7 +372,7 @@ void TxMgr::AlignedTx::do_write() {
 
 TxMgr::CoWTx::CoWTx(TxMgr* tx_mgr, const char* buf, size_t count, size_t offset)
     : Tx(tx_mgr, buf, count, offset),
-      entry(pmem::TxCommitEntry(num_blocks, begin_vidx, log_idx)),
+      entry(pmem::TxEntry(num_blocks, begin_vidx, log_idx)),
       begin_full_vidx(ALIGN_UP(offset, BLOCK_SIZE) >> BLOCK_SHIFT),
       end_full_vidx(end_offset >> BLOCK_SHIFT),
       num_full_blocks(end_full_vidx - begin_full_vidx),

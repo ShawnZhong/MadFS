@@ -9,12 +9,7 @@
 
 namespace ulayfs::pmem {
 
-enum class TxEntryType : bool {
-  TX_BEGIN = false,
-  TX_COMMIT = true,
-};
-
-struct TxCommitEntry {
+struct TxEntry {
  private:
   static constexpr int NUM_BLOCKS_BITS = 6;
   static constexpr int BEGIN_VIRTUAL_IDX_BITS = 17;
@@ -23,23 +18,28 @@ struct TxCommitEntry {
   static constexpr int BEGIN_VIRTUAL_IDX_MAX =
       (1 << BEGIN_VIRTUAL_IDX_BITS) - 1;
 
-  enum TxEntryType type : 1 = TxEntryType::TX_COMMIT;
-
-  friend union TxEntry;
-
  public:
-  // optionally, set these bits so OCC conflict detection can be done inline
-  uint32_t num_blocks : NUM_BLOCKS_BITS;
-  uint32_t begin_virtual_idx : BEGIN_VIRTUAL_IDX_BITS;
+  union {
+    struct {
+      // optionally, set these bits so OCC conflict detection can be done inline
+      uint32_t num_blocks : NUM_BLOCKS_BITS;
+      uint32_t begin_virtual_idx : BEGIN_VIRTUAL_IDX_BITS;
 
-  // points to the first LogHeadEntry for the group of log entries for this
-  // transaction
-  LogEntryIdx log_entry_idx;
+      // points to the first LogHeadEntry for the group of log entries for this
+      // transaction
+      LogEntryIdx log_entry_idx;
+    };
+
+    uint64_t raw_bits;
+  };
+
+  TxEntry(){};
+  TxEntry(uint64_t raw_bits) : raw_bits(raw_bits) {}
 
   // It's an optimization that num_blocks and virtual_block_idx could inline
   // with TxCommitEntry, but only if they could fit in.
-  TxCommitEntry(uint32_t num_blocks, uint32_t begin_virtual_idx,
-                LogEntryIdx log_entry_idx)
+  TxEntry(uint32_t num_blocks, uint32_t begin_virtual_idx,
+          LogEntryIdx log_entry_idx)
       : num_blocks(0), begin_virtual_idx(0), log_entry_idx(log_entry_idx) {
     assert(num_blocks <= NUM_BLOCKS_MAX);
     assert(begin_virtual_idx <= BEGIN_VIRTUAL_IDX_MAX);
@@ -47,35 +47,17 @@ struct TxCommitEntry {
     this->begin_virtual_idx = begin_virtual_idx;
   }
 
-  friend std::ostream& operator<<(std::ostream& out,
-                                  const TxCommitEntry& entry) {
-    out << "TxCommitEntry{n_blk=" << entry.num_blocks
-        << ", vidx=" << entry.begin_virtual_idx << "}";
-    return out;
-  }
-};
-
-union TxEntry {
- private:
-  uint64_t raw_bits;
-
- public:
-  // WARN: begin_entry is deprecated
-  TxCommitEntry commit_entry;
-
-  TxEntry(){};
-  TxEntry(uint64_t raw_bits) : raw_bits(raw_bits) {}
-  TxEntry(TxCommitEntry commit_entry) : commit_entry(commit_entry) {}
-
-  [[nodiscard]] bool is_commit() const {
-    return commit_entry.type == TxEntryType::TX_COMMIT;
-  }
-
   [[nodiscard]] bool is_valid() const { return raw_bits != 0; }
 
   [[nodiscard]] static bool is_last_entry_in_cacheline(TxLocalIdx idx) {
     auto offset = 2 * sizeof(LogicalBlockIdx) + (idx + 1) * sizeof(TxEntry);
     return (offset & (CACHELINE_SIZE - 1)) == 0;
+  }
+
+  friend std::ostream& operator<<(std::ostream& out, const TxEntry& entry) {
+    out << "TxEntry{n_blk=" << entry.num_blocks
+        << ", vidx=" << entry.begin_virtual_idx << "}";
+    return out;
   }
 
   /**
@@ -113,15 +95,9 @@ union TxEntry {
     // if success, it will return 0
     return expected;
   }
-
-  friend std::ostream& operator<<(std::ostream& out, const TxEntry& tx_entry) {
-    if (tx_entry.is_commit()) out << tx_entry.commit_entry;
-    return out;
-  }
 };
 
 static_assert(sizeof(TxEntry) == 8, "TxEntry must be 64 bits");
-static_assert(sizeof(TxCommitEntry) == 8, "TxEntry must be 64 bits");
 
 enum class LogOp {
   LOG_INVALID = 0,

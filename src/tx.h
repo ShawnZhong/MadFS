@@ -250,7 +250,7 @@ class TxMgr::CoWTx : public TxMgr::Tx {
   CoWTx(TxMgr* tx_mgr, const char* buf, size_t count, size_t offset);
 
   // the tx entry to be committed
-  const pmem::TxCommitEntry entry;
+  const pmem::TxEntry entry;
 
   /*
    * Read-only properties
