@@ -96,7 +96,7 @@ class TxBlock : public BaseBlock {
   bool set_next_tx_block(LogicalBlockIdx block_idx) {
     LogicalBlockIdx expected = 0;
     bool success = __atomic_compare_exchange_n(
-        &next, &expected, block_idx, true, __ATOMIC_ACQ_REL, __ATOMIC_ACQUIRE);
+        &next, &expected, block_idx, false, __ATOMIC_ACQ_REL, __ATOMIC_ACQUIRE);
     if (success) persist_cl_fenced(&next);
     return success;
   }
@@ -225,7 +225,7 @@ class MetaBlock : public BaseBlock {
   bool set_next_tx_block(LogicalBlockIdx block_idx) {
     LogicalBlockIdx expected = 0;
     bool success =
-        __atomic_compare_exchange_n(&next_tx_block, &expected, block_idx, true,
+        __atomic_compare_exchange_n(&next_tx_block, &expected, block_idx, false,
                                     __ATOMIC_ACQ_REL, __ATOMIC_ACQUIRE);
     if (success) persist_cl_fenced(&next_tx_block);
     return success;
