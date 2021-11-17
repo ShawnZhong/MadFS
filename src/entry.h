@@ -49,8 +49,11 @@ struct TxCommitEntry {
 
   friend std::ostream& operator<<(std::ostream& out,
                                   const TxCommitEntry& entry) {
-    out << "TxCommitEntry{n_blk=" << entry.num_blocks
-        << ", vidx=" << entry.begin_virtual_idx << "}";
+    out << "TxCommitEntry{";
+    out << "n_blk=" << entry.num_blocks << ", ";
+    out << "vidx=" << entry.begin_virtual_idx << ", ";
+    out << "log_head=" << entry.log_entry_idx;
+    out << "}";
     return out;
   }
 };
