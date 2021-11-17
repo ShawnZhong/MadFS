@@ -23,8 +23,9 @@ static_assert(NUM_BITMAP - 1 <= std::numeric_limits<BitmapLocalIdx>::max(),
               "NUM_BITMAP - 1 should be representable with BitmapLocalIdx");
 static_assert(NUM_TX_ENTRY - 1 <= std::numeric_limits<TxLocalIdx>::max(),
               "NUM_TX_ENTRY - 1 should be representable with TxLocalIdx");
-static_assert(NUM_LOG_ENTRY - 1 <= std::numeric_limits<LogLocalIdx>::max(),
-              "NUM_LOG_ENTRY - 1 should be representable with LogLocalIdx");
+static_assert(
+    NUM_LOG_ENTRY - 1 <= std::numeric_limits<LogLocalUnpackIdx>::max(),
+    "NUM_LOG_ENTRY - 1 should be representable with LogLocalUnpackIdx");
 
 // inline data structure count in meta block
 constexpr static uint16_t NUM_CL_BITMAP_IN_META = 32;
@@ -44,5 +45,9 @@ constexpr static uint32_t BITMAP_BLOCK_CAPACITY =
 // 32 cacheline corresponds to 2^14 bits
 constexpr static uint32_t INLINE_BITMAP_CAPACITY =
     NUM_INLINE_BITMAP * BITMAP_CAPACITY;
+
+// how many data blocks can be covered per CAS
+// TODO: put this constant somewhere else?
+constexpr static uint8_t MAX_BLOCKS_PER_BODY = 64;
 
 }  // namespace ulayfs

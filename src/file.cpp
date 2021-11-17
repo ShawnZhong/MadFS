@@ -3,7 +3,7 @@
 namespace ulayfs::dram {
 
 File::File(const char* pathname, int flags, mode_t mode)
-    : open_flags(flags), valid(false) {
+    : open_flags(flags), valid(false), file_offset(0) {
   if ((flags & O_ACCMODE) == O_WRONLY) {
     INFO("File \"%s\" opened with O_WRONLY. Changed to O_RDWR.", pathname);
     flags &= ~O_WRONLY;

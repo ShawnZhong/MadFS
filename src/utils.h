@@ -38,16 +38,14 @@
 
 // DEBUG, INFO, and WARN are not active in release mode
 static FILE *log_file = stderr;
-#define LOG(level, msg, ...)                                     \
-  do {                                                           \
-    if constexpr (BuildOptions::debug) {                         \
-      if (level < runtime_options.log_level) break;              \
-      const char *level_str = level == 1   ? "DEBUG"             \
-                              : level == 2 ? "INFO"              \
-                              : level == 3 ? "WARN"              \
-                                           : "UNK";              \
-      FPRINTF(log_file, "[%5s] " msg, level_str, ##__VA_ARGS__); \
-    }                                                            \
+#define LOG(level, msg, ...)                                             \
+  do {                                                                   \
+    if constexpr (BuildOptions::debug) {                                 \
+      if (level < runtime_options.log_level) break;                      \
+      constexpr const char *level_str_arr[] = {"DEBUG", "INFO", "WARN"}; \
+      constexpr const char *level_str = level_str_arr[level - 1];        \
+      FPRINTF(log_file, "[%5s] " msg, level_str, ##__VA_ARGS__);         \
+    }                                                                    \
   } while (0)
 
 #define DEBUG(msg, ...) LOG(1, msg, ##__VA_ARGS__)
