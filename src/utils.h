@@ -42,10 +42,8 @@ static FILE *log_file = stderr;
   do {                                                           \
     if constexpr (BuildOptions::debug) {                         \
       if (level < runtime_options.log_level) break;              \
-      const char *level_str = level == 1   ? "DEBUG"             \
-                              : level == 2 ? "INFO"              \
-                              : level == 3 ? "WARN"              \
-                                           : "UNK";              \
+      const char *level_str_arr[] = {"DEBUG", "INFO", "WARN"};   \
+      const char *level_str = level_str_arr[level - 1];          \
       FPRINTF(log_file, "[%5s] " msg, level_str, ##__VA_ARGS__); \
     }                                                            \
   } while (0)

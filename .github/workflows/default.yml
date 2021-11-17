@@ -13,7 +13,7 @@ jobs:
       - uses: DoozyX/clang-format-lint-action@v0.12
         with:
           extensions: "h,h.in,cpp"
-          clangFormatVersion: 12
+          clangFormatVersion: 10
 
   test:
     strategy:
