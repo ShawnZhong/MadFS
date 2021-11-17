@@ -3,7 +3,7 @@
 namespace ulayfs::dram {
 
 File::File(const char* pathname, int flags, mode_t mode)
-    : open_flags(flags), valid(false) {
+    : open_flags(flags), valid(false), file_offset(0) {
   if ((flags & O_ACCMODE) == O_WRONLY) {
     INFO("File \"%s\" opened with O_WRONLY. Changed to O_RDWR.", pathname);
     flags &= ~O_WRONLY;
@@ -81,7 +81,7 @@ off_t File::lseek(off_t offset, int whence) {
         new_off = old_off + offset;
         if (new_off < 0) return -1;
       } while (!__atomic_compare_exchange_n(&file_offset, &old_off, new_off,
-                                            true, __ATOMIC_ACQ_REL,
+                                            false, __ATOMIC_ACQ_REL,
                                             __ATOMIC_RELAXED));
       return file_offset;
     }
@@ -114,7 +114,7 @@ ssize_t File::read(void* buf, size_t count) {
   do {
     // TODO: place file_offset to EOF when entire file is read
     new_off = old_off + static_cast<off_t>(count);
-  } while (!__atomic_compare_exchange_n(&file_offset, &old_off, new_off, true,
+  } while (!__atomic_compare_exchange_n(&file_offset, &old_off, new_off, false,
                                         __ATOMIC_ACQ_REL, __ATOMIC_RELAXED));
 
   return pread(buf, count, old_off);

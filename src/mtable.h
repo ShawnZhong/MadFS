@@ -1,10 +1,11 @@
 #pragma once
 
 #include <linux/mman.h>
+#include <tbb/concurrent_unordered_map.h>
+#include <tbb/concurrent_vector.h>
 
 #include <cstddef>
 #include <stdexcept>
-#include <unordered_map>
 
 #include "block.h"
 #include "config.h"
@@ -38,10 +39,10 @@ class MemTable {
   // may be out-of-date; must re-read global one if necessary
   uint32_t num_blocks_local_copy;
 
-  std::unordered_map<LogicalBlockIdx, pmem::Block*> table;
+  tbb::concurrent_unordered_map<LogicalBlockIdx, pmem::Block*> table;
 
   // a vector of <addr, length> pairs
-  std::vector<std::tuple<void*, size_t>> mmap_regions;
+  tbb::concurrent_vector<std::tuple<void*, size_t>> mmap_regions;
 
  private:
   // called by other public functions with lock held
