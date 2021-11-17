@@ -43,8 +43,10 @@ int open(const char* pathname, int flags, ...) {
 }
 
 int close(int fd) {
-  if (files.erase(fd) == 1) {
+  if (auto file = get_file(fd)) {
     INFO("ulayfs::close(%d)", fd);
+    files.erase(fd);
+    delete file;
     return 0;
   } else {
     DEBUG("posix::close(%d)", fd);
