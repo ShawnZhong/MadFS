@@ -115,3 +115,7 @@ set(CMAKE_SHARED_LINKER_FLAGS_ASAN
 set(CMAKE_CXX_FLAGS_UBSAN
     "${CMAKE_CXX_FLAGS_DEBUG} -fsanitize=undefined" CACHE STRING
     "Flags used by the C++ compiler during UndefinedBehaviourSanitizer builds." FORCE)
+
+set(CMAKE_CXX_FLAGS_MSAN
+    "${CMAKE_CXX_FLAGS_DEBUG} -fsanitize=memory -fsanitize-memory-track-origins=2 -fno-omit-frame-pointer" CACHE STRING
+    "Flags used by the C++ compiler during MemorySanitizer builds." FORCE)
