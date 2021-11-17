@@ -1,5 +1,6 @@
 #pragma once
 
+#include <pthread.h>
 #include <tbb/concurrent_vector.h>
 
 #include <cstdint>
@@ -27,6 +28,7 @@ class BlkTable {
   // keep track of the next TxEntry to apply
   TxEntryIdx tail_tx_idx;
   pmem::TxBlock* tail_tx_block;
+  pthread_spinlock_t spinlock;
 
  public:
   BlkTable() = default;
@@ -57,6 +59,7 @@ class BlkTable {
    * default is false, and only set to true when write permission is granted
    */
   void update(bool do_alloc = false) {
+    pthread_spin_lock(&spinlock);
     // it's possible that the previous update move idx to overflow state
     if (!tx_mgr->handle_idx_overflow(tail_tx_idx, tail_tx_block, do_alloc)) {
       // if still overflow, do_alloc must be unset
@@ -72,6 +75,7 @@ class BlkTable {
       // FIXME: handle race condition??
       if (!tx_mgr->advance_tx_idx(tail_tx_idx, tail_tx_block, do_alloc)) break;
     }
+    pthread_spin_unlock(&spinlock);
   }
 
   /**
