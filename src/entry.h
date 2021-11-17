@@ -184,7 +184,7 @@ struct LogHeadEntry {
     out << "overflow=" << (entry.overflow ? "T" : "F") << ", ";
     out << "saturate=" << (entry.saturate ? "T" : "F") << ", ";
     out << "op=" << unsigned(entry.op) << ", ";
-    out << "left_bytes" << entry.leftover_bytes << ", ";
+    out << "left_bytes=" << entry.leftover_bytes << ", ";
     out << "n_blk=" << entry.num_blocks << ", ";
     out << "has_next=" << (entry.next.is_valid() ? "T" : "F");
     out << "}";

@@ -16,7 +16,7 @@ void LogMgr::get_coverage(LogEntryIdx first_head_idx,
                           VirtualBlockIdx& begin_virtual_idx,
                           uint32_t& num_blocks,
                           std::vector<LogicalBlockIdx>* begin_logical_idxs) {
-  LogEntryUnpackIdx idx = LogEntryUnpackIdx(first_head_idx);
+  LogEntryUnpackIdx idx = LogEntryUnpackIdx::from_pack_idx(first_head_idx);
   const pmem::LogHeadEntry* head_entry = get_head_entry(first_head_idx);
 
   // a head entry at the last slot of a LogBlock could have 0 body entries
@@ -97,6 +97,10 @@ LogEntryIdx LogMgr::append(
                        : num_blocks - MAX_BLOCKS_PER_BODY;
     }
 
+    std::ostringstream ss;
+    ss << *head_entry;
+    DEBUG("new head entry %s", ss.str().c_str());
+
     curr_block->persist(persist_start_idx, free_local_idx, fenced);
     if (head_entry->overflow)
       head_entry = alloc_head_entry(head_entry);
@@ -104,7 +108,7 @@ LogEntryIdx LogMgr::append(
       head_entry = nullptr;
   }
 
-  return LogEntryIdx(first_head_idx);
+  return LogEntryUnpackIdx::to_pack_idx(first_head_idx);
 }
 
 }  // namespace ulayfs::dram

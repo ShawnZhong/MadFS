@@ -1,5 +1,6 @@
 #pragma once
 
+#include <cassert>
 #include <cstdint>
 #include <iostream>
 
@@ -48,6 +49,17 @@ struct __attribute__((packed)) LogEntryIdx {
 struct __attribute__((packed)) LogEntryUnpackIdx {
   LogicalBlockIdx block_idx;
   LogLocalUnpackIdx local_idx;
+
+  static LogEntryUnpackIdx from_pack_idx(LogEntryIdx idx) {
+    LogLocalUnpackIdx local_idx = LogLocalUnpackIdx(idx.local_idx << 1);
+    return LogEntryUnpackIdx{idx.block_idx, local_idx};
+  }
+
+  static LogEntryIdx to_pack_idx(LogEntryUnpackIdx idx) {
+    assert(idx.local_idx % 2 == 0);
+    LogLocalIdx local_idx = LogLocalIdx(idx.local_idx >> 1);
+    return LogEntryIdx{idx.block_idx, local_idx};
+  }
 };
 
 static_assert(sizeof(LogEntryIdx) == 5, "LogEntryIdx must be 40 bits");

@@ -41,16 +41,16 @@ class LogMgr {
   /**
    * get pointer to entry data from 6-byte unpacked index
    */
-  const pmem::LogEntry* get_entry(pmem::LogEntryUnpackIdx idx) {
+  const pmem::LogEntry* get_entry(LogEntryUnpackIdx idx) {
     return mem_table->get(idx.block_idx)->log_entry_block.get(idx.local_idx);
   }
 
   // syntax sugar for union dispatching
-  const pmem::LogHeadEntry* get_head_entry(pmem::LogEntryUnpackIdx idx) {
+  const pmem::LogHeadEntry* get_head_entry(LogEntryUnpackIdx idx) {
     return &get_entry(idx)->head_entry;
   }
 
-  const pmem::LogBodyEntry* get_body_entry(pmem::LogEntryUnpackIdx idx) {
+  const pmem::LogBodyEntry* get_body_entry(LogEntryUnpackIdx idx) {
     return &get_entry(idx)->body_entry;
   }
 
@@ -58,8 +58,8 @@ class LogMgr {
   // other parts only have hold access to head entries, which are identified
   // by the 5-byte LogEntryIdx, so only this variant of get_head_entry() is
   // public
-  const pmem::LogHeadEntry* get_head_entry(pmem::LogEntryIdx idx) {
-    return get_head_entry(LogEntryUnpackIdx(idx));
+  const pmem::LogHeadEntry* get_head_entry(LogEntryIdx idx) {
+    return get_head_entry(LogEntryUnpackIdx::from_pack_idx(idx));
   }
 
   // TODO: return op and leftover_bytes
@@ -103,7 +103,8 @@ class LogMgr {
   /**
    * allocate a log entry, possibly triggering allocating a new LogBlock
    */
-  pmem::LogEntry* alloc_entry(pmem::LogHeadEntry* prev_head_entry = nullptr) {
+  pmem::LogEntry* alloc_entry(bool pack_align = false,
+                              pmem::LogHeadEntry* prev_head_entry = nullptr) {
     if (free_local_idx == NUM_LOG_ENTRY) {
       LogicalBlockIdx idx = allocator->alloc(1);
       log_blocks.push_back(idx);
@@ -111,6 +112,9 @@ class LogMgr {
       free_local_idx = 0;
       if (prev_head_entry) prev_head_entry->next.next_block_idx = idx;
     } else {
+      // if need 16-byte alignment, maybe skip one 8-byte slot
+      if (pack_align && free_local_idx % 2 == 1)
+        free_local_idx++;
       if (prev_head_entry)
         prev_head_entry->next.next_local_idx = free_local_idx;
     }
@@ -124,7 +128,7 @@ class LogMgr {
   // syntax sugar for union dispatching
   pmem::LogHeadEntry* alloc_head_entry(
       pmem::LogHeadEntry* prev_head_entry = nullptr) {
-    return &alloc_entry(prev_head_entry)->head_entry;
+    return &alloc_entry(/* pack_align */ true, prev_head_entry)->head_entry;
   }
 
   pmem::LogBodyEntry* alloc_body_entry() { return &alloc_entry()->body_entry; }
