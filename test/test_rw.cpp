@@ -64,11 +64,14 @@ int main(int argc, char* argv[]) {
   test({.num_bytes_per_iter = BLOCK_SIZE});
   test({.num_bytes_per_iter = BLOCK_SIZE * 8});
   test({.num_bytes_per_iter = BLOCK_SIZE * 33});
+  test({.num_bytes_per_iter = BLOCK_SIZE * 63});
   test({.num_bytes_per_iter = BLOCK_SIZE, .num_iter = 2});
   test({.num_bytes_per_iter = BLOCK_SIZE * 8, .num_iter = 2});
 
   // single-block write w/ block-aligned starting offset
   test({.num_bytes_per_iter = 8});
+  test({.num_bytes_per_iter = 1});
+  test({.num_bytes_per_iter = 17});
   test({.num_bytes_per_iter = 64});
   test({.num_bytes_per_iter = BLOCK_SIZE / 2});
   test({.num_bytes_per_iter = BLOCK_SIZE - 1});
