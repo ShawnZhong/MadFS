@@ -1,8 +1,9 @@
 #pragma once
 
+#include <tbb/concurrent_vector.h>
+
 #include <cstdint>
 #include <ostream>
-#include <unordered_map>
 
 #include "block.h"
 #include "idx.h"
@@ -21,7 +22,7 @@ class BlkTable {
   LogMgr* log_mgr;
   TxMgr* tx_mgr;
 
-  std::vector<LogicalBlockIdx> table;
+  tbb::concurrent_vector<LogicalBlockIdx> table;
 
   // keep track of the next TxEntry to apply
   TxEntryIdx tail_tx_idx;
