@@ -1,9 +1,9 @@
-.PHONY: debug release asan clean
+.PHONY: debug release asan ubsan clean
 
-asan: export CC := clang
-asan: export CXX := clang++
+asan ubsan: export CC := clang
+asan ubsan: export CXX := clang++
 
-debug release asan:
+debug release asan ubsan:
 	cmake -S . -B build-$@ -DCMAKE_BUILD_TYPE=$@
 	cmake --build build-$@ -j -- --quiet
 

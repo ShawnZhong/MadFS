@@ -13,11 +13,6 @@ set(CMAKE_CXX_FLAGS "\
     -Wno-unused-private-field \
 ")
 
-set(CMAKE_CXX_FLAGS_DEBUG "\
-    ${CMAKE_CXX_FLAGS_DEBUG} \
-    -fsanitize=undefined \
-")
-
 add_library(ulayfs SHARED
     src/alloc.h src/alloc.cpp
     src/bitmap.h
@@ -116,3 +111,7 @@ set(CMAKE_CXX_FLAGS_ASAN
 set(CMAKE_SHARED_LINKER_FLAGS_ASAN
     "${CMAKE_SHARED_LINKER_FLAGS_DEBUG} -fsanitize=address" CACHE STRING
     "Linker lags to be used to create shared libraries for Asan build type." FORCE)
+
+set(CMAKE_CXX_FLAGS_UBSAN
+    "${CMAKE_CXX_FLAGS_DEBUG} -fsanitize=undefined" CACHE STRING
+    "Flags used by the C++ compiler during UndefinedBehaviourSanitizer builds." FORCE)

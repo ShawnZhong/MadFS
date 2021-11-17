@@ -18,7 +18,7 @@ jobs:
   test:
     strategy:
       matrix:
-        build_type: [ debug, release, asan ]
+        build_type: [ debug, release, asan, ubsan ]
 
     runs-on: ubuntu-latest
 
