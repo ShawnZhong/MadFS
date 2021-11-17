@@ -85,6 +85,13 @@ class BlkTable {
   }
 
  private:
+  void resize_to_fit(VirtualBlockIdx idx) {
+    if (table.size() > idx) return;
+    // ref: https://jameshfisher.com/2018/03/30/round-up-power-2/
+    int next_pow2 = 1 << (64 - __builtin_clzl(idx - 1));
+    table.resize(next_pow2);
+  }
+
   // TODO: handle writev requests
   /**
    * Apply a transaction to the block table
@@ -101,7 +108,7 @@ class BlkTable {
     size_t now_logical_idx_off = 0;
     VirtualBlockIdx now_virtual_idx = begin_virtual_idx;
     VirtualBlockIdx end_virtual_idx = begin_virtual_idx + num_blocks;
-    if (table.size() <= end_virtual_idx) table.resize(table.size() * 2);
+    resize_to_fit(end_virtual_idx);
 
     while (now_virtual_idx < end_virtual_idx) {
       uint16_t chunk_blocks =

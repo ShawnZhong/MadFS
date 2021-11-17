@@ -10,11 +10,7 @@ set(CMAKE_CXX_FLAGS "\
     -Wno-unused-parameter \
     -Wno-unused-function \
     -Wno-unused-variable \
-")
-
-set(CMAKE_CXX_FLAGS_DEBUG "\
-    ${CMAKE_CXX_FLAGS_DEBUG} \
-    -fsanitize=undefined \
+    -Wno-unused-private-field \
 ")
 
 add_library(ulayfs SHARED
@@ -106,3 +102,20 @@ target_link_libraries(test_rw ulayfs)
 
 add_executable(test_sync test/test_sync.cpp test/common.h)
 target_link_libraries(test_sync ulayfs pthread)
+
+# sanitizers
+set(CMAKE_CXX_FLAGS_ASAN
+    "${CMAKE_CXX_FLAGS_DEBUG} -fsanitize=address -fno-omit-frame-pointer" CACHE STRING
+    "Flags used by the C++ compiler for Asan build type or configuration." FORCE)
+
+set(CMAKE_SHARED_LINKER_FLAGS_ASAN
+    "${CMAKE_SHARED_LINKER_FLAGS_DEBUG} -fsanitize=address" CACHE STRING
+    "Linker lags to be used to create shared libraries for Asan build type." FORCE)
+
+set(CMAKE_CXX_FLAGS_UBSAN
+    "${CMAKE_CXX_FLAGS_DEBUG} -fsanitize=undefined" CACHE STRING
+    "Flags used by the C++ compiler during UndefinedBehaviourSanitizer builds." FORCE)
+
+set(CMAKE_CXX_FLAGS_MSAN
+    "${CMAKE_CXX_FLAGS_DEBUG} -fsanitize=memory -fsanitize-memory-track-origins=2 -fno-omit-frame-pointer" CACHE STRING
+    "Flags used by the C++ compiler during MemorySanitizer builds." FORCE)

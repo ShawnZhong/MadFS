@@ -43,8 +43,10 @@ int open(const char* pathname, int flags, ...) {
 }
 
 int close(int fd) {
-  if (files.erase(fd) == 1) {
+  if (auto file = get_file(fd)) {
     INFO("ulayfs::close(%d)", fd);
+    files.erase(fd);
+    delete file;
     return 0;
   } else {
     DEBUG("posix::close(%d)", fd);
@@ -132,6 +134,10 @@ void __attribute__((constructor)) ulayfs_ctor() {
 /**
  * Called when the shared library is unloaded
  */
-void __attribute__((destructor)) ulayfs_dtor() {}
+void __attribute__((destructor)) ulayfs_dtor() {
+  for (auto& [fd, file] : files) {
+    delete file;
+  }
+}
 }  // extern "C"
 }  // namespace ulayfs
