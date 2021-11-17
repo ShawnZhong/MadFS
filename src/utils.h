@@ -2,7 +2,6 @@
 
 #include <immintrin.h>
 
-#include <cstring>
 #include <ctime>
 #include <iomanip>
 #include <iostream>
