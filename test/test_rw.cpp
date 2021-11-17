@@ -11,26 +11,35 @@ struct TestOpt {
   int init_offset = 0;
 };
 
-int test(TestOpt test_opt) {
+void test(TestOpt test_opt) {
   auto [num_bytes_per_iter, num_iter, init_offset] = test_opt;
+
+  std::cerr << "\n\n\n====== start test: num_bytes_per_iter = "
+            << num_bytes_per_iter << ", num_iter = " << num_iter
+            << ", init_offset = " << init_offset << " ======\n";
 
   [[maybe_unused]] ssize_t ret;
 
-  remove(FILEPATH);
+  // write data
+  {
+    remove(FILEPATH);
+    int fd = open(FILEPATH, O_CREAT | O_RDWR, S_IRUSR | S_IWUSR);
+    lseek(fd, init_offset, SEEK_SET);
+
+    for (int i = 0; i < num_iter; ++i) {
+      char src_buf[num_bytes_per_iter];
+      fill_buff(src_buf, num_bytes_per_iter, num_bytes_per_iter * i);
+      ret = write(fd, src_buf, num_bytes_per_iter);
+      assert(ret == num_bytes_per_iter);
+    }
+    close(fd);
+  }
+
+  // reopen the file and check result
   int fd = open(FILEPATH, O_CREAT | O_RDWR, S_IRUSR | S_IWUSR);
   auto file = get_file(fd);
 
-  lseek(fd, init_offset, SEEK_SET);
-
-  for (int i = 0; i < num_iter; ++i) {
-    char src_buf[num_bytes_per_iter];
-    fill_buff(src_buf, num_bytes_per_iter, num_bytes_per_iter * i);
-    ret = write(fd, src_buf, num_bytes_per_iter);
-    assert(ret == num_bytes_per_iter);
-  }
-
   // check that the content before OFFSET are all zeros
-  lseek(fd, 0, SEEK_SET);
   if (init_offset != 0) {
     char actual[init_offset];
     ret = read(fd, actual, init_offset);
@@ -56,7 +65,7 @@ int test(TestOpt test_opt) {
     CHECK_RESULT(expected, actual, length, file);
   }
 
-  return fd;
+  close(fd);
 }
 
 int main(int argc, char* argv[]) {
