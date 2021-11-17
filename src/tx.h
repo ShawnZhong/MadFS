@@ -106,8 +106,12 @@ class TxMgr {
   LogicalBlockIdx alloc_next_block(B* block) const;
 
   /**
-   * If the given idx is in an overflow state, update it if allowed. Return if
-   * it's in a non-overflow state now
+   * If the given idx is in an overflow state, update it if allowed.
+   *
+   * @param[in,out] tx_idx the transaction index to be handled, might be updated
+   * @param[in,out] tx_block the block corresponding to the tx, might be updated
+   * @param[in] do_alloc whether allocation is allowed
+   * @return whether if it's in a non-overflow state now
    */
   bool handle_idx_overflow(TxEntryIdx& tx_idx, pmem::TxBlock*& tx_block,
                            bool do_alloc) const {
