@@ -63,7 +63,8 @@ struct __attribute__((packed)) LogEntryUnpackIdx {
 };
 
 static_assert(sizeof(LogEntryIdx) == 5, "LogEntryIdx must be 40 bits");
-static_assert(sizeof(LogEntryUnpackIdx) == 6, "LogEntryUnpackIdx must be 48 bits");
+static_assert(sizeof(LogEntryUnpackIdx) == 6,
+              "LogEntryUnpackIdx must be 48 bits");
 
 /**
  * A transaction entry is identified by the block index and the local index

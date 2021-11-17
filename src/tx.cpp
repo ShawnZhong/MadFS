@@ -344,11 +344,11 @@ TxMgr::Tx::Tx(TxMgr* tx_mgr, const char* buf, size_t count, size_t offset)
   // append log without fence because we only care flush completion
   // before try_commit
   this->log_idx = tx_mgr->log_mgr->append(pmem::LogOp::LOG_OVERWRITE,  // op
-                                         0,           // leftover_bytes
-                                         num_blocks,  // total_blocks
-                                         begin_vidx,  // begin_virtual_idx
-                                         {dst_idx},   // begin_logical_idxs
-                                         false        // fenced
+                                          0,           // leftover_bytes
+                                          num_blocks,  // total_blocks
+                                          begin_vidx,  // begin_virtual_idx
+                                          {dst_idx},   // begin_logical_idxs
+                                          false        // fenced
   );
   // it's fine that we append log first as long we don't publish it by tx
 }
