@@ -28,7 +28,7 @@ class Futex {
   void acquire() {
     while (true) {
       uint32_t one = 1;
-      __atomic_compare_exchange_n(&val, &one, 0, true, __ATOMIC_ACQ_REL,
+      __atomic_compare_exchange_n(&val, &one, 0, false, __ATOMIC_ACQ_REL,
                                   __ATOMIC_ACQUIRE);
 
       long rc = futex(&val, FUTEX_TRYLOCK_PI, 0, nullptr, nullptr, 0);
