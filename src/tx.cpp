@@ -309,7 +309,7 @@ std::ostream& operator<<(std::ostream& out, const TxMgr& tx_mgr) {
     auto commit_entry = tx_entry.commit_entry;
     out << "\t" << tx_idx << " -> " << commit_entry << "\n";
     out << "\t\t" << commit_entry.log_entry_idx << " -> "
-        << tx_mgr.log_mgr->get_entry(commit_entry.log_entry_idx)->head_entry
+        << *(tx_mgr.log_mgr->get_head_entry(commit_entry.log_entry_idx))
         << "\n";
     if (!tx_mgr.advance_tx_idx(tx_idx, tx_block, /*do_alloc*/ false)) break;
   }
@@ -336,24 +336,22 @@ TxMgr::Tx::Tx(TxMgr* tx_mgr, const char* buf, size_t count, size_t offset)
       num_blocks(end_vidx - begin_vidx),
 
       dst_idx(tx_mgr->allocator->alloc(num_blocks)),
-      dst_blocks(tx_mgr->mem_table->get(dst_idx)),
-
-      log_idx([&] {  // IIFE for complex initialization
-        // TODO: implement the case where num_blocks is over 64 and there
-        //       are multiple begin_logical_idxs
-        // TODO: handle writev requests
-        // for overwrite, "leftover_bytes" is zero; only in append we care
-        // append log without fence because we only care flush completion
-        // before try_commit
-        return tx_mgr->log_mgr->append(pmem::LogOp::LOG_OVERWRITE,  // op
-                                       0,           // leftover_bytes
-                                       num_blocks,  // total_blocks
-                                       begin_vidx,  // begin_virtual_idx
-                                       {dst_idx},   // begin_logical_idxs
-                                       false        // fenced
-        );
-        // it's fine that we append log first as long we don't publish it by tx
-      }()) {}
+      dst_blocks(tx_mgr->mem_table->get(dst_idx)) {
+  // TODO: implement the case where num_blocks is over 64 and there
+  //       are multiple begin_logical_idxs
+  // TODO: handle writev requests
+  // for overwrite, "leftover_bytes" is zero; only in append we care
+  // append log without fence because we only care flush completion
+  // before try_commit
+  this->log_idx = tx_mgr->log_mgr->append(pmem::LogOp::LOG_OVERWRITE,  // op
+                                         0,           // leftover_bytes
+                                         num_blocks,  // total_blocks
+                                         begin_vidx,  // begin_virtual_idx
+                                         {dst_idx},   // begin_logical_idxs
+                                         false        // fenced
+  );
+  // it's fine that we append log first as long we don't publish it by tx
+}
 
 /*
  * AlignedTx

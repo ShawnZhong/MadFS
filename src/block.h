@@ -107,12 +107,13 @@ class LogEntryBlock : public BaseBlock {
   LogEntry log_entries[NUM_LOG_ENTRY];
 
  public:
-  [[nodiscard]] LogEntry* get(LogLocalIdx idx) {
+  [[nodiscard]] LogEntry* get(LogLocalUnpackIdx idx) {
     assert(idx >= 0 && idx < NUM_LOG_ENTRY);
     return &log_entries[idx];
   }
 
-  void persist(LogLocalIdx start_idx, LogLocalIdx end_idx, bool fenced = true) {
+  void persist(LogLocalUnpackIdx start_idx, LogLocalUnpackIdx end_idx,
+               bool fenced = true) {
     size_t len = (end_idx - start_idx) * sizeof(LogEntry);
     if (fenced)
       persist_fenced(&log_entries[start_idx], len);

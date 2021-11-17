@@ -17,9 +17,7 @@ enum class TxEntryType : bool {
 struct TxCommitEntry {
  private:
   static constexpr int NUM_BLOCKS_BITS = 6;
-  static constexpr int BEGIN_VIRTUAL_IDX_BITS = 9;
-  // FIXME: inline-allowed begin_virtual_idx bits cut down to 9 due to
-  //        LogEntryIdx growing to 6 bytes
+  static constexpr int BEGIN_VIRTUAL_IDX_BITS = 17;
 
   static constexpr int NUM_BLOCKS_MAX = (1 << NUM_BLOCKS_BITS) - 1;
   static constexpr int BEGIN_VIRTUAL_IDX_MAX =
@@ -141,7 +139,7 @@ union LogHeadNext {
   LogicalBlockIdx next_block_idx;
   // if !saturate, stores local idx of the next head entry since it must be
   // in the current LogBlock
-  LogLocalIdx next_local_idx;
+  LogLocalUnpackIdx next_local_idx;
 
   [[nodiscard]] bool is_valid() const { return raw_bits != 0; }
 };

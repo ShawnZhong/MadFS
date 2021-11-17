@@ -16,18 +16,19 @@ void LogMgr::get_coverage(LogEntryIdx first_head_idx,
                           VirtualBlockIdx& begin_virtual_idx,
                           uint32_t& num_blocks,
                           std::vector<LogicalBlockIdx>* begin_logical_idxs) {
-  LogEntryIdx idx = first_head_idx;
+  LogEntryUnpackIdx idx = LogEntryUnpackIdx(first_head_idx);
   const pmem::LogHeadEntry* head_entry = get_head_entry(first_head_idx);
 
   // a head entry at the last slot of a LogBlock could have 0 body entries
   if (head_entry->num_blocks == 0) {
     assert(head_entry->overflow);
-    idx = LogEntryIdx{head_entry->next.next_block_idx, 0};
+    idx = LogEntryUnpackIdx{head_entry->next.next_block_idx, 0};
     head_entry = get_head_entry(idx);
   }
 
   num_blocks = 0;
   while (head_entry != nullptr) {
+    // the first body entry must be read, to get begin_virtual_idx
     if (num_blocks == 0) {
       idx.local_idx++;
       const pmem::LogBodyEntry* body_entry = get_body_entry(idx);
@@ -47,7 +48,7 @@ void LogMgr::get_coverage(LogEntryIdx first_head_idx,
     num_blocks += head_entry->num_blocks;
 
     if (head_entry->overflow) {
-      idx = LogEntryIdx{head_entry->next.next_block_idx, 0};
+      idx = LogEntryUnpackIdx{head_entry->next.next_block_idx, 0};
       head_entry = get_head_entry(idx);
     } else
       head_entry = nullptr;
@@ -58,13 +59,16 @@ LogEntryIdx LogMgr::append(
     pmem::LogOp op, uint16_t leftover_bytes, uint32_t total_blocks,
     VirtualBlockIdx begin_virtual_idx,
     const std::vector<LogicalBlockIdx>& begin_logical_idxs, bool fenced) {
+  // allocate the first head entry, whose LogEntryIdx will be returned back
+  // to the transaction
   pmem::LogHeadEntry* head_entry = alloc_head_entry();
-  LogEntryIdx first_head_idx = LogEntryIdx{log_blocks.back(), last_local_idx()};
+  LogEntryUnpackIdx first_head_idx =
+      LogEntryUnpackIdx{log_blocks.back(), last_local_idx()};
   VirtualBlockIdx now_virtual_idx = begin_virtual_idx;
   size_t now_logical_idx_off = 0;
 
   while (head_entry != nullptr) {
-    LogLocalIdx persist_start_idx = last_local_idx();
+    LogLocalUnpackIdx persist_start_idx = last_local_idx();
     head_entry->op = op;
 
     uint32_t num_blocks = total_blocks;
@@ -100,7 +104,7 @@ LogEntryIdx LogMgr::append(
       head_entry = nullptr;
   }
 
-  return first_head_idx;
+  return LogEntryIdx(first_head_idx);
 }
 
 }  // namespace ulayfs::dram

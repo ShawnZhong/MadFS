@@ -223,7 +223,7 @@ class TxMgr::Tx {
 
   // the index of the first LogHeadEntry, can be used to locate the whole
   // group of log entries for this transaction
-  const LogEntryIdx log_idx;
+  LogEntryIdx log_idx;
 
   /*
    * Mutable states

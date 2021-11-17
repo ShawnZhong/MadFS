@@ -25,7 +25,7 @@ class LogMgr {
   pmem::LogEntryBlock* curr_block;
   // local index of the first free entry slot in the last block
   // might equal NUM_LOCAL_ENTREIS when a new log block is not allocated yet
-  LogLocalIdx free_local_idx;
+  LogLocalUnpackIdx free_local_idx;
 
  public:
   LogMgr() = default;
@@ -37,17 +37,29 @@ class LogMgr {
         curr_block(nullptr),
         free_local_idx(NUM_LOG_ENTRY) {}
 
-  const pmem::LogEntry* get_entry(LogEntryIdx idx) {
+ private:
+  /**
+   * get pointer to entry data from 6-byte unpacked index
+   */
+  const pmem::LogEntry* get_entry(pmem::LogEntryUnpackIdx idx) {
     return mem_table->get(idx.block_idx)->log_entry_block.get(idx.local_idx);
   }
 
   // syntax sugar for union dispatching
-  const pmem::LogBodyEntry* get_body_entry(LogEntryIdx idx) {
+  const pmem::LogHeadEntry* get_head_entry(pmem::LogEntryUnpackIdx idx) {
+    return &get_entry(idx)->head_entry;
+  }
+
+  const pmem::LogBodyEntry* get_body_entry(pmem::LogEntryUnpackIdx idx) {
     return &get_entry(idx)->body_entry;
   }
 
-  const pmem::LogHeadEntry* get_head_entry(LogEntryIdx idx) {
-    return &get_entry(idx)->head_entry;
+ public:
+  // other parts only have hold access to head entries, which are identified
+  // by the 5-byte LogEntryIdx, so only this variant of get_head_entry() is
+  // public
+  const pmem::LogHeadEntry* get_head_entry(pmem::LogEntryIdx idx) {
+    return get_head_entry(LogEntryUnpackIdx(idx));
   }
 
   // TODO: return op and leftover_bytes
@@ -127,6 +139,8 @@ class LogMgr {
   /**
    * get the last allocated entry's local index
    */
-  [[nodiscard]] LogLocalIdx last_local_idx() { return free_local_idx - 1; }
+  [[nodiscard]] LogLocalUnpackIdx last_local_idx() {
+    return free_local_idx - 1;
+  }
 };
 }  // namespace ulayfs::dram
