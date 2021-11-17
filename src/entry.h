@@ -55,8 +55,11 @@ struct TxEntry {
   }
 
   friend std::ostream& operator<<(std::ostream& out, const TxEntry& entry) {
-    out << "TxEntry{n_blk=" << entry.num_blocks
-        << ", vidx=" << entry.begin_virtual_idx << "}";
+    out << "TxEntry{";
+    out << "n_blk=" << entry.num_blocks << ", ";
+    out << "vidx=" << entry.begin_virtual_idx << ", ";
+    out << entry.log_entry_idx;
+    out << "}";
     return out;
   }
 

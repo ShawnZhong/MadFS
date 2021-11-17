@@ -302,8 +302,21 @@ std::ostream& operator<<(std::ostream& out, const TxMgr& tx_mgr) {
     auto tx_entry = tx_mgr.get_entry_from_block(tx_idx, tx_block);
     if (!tx_entry.is_valid()) break;
     out << "\t" << tx_idx << " -> " << tx_entry << "\n";
-    out << "\t\t" << tx_entry.log_entry_idx << " -> "
-        << *(tx_mgr.log_mgr->get_head_entry(tx_entry.log_entry_idx)) << "\n";
+
+    auto head_entry_idx = tx_entry.log_entry_idx;
+    auto head_entry = tx_mgr.log_mgr->get_head_entry(head_entry_idx);
+    uint32_t num_blocks;
+    VirtualBlockIdx begin_virtual_idx;
+    std::vector<LogicalBlockIdx> begin_logical_idxs;
+    tx_mgr.log_mgr->get_coverage(head_entry_idx, begin_virtual_idx, num_blocks,
+                                 &begin_logical_idxs);
+
+    out << "\t\t" << *head_entry << ", ";
+    out << "vidx=" << begin_virtual_idx << ", ";
+    out << "n_blk=" << num_blocks << ", ";
+    out << "begin_lidxs=[";
+    for (const auto& idx : begin_logical_idxs) out << idx << ", ";
+    out << "]\n";
     if (!tx_mgr.advance_tx_idx(tx_idx, tx_block, /*do_alloc*/ false)) break;
   }
 
