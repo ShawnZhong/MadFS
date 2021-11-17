@@ -97,10 +97,6 @@ LogEntryIdx LogMgr::append(
                        : num_blocks - MAX_BLOCKS_PER_BODY;
     }
 
-    std::ostringstream ss;
-    ss << *head_entry;
-    DEBUG("new head entry %s", ss.str().c_str());
-
     curr_block->persist(persist_start_idx, free_local_idx, fenced);
     if (head_entry->overflow)
       head_entry = alloc_head_entry(head_entry);

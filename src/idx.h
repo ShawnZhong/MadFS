@@ -15,7 +15,7 @@ using VirtualBlockIdx = uint32_t;
 using BitmapLocalIdx = int16_t;
 using TxLocalIdx = int16_t;
 // Note: LogLocalIdx will persist and the valid range is [0, 255]
-using LogLocalIdx = uint8_t;
+using LogLocalIdx = uint16_t;
 // TODO: this will no longer be needed when we deprecate the head-body design
 // for 8-byte aligned positions, the valid range is [0, 511]
 using LogLocalUnpackIdx = uint16_t;
