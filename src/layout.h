@@ -1,15 +1,8 @@
 #pragma once
 
-#include <atomic>
-#include <cassert>
-#include <cstdint>
-#include <cstring>
-#include <iostream>
-
 #include "bitmap.h"
 #include "config.h"
 #include "entry.h"
-#include "futex.h"
 #include "idx.h"
 #include "params.h"
 #include "utils.h"
