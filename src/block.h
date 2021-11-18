@@ -315,14 +315,15 @@ union Block {
   char* data() { return data_block.data; }
   const char* data_ro() const { return data_block.data; }
 
-  // zeroize a block from a given byte offset; offset must be cacheline-aligned
-  void zeroize_persist(uint16_t offset = 0) {
+  // memset a block to zero from a given byte offset
+  // offset must be cacheline-aligned
+  void zero_init_persist(uint16_t offset = 0) {
     assert((offset & (CACHELINE_SIZE - 1)) == 0);
-    constexpr static const char* zeroized_cl[CACHELINE_SIZE] = {};
+    constexpr static const char* zero_cl[CACHELINE_SIZE] = {};
     bool need_fence = false;
     for (; offset < BLOCK_SIZE; offset += CACHELINE_SIZE) {
       char* cl = data() + offset;
-      if (memcmp(cl, zeroized_cl, CACHELINE_SIZE)) {
+      if (memcmp(cl, zero_cl, CACHELINE_SIZE)) {
         memset(cl, 0, CACHELINE_SIZE);
         persist_cl_unfenced(cl);
         need_fence = true;
