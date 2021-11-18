@@ -282,7 +282,9 @@ bool TxMgr::handle_conflict(pmem::TxEntry curr_entry,
 template <class B>
 LogicalBlockIdx TxMgr::alloc_next_block(B* block) const {
   // allocate the next block
-  auto new_block_id = allocator->alloc(1);
+  LogicalBlockIdx new_block_id = allocator->alloc(1);
+  pmem::Block* new_block = mem_table->get(new_block_id);
+  new_block->zero_init_persist();
   bool success = block->set_next_tx_block(new_block_id);
   if (success) {
     return new_block_id;
