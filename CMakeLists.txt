@@ -49,6 +49,7 @@ option(RELAXED "Relax visibility and serialization guarantee on concurrent acces
 option(USE_HUGE_PAGE "Use huge page for mmap" ON)
 option(USE_MAP_SYNC "Use MAP_SYNC for mmap" ON)
 option(FORCE_MAP_POPULATE "Always use MAP_POPULATE for mmap" OFF)
+option(TX_FLUSH_ONLY_FSYNC "Only flush transaction entries in fsync" OFF)
 
 # check huge page support
 execute_process(
