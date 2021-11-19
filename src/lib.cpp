@@ -1,16 +1,19 @@
 #include "lib.h"
 
+#include <tbb/concurrent_unordered_map.h>
+
 #include <cstdarg>
 #include <cstdio>
+#include <unordered_map>
 
 #include "config.h"
-#include "layout.h"
 #include "posix.h"
 
 namespace ulayfs {
 
 // mapping between fd and in-memory file handle
-std::unordered_map<int, dram::File*> files;
+// shared across threads within the same process
+tbb::concurrent_unordered_map<int, dram::File*> files;
 
 dram::File* get_file(int fd) {
   auto it = files.find(fd);
@@ -45,7 +48,7 @@ int open(const char* pathname, int flags, ...) {
 int close(int fd) {
   if (auto file = get_file(fd)) {
     INFO("ulayfs::close(%d)", fd);
-    files.erase(fd);
+    files.unsafe_erase(fd);
     delete file;
     return 0;
   } else {

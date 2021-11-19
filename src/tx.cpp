@@ -7,6 +7,7 @@
 #include "block.h"
 #include "btable.h"
 #include "entry.h"
+#include "file.h"
 #include "idx.h"
 #include "layout.h"
 #include "params.h"
@@ -282,7 +283,7 @@ bool TxMgr::handle_conflict(pmem::TxEntry curr_entry,
 template <class B>
 LogicalBlockIdx TxMgr::alloc_next_block(B* block) const {
   // allocate the next block
-  LogicalBlockIdx new_block_id = allocator->alloc(1);
+  LogicalBlockIdx new_block_id = file->get_local_allocator()->alloc(1);
   pmem::Block* new_block = mem_table->get(new_block_id);
   new_block->zero_init_persist();
   bool success = block->set_next_tx_block(new_block_id);
@@ -290,7 +291,7 @@ LogicalBlockIdx TxMgr::alloc_next_block(B* block) const {
     return new_block_id;
   } else {
     // there is a race condition for adding the new blocks
-    allocator->free(new_block_id, 1);
+    file->get_local_allocator()->free(new_block_id, 1);
     return block->get_next_tx_block();
   }
 }
@@ -354,7 +355,7 @@ TxMgr::Tx::Tx(TxMgr* tx_mgr, const char* buf, size_t count, size_t offset)
       end_vidx(ALIGN_UP(end_offset, BLOCK_SIZE) >> BLOCK_SHIFT),
       num_blocks(end_vidx - begin_vidx),
 
-      dst_idx(tx_mgr->allocator->alloc(num_blocks)),
+      dst_idx(tx_mgr->file->get_local_allocator()->alloc(num_blocks)),
       dst_blocks(tx_mgr->mem_table->get(dst_idx)) {
   // TODO: implement the case where num_blocks is over 64 and there
   //       are multiple begin_logical_idxs
