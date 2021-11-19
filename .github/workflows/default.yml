@@ -35,11 +35,11 @@ jobs:
         working-directory: ${{github.workspace}}
         run: make ${{matrix.build_type}}
 
-      - name: test_rw
-        run: ./test_rw
-
       - name: test_basic
         run: ./test_basic
+
+      - name: test_rw
+        run: ./test_rw
 
       # - name: test_sync
       #   run: ./test_sync
