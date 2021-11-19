@@ -64,15 +64,17 @@ constexpr static struct BuildOptions {
 } build_options;
 
 static struct RuntimeOptions {
-  bool show_config;
-  const char* log_file;
-  int log_level;
+  bool show_config{true};
+  const char* log_file{};
+  int log_level{0};
+
   RuntimeOptions() noexcept {
-    show_config = std::getenv("ULAYFS_NO_SHOW_CONFIG") == nullptr;
+    if (std::getenv("ULAYFS_NO_SHOW_CONFIG")) show_config = false;
     log_file = std::getenv("ULAYFS_LOG_FILE");
-    auto log_level_str = std::getenv("ULAYFS_LOG_LEVEL");
-    log_level = log_level_str ? std::atoi(log_level_str) : 2;
+    if (auto str = std::getenv("ULAYFS_LOG_LEVEL"); str)
+      log_level = std::atoi(str);
   };
+
   friend std::ostream& operator<<(std::ostream& out,
                                   const RuntimeOptions& opt) {
     out << "RuntimeOptions: \n";
