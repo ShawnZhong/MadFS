@@ -116,3 +116,7 @@ set(CMAKE_CXX_FLAGS_UBSAN
 set(CMAKE_CXX_FLAGS_MSAN
     "${CMAKE_CXX_FLAGS_DEBUG} -fsanitize=memory -fsanitize-memory-track-origins=2 -fno-omit-frame-pointer" CACHE STRING
     "Flags used by the C++ compiler during MemorySanitizer builds." FORCE)
+
+set(CMAKE_CXX_FLAGS_TSAN
+    "${CMAKE_CXX_FLAGS_DEBUG} -fsanitize=thread" CACHE STRING
+    "Flags used by the C++ compiler during ThreadSanitizer builds." FORCE)
