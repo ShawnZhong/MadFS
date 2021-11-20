@@ -110,6 +110,13 @@ union TxEntry {
     return expected;
   }
 
+  // if we are touching a new cacheline, we must flush everything before it
+  // if only flush at fsync, always return false
+  static bool need_flush(TxLocalIdx idx) {
+    if constexpr (BuildOptions::tx_flush_only_fsync) return false;
+    return IS_ALIGNED(sizeof(TxEntry) * idx, CACHELINE_SIZE);
+  }
+
   friend std::ostream& operator<<(std::ostream& out, const TxEntry& tx_entry) {
     if (tx_entry.is_commit()) out << tx_entry.commit_entry;
     return out;

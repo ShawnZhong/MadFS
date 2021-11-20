@@ -107,13 +107,6 @@ class TxBlock : public BaseBlock {
     return success;
   }
 
-  // if we are touching a new cacheline, we must flush everything before it
-  // if only flush at fsync, always return false
-  static bool need_flush_before_proceed(TxLocalIdx idx) {
-    if constexpr (BuildOptions::tx_flush_only_fsync) return false;
-    return IS_ALIGNED(sizeof(TxEntry) * idx, CACHELINE_SIZE);
-  }
-
   /**
    * flush the current block starting from `begin_idx` (including two pointers)
    *
@@ -270,6 +263,7 @@ class MetaBlock : public BaseBlock {
 
   /**
    * Set the next tx block index
+   * No flush+fence but leave it to flush_tx_block
    * @return true on success, false if there is a race condition
    */
   bool set_next_tx_block(LogicalBlockIdx block_idx) {
@@ -280,9 +274,17 @@ class MetaBlock : public BaseBlock {
     return success;
   }
 
-  void set_tx_tail(TxEntryIdx tx_tail) {
+  /**
+   * Set the tx tail
+   * tx_tail is mostly just a hint, so it's fine to be not up-to-date; thus by
+   * default, we don't do concurrency control and no fence by default
+   *
+   * @param tx_tail tail value to set
+   * @param fenced whether use fence
+   */
+  void set_tx_tail(TxEntryIdx tx_tail, bool fenced = false) {
     this->tx_tail = tx_tail;
-    persist_cl_fenced(&cl1);
+    persist_cl(&cl1, fenced);
   }
 
   /**

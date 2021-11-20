@@ -143,6 +143,10 @@ pmem::TxEntry TxMgr::try_commit(pmem::TxEntry entry, TxEntryIdx& tx_idx,
   assert(is_inline == (curr_block == nullptr));
 
   while (true) {
+    if (pmem::TxEntry::need_flush(curr_idx.local_idx)) {
+      flush_tx_entries(meta->get_tx_tail(), curr_idx);
+      meta->set_tx_tail(curr_idx);
+    }
     pmem::TxEntry conflict_entry =
         is_inline ? meta->try_append(entry, curr_idx.local_idx)
                   : curr_block->try_append(entry, curr_idx.local_idx);
