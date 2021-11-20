@@ -37,7 +37,7 @@ class MemTable {
 
   // a copy of global num_blocks in MetaBlock to avoid shared memory access
   // may be out-of-date; must re-read global one if necessary
-  std::atomic<uint32_t> num_blocks_local_copy{};
+  std::atomic<uint32_t> num_blocks_local_copy;
 
   tbb::concurrent_unordered_map<LogicalBlockIdx, pmem::Block*> table;
 

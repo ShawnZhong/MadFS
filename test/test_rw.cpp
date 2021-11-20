@@ -12,11 +12,15 @@ struct TestOpt {
 };
 
 void test(TestOpt test_opt) {
-  auto [num_bytes_per_iter, num_iter, init_offset] = test_opt;
+  const auto& [num_bytes_per_iter, num_iter, init_offset] = test_opt;
 
-  std::cerr << "\n\n\n====== start test: num_bytes_per_iter = "
-            << num_bytes_per_iter << ", num_iter = " << num_iter
-            << ", init_offset = " << init_offset << " ======\n";
+  fprintf(stderr,
+          "\n\n\n====== "
+          "num_bytes_per_iter = %d, "
+          "num_iter = %d, "
+          "init_offset = %d "
+          "======\n",
+          num_bytes_per_iter, num_iter, init_offset);
 
   [[maybe_unused]] ssize_t ret;
 

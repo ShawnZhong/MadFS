@@ -70,8 +70,6 @@ static_assert(sizeof(LogEntryUnpackIdx) == 6,
  * A transaction entry is identified by the block index and the local index
  */
 struct TxEntryIdx {
-  using storage_type = uint64_t;
-
   LogicalBlockIdx block_idx;
   TxLocalIdx local_idx;
 
@@ -86,7 +84,6 @@ struct TxEntryIdx {
   }
 };
 
-static_assert(sizeof(TxEntryIdx) == sizeof(TxEntryIdx::storage_type),
-              "TxEntryIdx must be 64 bits");
+static_assert(sizeof(TxEntryIdx) == 8, "TxEntryIdx must be 64 bits");
 
 }  // namespace ulayfs

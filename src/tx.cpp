@@ -23,20 +23,20 @@ namespace ulayfs::dram {
 void TxMgr::do_write(const char* buf, size_t count, size_t offset) {
   // special case that we have everything aligned, no OCC
   if (count % BLOCK_SIZE == 0 && offset % BLOCK_SIZE == 0) {
-    AlignedTx tx(this, buf, count, offset);
+    AlignedTx tx(file, buf, count, offset);
     tx.do_write();
     return;
   }
 
   // another special case where range is within a single block
   if ((offset >> BLOCK_SHIFT) == ((offset + count - 1) >> BLOCK_SHIFT)) {
-    SingleBlockTx tx(this, buf, count, offset);
+    SingleBlockTx tx(file, buf, count, offset);
     tx.do_write();
     return;
   }
 
   // unaligned multi-block write
-  MultiBlockTx tx(this, buf, count, offset);
+  MultiBlockTx tx(file, buf, count, offset);
   tx.do_write();
 }
 
@@ -62,14 +62,14 @@ ssize_t TxMgr::do_read(char* buf, size_t count, size_t offset) {
   file->blk_table->get_tail_tx(tail_tx_idx, tail_tx_block);
 
   // first handle the first block (which might not be full block)
-  curr_block = vidx_to_addr_ro(begin_vidx);
+  curr_block = file->vidx_to_addr_ro(begin_vidx);
   memcpy(buf, curr_block->data_ro() + first_block_local_offset,
          first_block_size);
   buf_offset = first_block_size;
 
   // then handle middle full blocks (which might not exist)
   for (curr_vidx = begin_vidx + 1; curr_vidx < end_vidx - 1; ++curr_vidx) {
-    curr_block = vidx_to_addr_ro(curr_vidx);
+    curr_block = file->vidx_to_addr_ro(curr_vidx);
     memcpy(buf + buf_offset, curr_block->data_ro(), BLOCK_SIZE);
     buf_offset += BLOCK_SIZE;
   }
@@ -77,7 +77,7 @@ ssize_t TxMgr::do_read(char* buf, size_t count, size_t offset) {
   // if we have multiple blocks to read
   if (begin_vidx != end_vidx - 1) {
     assert(curr_vidx == end_vidx - 1);
-    curr_block = vidx_to_addr_ro(curr_vidx);
+    curr_block = file->vidx_to_addr_ro(curr_vidx);
     memcpy(buf + buf_offset, curr_block->data_ro(), count - buf_offset);
   }
 
@@ -156,18 +156,6 @@ pmem::TxEntry TxMgr::try_commit(pmem::TxEntry entry, TxEntryIdx& tx_idx,
     bool success = advance_tx_idx(curr_idx, curr_block, /*do_alloc*/ true);
     assert(success);
   }
-}
-
-pmem::Block* TxMgr::vidx_to_addr_rw(VirtualBlockIdx vidx) const {
-  return tables_vidx_to_addr(this->mem_table, file->blk_table, vidx);
-}
-
-const pmem::Block* TxMgr::vidx_to_addr_ro(VirtualBlockIdx vidx) const {
-  static const char empty_block[BLOCK_SIZE]{};
-
-  LogicalBlockIdx lidx = file->blk_table->get(vidx);
-  if (lidx == 0) return reinterpret_cast<const pmem::Block*>(&empty_block);
-  return this->mem_table->get(lidx);
 }
 
 void TxMgr::find_tail(TxEntryIdx& tx_idx, pmem::TxBlock*& tx_block) const {
@@ -344,9 +332,11 @@ std::ostream& operator<<(std::ostream& out, const TxMgr& tx_mgr) {
  * Tx
  */
 
-TxMgr::Tx::Tx(TxMgr* tx_mgr, const char* buf, size_t count, size_t offset)
-    : file(tx_mgr->file),
-      tx_mgr(tx_mgr),
+TxMgr::Tx::Tx(File* file, const char* buf, size_t count, size_t offset)
+    : file(file),
+      tx_mgr(&file->tx_mgr),
+      log_mgr(file->get_local_log_mgr()),
+      allocator(file->get_local_allocator()),
 
       // input properties
       buf(buf),
@@ -359,7 +349,7 @@ TxMgr::Tx::Tx(TxMgr* tx_mgr, const char* buf, size_t count, size_t offset)
       end_vidx(ALIGN_UP(end_offset, BLOCK_SIZE) >> BLOCK_SHIFT),
       num_blocks(end_vidx - begin_vidx),
 
-      dst_idx(tx_mgr->file->get_local_allocator()->alloc(num_blocks)),
+      dst_idx(allocator->alloc(num_blocks)),
       dst_blocks(tx_mgr->mem_table->get(dst_idx)) {
   // TODO: implement the case where num_blocks is over 64 and there
   //       are multiple begin_logical_idxs
@@ -367,13 +357,12 @@ TxMgr::Tx::Tx(TxMgr* tx_mgr, const char* buf, size_t count, size_t offset)
   // for overwrite, "leftover_bytes" is zero; only in append we care
   // append log without fence because we only care flush completion
   // before try_commit
-  this->log_idx = tx_mgr->file->get_local_log_mgr()->append(
-      pmem::LogOp::LOG_OVERWRITE,  // op
-      0,                           // leftover_bytes
-      num_blocks,                  // total_blocks
-      begin_vidx,                  // begin_virtual_idx
-      {dst_idx},                   // begin_logical_idxs
-      false                        // fenced
+  this->log_idx = log_mgr->append(pmem::LogOp::LOG_OVERWRITE,  // op
+                                  0,                           // leftover_bytes
+                                  num_blocks,                  // total_blocks
+                                  begin_vidx,  // begin_virtual_idx
+                                  {dst_idx},   // begin_logical_idxs
+                                  false        // fenced
   );
   // it's fine that we append log first as long we don't publish it by tx
 }
@@ -382,9 +371,9 @@ TxMgr::Tx::Tx(TxMgr* tx_mgr, const char* buf, size_t count, size_t offset)
  * AlignedTx
  */
 
-TxMgr::AlignedTx::AlignedTx(TxMgr* tx_mgr, const char* buf, size_t count,
+TxMgr::AlignedTx::AlignedTx(File* file, const char* buf, size_t count,
                             size_t offset)
-    : Tx(tx_mgr, buf, count, offset) {}
+    : Tx(file, buf, count, offset) {}
 
 void TxMgr::AlignedTx::do_write() {
   // since everything is block-aligned, we can copy data directly
@@ -402,8 +391,8 @@ void TxMgr::AlignedTx::do_write() {
  * CoWTx
  */
 
-TxMgr::CoWTx::CoWTx(TxMgr* tx_mgr, const char* buf, size_t count, size_t offset)
-    : Tx(tx_mgr, buf, count, offset),
+TxMgr::CoWTx::CoWTx(File* file, const char* buf, size_t count, size_t offset)
+    : Tx(file, buf, count, offset),
       entry(pmem::TxCommitEntry(num_blocks, begin_vidx, log_idx)),
       begin_full_vidx(ALIGN_UP(offset, BLOCK_SIZE) >> BLOCK_SHIFT),
       end_full_vidx(end_offset >> BLOCK_SHIFT),
@@ -417,9 +406,9 @@ TxMgr::CoWTx::CoWTx(TxMgr* tx_mgr, const char* buf, size_t count, size_t offset)
  * SingleBlockTx
  */
 
-TxMgr::SingleBlockTx::SingleBlockTx(TxMgr* tx_mgr, const char* buf,
-                                    size_t count, size_t offset)
-    : CoWTx(tx_mgr, buf, count, offset),
+TxMgr::SingleBlockTx::SingleBlockTx(File* file, const char* buf, size_t count,
+                                    size_t offset)
+    : CoWTx(file, buf, count, offset),
       local_offset(offset - begin_vidx * BLOCK_SIZE) {
   assert(num_blocks == 1);
   copy_last = false;
@@ -463,9 +452,9 @@ retry:
  * MultiBlockTx
  */
 
-TxMgr::MultiBlockTx::MultiBlockTx(TxMgr* tx_mgr, const char* buf, size_t count,
+TxMgr::MultiBlockTx::MultiBlockTx(File* file, const char* buf, size_t count,
                                   size_t offset)
-    : CoWTx(tx_mgr, buf, count, offset),
+    : CoWTx(file, buf, count, offset),
       first_block_local_offset(ALIGN_UP(offset, BLOCK_SIZE) - offset),
       last_block_local_offset(end_offset - ALIGN_DOWN(end_offset, BLOCK_SIZE)) {
 }

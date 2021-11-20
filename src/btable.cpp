@@ -32,7 +32,7 @@ void BlkTable::update(bool do_alloc) {
     if (tx_entry.is_commit()) apply_tx(tx_entry.commit_entry, log_mgr);
     if (!tx_mgr->advance_tx_idx(tail_tx_idx, tail_tx_block, do_alloc)) break;
   }
-  
+
   pthread_spin_unlock(&spinlock);
 }
 

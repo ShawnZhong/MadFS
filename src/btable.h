@@ -20,7 +20,6 @@ class File;
 // read logs and update mapping from virtual blocks to logical blocks
 class BlkTable {
   File* file;
-  pmem::MetaBlock* meta;
   TxMgr* tx_mgr;
 
   tbb::concurrent_vector<LogicalBlockIdx> table;
@@ -31,13 +30,8 @@ class BlkTable {
   pthread_spinlock_t spinlock;
 
  public:
-  explicit BlkTable(File* file, pmem::MetaBlock* meta, MemTable* mem_table,
-                    TxMgr* tx_mgr)
-      : file(file),
-        meta(meta),
-        tx_mgr(tx_mgr),
-        tail_tx_idx(),
-        tail_tx_block(nullptr) {
+  explicit BlkTable(File* file, TxMgr* tx_mgr)
+      : file(file), tx_mgr(tx_mgr), tail_tx_idx(), tail_tx_block(nullptr) {
     table.resize(16);
     pthread_spin_init(&spinlock, PTHREAD_PROCESS_PRIVATE);
   }
@@ -50,7 +44,7 @@ class BlkTable {
    */
   [[nodiscard]] LogicalBlockIdx get(VirtualBlockIdx virtual_block_idx) const {
     if (virtual_block_idx >= table.size()) return 0;
-    return table.at(virtual_block_idx);
+    return table[virtual_block_idx];
   }
 
   /**
@@ -83,14 +77,5 @@ class BlkTable {
 
   friend std::ostream& operator<<(std::ostream& out, const BlkTable& b);
 };
-
-/**
- * A sugar function to map vidx to addr
- */
-static inline pmem::Block* tables_vidx_to_addr(MemTable* mem_table,
-                                               const BlkTable* blk_table,
-                                               VirtualBlockIdx idx) {
-  return mem_table->get(blk_table->get(idx));
-}
 
 }  // namespace ulayfs::dram
