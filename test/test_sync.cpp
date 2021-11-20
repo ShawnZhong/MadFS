@@ -29,8 +29,8 @@ int main(int argc, char* argv[]) {
 
       char buf[BYTES_PER_THREAD]{};
       fill_buff(buf, BYTES_PER_THREAD, i);
-      ret = pwrite(fd, buf, BYTES_PER_THREAD, i);
-      assert(ret == BYTES_PER_THREAD);
+      ssize_t rc = pwrite(fd, buf, BYTES_PER_THREAD, i);
+      assert(rc == BYTES_PER_THREAD);
     }));
     // uncomment the line below to run sequentially
     //    threads.back().join();
