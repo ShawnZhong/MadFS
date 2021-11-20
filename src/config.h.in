@@ -13,6 +13,8 @@
 #cmakedefine CMAKE_BUILD_TYPE "@CMAKE_BUILD_TYPE@"
 
 #include <ostream>
+#include <string_view>
+
 namespace ulayfs {
 
 constexpr static struct BuildOptions {
@@ -26,6 +28,8 @@ constexpr static struct BuildOptions {
   constexpr static bool use_huge_page = USE_HUGE_PAGE;
   constexpr static bool use_map_sync = USE_MAP_SYNC;
   constexpr static bool force_map_populate = FORCE_MAP_POPULATE;
+  constexpr static bool use_valgrind =
+      std::string_view(build_type) == "valgrind";
 
 #ifdef NDEBUG
   constexpr static bool debug = false;
@@ -51,6 +55,7 @@ constexpr static struct BuildOptions {
     out << "\tgit_branch: " << git_branch << "\n";
     out << "\tgit_commit_hash: " << git_commit_hash << "\n";
     out << "\tdebug: " << debug << "\n";
+    out << "\tuse_valgrind: " << use_valgrind << "\n";
     out << "\tmem_protect: " << mem_protect << "\n";
     out << "\tno_sharing: " << no_sharing << "\n";
     out << "\trelaxed: " << relaxed << "\n";
