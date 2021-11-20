@@ -41,5 +41,5 @@ jobs:
       - name: test_rw
         run: ./test_rw
 
-      # - name: test_sync
-      #   run: ./test_sync
+      - name: test_sync
+        run: ./test_sync
