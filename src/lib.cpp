@@ -13,12 +13,12 @@ namespace ulayfs {
 
 // mapping between fd and in-memory file handle
 // shared across threads within the same process
-tbb::concurrent_unordered_map<int, dram::File*> files;
+tbb::concurrent_unordered_map<int, std::shared_ptr<dram::File>> files;
 
-dram::File* get_file(int fd) {
+std::shared_ptr<dram::File> get_file(int fd) {
   auto it = files.find(fd);
   if (it != files.end()) return it->second;
-  return nullptr;
+  return {};
 }
 
 extern "C" {
@@ -36,7 +36,7 @@ int open(const char* pathname, int flags, ...) {
   auto fd = file->get_fd();
   if (file->is_valid()) {
     INFO("ulayfs::open(%s, %x, %x) = %d", pathname, flags, mode, fd);
-    files[fd] = file;
+    files.emplace(fd, std::shared_ptr<dram::File>(file));
   } else {
     DEBUG("posix::open(%s, %x, %x) = %d", pathname, flags, mode, fd);
     delete file;
@@ -49,7 +49,6 @@ int close(int fd) {
   if (auto file = get_file(fd)) {
     INFO("ulayfs::close(%d)", fd);
     files.unsafe_erase(fd);
-    delete file;
     return 0;
   } else {
     DEBUG("posix::close(%d)", fd);
@@ -137,10 +136,6 @@ void __attribute__((constructor)) ulayfs_ctor() {
 /**
  * Called when the shared library is unloaded
  */
-void __attribute__((destructor)) ulayfs_dtor() {
-  for (auto& [fd, file] : files) {
-    delete file;
-  }
-}
+void __attribute__((destructor)) ulayfs_dtor() {}
 }  // extern "C"
 }  // namespace ulayfs

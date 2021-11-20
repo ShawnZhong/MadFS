@@ -3,5 +3,5 @@
 #include "file.h"
 
 namespace ulayfs {
-extern dram::File* get_file(int fd);
+extern std::shared_ptr<dram::File> get_file(int fd);
 }  // namespace ulayfs
