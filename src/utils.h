@@ -23,7 +23,7 @@
     std::tm *tm = std::localtime(&t);                                   \
     const char *s = strrchr(__FILE__, '/');                             \
     const char *filename = s ? s + 1 : __FILE__;                        \
-    fprintf(file, "%02d:%02d:%02d [%8s:%-3d] " fmt "\n", tm->tm_hour,   \
+    fprintf(file, "%02d:%02d:%02d [%14s:%-3d] " fmt "\n", tm->tm_hour,  \
             tm->tm_min, tm->tm_sec, filename, __LINE__, ##__VA_ARGS__); \
   } while (0)
 
@@ -38,14 +38,18 @@
 
 // DEBUG, INFO, and WARN are not active in release mode
 static FILE *log_file = stderr;
-#define LOG(level, msg, ...)                                             \
-  do {                                                                   \
-    if constexpr (BuildOptions::debug) {                                 \
-      if (level < runtime_options.log_level) break;                      \
-      constexpr const char *level_str_arr[] = {"DEBUG", "INFO", "WARN"}; \
-      constexpr const char *level_str = level_str_arr[level - 1];        \
-      FPRINTF(log_file, "[%5s] " msg, level_str, ##__VA_ARGS__);         \
-    }                                                                    \
+#define LOG(level, msg, ...)                                      \
+  do {                                                            \
+    if constexpr (BuildOptions::debug) {                          \
+      if (level < runtime_options.log_level) break;               \
+      constexpr const char *level_str_arr[] = {                   \
+          "[\u001b[32mDEBUG\u001b[0m]",                           \
+          "[\u001b[34m INFO\u001b[0m]",                           \
+          "[\u001b[31m WARN\u001b[0m]",                           \
+      };                                                          \
+      constexpr const char *level_str = level_str_arr[level - 1]; \
+      FPRINTF(log_file, "%s " msg, level_str, ##__VA_ARGS__);     \
+    }                                                             \
   } while (0)
 
 #define DEBUG(msg, ...) LOG(1, msg, ##__VA_ARGS__)
