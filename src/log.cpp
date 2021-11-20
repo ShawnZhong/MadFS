@@ -110,6 +110,9 @@ LogEntryIdx LogMgr::append(
 
 pmem::LogEntry* LogMgr::alloc_entry(bool pack_align,
                                     pmem::LogHeadEntry* prev_head_entry) {
+  // if need 16-byte alignment, maybe skip one 8-byte slot
+  if (pack_align) free_local_idx = ALIGN_UP(free_local_idx, 2);
+
   if (free_local_idx == NUM_LOG_ENTRY) {
     LogicalBlockIdx idx = file->get_local_allocator()->alloc(1);
     log_blocks.push_back(idx);
@@ -117,8 +120,6 @@ pmem::LogEntry* LogMgr::alloc_entry(bool pack_align,
     free_local_idx = 0;
     if (prev_head_entry) prev_head_entry->next.next_block_idx = idx;
   } else {
-    // if need 16-byte alignment, maybe skip one 8-byte slot
-    if (pack_align) free_local_idx = ALIGN_UP(free_local_idx, 2);
     if (prev_head_entry) prev_head_entry->next.next_local_idx = free_local_idx;
   }
 
