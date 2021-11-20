@@ -7,6 +7,7 @@
 
 #include "bitmap.h"
 #include "entry.h"
+#include "idx.h"
 #include "layout.h"
 #include "params.h"
 #include "utils.h"
@@ -73,9 +74,10 @@ class BitmapBlock : public BaseBlock {
 };
 
 class TxBlock : public BaseBlock {
-  LogicalBlockIdx prev;
-  LogicalBlockIdx next;
   TxEntry tx_entries[NUM_TX_ENTRY];
+  // next is placed after tx_entires so that it could be flushed with tx_entries
+  uint32_t unused;
+  LogicalBlockIdx next;
 
  public:
   TxLocalIdx find_tail(TxLocalIdx hint = 0) {
@@ -91,9 +93,6 @@ class TxBlock : public BaseBlock {
     return tx_entries[idx];
   }
 
-  [[nodiscard]] LogicalBlockIdx get_next() { return next; }
-  [[nodiscard]] LogicalBlockIdx get_prev() { return prev; }
-
   [[nodiscard]] LogicalBlockIdx get_next_tx_block() const { return next; }
 
   /**
@@ -104,8 +103,14 @@ class TxBlock : public BaseBlock {
     LogicalBlockIdx expected = 0;
     bool success = __atomic_compare_exchange_n(
         &next, &expected, block_idx, false, __ATOMIC_ACQ_REL, __ATOMIC_ACQUIRE);
-    if (success) persist_cl_fenced(&next);
     return success;
+  }
+
+  // if we are touching a new cacheline, we must flush everything before it
+  // if only flush at fsync, always return false
+  static bool need_flush_before_proceed(TxLocalIdx idx) {
+    if constexpr (BuildOptions::tx_flush_only_fsync) return false;
+    return IS_ALIGNED(sizeof(TxEntry) * idx, CACHELINE_SIZE);
   }
 };
 
@@ -149,6 +154,7 @@ class MetaBlock : public BaseBlock {
       LogicalBlockIdx next_tx_block;
 
       // hint to find tx log tail; not necessarily up-to-date
+      // all tx entries before it must be flushed
       TxEntryIdx tx_tail;
     };
 
@@ -249,7 +255,6 @@ class MetaBlock : public BaseBlock {
     bool success =
         __atomic_compare_exchange_n(&next_tx_block, &expected, block_idx, false,
                                     __ATOMIC_ACQ_REL, __ATOMIC_ACQUIRE);
-    if (success) persist_cl_fenced(&next_tx_block);
     return success;
   }
 
@@ -317,19 +322,21 @@ union Block {
 
   // memset a block to zero from a given byte offset
   // offset must be cacheline-aligned
-  void zero_init_persist(uint16_t offset = 0) {
+  // return whether a memset happen (may need fence if true)
+  bool zero_init(uint16_t offset = 0) {
     assert((offset & (CACHELINE_SIZE - 1)) == 0);
     constexpr static const char* zero_cl[CACHELINE_SIZE] = {};
-    bool need_fence = false;
+    bool do_memset = false;
     for (; offset < BLOCK_SIZE; offset += CACHELINE_SIZE) {
       char* cl = data() + offset;
       if (memcmp(cl, zero_cl, CACHELINE_SIZE)) {
         memset(cl, 0, CACHELINE_SIZE);
         persist_cl_unfenced(cl);
-        need_fence = true;
+        do_memset = true;
       }
     }
-    if (need_fence) _mm_sfence();
+    if (do_memset) _mm_sfence();
+    return do_memset;
   }
 };
 

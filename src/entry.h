@@ -23,9 +23,9 @@ struct TxCommitEntry {
   static constexpr int BEGIN_VIRTUAL_IDX_MAX =
       (1 << BEGIN_VIRTUAL_IDX_BITS) - 1;
 
-  enum TxEntryType type : 1 = TxEntryType::TX_COMMIT;
-
   friend union TxEntry;
+
+  enum TxEntryType type : 1 = TxEntryType::TX_COMMIT;
 
  public:
   // optionally, set these bits so OCC conflict detection can be done inline
@@ -76,11 +76,6 @@ union TxEntry {
 
   [[nodiscard]] bool is_valid() const { return raw_bits != 0; }
 
-  [[nodiscard]] static bool is_last_entry_in_cacheline(TxLocalIdx idx) {
-    auto offset = 2 * sizeof(LogicalBlockIdx) + (idx + 1) * sizeof(TxEntry);
-    return (offset & (CACHELINE_SIZE - 1)) == 0;
-  }
-
   /**
    * find the tail (next unused slot) in an array of TxEntry
    *
@@ -107,11 +102,9 @@ union TxEntry {
    */
   static TxEntry try_append(TxEntry entries[], TxEntry entry, TxLocalIdx idx) {
     uint64_t expected = 0;
-    if (__atomic_compare_exchange_n(&entries[idx].raw_bits, &expected,
-                                    entry.raw_bits, false, __ATOMIC_RELEASE,
-                                    __ATOMIC_ACQUIRE))
-      // only persist if it's the last entry in a cacheline
-      if (is_last_entry_in_cacheline(idx)) persist_cl_fenced(&entries[idx]);
+    __atomic_compare_exchange_n(&entries[idx].raw_bits, &expected,
+                                entry.raw_bits, false, __ATOMIC_RELEASE,
+                                __ATOMIC_ACQUIRE);
     // if CAS fails, `expected` will be stored the value in entries[idx]
     // if success, it will return 0
     return expected;

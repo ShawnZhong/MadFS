@@ -83,6 +83,14 @@ static inline void persist_cl_fenced(void *p) {
 }
 
 /**
+ * same as persist_cl above but take `fenced` argument
+ */
+static inline void persist_cl(void *p, bool fenced) {
+  persist_cl_unfenced(p);
+  if (fenced) _mm_sfence();
+}
+
+/**
  * persist the range [buf, buf + len) with possibly reordering
  */
 static inline void persist_unfenced(void *buf, uint64_t len) {
