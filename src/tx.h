@@ -181,6 +181,47 @@ class TxMgr {
                        LogicalBlockIdx* first_lidx, LogicalBlockIdx* last_lidx,
                        std::vector<LogicalBlockIdx>* redo_image);
 
+  /**
+   * Flush tx entries from tx_idx_begin to tx_idx_end
+   * A typical use pattern is use meta->tx_tail as begin and the latest tail as
+   * end. Thus, we usually don't know the block address that corresponds to
+   * tx_idx_begin, but we know the block address that corresponds to tx_idx_end
+   *
+   * @param tx_idx_begin which tx entry to begin
+   * @param tx_idx_end which tx entry to stop (non-inclusive)
+   * @param tx_block_end if tx_idx_end is known, could optionally provide to
+   * save one access to mem_table (this should be a common case)
+   */
+  void flush_tx_entries(TxEntryIdx tx_idx_begin, TxEntryIdx tx_idx_end,
+                        pmem::TxBlock* tx_block_end = nullptr) {
+    if (tx_idx_begin == tx_idx_end) return;
+    pmem::TxBlock* tx_block_begin;
+    // handle special case of inline tx
+    if (tx_idx_begin.block_idx == 0) {
+      if (tx_idx_end.block_idx == 0) {
+        meta->flush_tx_entries(tx_idx_begin.local_idx, tx_idx_end.local_idx);
+        goto done;
+      }
+      meta->flush_tx_block(tx_idx_begin.local_idx);
+      // now the next block is the "new begin"
+      tx_idx_begin = {meta->get_next_tx_block(), 0};
+    }
+    while (tx_idx_begin.block_idx != tx_idx_end.block_idx) {
+      tx_block_begin = &mem_table->get(tx_idx_begin.block_idx)->tx_block;
+      tx_block_begin->flush_tx_block(tx_idx_begin.local_idx);
+      tx_idx_begin = {tx_block_begin->get_next_tx_block(), 0};
+      // special case: tx_idx_end is the first entry of the next block, which
+      // means we only need to flush the current block and no need to
+      // dereference to get the last block
+      if (tx_idx_begin == tx_idx_end) goto done;
+    }
+    tx_block_end->flush_tx_entries(tx_idx_begin.local_idx,
+                                   tx_idx_end.local_idx);
+
+  done:
+    _mm_sfence();
+  }
+
  public:
   friend std::ostream& operator<<(std::ostream& out, const TxMgr& tx_mgr);
 };

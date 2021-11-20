@@ -76,8 +76,9 @@ class BitmapBlock : public BaseBlock {
 class TxBlock : public BaseBlock {
   TxEntry tx_entries[NUM_TX_ENTRY];
   // next is placed after tx_entires so that it could be flushed with tx_entries
-  uint32_t unused;
   LogicalBlockIdx next;
+  // currently not used (kept for padding purpose)
+  LogicalBlockIdx unused;
 
  public:
   TxLocalIdx find_tail(TxLocalIdx hint = 0) {
@@ -111,6 +112,27 @@ class TxBlock : public BaseBlock {
   static bool need_flush_before_proceed(TxLocalIdx idx) {
     if constexpr (BuildOptions::tx_flush_only_fsync) return false;
     return IS_ALIGNED(sizeof(TxEntry) * idx, CACHELINE_SIZE);
+  }
+
+  /**
+   * flush the current block starting from `begin_idx` (including two pointers)
+   *
+   * @param begin_idx where to start flush
+   */
+  void flush_tx_block(TxLocalIdx begin_idx = 0) {
+    persist_unfenced(&tx_entries[begin_idx],
+                     sizeof(TxEntry) * (NUM_TX_ENTRY - begin_idx) +
+                         2 * sizeof(LogicalBlockIdx));
+  }
+
+  /**
+   * flush a range of tx entries
+   *
+   * @param begin_idx
+   */
+  void flush_tx_entries(TxLocalIdx begin_idx, TxLocalIdx end_idx) {
+    persist_unfenced(&tx_entries[begin_idx],
+                     sizeof(TxEntry) * (end_idx - begin_idx));
   }
 };
 
@@ -261,6 +283,28 @@ class MetaBlock : public BaseBlock {
   void set_tx_tail(TxEntryIdx tx_tail) {
     this->tx_tail = tx_tail;
     persist_cl_fenced(&cl1);
+  }
+
+  /**
+   * similar to the one in TxBlock:
+   * flush the current block starting from `begin_idx` (including two pointers)
+   *
+   * @param begin_idx where to start flush
+   */
+  void flush_tx_block(TxLocalIdx begin_idx = 0) {
+    persist_unfenced(&inline_tx_entries[begin_idx],
+                     sizeof(TxEntry) * (NUM_INLINE_TX_ENTRY - begin_idx));
+    persist_cl_unfenced(cl1);
+  }
+
+  /**
+   * flush a range of tx entries
+   *
+   * @param begin_idx
+   */
+  void flush_tx_entries(TxLocalIdx begin_idx, TxLocalIdx end_idx) {
+    persist_unfenced(&inline_tx_entries[begin_idx],
+                     sizeof(TxEntry) * (end_idx - begin_idx));
   }
 
   [[nodiscard]] uint32_t get_num_blocks() const { return num_blocks; }
