@@ -118,7 +118,7 @@ pmem::LogEntry* LogMgr::alloc_entry(bool pack_align,
     if (prev_head_entry) prev_head_entry->next.next_block_idx = idx;
   } else {
     // if need 16-byte alignment, maybe skip one 8-byte slot
-    if (pack_align && free_local_idx % 2 == 1) free_local_idx++;
+    if (pack_align) free_local_idx = ALIGN_UP(free_local_idx, 2);
     if (prev_head_entry) prev_head_entry->next.next_local_idx = free_local_idx;
   }
 
