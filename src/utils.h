@@ -1,6 +1,7 @@
 #pragma once
 
 #include <immintrin.h>
+#include <valgrind/pmemcheck.h>
 
 #include <ctime>
 #include <iomanip>

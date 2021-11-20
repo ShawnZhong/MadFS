@@ -3,7 +3,6 @@
 #include <linux/mman.h>
 #include <tbb/concurrent_unordered_map.h>
 #include <tbb/concurrent_vector.h>
-#include <valgrind/pmemcheck.h>
 
 #include <cstddef>
 #include <stdexcept>

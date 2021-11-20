@@ -197,6 +197,9 @@ class MetaBlock : public BaseBlock {
   void init() {
     // the first block is always used (by MetaBlock itself)
 
+    if (BuildOptions::use_valgrind)
+      VALGRIND_PMC_REMOVE_PMEM_MAPPING(&mutex, sizeof(mutex));
+
     // initialize the mutex
     pthread_mutexattr_t attr;
     pthread_mutexattr_init(&attr);
@@ -237,7 +240,7 @@ class MetaBlock : public BaseBlock {
   // called by other public functions with lock held
   void set_num_blocks_no_lock(uint32_t num_blocks) {
     __atomic_store_n(&this->num_blocks, num_blocks, __ATOMIC_RELEASE);
-    persist_cl_fenced(&cl1);
+    persist_cl_fenced(&cl2);
   }
 
   /**
