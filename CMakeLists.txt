@@ -122,5 +122,5 @@ set(CMAKE_CXX_FLAGS_TSAN
     "Flags used by the C++ compiler during ThreadSanitizer builds." FORCE)
 
 set(CMAKE_CXX_FLAGS_VALGRIND
-    "${CMAKE_CXX_FLAGS_DEBUG} -mno-avx512f" CACHE STRING
+    "${CMAKE_CXX_FLAGS_DEBUG} -mno-avx512f -DUSE_VALGRIND" CACHE STRING
     "Flags used by the C++ compiler during Valgrind builds." FORCE)

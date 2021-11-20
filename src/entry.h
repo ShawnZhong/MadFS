@@ -111,8 +111,7 @@ union TxEntry {
       if (is_last_entry_in_cacheline(idx)) persist_cl_fenced(&entries[idx]);
 
       // simulate a flush when running valgrind
-      if (BuildOptions::use_valgrind)
-        VALGRIND_PMC_DO_FLUSH(&entries[idx], sizeof(TxEntry));
+      VALGRIND_PMC_DO_FLUSH(&entries[idx], sizeof(TxEntry));
     }
     // if CAS fails, `expected` will be stored the value in entries[idx]
     // if success, it will return 0

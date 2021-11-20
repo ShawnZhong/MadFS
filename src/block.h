@@ -197,8 +197,7 @@ class MetaBlock : public BaseBlock {
   void init() {
     // the first block is always used (by MetaBlock itself)
 
-    if (BuildOptions::use_valgrind)
-      VALGRIND_PMC_REMOVE_PMEM_MAPPING(&mutex, sizeof(mutex));
+    VALGRIND_PMC_REMOVE_PMEM_MAPPING(&mutex, sizeof(mutex));
 
     // initialize the mutex
     pthread_mutexattr_t attr;

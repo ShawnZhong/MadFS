@@ -103,8 +103,7 @@ class MemTable {
 
       PANIC_IF(addr == MAP_FAILED, "mmap fd = %d failed", fd);
     }
-    if constexpr (BuildOptions::use_valgrind)
-      VALGRIND_PMC_REGISTER_PMEM_MAPPING(addr, length);
+    VALGRIND_PMC_REGISTER_PMEM_MAPPING(addr, length);
     mmap_regions.emplace_back(addr, length);
     return static_cast<pmem::Block*>(addr);
   }
@@ -139,8 +138,7 @@ class MemTable {
   ~MemTable() {
     for (const auto& [addr, length] : mmap_regions) {
       munmap(addr, length);
-      if constexpr (BuildOptions::use_valgrind)
-        VALGRIND_PMC_REMOVE_PMEM_MAPPING(addr, length);
+      VALGRIND_PMC_REMOVE_PMEM_MAPPING(addr, length);
     }
   }
 
