@@ -2,6 +2,18 @@
 
 namespace ulayfs::dram {
 
+thread_local std::unordered_map<int, Allocator> File::allocators;
+
+Allocator* File::get_local_allocator() {
+  if (auto it = allocators.find(fd); it != allocators.end()) {
+    return &it->second;
+  }
+
+  auto [it, ok] = allocators.emplace(fd, Allocator(fd, meta, &mem_table));
+  PANIC_IF(!ok, "insert thread-local allocators failed");
+  return &it->second;
+}
+
 File::File(const char* pathname, int flags, mode_t mode)
     : open_flags(flags), valid(false), file_offset(0) {
   if ((flags & O_ACCMODE) == O_WRONLY) {
@@ -36,9 +48,9 @@ File::File(const char* pathname, int flags, mode_t mode)
 
   mem_table = MemTable(fd, stat_buf.st_size);
   meta = mem_table.get_meta();
-  allocator = Allocator(fd, meta, &mem_table);
-  log_mgr = LogMgr(meta, &allocator, &mem_table);
-  tx_mgr = TxMgr(meta, &allocator, &mem_table, &log_mgr, &blk_table);
+
+  log_mgr = LogMgr(this, meta, &mem_table);
+  tx_mgr = TxMgr(this, meta, &mem_table, &log_mgr, &blk_table);
   blk_table = BlkTable(meta, &mem_table, &log_mgr, &tx_mgr);
   blk_table.update();
 

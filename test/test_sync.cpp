@@ -6,7 +6,7 @@
 
 #include "common.h"
 
-constexpr auto NUM_BYTES = 128;
+constexpr auto NUM_BYTES = 32;
 constexpr auto BYTES_PER_THREAD = 1;
 
 int main(int argc, char* argv[]) {
@@ -23,7 +23,10 @@ int main(int argc, char* argv[]) {
   std::vector<std::thread> threads;
 
   for (int i = 0; i < NUM_BYTES; ++i) {
-    threads.emplace_back(std::thread([&]() {
+    threads.emplace_back(std::thread([&, i]() {
+      DEBUG("Thread %d: address of allocator = %p", i,
+            file->get_local_allocator());
+
       char buf[BYTES_PER_THREAD]{};
       fill_buff(buf, BYTES_PER_THREAD, i);
       ret = pwrite(fd, buf, BYTES_PER_THREAD, i);
