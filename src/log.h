@@ -12,11 +12,13 @@
 
 namespace ulayfs::dram {
 
+// forward declaration
+class File;
+
 class LogMgr {
  private:
+  File* file;
   pmem::MetaBlock* meta;
-
-  Allocator* allocator;
   MemTable* mem_table;
 
   // blocks for storing log entries, max 512 entries per block
@@ -29,9 +31,9 @@ class LogMgr {
 
  public:
   LogMgr() = default;
-  LogMgr(pmem::MetaBlock* meta, Allocator* allocator, MemTable* mem_table)
-      : meta(meta),
-        allocator(allocator),
+  LogMgr(File* file, pmem::MetaBlock* meta, MemTable* mem_table)
+      : file(file),
+        meta(meta),
         mem_table(mem_table),
         log_blocks(),
         curr_block(nullptr),
@@ -104,25 +106,7 @@ class LogMgr {
    * allocate a log entry, possibly triggering allocating a new LogBlock
    */
   pmem::LogEntry* alloc_entry(bool pack_align = false,
-                              pmem::LogHeadEntry* prev_head_entry = nullptr) {
-    if (free_local_idx == NUM_LOG_ENTRY) {
-      LogicalBlockIdx idx = allocator->alloc(1);
-      log_blocks.push_back(idx);
-      curr_block = &mem_table->get(idx)->log_entry_block;
-      free_local_idx = 0;
-      if (prev_head_entry) prev_head_entry->next.next_block_idx = idx;
-    } else {
-      // if need 16-byte alignment, maybe skip one 8-byte slot
-      if (pack_align && free_local_idx % 2 == 1) free_local_idx++;
-      if (prev_head_entry)
-        prev_head_entry->next.next_local_idx = free_local_idx;
-    }
-
-    assert(curr_block != nullptr);
-    pmem::LogEntry* entry = curr_block->get(free_local_idx);
-    free_local_idx++;
-    return entry;
-  }
+                              pmem::LogHeadEntry* prev_head_entry = nullptr);
 
   // syntax sugar for union dispatching
   pmem::LogHeadEntry* alloc_head_entry(

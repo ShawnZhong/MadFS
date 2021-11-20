@@ -6,6 +6,7 @@
 #include "alloc.h"
 #include "block.h"
 #include "entry.h"
+#include "file.h"
 #include "idx.h"
 #include "layout.h"
 #include "mtable.h"
@@ -105,6 +106,27 @@ LogEntryIdx LogMgr::append(
   }
 
   return LogEntryUnpackIdx::to_pack_idx(first_head_idx);
+}
+
+pmem::LogEntry* LogMgr::alloc_entry(bool pack_align,
+                                    pmem::LogHeadEntry* prev_head_entry) {
+  // if need 16-byte alignment, maybe skip one 8-byte slot
+  if (pack_align) free_local_idx = ALIGN_UP(free_local_idx, 2);
+
+  if (free_local_idx == NUM_LOG_ENTRY) {
+    LogicalBlockIdx idx = file->get_local_allocator()->alloc(1);
+    log_blocks.push_back(idx);
+    curr_block = &mem_table->get(idx)->log_entry_block;
+    free_local_idx = 0;
+    if (prev_head_entry) prev_head_entry->next.next_block_idx = idx;
+  } else {
+    if (prev_head_entry) prev_head_entry->next.next_local_idx = free_local_idx;
+  }
+
+  assert(curr_block != nullptr);
+  pmem::LogEntry* entry = curr_block->get(free_local_idx);
+  free_local_idx++;
+  return entry;
 }
 
 }  // namespace ulayfs::dram

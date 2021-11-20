@@ -20,8 +20,8 @@ class BlkTable;
 
 class TxMgr {
  private:
+  File* file;
   pmem::MetaBlock* meta;
-  Allocator* allocator;
   MemTable* mem_table;
   LogMgr* log_mgr;
   BlkTable* blk_table;
@@ -34,10 +34,10 @@ class TxMgr {
 
  public:
   TxMgr() = default;
-  TxMgr(pmem::MetaBlock* meta, Allocator* allocator, MemTable* mem_table,
-        LogMgr* log_mgr, BlkTable* blk_table)
-      : meta(meta),
-        allocator(allocator),
+  TxMgr(File* file, pmem::MetaBlock* meta, MemTable* mem_table, LogMgr* log_mgr,
+        BlkTable* blk_table)
+      : file(file),
+        meta(meta),
         mem_table(mem_table),
         log_mgr(log_mgr),
         blk_table(blk_table) {}
