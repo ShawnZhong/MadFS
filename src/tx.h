@@ -42,6 +42,14 @@ class TxMgr {
         log_mgr(log_mgr),
         blk_table(blk_table) {}
 
+  bool tx_idx_greater(TxEntryIdx lhs, TxEntryIdx rhs) {
+    if (lhs.block_idx == rhs.block_idx) return lhs.local_idx > rhs.local_idx;
+    if (lhs.block_idx == 0) return false;
+    if (rhs.block_idx == 0) return true;
+    return mem_table->get(lhs.block_idx)->tx_block.get_tx_seq() >
+           mem_table->get(rhs.block_idx)->tx_block.get_tx_seq();
+  }
+
   /**
    * Same argurments as pwrite
    */
@@ -194,7 +202,7 @@ class TxMgr {
    */
   void flush_tx_entries(TxEntryIdx tx_idx_begin, TxEntryIdx tx_idx_end,
                         pmem::TxBlock* tx_block_end = nullptr) {
-    if (tx_idx_begin == tx_idx_end) return;
+    if (!tx_idx_greater(tx_idx_end, tx_idx_begin)) return;
     pmem::TxBlock* tx_block_begin;
     // handle special case of inline tx
     if (tx_idx_begin.block_idx == 0) {
@@ -213,8 +221,10 @@ class TxMgr {
       // special case: tx_idx_end is the first entry of the next block, which
       // means we only need to flush the current block and no need to
       // dereference to get the last block
-      if (tx_idx_begin == tx_idx_end) goto done;
     }
+    if (tx_idx_begin.local_idx == tx_idx_end.local_idx) goto done;
+    if (!tx_block_end)
+      tx_block_end = &mem_table->get(tx_idx_end.block_idx)->tx_block;
     tx_block_end->flush_tx_entries(tx_idx_begin.local_idx,
                                    tx_idx_end.local_idx);
 

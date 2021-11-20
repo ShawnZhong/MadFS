@@ -77,8 +77,12 @@ class TxBlock : public BaseBlock {
   TxEntry tx_entries[NUM_TX_ENTRY];
   // next is placed after tx_entires so that it could be flushed with tx_entries
   LogicalBlockIdx next;
-  // currently not used (kept for padding purpose)
-  LogicalBlockIdx unused;
+  // seq is used to construct total order between tx entries, so it must
+  // increase monotically
+  // when compare two TxEntryIdx
+  // if within same block, compare local index
+  // if not, compare their block's seq number
+  uint32_t tx_seq;
 
  public:
   TxLocalIdx find_tail(TxLocalIdx hint = 0) {
@@ -95,6 +99,9 @@ class TxBlock : public BaseBlock {
   }
 
   [[nodiscard]] LogicalBlockIdx get_next_tx_block() const { return next; }
+
+  void set_tx_seq(uint32_t seq) { tx_seq = seq; }
+  uint32_t get_tx_seq() { return tx_seq; }
 
   /**
    * Set the next block index
@@ -124,6 +131,7 @@ class TxBlock : public BaseBlock {
    * @param begin_idx
    */
   void flush_tx_entries(TxLocalIdx begin_idx, TxLocalIdx end_idx) {
+    assert(end_idx > begin_idx);
     persist_unfenced(&tx_entries[begin_idx],
                      sizeof(TxEntry) * (end_idx - begin_idx));
   }
@@ -261,6 +269,8 @@ class MetaBlock : public BaseBlock {
     persist_cl_fenced(&cl1);
   }
 
+  uint32_t get_tx_seq() { return 0; }
+
   /**
    * Set the next tx block index
    * No flush+fence but leave it to flush_tx_block
@@ -363,24 +373,32 @@ union Block {
   LogEntryBlock log_entry_block;
   DataBlock data_block;
 
+  // view a block as an array of cache line
+  struct {
+    char cl[CACHELINE_SIZE];
+  } cl_view[NUM_CL_PER_BLOCK];
+
   char* data() { return data_block.data; }
   const char* data_ro() const { return data_block.data; }
+
+  bool zero_init_cl(uint16_t cl_idx) {
+    constexpr static const char* zero_cl[CACHELINE_SIZE] = {};
+    if (memcmp(&cl_view[cl_idx], zero_cl, CACHELINE_SIZE)) {
+      memset(&cl_view[cl_idx], 0, CACHELINE_SIZE);
+      persist_cl_unfenced(&cl_view[cl_idx]);
+      return true;
+    }
+    return false;
+  }
 
   // memset a block to zero from a given byte offset
   // offset must be cacheline-aligned
   // return whether a memset happen (may need fence if true)
-  bool zero_init(uint16_t offset = 0) {
-    assert((offset & (CACHELINE_SIZE - 1)) == 0);
-    constexpr static const char* zero_cl[CACHELINE_SIZE] = {};
+  bool zero_init(uint16_t cl_idx_begin = 0,
+                 uint16_t cl_idx_end = NUM_CL_PER_BLOCK) {
     bool do_memset = false;
-    for (; offset < BLOCK_SIZE; offset += CACHELINE_SIZE) {
-      char* cl = data() + offset;
-      if (memcmp(cl, zero_cl, CACHELINE_SIZE)) {
-        memset(cl, 0, CACHELINE_SIZE);
-        persist_cl_unfenced(cl);
-        do_memset = true;
-      }
-    }
+    for (uint16_t cl_idx = cl_idx_begin; cl_idx < cl_idx_end; ++cl_idx)
+      do_memset |= zero_init_cl(cl_idx);
     if (do_memset) _mm_sfence();
     return do_memset;
   }
