@@ -15,16 +15,11 @@
 
 namespace ulayfs::dram {
 
-// forward declaration
-class BlkTable;
-
 class TxMgr {
  private:
   File* file;
   pmem::MetaBlock* meta;
   MemTable* mem_table;
-  LogMgr* log_mgr;
-  BlkTable* blk_table;
 
   class Tx;
   class AlignedTx;
@@ -34,21 +29,16 @@ class TxMgr {
 
  public:
   TxMgr() = default;
-  TxMgr(File* file, pmem::MetaBlock* meta, MemTable* mem_table, LogMgr* log_mgr,
-        BlkTable* blk_table)
-      : file(file),
-        meta(meta),
-        mem_table(mem_table),
-        log_mgr(log_mgr),
-        blk_table(blk_table) {}
+  TxMgr(File* file, pmem::MetaBlock* meta, MemTable* mem_table)
+      : file(file), meta(meta), mem_table(mem_table) {}
 
   /**
-   * Same argurments as pwrite
+   * Same arguments as pwrite
    */
   void do_write(const char* buf, size_t count, size_t offset);
 
   /**
-   * Same argurments as pread
+   * Same arguments as pread
    */
   ssize_t do_read(char* buf, size_t count, size_t offset);
 
@@ -194,6 +184,7 @@ class TxMgr::Tx {
 
  protected:
   // pointer to the outer class
+  File* file;
   TxMgr* tx_mgr;
 
   /*

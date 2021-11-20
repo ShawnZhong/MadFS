@@ -59,7 +59,7 @@ ssize_t TxMgr::do_read(char* buf, size_t count, size_t offset) {
 
   TxEntryIdx tail_tx_idx;
   pmem::TxBlock* tail_tx_block;
-  blk_table->get_tail_tx(tail_tx_idx, tail_tx_block);
+  file->blk_table->get_tail_tx(tail_tx_idx, tail_tx_block);
 
   // first handle the first block (which might not be full block)
   curr_block = vidx_to_addr_ro(begin_vidx);
@@ -159,13 +159,13 @@ pmem::TxEntry TxMgr::try_commit(pmem::TxEntry entry, TxEntryIdx& tx_idx,
 }
 
 pmem::Block* TxMgr::vidx_to_addr_rw(VirtualBlockIdx vidx) const {
-  return tables_vidx_to_addr(this->mem_table, this->blk_table, vidx);
+  return tables_vidx_to_addr(this->mem_table, file->blk_table, vidx);
 }
 
 const pmem::Block* TxMgr::vidx_to_addr_ro(VirtualBlockIdx vidx) const {
   static const char empty_block[BLOCK_SIZE]{};
 
-  LogicalBlockIdx lidx = this->blk_table->get(vidx);
+  LogicalBlockIdx lidx = file->blk_table->get(vidx);
   if (lidx == 0) return reinterpret_cast<const pmem::Block*>(&empty_block);
   return this->mem_table->get(lidx);
 }
@@ -223,6 +223,7 @@ bool TxMgr::handle_conflict(pmem::TxEntry curr_entry,
   VirtualBlockIdx overlap_first_vidx, overlap_last_vidx;
   uint32_t num_blocks;
   bool need_redo = false;
+  auto log_mgr = file->get_local_log_mgr();
 
   do {
     // TODO: implement the case where num_blocks is over 64 and there
@@ -303,6 +304,8 @@ template LogicalBlockIdx TxMgr::alloc_next_block(pmem::TxBlock* block) const;
 std::ostream& operator<<(std::ostream& out, const TxMgr& tx_mgr) {
   out << "Transactions: \n";
 
+  auto log_mgr = tx_mgr.file->get_local_log_mgr();
+
   TxEntryIdx tx_idx = {0, 0};
   pmem::TxBlock* tx_block = nullptr;
 
@@ -315,15 +318,15 @@ std::ostream& operator<<(std::ostream& out, const TxMgr& tx_mgr) {
 
     // print log head
     auto head_entry_idx = tx_entry.commit_entry.log_entry_idx;
-    auto head_entry = tx_mgr.log_mgr->get_head_entry(head_entry_idx);
+    auto head_entry = log_mgr->get_head_entry(head_entry_idx);
     out << "\t\t" << *head_entry << "\n";
 
     // print log coverage
     uint32_t num_blocks;
     VirtualBlockIdx begin_virtual_idx;
     std::vector<LogicalBlockIdx> begin_logical_idxs;
-    tx_mgr.log_mgr->get_coverage(head_entry_idx, begin_virtual_idx, num_blocks,
-                                 &begin_logical_idxs);
+    log_mgr->get_coverage(head_entry_idx, begin_virtual_idx, num_blocks,
+                          &begin_logical_idxs);
     out << "\t\tLogCoverage{";
     out << "n_blk=" << num_blocks << ", ";
     out << "vidx=" << begin_virtual_idx << ", ";
@@ -342,7 +345,8 @@ std::ostream& operator<<(std::ostream& out, const TxMgr& tx_mgr) {
  */
 
 TxMgr::Tx::Tx(TxMgr* tx_mgr, const char* buf, size_t count, size_t offset)
-    : tx_mgr(tx_mgr),
+    : file(tx_mgr->file),
+      tx_mgr(tx_mgr),
 
       // input properties
       buf(buf),
@@ -363,12 +367,13 @@ TxMgr::Tx::Tx(TxMgr* tx_mgr, const char* buf, size_t count, size_t offset)
   // for overwrite, "leftover_bytes" is zero; only in append we care
   // append log without fence because we only care flush completion
   // before try_commit
-  this->log_idx = tx_mgr->log_mgr->append(pmem::LogOp::LOG_OVERWRITE,  // op
-                                          0,           // leftover_bytes
-                                          num_blocks,  // total_blocks
-                                          begin_vidx,  // begin_virtual_idx
-                                          {dst_idx},   // begin_logical_idxs
-                                          false        // fenced
+  this->log_idx = tx_mgr->file->get_local_log_mgr()->append(
+      pmem::LogOp::LOG_OVERWRITE,  // op
+      0,                           // leftover_bytes
+      num_blocks,                  // total_blocks
+      begin_vidx,                  // begin_virtual_idx
+      {dst_idx},                   // begin_logical_idxs
+      false                        // fenced
   );
   // it's fine that we append log first as long we don't publish it by tx
 }
@@ -387,7 +392,7 @@ void TxMgr::AlignedTx::do_write() {
   persist_fenced(dst_blocks, count);
 
   // make a local copy of the tx tail
-  tx_mgr->blk_table->get_tail_tx(tail_tx_idx, tail_tx_block);
+  file->blk_table->get_tail_tx(tail_tx_idx, tail_tx_block);
   // commit the transaction, it's fine if the tx fails due to race condition
   pmem::TxCommitEntry entry(num_blocks, begin_vidx, log_idx);
   tx_mgr->try_commit(entry, tail_tx_idx, tail_tx_block, /*cont_if_fail*/ true);
@@ -422,11 +427,11 @@ TxMgr::SingleBlockTx::SingleBlockTx(TxMgr* tx_mgr, const char* buf,
 
 void TxMgr::SingleBlockTx::do_write() {
   // must acquire the tx tail before any get
-  tx_mgr->blk_table->get_tail_tx(tail_tx_idx, tail_tx_block);
+  file->blk_table->get_tail_tx(tail_tx_idx, tail_tx_block);
 
   // src block is the block to be copied over
   // we only use first_* but not last_* because they are the same one
-  src_first_lidx = tx_mgr->blk_table->get(begin_vidx);
+  src_first_lidx = file->blk_table->get(begin_vidx);
 
 redo:
   // copy original data
@@ -475,15 +480,15 @@ void TxMgr::MultiBlockTx::do_write() {
   }
 
   // only get a snapshot of the tail when starting critical piece
-  tx_mgr->blk_table->get_tail_tx(tail_tx_idx, tail_tx_block);
+  file->blk_table->get_tail_tx(tail_tx_idx, tail_tx_block);
 
   if (copy_first) {
     assert(begin_full_vidx - begin_vidx == 1);
-    src_first_lidx = tx_mgr->blk_table->get(begin_vidx);
+    src_first_lidx = file->blk_table->get(begin_vidx);
   }
   if (copy_last) {
     assert(end_vidx - end_full_vidx == 1);
-    src_last_lidx = tx_mgr->blk_table->get(end_full_vidx);
+    src_last_lidx = file->blk_table->get(end_full_vidx);
   }
 
 redo:

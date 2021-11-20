@@ -30,7 +30,6 @@ class LogMgr {
   LogLocalUnpackIdx free_local_idx;
 
  public:
-  LogMgr() = default;
   LogMgr(File* file, pmem::MetaBlock* meta, MemTable* mem_table)
       : file(file),
         meta(meta),

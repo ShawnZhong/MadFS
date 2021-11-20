@@ -59,11 +59,8 @@ struct TxCommitEntry {
 };
 
 union TxEntry {
- private:
-  uint64_t raw_bits;
-
  public:
-  // WARN: begin_entry is deprecated
+  uint64_t raw_bits;
   TxCommitEntry commit_entry;
 
   TxEntry(){};
@@ -108,7 +105,7 @@ union TxEntry {
   static TxEntry try_append(TxEntry entries[], TxEntry entry, TxLocalIdx idx) {
     uint64_t expected = 0;
     if (__atomic_compare_exchange_n(&entries[idx].raw_bits, &expected,
-                                    entry.raw_bits, false, __ATOMIC_RELEASE,
+                                    entry.raw_bits, false, __ATOMIC_ACQ_REL,
                                     __ATOMIC_ACQUIRE))
       // only persist if it's the last entry in a cacheline
       if (is_last_entry_in_cacheline(idx)) persist_cl_fenced(&entries[idx]);

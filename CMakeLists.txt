@@ -17,7 +17,7 @@ add_library(ulayfs SHARED
     src/alloc.h src/alloc.cpp
     src/bitmap.h
     src/block.h
-    src/btable.h
+    src/btable.h src/btable.cpp
     src/entry.h
     src/file.h src/file.cpp
     src/layout.h

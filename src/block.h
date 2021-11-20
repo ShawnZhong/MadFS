@@ -236,7 +236,7 @@ class MetaBlock : public BaseBlock {
 
   // called by other public functions with lock held
   void set_num_blocks_no_lock(uint32_t num_blocks) {
-    this->num_blocks = num_blocks;
+    __atomic_store_n(&this->num_blocks, num_blocks, __ATOMIC_RELEASE);
     persist_cl_fenced(&cl1);
   }
 
@@ -258,7 +258,9 @@ class MetaBlock : public BaseBlock {
     persist_cl_fenced(&cl1);
   }
 
-  [[nodiscard]] uint32_t get_num_blocks() const { return num_blocks; }
+  [[nodiscard]] uint32_t get_num_blocks() const {
+    return __atomic_load_n(&this->num_blocks, __ATOMIC_ACQUIRE);
+  }
   [[nodiscard]] LogicalBlockIdx get_next_tx_block() const {
     return next_tx_block;
   }
@@ -266,7 +268,7 @@ class MetaBlock : public BaseBlock {
 
   [[nodiscard]] TxEntry get_tx_entry(TxLocalIdx idx) const {
     assert(idx >= 0 && idx < NUM_INLINE_TX_ENTRY);
-    return inline_tx_entries[idx];
+    return __atomic_load_n(&inline_tx_entries[idx].raw_bits, __ATOMIC_ACQUIRE);
   }
 
   /*

@@ -3,14 +3,25 @@
 namespace ulayfs::dram {
 
 thread_local std::unordered_map<int, Allocator> File::allocators;
+thread_local std::unordered_map<int, LogMgr> File::log_mgrs;
 
 Allocator* File::get_local_allocator() {
   if (auto it = allocators.find(fd); it != allocators.end()) {
     return &it->second;
   }
 
-  auto [it, ok] = allocators.emplace(fd, Allocator(fd, meta, &mem_table));
-  PANIC_IF(!ok, "insert thread-local allocators failed");
+  auto [it, ok] = allocators.emplace(fd, Allocator(fd, meta, mem_table));
+  PANIC_IF(!ok, "insert to thread-local allocators failed");
+  return &it->second;
+}
+
+LogMgr* File::get_local_log_mgr() {
+  if (auto it = log_mgrs.find(fd); it != log_mgrs.end()) {
+    return &it->second;
+  }
+
+  auto [it, ok] = log_mgrs.emplace(fd, LogMgr(this, meta, mem_table));
+  PANIC_IF(!ok, "insert to thread-local log_mgrs failed");
   return &it->second;
 }
 
@@ -46,26 +57,31 @@ File::File(const char* pathname, int flags, mode_t mode)
     return;
   }
 
-  mem_table = MemTable(fd, stat_buf.st_size);
-  meta = mem_table.get_meta();
+  mem_table = new MemTable(fd, stat_buf.st_size);
+  meta = mem_table->get_meta();
 
-  log_mgr = LogMgr(this, meta, &mem_table);
-  tx_mgr = TxMgr(this, meta, &mem_table, &log_mgr, &blk_table);
-  blk_table = BlkTable(meta, &mem_table, &log_mgr, &tx_mgr);
-  blk_table.update();
+  tx_mgr = TxMgr(this, meta, mem_table);
+  blk_table = new BlkTable(this, meta, mem_table, &tx_mgr);
 
-  if (stat_buf.st_size == 0) meta->init();
+  if (stat_buf.st_size == 0) {
+    meta->init();
+  } else {
+    blk_table->update();
+  }
 
   valid = true;
 }
 
-File::~File() { mem_table.unmap(); }
+File::~File() {
+  delete mem_table;
+  delete blk_table;
+}
 
 ssize_t File::pwrite(const void* buf, size_t count, size_t offset) {
   if (count == 0) return 0;
   // we allow (and only allow) allocation here since the index of the next tx
   // entry needs to be valid so that we have a slot to start from
-  blk_table.update(/*do_alloc*/ true);
+  blk_table->update(/*do_alloc*/ true);
   tx_mgr.do_write(static_cast<const char*>(buf), count, offset);
   // TODO: handle write fails i.e. return value != count
   return static_cast<ssize_t>(count);
@@ -73,7 +89,7 @@ ssize_t File::pwrite(const void* buf, size_t count, size_t offset) {
 
 ssize_t File::pread(void* buf, size_t count, off_t offset) {
   if (count == 0) return 0;
-  blk_table.update();
+  blk_table->update();
   return tx_mgr.do_read(static_cast<char*>(buf), count, offset);
 }
 

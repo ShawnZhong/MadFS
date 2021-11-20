@@ -51,13 +51,13 @@ struct __attribute__((packed)) LogEntryUnpackIdx {
   LogLocalUnpackIdx local_idx;
 
   static LogEntryUnpackIdx from_pack_idx(LogEntryIdx idx) {
-    LogLocalUnpackIdx local_idx = LogLocalUnpackIdx(idx.local_idx << 1);
+    auto local_idx = LogLocalUnpackIdx(idx.local_idx << 1);
     return LogEntryUnpackIdx{idx.block_idx, local_idx};
   }
 
   static LogEntryIdx to_pack_idx(LogEntryUnpackIdx idx) {
     assert(idx.local_idx % 2 == 0);
-    LogLocalIdx local_idx = LogLocalIdx(idx.local_idx >> 1);
+    auto local_idx = LogLocalIdx(idx.local_idx >> 1);
     return LogEntryIdx{idx.block_idx, local_idx};
   }
 };
@@ -70,6 +70,8 @@ static_assert(sizeof(LogEntryUnpackIdx) == 6,
  * A transaction entry is identified by the block index and the local index
  */
 struct TxEntryIdx {
+  using storage_type = uint64_t;
+
   LogicalBlockIdx block_idx;
   TxLocalIdx local_idx;
 
@@ -84,6 +86,7 @@ struct TxEntryIdx {
   }
 };
 
-static_assert(sizeof(TxEntryIdx) == 8, "TxEntryIdx must be 64 bits");
+static_assert(sizeof(TxEntryIdx) == sizeof(TxEntryIdx::storage_type),
+              "TxEntryIdx must be 64 bits");
 
 }  // namespace ulayfs

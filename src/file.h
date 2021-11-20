@@ -25,23 +25,27 @@ class File {
   off_t file_offset;
 
   pmem::MetaBlock* meta;
-  MemTable mem_table;
-  BlkTable blk_table;
-  LogMgr log_mgr;
+  MemTable* mem_table;
+  BlkTable* blk_table;
   TxMgr tx_mgr;
+
+  friend class TxMgr;
 
   // each thread maintain a mapping from fd to allocator
   // the allocator is a per-thread per-file data structure
   thread_local static std::unordered_map<int, Allocator> allocators;
+
+  // each thread maintain a mapping from fd to log managers
+  thread_local static std::unordered_map<int, LogMgr> log_mgrs;
 
  public:
   File(const char* pathname, int flags, mode_t mode);
   ~File();
 
   [[nodiscard]] bool is_valid() const { return valid; }
-  [[nodiscard]] pmem::MetaBlock* get_meta() { return meta; }
   [[nodiscard]] int get_fd() const { return fd; }
   [[nodiscard]] Allocator* get_local_allocator();
+  [[nodiscard]] LogMgr* get_local_log_mgr();
 
   /**
    * write the content in buf to the byte range [offset, offset + count)
@@ -79,7 +83,6 @@ class File {
    */
   const char* get_ro_data_ptr(VirtualBlockIdx virtual_block_idx);
 
- public:
   friend std::ostream& operator<<(std::ostream& out, const File& f);
 };
 

@@ -37,7 +37,7 @@ class MemTable {
 
   // a copy of global num_blocks in MetaBlock to avoid shared memory access
   // may be out-of-date; must re-read global one if necessary
-  uint32_t num_blocks_local_copy;
+  std::atomic<uint32_t> num_blocks_local_copy{};
 
   tbb::concurrent_unordered_map<LogicalBlockIdx, pmem::Block*> table;
 
@@ -108,8 +108,6 @@ class MemTable {
   }
 
  public:
-  MemTable() = default;
-
   MemTable(int fd, off_t file_size) {
     this->fd = fd;
 
@@ -136,7 +134,7 @@ class MemTable {
       table.emplace(idx, blocks + idx);
   }
 
-  void unmap() {
+  ~MemTable() {
     for (const auto& [addr, length] : mmap_regions) {
       munmap(addr, length);
     }
