@@ -6,7 +6,7 @@ namespace ulayfs::dram {
 
 void BlkTable::get_tail_tx(TxEntryIdx& tx_idx, pmem::TxBlock*& tx_block) {
   tx_idx = tail_tx_idx;
-  tx_block = tail_tx_block;
+  tx_block = &file->mem_table.get(tx_idx.block_idx)->tx_block;
 }
 
 void BlkTable::update(bool do_alloc) {
