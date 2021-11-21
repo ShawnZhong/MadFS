@@ -35,10 +35,6 @@ class MemTable {
   pmem::MetaBlock* meta;
   int fd;
 
-  // a copy of global num_blocks in MetaBlock to avoid shared memory access
-  // may be out-of-date; must re-read global one if necessary
-  uint32_t num_blocks_local_copy;
-
   tbb::concurrent_unordered_map<LogicalBlockIdx, pmem::Block*> table;
 
   // a vector of <addr, length> pairs
@@ -126,12 +122,11 @@ class MemTable {
     meta = &blocks->meta_block;
 
     // compute number of blocks and update the mata block if necessary
-    num_blocks_local_copy = file_size >> BLOCK_SHIFT;
-    if (should_grow) meta->set_num_blocks_no_lock(num_blocks_local_copy);
+    auto num_blocks = file_size >> BLOCK_SHIFT;
+    if (should_grow) meta->set_num_blocks_no_lock(num_blocks);
 
     // initialize the mapping
-    for (LogicalBlockIdx idx = 0; idx < num_blocks_local_copy;
-         idx += NUM_BLOCKS_PER_GROW)
+    for (LogicalBlockIdx idx = 0; idx < num_blocks; idx += NUM_BLOCKS_PER_GROW)
       table.emplace(idx, blocks + idx);
   }
 
@@ -146,12 +141,8 @@ class MemTable {
 
   // ask more blocks for the kernel filesystem, so that idx is valid
   void validate(LogicalBlockIdx idx) {
-    // fast path: if smaller than local copy; return
-    if (idx < num_blocks_local_copy) return;
-
-    // medium path: update local copy and retry
-    num_blocks_local_copy = meta->get_num_blocks();
-    if (idx < num_blocks_local_copy) return;
+    // fast path: if smaller than the number of block; return
+    if (idx < meta->get_num_blocks()) return;
 
     // slow path: acquire lock to verify and grow if necessary
     meta->lock();
