@@ -24,6 +24,7 @@ REGISTER_FN(close);
 REGISTER_FN(mmap);
 REGISTER_FN(munmap);
 REGISTER_FN(ftruncate);
+REGISTER_FN(fsync);
 
 #undef REGISTER_FN
 

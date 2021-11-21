@@ -94,6 +94,15 @@ ssize_t File::read(void* buf, size_t count) {
   return pread(buf, count, old_off);
 }
 
+int File::fsync() {
+  TxEntryIdx tail_tx_idx;
+  pmem::TxBlock* tail_tx_block;
+  blk_table.update();
+  blk_table.get_tail_tx(tail_tx_idx, tail_tx_block);
+  tx_mgr.flush_tx_entries(meta->get_tail_tx(), tail_tx_idx, tail_tx_block);
+  return 0;
+}
+
 /*
  * Getters for thread-local data structures
  */

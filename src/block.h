@@ -327,7 +327,7 @@ class MetaBlock : public BaseBlock {
   [[nodiscard]] LogicalBlockIdx get_next_tx_block() const {
     return next_tx_block;
   }
-  [[nodiscard]] TxEntryIdx get_tx_tail() const { return tx_tail; }
+  [[nodiscard]] TxEntryIdx get_tail_tx() const { return tx_tail; }
 
   [[nodiscard]] TxEntry get_tx_entry(TxLocalIdx idx) const {
     assert(idx >= 0 && idx < NUM_INLINE_TX_ENTRY);

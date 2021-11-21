@@ -129,43 +129,6 @@ class TxMgr {
     return true;
   }
 
- private:
-  /**
-   * Move along the linked list of TxBlock and find the tail. The returned
-   * tail may not be up-to-date due to race conditon. No new blocks will be
-   * allocated. If the end of TxBlock is reached, just return NUM_TX_ENTRY as
-   * the TxLocalIdx.
-   */
-  void find_tail(TxEntryIdx& curr_idx, pmem::TxBlock*& curr_block) const;
-
-  /**
-   * Move to the real tx and update first/last_src_block to indicate whether to
-   * redo
-   *
-   * @param[in] curr_entry the last entry returned by try_commit; this should be
-   * what dereferenced from tail_tx_idx, and we only take it to avoid one more
-   * dereference to some shared memory
-   * @param[in] first_vidx the first block's virtual idx; ignored if !copy_first
-   * @param[in] last_vidx the last block's virtual idx; ignored if !copy_last
-   * @param[in,out] tail_tx_idx current tail index
-   * @param[in,out] tail_tx_block current tail block
-   * @param[in] is_range whether it is range conflict: if false, only handle the
-   * conflict with the first/last; if true, any conflict in the range will be
-   * handled
-   * @param[out] redo_first whether redo the first; only valid if !is_range
-   * @param[out] redo_last whether redo the lsat; only valid if !is_range
-   * @param[out] first_lidx if redo_first, which logical block to copy from
-   * @param[out] last_lidx if redo_last, which logical block to copy from
-   * @param[out] redo_image if is_range and need redo, copy from the image
-   * @return true if needs redo; false otherwise
-   */
-  bool handle_conflict(pmem::TxEntry curr_entry, VirtualBlockIdx first_vidx,
-                       VirtualBlockIdx last_vidx, TxEntryIdx& tail_tx_idx,
-                       pmem::TxBlock*& tail_tx_block, bool is_range,
-                       bool* redo_first, bool* redo_last,
-                       LogicalBlockIdx* first_lidx, LogicalBlockIdx* last_lidx,
-                       std::vector<LogicalBlockIdx>* redo_image);
-
   /**
    * Flush tx entries from tx_idx_begin to tx_idx_end
    * A typical use pattern is use meta->tx_tail as begin and the latest tail as
@@ -208,6 +171,43 @@ class TxMgr {
   done:
     _mm_sfence();
   }
+
+ private:
+  /**
+   * Move along the linked list of TxBlock and find the tail. The returned
+   * tail may not be up-to-date due to race conditon. No new blocks will be
+   * allocated. If the end of TxBlock is reached, just return NUM_TX_ENTRY as
+   * the TxLocalIdx.
+   */
+  void find_tail(TxEntryIdx& curr_idx, pmem::TxBlock*& curr_block) const;
+
+  /**
+   * Move to the real tx and update first/last_src_block to indicate whether to
+   * redo
+   *
+   * @param[in] curr_entry the last entry returned by try_commit; this should be
+   * what dereferenced from tail_tx_idx, and we only take it to avoid one more
+   * dereference to some shared memory
+   * @param[in] first_vidx the first block's virtual idx; ignored if !copy_first
+   * @param[in] last_vidx the last block's virtual idx; ignored if !copy_last
+   * @param[in,out] tail_tx_idx current tail index
+   * @param[in,out] tail_tx_block current tail block
+   * @param[in] is_range whether it is range conflict: if false, only handle the
+   * conflict with the first/last; if true, any conflict in the range will be
+   * handled
+   * @param[out] redo_first whether redo the first; only valid if !is_range
+   * @param[out] redo_last whether redo the lsat; only valid if !is_range
+   * @param[out] first_lidx if redo_first, which logical block to copy from
+   * @param[out] last_lidx if redo_last, which logical block to copy from
+   * @param[out] redo_image if is_range and need redo, copy from the image
+   * @return true if needs redo; false otherwise
+   */
+  bool handle_conflict(pmem::TxEntry curr_entry, VirtualBlockIdx first_vidx,
+                       VirtualBlockIdx last_vidx, TxEntryIdx& tail_tx_idx,
+                       pmem::TxBlock*& tail_tx_block, bool is_range,
+                       bool* redo_first, bool* redo_last,
+                       LogicalBlockIdx* first_lidx, LogicalBlockIdx* last_lidx,
+                       std::vector<LogicalBlockIdx>* redo_image);
 
  public:
   friend std::ostream& operator<<(std::ostream& out, const TxMgr& tx_mgr);
