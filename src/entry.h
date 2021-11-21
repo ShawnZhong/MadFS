@@ -106,9 +106,13 @@ union TxEntry {
     uint64_t expected = 0;
     if (__atomic_compare_exchange_n(&entries[idx].raw_bits, &expected,
                                     entry.raw_bits, false, __ATOMIC_ACQ_REL,
-                                    __ATOMIC_ACQUIRE))
+                                    __ATOMIC_ACQUIRE)) {
       // only persist if it's the last entry in a cacheline
       if (is_last_entry_in_cacheline(idx)) persist_cl_fenced(&entries[idx]);
+
+      // simulate a flush when running valgrind
+      VALGRIND_PMC_DO_FLUSH(&entries[idx], sizeof(TxEntry));
+    }
     // if CAS fails, `expected` will be stored the value in entries[idx]
     // if success, it will return 0
     return expected;

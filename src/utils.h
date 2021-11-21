@@ -1,5 +1,13 @@
 #pragma once
 
+#ifdef USE_VALGRIND
+#include <valgrind/pmemcheck.h>
+#else
+#define VALGRIND_PMC_REMOVE_PMEM_MAPPING(...) ({})
+#define VALGRIND_PMC_REGISTER_PMEM_MAPPING(...) ({})
+#define VALGRIND_PMC_DO_FLUSH(...) ({})
+#endif
+
 #include <immintrin.h>
 
 #include <ctime>

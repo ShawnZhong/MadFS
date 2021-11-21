@@ -103,6 +103,7 @@ class MemTable {
 
       PANIC_IF(addr == MAP_FAILED, "mmap fd = %d failed", fd);
     }
+    VALGRIND_PMC_REGISTER_PMEM_MAPPING(addr, length);
     mmap_regions.emplace_back(addr, length);
     return static_cast<pmem::Block*>(addr);
   }
@@ -111,8 +112,8 @@ class MemTable {
   MemTable(int fd, off_t file_size) {
     this->fd = fd;
 
-    // grow to multiple of grow_unit_size if the file is empty or the file size
-    // is not grow_unit aligned
+    // grow to multiple of grow_unit_size if the file is empty or the file
+    // size is not grow_unit aligned
     bool should_grow = file_size == 0 || !IS_ALIGNED(file_size, GROW_UNIT_SIZE);
     if (should_grow) {
       file_size =
@@ -137,6 +138,7 @@ class MemTable {
   ~MemTable() {
     for (const auto& [addr, length] : mmap_regions) {
       munmap(addr, length);
+      VALGRIND_PMC_REMOVE_PMEM_MAPPING(addr, length);
     }
   }
 
@@ -161,8 +163,8 @@ class MemTable {
    * the idx might pass Allocator's grow() to ensure there is a backing kernel
    * filesystem block
    *
-   * it will then check if it has been mapped into the address space; if not, it
-   * does mapping first
+   * it will then check if it has been mapped into the address space; if not,
+   * it does mapping first
    *
    * @param idx the logical block index
    * @return the Block pointer if idx is not 0; nullptr for idx == 0, and the
