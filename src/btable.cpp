@@ -34,8 +34,10 @@ void BlkTable::update(bool do_alloc) {
 
 void BlkTable::resize_to_fit(VirtualBlockIdx idx) {
   if (table.size() > idx) return;
-  // ref: https://jameshfisher.com/2018/03/30/round-up-power-2/
-  int next_pow2 = 1 << (64 - __builtin_clzl(idx - 1));
+  // __builtin_clz counts the number of leading 0-bits for an unsigned int
+  // if idx is already a pow of 2, it will be rounded to the next pow of 2
+  // so that the table has enough space to hold this index
+  int next_pow2 = 1 << (32 - __builtin_clz(idx));
   table.resize(next_pow2);
 }
 
