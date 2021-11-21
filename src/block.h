@@ -267,7 +267,7 @@ class MetaBlock : public BaseBlock {
 
   // called by other public functions with lock held
   void set_num_blocks_no_lock(uint32_t num_blocks) {
-    __atomic_store_n(&this->num_blocks, num_blocks, __ATOMIC_RELEASE);
+    __atomic_store_n(&this->num_blocks, num_blocks, __ATOMIC_RELAXED);
     persist_cl_fenced(&cl2);
   }
 

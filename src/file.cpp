@@ -7,10 +7,10 @@ thread_local std::unordered_map<int, LogMgr> File::log_mgrs;
 
 File::File(int fd, off_t init_file_size)
     : fd(fd),
-      mem_table(MemTable(fd, init_file_size)),
+      mem_table(fd, init_file_size),
       meta(mem_table.get_meta()),
-      tx_mgr(TxMgr(this, meta, &mem_table)),
-      blk_table(BlkTable(this, &tx_mgr)),
+      tx_mgr(this, meta, &mem_table),
+      blk_table(this, &tx_mgr),
       file_offset(0) {
   if (init_file_size == 0) {
     meta->init();
