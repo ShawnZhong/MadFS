@@ -143,10 +143,10 @@ ssize_t pread(int fd, void* buf, size_t count, off_t offset) {
 
 int fsync(int fd) {
   if (auto file = get_file(fd)) {
-    INFO("ulayfs::fsync()");
+    INFO("ulayfs::fsync(%d)", fd);
     return file->fsync();
   } else {
-    DEBUG("posix::fstat()");
+    DEBUG("posix::fsync(%d)", fd);
     return posix::fsync(fd);
   }
 }
