@@ -144,6 +144,10 @@ pmem::TxEntry TxMgr::try_commit(pmem::TxEntry entry, TxEntryIdx& tx_idx,
   assert(is_inline == (curr_block == nullptr));
 
   while (true) {
+    if (pmem::TxEntry::need_flush(curr_idx.local_idx)) {
+      flush_tx_entries(meta->get_tx_tail(), curr_idx, curr_block);
+      meta->set_tx_tail(curr_idx);
+    }
     pmem::TxEntry conflict_entry =
         is_inline ? meta->try_append(entry, curr_idx.local_idx)
                   : curr_block->try_append(entry, curr_idx.local_idx);
@@ -187,7 +191,7 @@ void TxMgr::find_tail(TxEntryIdx& tx_idx, pmem::TxBlock*& tx_block) const {
     curr_block = &mem_table->get(curr_idx.block_idx)->tx_block;
   }
 
-  if (!(next_block_idx = curr_block->get_next())) {
+  if (!(next_block_idx = curr_block->get_next_tx_block())) {
     curr_idx.local_idx = curr_block->find_tail(curr_idx.local_idx);
     if (curr_idx.local_idx < NUM_TX_ENTRY) goto done;
   }
@@ -196,12 +200,12 @@ retry:
   do {
     curr_idx.block_idx = next_block_idx;
     curr_block = &(mem_table->get(next_block_idx)->tx_block);
-  } while ((next_block_idx = curr_block->get_next()));
+  } while ((next_block_idx = curr_block->get_next_tx_block()));
 
   curr_idx.local_idx = curr_block->find_tail();
   if (curr_idx.local_idx < NUM_TX_ENTRY) goto done;
 
-  next_block_idx = alloc_next_block(meta);
+  next_block_idx = alloc_next_block(curr_block);
   goto retry;
 
 done:
@@ -283,15 +287,18 @@ bool TxMgr::handle_conflict(pmem::TxEntry curr_entry,
 template <class B>
 LogicalBlockIdx TxMgr::alloc_next_block(B* block) const {
   // allocate the next block
-  LogicalBlockIdx new_block_id = file->get_local_allocator()->alloc(1);
-  pmem::Block* new_block = mem_table->get(new_block_id);
-  new_block->zero_init_persist();
-  bool success = block->set_next_tx_block(new_block_id);
+  LogicalBlockIdx new_block_idx = file->get_local_allocator()->alloc(1);
+  pmem::Block* new_block = mem_table->get(new_block_idx);
+  memset(&new_block->cl_view[NUM_CL_PER_BLOCK - 1], 0, CACHELINE_SIZE);
+  new_block->tx_block.set_tx_seq(block->get_tx_seq() + 1);
+  pmem::persist_cl_unfenced(&new_block->cl_view[NUM_CL_PER_BLOCK - 1]);
+  new_block->zero_init(0, NUM_CL_PER_BLOCK - 1);
+  bool success = block->set_next_tx_block(new_block_idx);
   if (success) {
-    return new_block_id;
+    return new_block_idx;
   } else {
     // there is a race condition for adding the new blocks
-    file->get_local_allocator()->free(new_block_id, 1);
+    file->get_local_allocator()->free(new_block_idx, 1);
     return block->get_next_tx_block();
   }
 }

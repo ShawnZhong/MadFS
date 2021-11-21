@@ -7,6 +7,7 @@
 
 #include "bitmap.h"
 #include "entry.h"
+#include "idx.h"
 #include "layout.h"
 #include "params.h"
 #include "utils.h"
@@ -73,9 +74,15 @@ class BitmapBlock : public BaseBlock {
 };
 
 class TxBlock : public BaseBlock {
-  LogicalBlockIdx prev;
-  LogicalBlockIdx next;
   TxEntry tx_entries[NUM_TX_ENTRY];
+  // next is placed after tx_entires so that it could be flushed with tx_entries
+  LogicalBlockIdx next;
+  // seq is used to construct total order between tx entries, so it must
+  // increase monotically
+  // when compare two TxEntryIdx
+  // if within same block, compare local index
+  // if not, compare their block's seq number
+  uint32_t tx_seq;
 
  public:
   TxLocalIdx find_tail(TxLocalIdx hint = 0) {
@@ -91,10 +98,10 @@ class TxBlock : public BaseBlock {
     return tx_entries[idx];
   }
 
-  [[nodiscard]] LogicalBlockIdx get_next() { return next; }
-  [[nodiscard]] LogicalBlockIdx get_prev() { return prev; }
-
   [[nodiscard]] LogicalBlockIdx get_next_tx_block() const { return next; }
+
+  void set_tx_seq(uint32_t seq) { tx_seq = seq; }
+  uint32_t get_tx_seq() { return tx_seq; }
 
   /**
    * Set the next block index
@@ -104,8 +111,29 @@ class TxBlock : public BaseBlock {
     LogicalBlockIdx expected = 0;
     bool success = __atomic_compare_exchange_n(
         &next, &expected, block_idx, false, __ATOMIC_ACQ_REL, __ATOMIC_ACQUIRE);
-    if (success) persist_cl_fenced(&next);
     return success;
+  }
+
+  /**
+   * flush the current block starting from `begin_idx` (including two pointers)
+   *
+   * @param begin_idx where to start flush
+   */
+  void flush_tx_block(TxLocalIdx begin_idx = 0) {
+    persist_unfenced(&tx_entries[begin_idx],
+                     sizeof(TxEntry) * (NUM_TX_ENTRY - begin_idx) +
+                         2 * sizeof(LogicalBlockIdx));
+  }
+
+  /**
+   * flush a range of tx entries
+   *
+   * @param begin_idx
+   */
+  void flush_tx_entries(TxLocalIdx begin_idx, TxLocalIdx end_idx) {
+    assert(end_idx > begin_idx);
+    persist_unfenced(&tx_entries[begin_idx],
+                     sizeof(TxEntry) * (end_idx - begin_idx));
   }
 };
 
@@ -149,6 +177,7 @@ class MetaBlock : public BaseBlock {
       LogicalBlockIdx next_tx_block;
 
       // hint to find tx log tail; not necessarily up-to-date
+      // all tx entries before it must be flushed
       TxEntryIdx tx_tail;
     };
 
@@ -240,8 +269,11 @@ class MetaBlock : public BaseBlock {
     persist_cl_fenced(&cl1);
   }
 
+  uint32_t get_tx_seq() { return 0; }
+
   /**
    * Set the next tx block index
+   * No flush+fence but leave it to flush_tx_block
    * @return true on success, false if there is a race condition
    */
   bool set_next_tx_block(LogicalBlockIdx block_idx) {
@@ -249,13 +281,42 @@ class MetaBlock : public BaseBlock {
     bool success =
         __atomic_compare_exchange_n(&next_tx_block, &expected, block_idx, false,
                                     __ATOMIC_ACQ_REL, __ATOMIC_ACQUIRE);
-    if (success) persist_cl_fenced(&next_tx_block);
     return success;
   }
 
-  void set_tx_tail(TxEntryIdx tx_tail) {
+  /**
+   * Set the tx tail
+   * tx_tail is mostly just a hint, so it's fine to be not up-to-date; thus by
+   * default, we don't do concurrency control and no fence by default
+   *
+   * @param tx_tail tail value to set
+   * @param fenced whether use fence
+   */
+  void set_tx_tail(TxEntryIdx tx_tail, bool fenced = false) {
     this->tx_tail = tx_tail;
-    persist_cl_fenced(&cl1);
+    persist_cl(&cl1, fenced);
+  }
+
+  /**
+   * similar to the one in TxBlock:
+   * flush the current block starting from `begin_idx` (including two pointers)
+   *
+   * @param begin_idx where to start flush
+   */
+  void flush_tx_block(TxLocalIdx begin_idx = 0) {
+    persist_unfenced(&inline_tx_entries[begin_idx],
+                     sizeof(TxEntry) * (NUM_INLINE_TX_ENTRY - begin_idx));
+    persist_cl_unfenced(cl1);
+  }
+
+  /**
+   * flush a range of tx entries
+   *
+   * @param begin_idx
+   */
+  void flush_tx_entries(TxLocalIdx begin_idx, TxLocalIdx end_idx) {
+    persist_unfenced(&inline_tx_entries[begin_idx],
+                     sizeof(TxEntry) * (end_idx - begin_idx));
   }
 
   [[nodiscard]] uint32_t get_num_blocks() const { return num_blocks; }
@@ -312,24 +373,34 @@ union Block {
   LogEntryBlock log_entry_block;
   DataBlock data_block;
 
+  // view a block as an array of cache line
+  struct {
+    char cl[CACHELINE_SIZE];
+  } cl_view[NUM_CL_PER_BLOCK];
+
   char* data() { return data_block.data; }
   const char* data_ro() const { return data_block.data; }
 
+  bool zero_init_cl(uint16_t cl_idx) {
+    constexpr static const char* zero_cl[CACHELINE_SIZE] = {};
+    if (memcmp(&cl_view[cl_idx], zero_cl, CACHELINE_SIZE)) {
+      memset(&cl_view[cl_idx], 0, CACHELINE_SIZE);
+      persist_cl_unfenced(&cl_view[cl_idx]);
+      return true;
+    }
+    return false;
+  }
+
   // memset a block to zero from a given byte offset
   // offset must be cacheline-aligned
-  void zero_init_persist(uint16_t offset = 0) {
-    assert((offset & (CACHELINE_SIZE - 1)) == 0);
-    constexpr static const char* zero_cl[CACHELINE_SIZE] = {};
-    bool need_fence = false;
-    for (; offset < BLOCK_SIZE; offset += CACHELINE_SIZE) {
-      char* cl = data() + offset;
-      if (memcmp(cl, zero_cl, CACHELINE_SIZE)) {
-        memset(cl, 0, CACHELINE_SIZE);
-        persist_cl_unfenced(cl);
-        need_fence = true;
-      }
-    }
-    if (need_fence) _mm_sfence();
+  // return whether a memset happen (may need fence if true)
+  bool zero_init(uint16_t cl_idx_begin = 0,
+                 uint16_t cl_idx_end = NUM_CL_PER_BLOCK) {
+    bool do_memset = false;
+    for (uint16_t cl_idx = cl_idx_begin; cl_idx < cl_idx_end; ++cl_idx)
+      do_memset |= zero_init_cl(cl_idx);
+    if (do_memset) _mm_sfence();
+    return do_memset;
   }
 };
 
