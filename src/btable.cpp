@@ -5,12 +5,8 @@
 namespace ulayfs::dram {
 
 void BlkTable::get_tail_tx(TxEntryIdx& tx_idx, pmem::TxBlock*& tx_block) {
-  pthread_spin_lock(&spinlock);
-
   tx_idx = tail_tx_idx;
   tx_block = tail_tx_block;
-
-  pthread_spin_unlock(&spinlock);
 }
 
 void BlkTable::update(bool do_alloc) {
