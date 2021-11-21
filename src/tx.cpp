@@ -144,7 +144,7 @@ pmem::TxEntry TxMgr::try_commit(pmem::TxEntry entry, TxEntryIdx& tx_idx,
 
   while (true) {
     if (pmem::TxEntry::need_flush(curr_idx.local_idx)) {
-      flush_tx_entries(meta->get_tail_tx(), curr_idx, curr_block);
+      flush_tx_entries(meta->get_tx_tail(), curr_idx, curr_block);
       meta->set_tx_tail(curr_idx);
     }
     pmem::TxEntry conflict_entry =
