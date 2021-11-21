@@ -51,13 +51,13 @@ struct __attribute__((packed)) LogEntryUnpackIdx {
   LogLocalUnpackIdx local_idx;
 
   static LogEntryUnpackIdx from_pack_idx(LogEntryIdx idx) {
-    LogLocalUnpackIdx local_idx = LogLocalUnpackIdx(idx.local_idx << 1);
+    auto local_idx = LogLocalUnpackIdx(idx.local_idx << 1);
     return LogEntryUnpackIdx{idx.block_idx, local_idx};
   }
 
   static LogEntryIdx to_pack_idx(LogEntryUnpackIdx idx) {
     assert(idx.local_idx % 2 == 0);
-    LogLocalIdx local_idx = LogLocalIdx(idx.local_idx >> 1);
+    auto local_idx = LogLocalIdx(idx.local_idx >> 1);
     return LogEntryIdx{idx.block_idx, local_idx};
   }
 };

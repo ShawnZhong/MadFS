@@ -226,6 +226,8 @@ class MetaBlock : public BaseBlock {
   void init() {
     // the first block is always used (by MetaBlock itself)
 
+    VALGRIND_PMC_REMOVE_PMEM_MAPPING(&mutex, sizeof(mutex));
+
     // initialize the mutex
     pthread_mutexattr_t attr;
     pthread_mutexattr_init(&attr);
@@ -265,8 +267,8 @@ class MetaBlock : public BaseBlock {
 
   // called by other public functions with lock held
   void set_num_blocks_no_lock(uint32_t num_blocks) {
-    this->num_blocks = num_blocks;
-    persist_cl_fenced(&cl1);
+    __atomic_store_n(&this->num_blocks, num_blocks, __ATOMIC_RELAXED);
+    persist_cl_fenced(&cl2);
   }
 
   uint32_t get_tx_seq() { return 0; }
@@ -319,7 +321,9 @@ class MetaBlock : public BaseBlock {
                      sizeof(TxEntry) * (end_idx - begin_idx));
   }
 
-  [[nodiscard]] uint32_t get_num_blocks() const { return num_blocks; }
+  [[nodiscard]] uint32_t get_num_blocks() const {
+    return __atomic_load_n(&this->num_blocks, __ATOMIC_ACQUIRE);
+  }
   [[nodiscard]] LogicalBlockIdx get_next_tx_block() const {
     return next_tx_block;
   }
@@ -327,7 +331,7 @@ class MetaBlock : public BaseBlock {
 
   [[nodiscard]] TxEntry get_tx_entry(TxLocalIdx idx) const {
     assert(idx >= 0 && idx < NUM_INLINE_TX_ENTRY);
-    return inline_tx_entries[idx];
+    return __atomic_load_n(&inline_tx_entries[idx].raw_bits, __ATOMIC_ACQUIRE);
   }
 
   /*

@@ -59,11 +59,8 @@ struct TxCommitEntry {
 };
 
 union TxEntry {
- private:
-  uint64_t raw_bits;
-
  public:
-  // WARN: begin_entry is deprecated
+  uint64_t raw_bits;
   TxCommitEntry commit_entry;
 
   TxEntry(){};

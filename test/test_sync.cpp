@@ -6,11 +6,11 @@
 
 #include "common.h"
 
-constexpr auto NUM_BYTES = 32;
-constexpr auto BYTES_PER_THREAD = 1;
+constexpr auto NUM_BYTES = 128;
+constexpr auto BYTES_PER_THREAD = 2;
 
 int main(int argc, char* argv[]) {
-  ssize_t ret;
+  [[maybe_unused]] ssize_t ret;
 
   remove(FILEPATH);
   int fd = open(FILEPATH, O_CREAT | O_RDWR, S_IRUSR | S_IWUSR);
@@ -24,13 +24,10 @@ int main(int argc, char* argv[]) {
 
   for (int i = 0; i < NUM_BYTES; ++i) {
     threads.emplace_back(std::thread([&, i]() {
-      DEBUG("Thread %d: address of allocator = %p", i,
-            file->get_local_allocator());
-
       char buf[BYTES_PER_THREAD]{};
       fill_buff(buf, BYTES_PER_THREAD, i);
-      ret = pwrite(fd, buf, BYTES_PER_THREAD, i);
-      assert(ret == BYTES_PER_THREAD);
+      ssize_t rc = pwrite(fd, buf, BYTES_PER_THREAD, i);
+      assert(rc == BYTES_PER_THREAD);
     }));
     // uncomment the line below to run sequentially
     //    threads.back().join();

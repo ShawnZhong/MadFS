@@ -14,6 +14,7 @@
 #cmakedefine CMAKE_BUILD_TYPE "@CMAKE_BUILD_TYPE@"
 
 #include <ostream>
+
 namespace ulayfs {
 
 constexpr static struct BuildOptions {
@@ -28,6 +29,12 @@ constexpr static struct BuildOptions {
   constexpr static bool use_map_sync = USE_MAP_SYNC;
   constexpr static bool force_map_populate = FORCE_MAP_POPULATE;
   constexpr static bool tx_flush_only_fsync = TX_FLUSH_ONLY_FSYNC;
+
+#ifdef USE_VALGRIND
+  constexpr static bool use_valgrind = true;
+#else
+  constexpr static bool use_valgrind = false;
+#endif
 
 #ifdef NDEBUG
   constexpr static bool debug = false;
@@ -53,6 +60,7 @@ constexpr static struct BuildOptions {
     out << "\tgit_branch: " << git_branch << "\n";
     out << "\tgit_commit_hash: " << git_commit_hash << "\n";
     out << "\tdebug: " << debug << "\n";
+    out << "\tuse_valgrind: " << use_valgrind << "\n";
     out << "\tmem_protect: " << mem_protect << "\n";
     out << "\tno_sharing: " << no_sharing << "\n";
     out << "\trelaxed: " << relaxed << "\n";

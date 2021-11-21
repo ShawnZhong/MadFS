@@ -15,16 +15,11 @@
 
 namespace ulayfs::dram {
 
-// forward declaration
-class BlkTable;
-
 class TxMgr {
  private:
   File* file;
   pmem::MetaBlock* meta;
   MemTable* mem_table;
-  LogMgr* log_mgr;
-  BlkTable* blk_table;
 
   class Tx;
   class AlignedTx;
@@ -33,14 +28,8 @@ class TxMgr {
   class MultiBlockTx;
 
  public:
-  TxMgr() = default;
-  TxMgr(File* file, pmem::MetaBlock* meta, MemTable* mem_table, LogMgr* log_mgr,
-        BlkTable* blk_table)
-      : file(file),
-        meta(meta),
-        mem_table(mem_table),
-        log_mgr(log_mgr),
-        blk_table(blk_table) {}
+  TxMgr(File* file, pmem::MetaBlock* meta, MemTable* mem_table)
+      : file(file), meta(meta), mem_table(mem_table) {}
 
   bool tx_idx_greater(TxEntryIdx lhs, TxEntryIdx rhs) {
     if (lhs.block_idx == rhs.block_idx) return lhs.local_idx > rhs.local_idx;
@@ -51,12 +40,12 @@ class TxMgr {
   }
 
   /**
-   * Same argurments as pwrite
+   * Same arguments as pwrite
    */
   void do_write(const char* buf, size_t count, size_t offset);
 
   /**
-   * Same argurments as pread
+   * Same arguments as pread
    */
   ssize_t do_read(char* buf, size_t count, size_t offset);
 
@@ -77,7 +66,7 @@ class TxMgr {
                                     pmem::TxBlock*& tx_block,
                                     bool do_alloc) const {
     assert(tx_idx.local_idx >= 0);
-    tx_idx.local_idx++;
+    __atomic_fetch_add(&tx_idx.local_idx, 1, __ATOMIC_ACQ_REL);
     return handle_idx_overflow(tx_idx, tx_block, do_alloc);
   }
 
@@ -141,18 +130,6 @@ class TxMgr {
   }
 
  private:
-  /**
-   * Return a write-only pointer to the block given a virtual block index
-   * A nullptr is returned if the block is not allocated yet (e.g., a hole)
-   */
-  [[nodiscard]] pmem::Block* vidx_to_addr_rw(VirtualBlockIdx vidx) const;
-
-  /**
-   * Return a read-only pointer to the block given a virtual block index
-   * An empty block is returned if the block is not allocated yet (e.g., a hole)
-   */
-  [[nodiscard]] const pmem::Block* vidx_to_addr_ro(VirtualBlockIdx vidx) const;
-
   /**
    * Move along the linked list of TxBlock and find the tail. The returned
    * tail may not be up-to-date due to race conditon. No new blocks will be
@@ -241,11 +218,14 @@ class TxMgr {
  */
 class TxMgr::Tx {
  public:
-  Tx(TxMgr* tx_mgr, const char* buf, size_t count, size_t offset);
+  Tx(File* file, const char* buf, size_t count, size_t offset);
 
  protected:
   // pointer to the outer class
+  File* file;
   TxMgr* tx_mgr;
+  LogMgr* log_mgr;
+  Allocator* allocator;
 
   /*
    * Input (read-only) properties
@@ -292,13 +272,13 @@ class TxMgr::Tx {
 
 class TxMgr::AlignedTx : public TxMgr::Tx {
  public:
-  AlignedTx(TxMgr* tx_mgr, const char* buf, size_t count, size_t offset);
+  AlignedTx(File* file, const char* buf, size_t count, size_t offset);
   void do_write();
 };
 
 class TxMgr::CoWTx : public TxMgr::Tx {
  protected:
-  CoWTx(TxMgr* tx_mgr, const char* buf, size_t count, size_t offset);
+  CoWTx(File* file, const char* buf, size_t count, size_t offset);
 
   // the tx entry to be committed
   const pmem::TxCommitEntry entry;
@@ -334,7 +314,7 @@ class TxMgr::CoWTx : public TxMgr::Tx {
 
 class TxMgr::SingleBlockTx : public TxMgr::CoWTx {
  public:
-  SingleBlockTx(TxMgr* tx_mgr, const char* buf, size_t count, size_t offset);
+  SingleBlockTx(File* file, const char* buf, size_t count, size_t offset);
   void do_write();
 
  private:
@@ -344,7 +324,7 @@ class TxMgr::SingleBlockTx : public TxMgr::CoWTx {
 
 class TxMgr::MultiBlockTx : public TxMgr::CoWTx {
  public:
-  MultiBlockTx(TxMgr* tx_mgr, const char* buf, size_t count, size_t offset);
+  MultiBlockTx(File* file, const char* buf, size_t count, size_t offset);
   void do_write();
 
  private:

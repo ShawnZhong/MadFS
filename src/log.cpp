@@ -3,13 +3,10 @@
 #include <ostream>
 #include <vector>
 
-#include "alloc.h"
-#include "block.h"
 #include "entry.h"
 #include "file.h"
 #include "idx.h"
 #include "layout.h"
-#include "mtable.h"
 
 namespace ulayfs::dram {
 

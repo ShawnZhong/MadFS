@@ -3,63 +3,25 @@
 namespace ulayfs::dram {
 
 thread_local std::unordered_map<int, Allocator> File::allocators;
+thread_local std::unordered_map<int, LogMgr> File::log_mgrs;
 
-Allocator* File::get_local_allocator() {
-  if (auto it = allocators.find(fd); it != allocators.end()) {
-    return &it->second;
+File::File(int fd, off_t init_file_size)
+    : fd(fd),
+      mem_table(fd, init_file_size),
+      meta(mem_table.get_meta()),
+      tx_mgr(this, meta, &mem_table),
+      blk_table(this, &tx_mgr),
+      file_offset(0) {
+  if (init_file_size == 0) {
+    meta->init();
+  } else {
+    blk_table.update();
   }
-
-  auto [it, ok] = allocators.emplace(fd, Allocator(fd, meta, &mem_table));
-  PANIC_IF(!ok, "insert thread-local allocators failed");
-  return &it->second;
 }
 
-File::File(const char* pathname, int flags, mode_t mode)
-    : open_flags(flags), valid(false), file_offset(0) {
-  if ((flags & O_ACCMODE) == O_WRONLY) {
-    INFO("File \"%s\" opened with O_WRONLY. Changed to O_RDWR.", pathname);
-    flags &= ~O_WRONLY;
-    flags |= O_RDWR;
-  }
-
-  fd = posix::open(pathname, flags, mode);
-  if (fd < 0) return;  // fail to open the file
-
-  // TODO: support read-only files
-  if ((flags & O_ACCMODE) == O_RDONLY) {
-    WARN("File \"%s\" opened with O_RDONLY. Fallback to syscall.", pathname);
-    return;
-  }
-
-  struct stat stat_buf;  // NOLINT(cppcoreguidelines-pro-type-member-init)
-  int ret = posix::fstat(fd, &stat_buf);
-  PANIC_IF(ret, "fstat failed");
-
-  // we don't handle non-normal file (e.g., socket, directory, block dev)
-  if (!S_ISREG(stat_buf.st_mode) && !S_ISLNK(stat_buf.st_mode)) {
-    WARN("Unable to handle non-normal file \"%s\"", pathname);
-    return;
-  }
-
-  if (!IS_ALIGNED(stat_buf.st_size, BLOCK_SIZE)) {
-    WARN("File size not aligned for \"%s\". Fall back to syscall", pathname);
-    return;
-  }
-
-  mem_table = MemTable(fd, stat_buf.st_size);
-  meta = mem_table.get_meta();
-
-  log_mgr = LogMgr(this, meta, &mem_table);
-  tx_mgr = TxMgr(this, meta, &mem_table, &log_mgr, &blk_table);
-  blk_table = BlkTable(meta, &mem_table, &log_mgr, &tx_mgr);
-  blk_table.update();
-
-  if (stat_buf.st_size == 0) meta->init();
-
-  valid = true;
-}
-
-File::~File() { mem_table.unmap(); }
+/*
+ * POSIX I/O operations
+ */
 
 ssize_t File::pwrite(const void* buf, size_t count, size_t offset) {
   if (count == 0) return 0;
@@ -130,6 +92,46 @@ ssize_t File::read(void* buf, size_t count) {
                                         __ATOMIC_ACQ_REL, __ATOMIC_RELAXED));
 
   return pread(buf, count, old_off);
+}
+
+/*
+ * Getters for thread-local data structures
+ */
+
+Allocator* File::get_local_allocator() {
+  if (auto it = allocators.find(fd); it != allocators.end()) {
+    return &it->second;
+  }
+
+  auto [it, ok] = allocators.emplace(fd, Allocator(fd, meta, &mem_table));
+  PANIC_IF(!ok, "insert to thread-local allocators failed");
+  return &it->second;
+}
+
+LogMgr* File::get_local_log_mgr() {
+  if (auto it = log_mgrs.find(fd); it != log_mgrs.end()) {
+    return &it->second;
+  }
+
+  auto [it, ok] = log_mgrs.emplace(fd, LogMgr(this, meta, &mem_table));
+  PANIC_IF(!ok, "insert to thread-local log_mgrs failed");
+  return &it->second;
+}
+
+/*
+ * Helper functions
+ */
+
+const pmem::Block* File::vidx_to_addr_ro(VirtualBlockIdx vidx) {
+  static const char empty_block[BLOCK_SIZE]{};
+
+  LogicalBlockIdx lidx = blk_table.get(vidx);
+  if (lidx == 0) return reinterpret_cast<const pmem::Block*>(&empty_block);
+  return mem_table.get(lidx);
+}
+
+pmem::Block* File::vidx_to_addr_rw(VirtualBlockIdx vidx) {
+  return mem_table.get(blk_table.get(vidx));
 }
 
 std::ostream& operator<<(std::ostream& out, const File& f) {

@@ -1,5 +1,13 @@
 #pragma once
 
+#ifdef USE_VALGRIND
+#include <valgrind/pmemcheck.h>
+#else
+#define VALGRIND_PMC_REMOVE_PMEM_MAPPING(...) ({})
+#define VALGRIND_PMC_REGISTER_PMEM_MAPPING(...) ({})
+#define VALGRIND_PMC_DO_FLUSH(...) ({})
+#endif
+
 #include <immintrin.h>
 
 #include <ctime>
@@ -17,14 +25,15 @@
  * Defined as macros since we want to have access to __FILE__ and __LINE__
  */
 
-#define FPRINTF(file, fmt, ...)                                         \
-  do {                                                                  \
-    std::time_t t = std::time(nullptr);                                 \
-    std::tm *tm = std::localtime(&t);                                   \
-    const char *s = strrchr(__FILE__, '/');                             \
-    const char *filename = s ? s + 1 : __FILE__;                        \
-    fprintf(file, "%02d:%02d:%02d [%14s:%-3d] " fmt "\n", tm->tm_hour,  \
-            tm->tm_min, tm->tm_sec, filename, __LINE__, ##__VA_ARGS__); \
+#define FPRINTF(file, fmt, ...)                                       \
+  do {                                                                \
+    std::tm tm{};                                                     \
+    std::time_t t = std::time(nullptr);                               \
+    localtime_r(&t, &tm);                                             \
+    const char *s = strrchr(__FILE__, '/');                           \
+    const char *filename = s ? s + 1 : __FILE__;                      \
+    fprintf(file, "%02d:%02d:%02d [%14s:%-3d] " fmt "\n", tm.tm_hour, \
+            tm.tm_min, tm.tm_sec, filename, __LINE__, ##__VA_ARGS__); \
   } while (0)
 
 // PANIC_IF is active for both debug and release modes

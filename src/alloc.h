@@ -33,7 +33,6 @@ class Allocator {
   BitmapLocalIdx recent_bitmap_local_idx;
 
  public:
-  Allocator() = default;
   Allocator(int fd, pmem::MetaBlock* meta, MemTable* mem_table)
       : fd(fd),
         meta(meta),

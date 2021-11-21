@@ -17,7 +17,7 @@ add_library(ulayfs SHARED
     src/alloc.h src/alloc.cpp
     src/bitmap.h
     src/block.h
-    src/btable.h
+    src/btable.h src/btable.cpp
     src/entry.h
     src/file.h src/file.cpp
     src/layout.h
@@ -121,3 +121,7 @@ set(CMAKE_CXX_FLAGS_MSAN
 set(CMAKE_CXX_FLAGS_TSAN
     "${CMAKE_CXX_FLAGS_DEBUG} -fsanitize=thread" CACHE STRING
     "Flags used by the C++ compiler during ThreadSanitizer builds." FORCE)
+
+set(CMAKE_CXX_FLAGS_VALGRIND
+    "${CMAKE_CXX_FLAGS_DEBUG} -mno-avx512f -DUSE_VALGRIND" CACHE STRING
+    "Flags used by the C++ compiler during Valgrind builds." FORCE)
