@@ -28,7 +28,6 @@ class TxMgr {
   class MultiBlockTx;
 
  public:
-  TxMgr() = default;
   TxMgr(File* file, pmem::MetaBlock* meta, MemTable* mem_table)
       : file(file), meta(meta), mem_table(mem_table) {}
 

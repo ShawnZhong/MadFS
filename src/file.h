@@ -19,15 +19,13 @@
 namespace ulayfs::dram {
 
 class File {
-  int fd;
-  int open_flags;
-  bool valid;
-  off_t file_offset;
-
+  const int fd;
+  MemTable mem_table;
   pmem::MetaBlock* meta;
-  MemTable* mem_table;
-  BlkTable* blk_table;
   TxMgr tx_mgr;
+  BlkTable blk_table;
+
+  off_t file_offset;
 
   // each thread maintain a mapping from fd to allocator
   // the allocator is a per-thread per-file data structure
@@ -41,11 +39,7 @@ class File {
   friend class BlkTable;
 
  public:
-  File(const char* pathname, int flags, mode_t mode);
-  ~File();
-
-  [[nodiscard]] bool is_valid() const { return valid; }
-  [[nodiscard]] int get_fd() const { return fd; }
+  File(int fd, off_t init_file_size);
 
   /*
    * POSIX I/O operations
@@ -67,13 +61,13 @@ class File {
    * Return a write-only pointer to the block given a virtual block index
    * A nullptr is returned if the block is not allocated yet (e.g., a hole)
    */
-  [[nodiscard]] pmem::Block* vidx_to_addr_rw(VirtualBlockIdx vidx) const;
+  [[nodiscard]] pmem::Block* vidx_to_addr_rw(VirtualBlockIdx vidx);
 
   /**
    * Return a read-only pointer to the block given a virtual block index
    * An empty block is returned if the block is not allocated yet (e.g., a hole)
    */
-  [[nodiscard]] const pmem::Block* vidx_to_addr_ro(VirtualBlockIdx vidx) const;
+  [[nodiscard]] const pmem::Block* vidx_to_addr_ro(VirtualBlockIdx vidx);
 
   friend std::ostream& operator<<(std::ostream& out, const File& f);
 };

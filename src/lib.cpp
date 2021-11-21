@@ -32,16 +32,51 @@ int open(const char* pathname, int flags, ...) {
     va_end(arg);
   }
 
-  auto file = new dram::File(pathname, flags, mode);
-  auto fd = file->get_fd();
-  if (file->is_valid()) {
-    INFO("ulayfs::open(%s, %x, %x) = %d", pathname, flags, mode, fd);
-    files.emplace(fd, std::shared_ptr<dram::File>(file));
-  } else {
+  // TODO: support read-only files
+  if ((flags & O_ACCMODE) == O_RDONLY) {
+    WARN("File \"%s\" opened with O_RDONLY. Fallback to syscall.", pathname);
+    int fd = posix::open(pathname, flags, mode);
     DEBUG("posix::open(%s, %x, %x) = %d", pathname, flags, mode, fd);
-    delete file;
+    return fd;
   }
 
+  if ((flags & O_ACCMODE) == O_WRONLY) {
+    INFO("File \"%s\" opened with O_WRONLY. Changed to O_RDWR.", pathname);
+    flags &= ~O_WRONLY;
+    flags |= O_RDWR;
+  }
+
+  int fd = posix::open(pathname, flags, mode);
+
+  if (fd < 0) {
+    WARN("File \"%s\" posix::open failed: %m", pathname);
+    DEBUG("posix::open(%s, %x, %x) = %d", pathname, flags, mode, fd);
+    return fd;
+  }
+
+  struct stat stat_buf;  // NOLINT(cppcoreguidelines-pro-type-member-init)
+  int rc = posix::fstat(fd, &stat_buf);
+  if (rc < 0) {
+    WARN("File \"%s\" fstat fialed: %m. Fallback to syscall.", pathname);
+    DEBUG("posix::open(%s, %x, %x) = %d", pathname, flags, mode, fd);
+    return fd;
+  }
+
+  // we don't handle non-normal file (e.g., socket, directory, block dev)
+  if (!S_ISREG(stat_buf.st_mode) && !S_ISLNK(stat_buf.st_mode)) {
+    WARN("Non-normal file \"%s\". Fallback to syscall.", pathname);
+    DEBUG("posix::open(%s, %x, %x) = %d", pathname, flags, mode, fd);
+    return fd;
+  }
+
+  if (!IS_ALIGNED(stat_buf.st_size, BLOCK_SIZE)) {
+    WARN("File size not aligned for \"%s\". Fallback to syscall", pathname);
+    DEBUG("posix::open(%s, %x, %x) = %d", pathname, flags, mode, fd);
+    return fd;
+  }
+
+  files.emplace(fd, std::make_shared<dram::File>(fd, stat_buf.st_size));
+  INFO("ulayfs::open(%s, %x, %x) = %d", pathname, flags, mode, fd);
   return fd;
 }
 
