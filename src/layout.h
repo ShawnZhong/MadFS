@@ -27,14 +27,19 @@ static_assert(
     NUM_LOG_ENTRY - 1 <= std::numeric_limits<LogLocalUnpackIdx>::max(),
     "NUM_LOG_ENTRY - 1 should be representable with LogLocalUnpackIdx");
 
+const static uint16_t NUM_TX_ENTRY_PER_CL =
+    CACHELINE_SIZE / sizeof(pmem::TxEntry);
+const static uint16_t NUM_BITMAP_PER_CL = CACHELINE_SIZE / sizeof(pmem::Bitmap);
+const static uint16_t NUM_CL_PER_BLOCK = BLOCK_SIZE / CACHELINE_SIZE;
+
 // inline data structure count in meta block
 constexpr static uint16_t NUM_CL_BITMAP_IN_META = 32;
 constexpr static uint16_t NUM_CL_TX_ENTRY_IN_META =
     ((BLOCK_SIZE / CACHELINE_SIZE) - 2) - NUM_CL_BITMAP_IN_META;
 constexpr static uint16_t NUM_INLINE_BITMAP =
-    NUM_CL_BITMAP_IN_META * (CACHELINE_SIZE / sizeof(pmem::Bitmap));
+    NUM_CL_BITMAP_IN_META * NUM_BITMAP_PER_CL;
 constexpr static uint16_t NUM_INLINE_TX_ENTRY =
-    NUM_CL_TX_ENTRY_IN_META * (CACHELINE_SIZE / sizeof(pmem::TxEntry));
+    NUM_CL_TX_ENTRY_IN_META * NUM_TX_ENTRY_PER_CL;
 
 // how many blocks a bitmap block can manage
 constexpr static uint32_t BITMAP_BLOCK_CAPACITY_SHIFT =

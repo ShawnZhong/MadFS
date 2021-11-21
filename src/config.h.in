@@ -7,6 +7,7 @@
 #cmakedefine01 USE_HUGE_PAGE
 #cmakedefine01 USE_MAP_SYNC
 #cmakedefine01 FORCE_MAP_POPULATE
+#cmakedefine01 TX_FLUSH_ONLY_FSYNC
 
 #cmakedefine GIT_BRANCH "@GIT_BRANCH@"
 #cmakedefine GIT_COMMIT_HASH "@GIT_COMMIT_HASH@"
@@ -27,6 +28,7 @@ constexpr static struct BuildOptions {
   constexpr static bool use_huge_page = USE_HUGE_PAGE;
   constexpr static bool use_map_sync = USE_MAP_SYNC;
   constexpr static bool force_map_populate = FORCE_MAP_POPULATE;
+  constexpr static bool tx_flush_only_fsync = TX_FLUSH_ONLY_FSYNC;
 
 #ifdef USE_VALGRIND
   constexpr static bool use_valgrind = true;
