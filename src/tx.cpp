@@ -57,7 +57,7 @@ ssize_t TxMgr::do_read(char* buf, size_t count, size_t offset) {
 
   TxEntryIdx tail_tx_idx;
   pmem::TxBlock* tail_tx_block;
-  file->blk_table.get_tail_tx(tail_tx_idx, tail_tx_block);
+  file->blk_table.update(tail_tx_idx, tail_tx_block, /*do_alloc*/ false);
 
   // first handle the first block (which might not be full block)
   curr_block = file->vidx_to_addr_ro(begin_vidx);
@@ -386,7 +386,7 @@ void TxMgr::AlignedTx::do_write() {
   persist_fenced(dst_blocks, count);
 
   // make a local copy of the tx tail
-  file->blk_table.get_tail_tx(tail_tx_idx, tail_tx_block);
+  file->blk_table.update(tail_tx_idx, tail_tx_block, /*do_alloc*/ true);
   // commit the transaction, it's fine if the tx fails due to race condition
   pmem::TxCommitEntry entry(num_blocks, begin_vidx, log_idx);
   tx_mgr->try_commit(entry, tail_tx_idx, tail_tx_block, /*cont_if_fail*/ true);
@@ -421,7 +421,7 @@ TxMgr::SingleBlockTx::SingleBlockTx(File* file, const char* buf, size_t count,
 
 void TxMgr::SingleBlockTx::do_write() {
   // must acquire the tx tail before any get
-  file->blk_table.get_tail_tx(tail_tx_idx, tail_tx_block);
+  file->blk_table.update(tail_tx_idx, tail_tx_block, /*do_alloc*/ true);
 
   // src block is the block to be copied over
   // we only use first_* but not last_* because they are the same one
@@ -474,7 +474,7 @@ void TxMgr::MultiBlockTx::do_write() {
   }
 
   // only get a snapshot of the tail when starting critical piece
-  file->blk_table.get_tail_tx(tail_tx_idx, tail_tx_block);
+  file->blk_table.update(tail_tx_idx, tail_tx_block, /*do_alloc*/ true);
 
   if (copy_first) {
     assert(begin_full_vidx - begin_vidx == 1);

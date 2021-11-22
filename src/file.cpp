@@ -12,11 +12,7 @@ File::File(int fd, off_t init_file_size)
       tx_mgr(this, meta, &mem_table),
       blk_table(this, &tx_mgr),
       file_offset(0) {
-  if (init_file_size == 0) {
-    meta->init();
-  } else {
-    blk_table.update();
-  }
+  if (init_file_size == 0) meta->init();
 }
 
 /*
@@ -25,9 +21,6 @@ File::File(int fd, off_t init_file_size)
 
 ssize_t File::pwrite(const void* buf, size_t count, size_t offset) {
   if (count == 0) return 0;
-  // we allow (and only allow) allocation here since the index of the next tx
-  // entry needs to be valid so that we have a slot to start from
-  blk_table.update(/*do_alloc*/ true);
   tx_mgr.do_write(static_cast<const char*>(buf), count, offset);
   // TODO: handle write fails i.e. return value != count
   return static_cast<ssize_t>(count);
@@ -35,7 +28,6 @@ ssize_t File::pwrite(const void* buf, size_t count, size_t offset) {
 
 ssize_t File::pread(void* buf, size_t count, off_t offset) {
   if (count == 0) return 0;
-  blk_table.update();
   return tx_mgr.do_read(static_cast<char*>(buf), count, offset);
 }
 
@@ -97,9 +89,17 @@ ssize_t File::read(void* buf, size_t count) {
 int File::fsync() {
   TxEntryIdx tail_tx_idx;
   pmem::TxBlock* tail_tx_block;
-  blk_table.update();
-  blk_table.get_tail_tx(tail_tx_idx, tail_tx_block);
+  blk_table.update(tail_tx_idx, tail_tx_block, /*do_alloc*/ false);
   tx_mgr.flush_tx_entries(meta->get_tx_tail(), tail_tx_idx, tail_tx_block);
+  // we keep an invariant that tx_tail must be a valid (non-overflow) idx
+  // an overflow index implies that the `next` pointer of the block is not set
+  // (and thus not flushed) yet, so we cannot assume it is equivalent to the
+  // first index of the next block
+  // here we use the last index of the block to enforce reflush later
+  uint16_t capacity =
+      tail_tx_idx.block_idx == 0 ? NUM_INLINE_TX_ENTRY : NUM_TX_ENTRY;
+  if (unlikely(tail_tx_idx.local_idx >= capacity))
+    tail_tx_idx.local_idx = capacity - 1;
   meta->set_tx_tail(tail_tx_idx);
   return 0;
 }
