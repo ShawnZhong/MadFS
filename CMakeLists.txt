@@ -25,7 +25,7 @@ add_library(ulayfs SHARED
     src/log.h src/log.cpp
     src/mtable.h
     src/params.h
-    src/posix.h
+    src/posix.h src/posix.cpp
     src/tx.h src/tx.cpp
     src/utils.h
     )

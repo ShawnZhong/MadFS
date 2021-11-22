@@ -49,6 +49,7 @@ class File {
   off_t lseek(off_t offset, int whence);
   ssize_t write(const void* buf, size_t count);
   ssize_t read(void* buf, size_t count);
+  int fsync();
 
   /*
    * Getters for thread-local data structures
