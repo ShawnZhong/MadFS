@@ -6,9 +6,9 @@
 #include <cstring>
 
 #include "bitmap.h"
+#include "const.h"
 #include "entry.h"
 #include "idx.h"
-#include "layout.h"
 #include "params.h"
 #include "utils.h"
 
@@ -78,7 +78,7 @@ class TxBlock : public BaseBlock {
   // next is placed after tx_entires so that it could be flushed with tx_entries
   LogicalBlockIdx next;
   // seq is used to construct total order between tx entries, so it must
-  // increase monotically
+  // increase monotonically
   // when compare two TxEntryIdx
   // if within same block, compare local index
   // if not, compare their block's seq number
@@ -101,7 +101,7 @@ class TxBlock : public BaseBlock {
   [[nodiscard]] LogicalBlockIdx get_next_tx_block() const { return next; }
 
   void set_tx_seq(uint32_t seq) { tx_seq = seq; }
-  uint32_t get_tx_seq() { return tx_seq; }
+  [[nodiscard]] uint32_t get_tx_seq() const { return tx_seq; }
 
   /**
    * Set the next block index
@@ -263,7 +263,7 @@ class MetaBlock : public BaseBlock {
    * Getters and setters
    */
 
-  size_t get_file_size() { return file_size; }
+  [[nodiscard]] size_t get_file_size() const { return file_size; }
 
   // called by other public functions with lock held
   void set_num_blocks_if_larger(uint32_t new_num_blocks) {
@@ -281,7 +281,7 @@ class MetaBlock : public BaseBlock {
     persist_cl_unfenced(&cl2);
   }
 
-  uint32_t get_tx_seq() { return 0; }
+  [[nodiscard]] uint32_t get_tx_seq() const { return 0; }
 
   /**
    * Set the next tx block index
@@ -392,12 +392,12 @@ union Block {
     char cl[CACHELINE_SIZE];
   } cl_view[NUM_CL_PER_BLOCK];
 
-  char* data() { return data_block.data; }
-  const char* data_ro() const { return data_block.data; }
+  [[nodiscard]] char* data_rw() { return data_block.data; }
+  [[nodiscard]] const char* data_ro() const { return data_block.data; }
 
   bool zero_init_cl(uint16_t cl_idx) {
     constexpr static const char* zero_cl[CACHELINE_SIZE] = {};
-    if (memcmp(&cl_view[cl_idx], zero_cl, CACHELINE_SIZE)) {
+    if (memcmp(&cl_view[cl_idx], zero_cl, CACHELINE_SIZE) != 0) {
       memset(&cl_view[cl_idx], 0, CACHELINE_SIZE);
       persist_cl_unfenced(&cl_view[cl_idx]);
       return true;

@@ -73,6 +73,8 @@ struct TxEntryIdx {
   LogicalBlockIdx block_idx;
   TxLocalIdx local_idx;
 
+  [[nodiscard]] bool is_inline() const { return block_idx == 0; }
+
   bool operator==(const TxEntryIdx& rhs) const {
     return block_idx == rhs.block_idx && local_idx == rhs.local_idx;
   }

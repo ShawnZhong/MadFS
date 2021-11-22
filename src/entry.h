@@ -10,7 +10,6 @@
 namespace ulayfs::pmem {
 
 enum class TxEntryType : bool {
-  TX_BEGIN = false,
   TX_COMMIT = true,
 };
 

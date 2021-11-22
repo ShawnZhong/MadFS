@@ -1,14 +1,9 @@
 #pragma once
 
 #include "bitmap.h"
-#include "config.h"
 #include "entry.h"
-#include "idx.h"
-#include "params.h"
-#include "utils.h"
 
 namespace ulayfs {
-
 // signature
 constexpr static int SIGNATURE_SIZE = 16;
 constexpr static char FILE_SIGNATURE[SIGNATURE_SIZE] = "ULAYFS";
@@ -54,5 +49,4 @@ constexpr static uint32_t INLINE_BITMAP_CAPACITY =
 // how many data blocks can be covered per CAS
 // TODO: put this constant somewhere else?
 constexpr static uint8_t MAX_BLOCKS_PER_BODY = 64;
-
 }  // namespace ulayfs

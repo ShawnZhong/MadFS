@@ -8,14 +8,11 @@
 
 #include "block.h"
 #include "idx.h"
-#include "layout.h"
 #include "log.h"
 #include "tx.h"
 #include "utils.h"
 
 namespace ulayfs::dram {
-
-class File;
 
 // read logs and update mapping from virtual blocks to logical blocks
 class BlkTable {

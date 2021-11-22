@@ -8,7 +8,6 @@
 #include "entry.h"
 #include "file.h"
 #include "idx.h"
-#include "layout.h"
 #include "params.h"
 #include "utils.h"
 
@@ -383,7 +382,7 @@ TxMgr::AlignedTx::AlignedTx(File* file, const char* buf, size_t count,
 
 void TxMgr::AlignedTx::do_write() {
   // since everything is block-aligned, we can copy data directly
-  memcpy(dst_blocks->data(), buf, count);
+  memcpy(dst_blocks->data_rw(), buf, count);
   persist_fenced(dst_blocks, count);
 
   // make a local copy of the tx tail
@@ -431,10 +430,10 @@ void TxMgr::SingleBlockTx::do_write() {
 redo:
   // copy original data
   if (src_first_lidx)  // TODO: handle src_first_lidx == 0
-    memcpy(dst_blocks->data(),
+    memcpy(dst_blocks->data_rw(),
            tx_mgr->mem_table->get(src_first_lidx)->data_ro(), BLOCK_SIZE);
   // copy data from buf
-  memcpy(dst_blocks->data() + local_offset, buf, count);
+  memcpy(dst_blocks->data_rw() + local_offset, buf, count);
 
   // persist the data
   persist_fenced(dst_blocks, BLOCK_SIZE);
@@ -470,7 +469,7 @@ void TxMgr::MultiBlockTx::do_write() {
   if (num_full_blocks > 0) {
     pmem::Block* full_blocks = dst_blocks + (begin_full_vidx - begin_vidx);
     const size_t num_bytes = num_full_blocks << BLOCK_SHIFT;
-    memcpy(full_blocks->data(), buf + first_block_local_offset, num_bytes);
+    memcpy(full_blocks->data_rw(), buf + first_block_local_offset, num_bytes);
     persist_unfenced(full_blocks, num_bytes);
   }
 
@@ -491,11 +490,11 @@ redo:
   if (copy_first) {
     // copy the data from the source block if exits
     if (src_first_lidx)  // TODO: handle src_first_lidx == 0
-      memcpy(dst_blocks->data(),
+      memcpy(dst_blocks->data_rw(),
              tx_mgr->mem_table->get(src_first_lidx)->data_ro(), BLOCK_SIZE);
 
     // write data from the buf to the first block
-    char* dst = dst_blocks->data() + BLOCK_SIZE - first_block_local_offset;
+    char* dst = dst_blocks->data_rw() + BLOCK_SIZE - first_block_local_offset;
     memcpy(dst, buf, first_block_local_offset);
 
     persist_unfenced(dst_blocks, BLOCK_SIZE);
@@ -507,12 +506,12 @@ redo:
 
     // copy the data from the source block if exits
     if (src_last_lidx)  // TODO: handle src_last_lidx == 0
-      memcpy(last_dst_block->data(),
+      memcpy(last_dst_block->data_rw(),
              tx_mgr->mem_table->get(src_last_lidx)->data_ro(), BLOCK_SIZE);
 
     // write data from the buf to the last block
     const char* src = buf + (count - last_block_local_offset);
-    memcpy(last_dst_block->data(), src, last_block_local_offset);
+    memcpy(last_dst_block->data_rw(), src, last_block_local_offset);
 
     persist_unfenced(last_dst_block, BLOCK_SIZE);
   }
