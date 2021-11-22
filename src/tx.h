@@ -111,7 +111,7 @@ class TxMgr {
    */
   bool handle_idx_overflow(TxEntryIdx& tx_idx, pmem::TxBlock*& tx_block,
                            bool do_alloc) const {
-    const bool is_inline = tx_idx.block_idx == 0;
+    const bool is_inline = tx_idx.is_inline();
     uint16_t capacity = is_inline ? NUM_INLINE_TX_ENTRY : NUM_TX_ENTRY;
     if (unlikely(tx_idx.local_idx >= capacity)) {
       LogicalBlockIdx block_idx =

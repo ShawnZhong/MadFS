@@ -34,10 +34,10 @@ void BlkTable::update(TxEntryIdx& tx_idx, pmem::TxBlock*& tx_block,
 
 void BlkTable::resize_to_fit(VirtualBlockIdx idx) {
   if (table.size() > idx) return;
-  // __builtin_clz counts the number of leading 0-bits for an unsigned int
+  // countr_zero counts the number of leading 0-bits
   // if idx is already a pow of 2, it will be rounded to the next pow of 2
   // so that the table has enough space to hold this index
-  int next_pow2 = 1 << (32 - __builtin_clz(idx));
+  int next_pow2 = 1 << (sizeof(idx) * 8 - std::countr_zero(idx));
   table.resize(next_pow2);
 }
 

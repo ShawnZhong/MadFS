@@ -33,7 +33,7 @@ class Bitmap {
                                      __ATOMIC_ACQ_REL, __ATOMIC_ACQUIRE))
       goto retry;
     persist_cl_fenced(&bitmap);
-    return std::countr_zero(b);
+    return static_cast<BitmapLocalIdx>(std::countr_zero(b));
   }
 
   // allocate all blocks in this bit; return 0 if succeeds, -1 otherwise
