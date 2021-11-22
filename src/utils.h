@@ -1,6 +1,6 @@
 #pragma once
 
-#ifdef USE_VALGRIND
+#ifdef USE_PMEMCHECK
 #include <valgrind/pmemcheck.h>
 #else
 #define VALGRIND_PMC_REMOVE_PMEM_MAPPING(...) ({})
