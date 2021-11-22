@@ -109,7 +109,7 @@ class LogMgr {
   // syntax sugar for union dispatching
   pmem::LogHeadEntry* alloc_head_entry(
       pmem::LogHeadEntry* prev_head_entry = nullptr) {
-    return &alloc_entry(/* pack_align */ true, prev_head_entry)->head_entry;
+    return &alloc_entry(/*pack_align*/ true, prev_head_entry)->head_entry;
   }
 
   pmem::LogBodyEntry* alloc_body_entry() { return &alloc_entry()->body_entry; }
@@ -117,14 +117,14 @@ class LogMgr {
   /**
    * get the number of free entries in the current LogBlock
    */
-  [[nodiscard]] uint16_t num_free_entries() {
+  [[nodiscard]] uint16_t num_free_entries() const {
     return NUM_LOG_ENTRY - free_local_idx;
   }
 
   /**
    * get the last allocated entry's local index
    */
-  [[nodiscard]] LogLocalUnpackIdx last_local_idx() {
+  [[nodiscard]] LogLocalUnpackIdx last_local_idx() const {
     return free_local_idx - 1;
   }
 };

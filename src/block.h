@@ -147,7 +147,7 @@ class TxBlock : public BaseBlock {
   [[nodiscard]] LogicalBlockIdx get_next_tx_block() const { return next; }
 
   void set_tx_seq(uint32_t seq) { tx_seq = seq; }
-  uint32_t get_tx_seq() { return tx_seq; }
+  [[nodiscard]] uint32_t get_tx_seq() const { return tx_seq; }
 
   /**
    * Set the next block index
@@ -309,7 +309,7 @@ class MetaBlock : public BaseBlock {
    * Getters and setters
    */
 
-  size_t get_file_size() { return file_size; }
+  [[nodiscard]] size_t get_file_size() const { return file_size; }
 
   // called by other public functions with lock held
   void set_num_blocks_no_lock(uint32_t num_blocks) {
@@ -317,7 +317,7 @@ class MetaBlock : public BaseBlock {
     persist_cl_fenced(&cl2);
   }
 
-  uint32_t get_tx_seq() { return 0; }
+  [[nodiscard]] uint32_t get_tx_seq() const { return 0; }
 
   /**
    * Set the next tx block index
@@ -433,7 +433,7 @@ union Block {
 
   bool zero_init_cl(uint16_t cl_idx) {
     constexpr static const char* zero_cl[CACHELINE_SIZE] = {};
-    if (memcmp(&cl_view[cl_idx], zero_cl, CACHELINE_SIZE)) {
+    if (memcmp(&cl_view[cl_idx], zero_cl, CACHELINE_SIZE) != 0) {
       memset(&cl_view[cl_idx], 0, CACHELINE_SIZE);
       persist_cl_unfenced(&cl_view[cl_idx]);
       return true;

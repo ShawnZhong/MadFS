@@ -67,6 +67,7 @@ constexpr static struct BuildOptions {
     out << "\tuse_huge_page: " << use_huge_page << "\n";
     out << "\tuse_map_sync: " << use_map_sync << "\n";
     out << "\tforce_map_populate: " << force_map_populate << "\n";
+    out << "\ttx_flush_only_fsync: " << tx_flush_only_fsync << "\n";
     out << "\tsupport_clwb: " << support_clwb << "\n";
     out << "\tsupport_clflushopt: " << support_clflushopt << "\n";
     return out;

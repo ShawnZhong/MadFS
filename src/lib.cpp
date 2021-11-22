@@ -48,7 +48,7 @@ int open(const char* pathname, int flags, ...) {
 
   int fd = posix::open(pathname, flags, mode);
 
-  if (fd < 0) {
+  if (unlikely(fd < 0)) {
     WARN("File \"%s\" posix::open failed: %m", pathname);
     DEBUG("posix::open(%s, %x, %x) = %d", pathname, flags, mode, fd);
     return fd;
@@ -56,14 +56,14 @@ int open(const char* pathname, int flags, ...) {
 
   struct stat stat_buf;  // NOLINT(cppcoreguidelines-pro-type-member-init)
   int rc = posix::fstat(fd, &stat_buf);
-  if (rc < 0) {
+  if (unlikely(rc < 0)) {
     WARN("File \"%s\" fstat fialed: %m. Fallback to syscall.", pathname);
     DEBUG("posix::open(%s, %x, %x) = %d", pathname, flags, mode, fd);
     return fd;
   }
 
   // we don't handle non-normal file (e.g., socket, directory, block dev)
-  if (!S_ISREG(stat_buf.st_mode) && !S_ISLNK(stat_buf.st_mode)) {
+  if (unlikely(!S_ISREG(stat_buf.st_mode) && !S_ISLNK(stat_buf.st_mode))) {
     WARN("Non-normal file \"%s\". Fallback to syscall.", pathname);
     DEBUG("posix::open(%s, %x, %x) = %d", pathname, flags, mode, fd);
     return fd;

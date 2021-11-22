@@ -59,8 +59,7 @@ LogEntryIdx LogMgr::append(
   // allocate the first head entry, whose LogEntryIdx will be returned back
   // to the transaction
   pmem::LogHeadEntry* head_entry = alloc_head_entry();
-  LogEntryUnpackIdx first_head_idx =
-      LogEntryUnpackIdx{log_blocks.back(), last_local_idx()};
+  auto first_head_idx = LogEntryUnpackIdx{log_blocks.back(), last_local_idx()};
   VirtualBlockIdx now_virtual_idx = begin_virtual_idx;
   size_t now_logical_idx_off = 0;
 
