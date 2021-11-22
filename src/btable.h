@@ -52,8 +52,7 @@ class BlkTable {
    *
    * @param[out] tx_idx the index of the current transaction tail
    * @param[out] tx_block the log block corresponding to the transaction
-   * @param[in] do_alloc whether we allow allocation when iterating the tx_idx.
-   * default is false, and only set to true when write permission is granted
+   * @param[in] do_alloc whether we allow allocation when iterating the tx_idx
    */
   void update(TxEntryIdx& tx_idx, pmem::TxBlock*& tx_block, bool do_alloc);
 
