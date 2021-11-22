@@ -55,8 +55,7 @@ class BlkTable {
    * @param[in] do_alloc whether we allow allocation when iterating the tx_idx.
    * default is false, and only set to true when write permission is granted
    */
-  void update(TxEntryIdx& tx_idx, pmem::TxBlock*& tx_block,
-              bool do_alloc = false);
+  void update(TxEntryIdx& tx_idx, pmem::TxBlock*& tx_block, bool do_alloc);
 
  private:
   void resize_to_fit(VirtualBlockIdx idx);

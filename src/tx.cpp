@@ -58,7 +58,7 @@ ssize_t TxMgr::do_read(char* buf, size_t count, size_t offset) {
 
   TxEntryIdx tail_tx_idx;
   pmem::TxBlock* tail_tx_block;
-  file->blk_table.update(tail_tx_idx, tail_tx_block);
+  file->blk_table.update(tail_tx_idx, tail_tx_block, /*do_alloc*/ false);
 
   // first handle the first block (which might not be full block)
   curr_block = file->vidx_to_addr_ro(begin_vidx);

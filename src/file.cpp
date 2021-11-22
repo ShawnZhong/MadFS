@@ -89,9 +89,17 @@ ssize_t File::read(void* buf, size_t count) {
 int File::fsync() {
   TxEntryIdx tail_tx_idx;
   pmem::TxBlock* tail_tx_block;
-  blk_table.update();
-  blk_table.get_tail_tx(tail_tx_idx, tail_tx_block);
+  blk_table.update(tail_tx_idx, tail_tx_block, /*do_alloc*/ false);
   tx_mgr.flush_tx_entries(meta->get_tx_tail(), tail_tx_idx, tail_tx_block);
+  // we keep an invariant that tx_tail must be a valid (non-overflow) idx
+  // an overflow index implies that the `next` pointer of the block is not set
+  // (and thus not flushed) yet, so we cannot assume it is equivalent to the
+  // first index of the next block
+  // here we use the last index of the block to enforce reflush later
+  uint16_t capacity =
+      tail_tx_idx.block_idx == 0 ? NUM_INLINE_TX_ENTRY : NUM_TX_ENTRY;
+  if (unlikely(tail_tx_idx.local_idx >= capacity))
+    tail_tx_idx.local_idx = capacity - 1;
   meta->set_tx_tail(tail_tx_idx);
   return 0;
 }
