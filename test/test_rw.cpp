@@ -36,6 +36,7 @@ void test(TestOpt test_opt) {
       ret = write(fd, src_buf, num_bytes_per_iter);
       assert(ret == num_bytes_per_iter);
     }
+    fsync(fd);
     close(fd);
   }
 
@@ -69,6 +70,7 @@ void test(TestOpt test_opt) {
     CHECK_RESULT(expected, actual, length, file);
   }
 
+  fsync(fd);
   close(fd);
 }
 

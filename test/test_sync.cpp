@@ -48,4 +48,7 @@ int main(int argc, char* argv[]) {
 
     CHECK_RESULT(expected, actual, NUM_BYTES, file);
   }
+
+  fsync(fd);
+  close(fd);
 }

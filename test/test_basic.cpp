@@ -8,17 +8,24 @@
 #include "common.h"
 
 void test_write() {
+  [[maybe_unused]] off_t res;
+
   int fd = open(FILEPATH, O_CREAT | O_RDWR, S_IRUSR | S_IWUSR);
   assert(fd >= 0);
 
   ssize_t sz = write(fd, TEST_STR, TEST_STR_LEN);
   assert(sz == TEST_STR_LEN);
 
-  int rc = close(fd);
-  assert(rc == 0);
+  res = fsync(fd);
+  assert(res == 0);
+
+  res = close(fd);
+  assert(res == 0);
 }
 
 void test_read() {
+  [[maybe_unused]] off_t res;
+
   int fd = open(FILEPATH, O_RDWR);
   assert(fd >= 0);
 
@@ -27,8 +34,11 @@ void test_read() {
   assert(sz == TEST_STR_LEN);
   assert(strcmp(buff, TEST_STR) == 0);
 
-  int rc = close(fd);
-  assert(rc == 0);
+  res = fsync(fd);
+  assert(res == 0);
+
+  res = close(fd);
+  assert(res == 0);
 }
 
 void test_lseek() {
@@ -54,6 +64,9 @@ void test_lseek() {
   res = read(fd, buff, TEST_STR_LEN);
   assert(res == TEST_STR_LEN);
   assert(strcmp(buff, TEST_STR) == 0);
+
+  res = fsync(fd);
+  assert(res == 0);
 
   res = close(fd);
   assert(res == 0);
