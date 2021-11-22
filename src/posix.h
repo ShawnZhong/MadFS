@@ -39,7 +39,7 @@ DECL_FN(open);
 DECL_FN(close);
 DECL_FN(mmap);
 DECL_FN(munmap);
-DECL_FN(ftruncate);
+DECL_FN(fallocate);
 DECL_FN(fsync);
 
 #undef DECL_FN

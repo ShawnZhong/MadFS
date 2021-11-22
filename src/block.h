@@ -189,7 +189,7 @@ class MetaBlock : public BaseBlock {
   // metadata above
   union {
     struct {
-      // this lock is ONLY used for ftruncate
+      // this lock is ONLY used for bitmap rebuild
       pthread_mutex_t mutex;
 
       // file size in bytes (logical size to users)
@@ -221,7 +221,7 @@ class MetaBlock : public BaseBlock {
  public:
   /**
    * only called if a new file is created
-   * We can assume that all other fields are zero-initialized upon ftruncate
+   * We can assume that all other fields are zero-initialized upon fallocate
    */
   void init() {
     // the first block is always used (by MetaBlock itself)
@@ -266,9 +266,19 @@ class MetaBlock : public BaseBlock {
   [[nodiscard]] size_t get_file_size() const { return file_size; }
 
   // called by other public functions with lock held
-  void set_num_blocks_no_lock(uint32_t num_blocks) {
-    __atomic_store_n(&this->num_blocks, num_blocks, __ATOMIC_RELAXED);
-    persist_cl_fenced(&cl2);
+  void set_num_blocks_if_larger(uint32_t new_num_blocks) {
+    uint32_t old_num_blocks =
+        __atomic_load_n(&this->num_blocks, __ATOMIC_ACQUIRE);
+  retry:
+    if (unlikely(old_num_blocks >= new_num_blocks)) return;
+    if (__atomic_compare_exchange_n(&this->num_blocks, &old_num_blocks,
+                                    new_num_blocks, false, __ATOMIC_ACQ_REL,
+                                    __ATOMIC_ACQUIRE))
+      goto retry;
+    // if num_blocks is out-of-date, it's fine...
+    // in the worst case, we just do unnecessary fallocate...
+    // so we don't wait for it to persist
+    persist_cl_unfenced(&cl2);
   }
 
   [[nodiscard]] uint32_t get_tx_seq() const { return 0; }
