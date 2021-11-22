@@ -8,7 +8,6 @@
 #include "block.h"
 #include "entry.h"
 #include "idx.h"
-#include "layout.h"
 #include "log.h"
 #include "mtable.h"
 #include "utils.h"

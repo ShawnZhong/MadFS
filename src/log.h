@@ -7,7 +7,6 @@
 #include "block.h"
 #include "entry.h"
 #include "idx.h"
-#include "layout.h"
 #include "mtable.h"
 
 namespace ulayfs::dram {
@@ -40,7 +39,7 @@ class LogMgr {
 
  private:
   /**
-   * get pointer to entry data from 6-byte unpacked index
+   * get pointer to entry data_rw from 6-byte unpacked index
    */
   const pmem::LogEntry* get_entry(LogEntryUnpackIdx idx) {
     return mem_table->get(idx.block_idx)->log_entry_block.get(idx.local_idx);

@@ -6,7 +6,6 @@
 #include "entry.h"
 #include "file.h"
 #include "idx.h"
-#include "layout.h"
 
 namespace ulayfs::dram {
 

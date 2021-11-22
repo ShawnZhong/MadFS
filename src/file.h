@@ -8,7 +8,6 @@
 #include "btable.h"
 #include "config.h"
 #include "entry.h"
-#include "layout.h"
 #include "log.h"
 #include "mtable.h"
 #include "posix.h"

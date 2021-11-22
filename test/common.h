@@ -3,7 +3,7 @@
 #include <algorithm>
 #include <cstdio>
 
-#include "layout.h"
+#include "block.h"
 #include "lib.h"
 
 #define CHECK_RESULT(expected, actual, length, file) \

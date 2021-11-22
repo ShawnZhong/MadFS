@@ -20,7 +20,6 @@ add_library(ulayfs SHARED
     src/btable.h src/btable.cpp
     src/entry.h
     src/file.h src/file.cpp
-    src/layout.h
     src/lib.h src/lib.cpp
     src/log.h src/log.cpp
     src/mtable.h

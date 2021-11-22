@@ -5,7 +5,6 @@
 
 #include "block.h"
 #include "config.h"
-#include "layout.h"
 #include "mtable.h"
 #include "posix.h"
 

@@ -9,7 +9,6 @@
 
 #include "block.h"
 #include "config.h"
-#include "layout.h"
 #include "params.h"
 #include "posix.h"
 #include "utils.h"
