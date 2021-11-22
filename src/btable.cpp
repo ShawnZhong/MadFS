@@ -4,12 +4,8 @@
 
 namespace ulayfs::dram {
 
-void BlkTable::get_tail_tx(TxEntryIdx& tx_idx, pmem::TxBlock*& tx_block) {
-  tx_idx = tail_tx_idx;
-  tx_block = &file->mem_table.get(tx_idx.block_idx)->tx_block;
-}
-
-void BlkTable::update(bool do_alloc) {
+void BlkTable::update(TxEntryIdx& tx_idx, pmem::TxBlock*& tx_block,
+                      bool do_alloc) {
   pthread_spin_lock(&spinlock);
 
   // it's possible that the previous update move idx to overflow state
@@ -28,6 +24,10 @@ void BlkTable::update(bool do_alloc) {
     if (tx_entry.is_commit()) apply_tx(tx_entry.commit_entry, log_mgr);
     if (!tx_mgr->advance_tx_idx(tail_tx_idx, tail_tx_block, do_alloc)) break;
   }
+
+  // return it out
+  tx_idx = tail_tx_idx;
+  tx_block = tail_tx_block;
 
   pthread_spin_unlock(&spinlock);
 }

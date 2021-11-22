@@ -12,11 +12,7 @@ File::File(int fd, off_t init_file_size)
       tx_mgr(this, meta, &mem_table),
       blk_table(this, &tx_mgr),
       file_offset(0) {
-  if (init_file_size == 0) {
-    meta->init();
-  } else {
-    blk_table.update();
-  }
+  if (init_file_size == 0) meta->init();
 }
 
 /*
@@ -25,9 +21,6 @@ File::File(int fd, off_t init_file_size)
 
 ssize_t File::pwrite(const void* buf, size_t count, size_t offset) {
   if (count == 0) return 0;
-  // we allow (and only allow) allocation here since the index of the next tx
-  // entry needs to be valid so that we have a slot to start from
-  blk_table.update(/*do_alloc*/ true);
   tx_mgr.do_write(static_cast<const char*>(buf), count, offset);
   // TODO: handle write fails i.e. return value != count
   return static_cast<ssize_t>(count);
@@ -35,7 +28,6 @@ ssize_t File::pwrite(const void* buf, size_t count, size_t offset) {
 
 ssize_t File::pread(void* buf, size_t count, off_t offset) {
   if (count == 0) return 0;
-  blk_table.update();
   return tx_mgr.do_read(static_cast<char*>(buf), count, offset);
 }
 
