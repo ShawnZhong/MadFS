@@ -42,19 +42,16 @@ class MemTable {
 
  private:
   // called by other public functions with lock held
-  void grow_no_lock(LogicalBlockIdx idx) {
-    // we need to revalidate under after acquiring lock
-    if (idx < meta->get_num_blocks()) return;
-
+  void grow(LogicalBlockIdx idx) {
     // the new file size should be a multiple of grow unit
     // we have `idx + 1` since we want to grow the file when idx is a multiple
     // of the number of blocks in a grow unit (e.g., 512 for 2 MB grow)
     size_t file_size =
         ALIGN_UP(static_cast<size_t>(idx + 1) << BLOCK_SHIFT, GROW_UNIT_SIZE);
 
-    int ret = posix::ftruncate(fd, static_cast<off_t>(file_size));
-    PANIC_IF(ret, "ftruncate failed");
-    meta->set_num_blocks_no_lock(file_size >> BLOCK_SHIFT);
+    int ret = posix::fallocate(fd, 0, 0, static_cast<off_t>(file_size));
+    PANIC_IF(ret, "fallocate failed");
+    meta->set_num_blocks_if_larger(file_size >> BLOCK_SHIFT);
   }
 
   /**
@@ -114,8 +111,8 @@ class MemTable {
     if (should_grow) {
       file_size =
           file_size == 0 ? PREALLOC_SIZE : ALIGN_UP(file_size, GROW_UNIT_SIZE);
-      int ret = posix::ftruncate(fd, file_size);
-      PANIC_IF(ret, "ftruncate failed");
+      int ret = posix::fallocate(fd, 0, 0, file_size);
+      PANIC_IF(ret, "fallocate failed");
     }
 
     pmem::Block* blocks = mmap_file(file_size, 0);
@@ -123,7 +120,7 @@ class MemTable {
 
     // compute number of blocks and update the mata block if necessary
     auto num_blocks = file_size >> BLOCK_SHIFT;
-    if (should_grow) meta->set_num_blocks_no_lock(num_blocks);
+    if (should_grow) meta->set_num_blocks_if_larger(num_blocks);
 
     // initialize the mapping
     for (LogicalBlockIdx idx = 0; idx < num_blocks; idx += NUM_BLOCKS_PER_GROW)
@@ -145,9 +142,7 @@ class MemTable {
     if (idx < meta->get_num_blocks()) return;
 
     // slow path: acquire lock to verify and grow if necessary
-    meta->lock();
-    grow_no_lock(idx);
-    meta->unlock();
+    grow(idx);
   }
 
   /**
