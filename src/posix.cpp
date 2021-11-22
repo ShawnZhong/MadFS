@@ -6,7 +6,7 @@
 
 namespace ulayfs::posix {
 #define INIT_FN(fn)                                                      \
-  decltype(&::fn) fn = []() noexcept {                                   \
+  const decltype(&::fn) fn = []() noexcept {                             \
     auto res = reinterpret_cast<decltype(&::fn)>(dlsym(RTLD_NEXT, #fn)); \
     assert(res != nullptr);                                              \
     return res;                                                          \

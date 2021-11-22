@@ -28,7 +28,7 @@ namespace ulayfs::posix {
  * initialized via `dlsym` during global variable initialization.
  */
 
-#define DECL_FN(fn) extern decltype(&::fn) fn
+#define DECL_FN(fn) extern const decltype(&::fn) fn
 
 DECL_FN(lseek);
 DECL_FN(write);
