@@ -9,6 +9,8 @@
 #endif
 
 #include <immintrin.h>
+#include <sys/syscall.h>
+#include <unistd.h>
 
 #include <chrono>
 
@@ -23,17 +25,19 @@
  * Defined as macros since we want to have access to __FILE__ and __LINE__
  */
 
-#define FPRINTF(file, fmt, ...)                                                \
-  do {                                                                         \
-    auto now = std::chrono::high_resolution_clock::now();                      \
-    std::chrono::duration<double> sec = now.time_since_epoch();                \
-    const char *s = strrchr(__FILE__, '/');                                    \
-    const char *filename = s ? s + 1 : __FILE__;                               \
-    fprintf(file, "%f [%14s:%-3d] " fmt "\n", sec.count(), filename, __LINE__, \
-            ##__VA_ARGS__);                                                    \
+static thread_local const pid_t tid = syscall(SYS_gettid);
+
+#define FPRINTF(file, fmt, ...)                                             \
+  do {                                                                      \
+    auto now = std::chrono::high_resolution_clock::now();                   \
+    std::chrono::duration<double> sec = now.time_since_epoch();             \
+    const char *s = strrchr(__FILE__, '/');                                 \
+    const char *filename = s ? s + 1 : __FILE__;                            \
+    fprintf(file, "[Thread %d] %f [%14s:%-3d] " fmt "\n", tid, sec.count(), \
+            filename, __LINE__, ##__VA_ARGS__);                             \
   } while (0)
 
-//  PANIC_IF is active for both debug and release modes
+// PANIC_IF is active for both debug and release modes
 #define PANIC_IF(expr, msg, ...)                           \
   do {                                                     \
     if (likely(!(expr))) break;                            \
@@ -50,8 +54,8 @@ static FILE *log_file = stderr;
     if (level < runtime_options.log_level) break;               \
     constexpr const char *level_str_arr[] = {                   \
         "[\u001b[32mDEBUG\u001b[0m]",                           \
-        "[\u001b[34m INFO\u001b[0m]",                           \
-        "[\u001b[31m WARN\u001b[0m]",                           \
+        "[\u001b[34mINFO\u001b[0m] ",                           \
+        "[\u001b[31mWARN\u001b[0m] ",                           \
     };                                                          \
     constexpr const char *level_str = level_str_arr[level - 1]; \
     FPRINTF(log_file, "%s " msg, level_str, ##__VA_ARGS__);     \
