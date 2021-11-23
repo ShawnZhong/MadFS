@@ -181,6 +181,6 @@ void __attribute__((constructor)) ulayfs_ctor() {
 /**
  * Called when the shared library is unloaded
  */
-void __attribute__((destructor)) ulayfs_dtor() {}
+void __attribute__((destructor)) ulayfs_dtor() { INFO("ulayfs_dtor called"); }
 }  // extern "C"
 }  // namespace ulayfs
