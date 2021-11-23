@@ -28,7 +28,7 @@ add_library(ulayfs SHARED
     src/params.h
     src/posix.h src/posix.cpp
     src/tx.h src/tx.cpp
-    src/utils.h
+    src/utils.h src/utils.cpp
     )
 
 # external dependencies

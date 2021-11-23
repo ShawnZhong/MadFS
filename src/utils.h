@@ -25,7 +25,8 @@
  * Defined as macros since we want to have access to __FILE__ and __LINE__
  */
 
-static thread_local const pid_t tid = syscall(SYS_gettid);
+extern thread_local const pid_t tid;
+extern FILE *log_file;
 
 #define FPRINTF(file, fmt, ...)                                             \
   do {                                                                      \
@@ -47,7 +48,6 @@ static thread_local const pid_t tid = syscall(SYS_gettid);
 #define PANIC(msg, ...) PANIC_IF(true, msg, ##__VA_ARGS__)
 
 // DEBUG, INFO, and WARN are not active in release mode
-static FILE *log_file = stderr;
 #define LOG(level, msg, ...)                                    \
   do {                                                          \
     if constexpr (!BuildOptions::debug) break;                  \
