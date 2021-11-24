@@ -74,11 +74,7 @@ class MemTable {
       // Note that the order of the following two fallback plans matters
       if constexpr (BuildOptions::use_huge_page) {
         if (errno == EINVAL) {
-          WARN(
-              "Huge page not supported for fd = %d. "
-              "Please check `cat /proc/meminfo | grep Huge`. "
-              "Retry w/o huge page",
-              fd);
+          WARN("Huge page not supported for fd = %d. Retry w/o huge page", fd);
           flags &= ~(MAP_HUGETLB | MAP_HUGE_2MB);
           addr = posix::mmap(nullptr, length, prot, flags, fd, offset);
         }
