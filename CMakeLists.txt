@@ -43,7 +43,10 @@ target_link_libraries(ulayfs dl pthread TBB::tbb)
 # enable link time optimization
 set_property(TARGET ulayfs PROPERTY INTERPROCEDURAL_OPTIMIZATION TRUE)
 
+#[[
 # build options
+]]
+
 option(MEM_PROTECT "Enable memory protection to avoid stray writes" OFF)
 option(NO_SHARING "Assume that no two processes concurrently operate on the same file" OFF)
 option(RELAXED "Relax visibility and serialization guarantee on concurrent access" OFF)
@@ -90,7 +93,10 @@ configure_file("src/config.h.in" "config.h")
 
 include_directories(${CMAKE_CURRENT_BINARY_DIR})
 
-# tests
+#[[
+tests
+]]
+
 include_directories(src)
 
 add_executable(test_basic test/test_basic.cpp test/common.h)
@@ -102,7 +108,10 @@ target_link_libraries(test_rw ulayfs)
 add_executable(test_sync test/test_sync.cpp test/common.h)
 target_link_libraries(test_sync ulayfs)
 
-# sanitizers
+#[[
+sanitizers and tooling
+]]
+
 set(CMAKE_CXX_FLAGS_ASAN
     "${CMAKE_CXX_FLAGS_DEBUG} -fsanitize=address -fno-omit-frame-pointer" CACHE STRING
     "Flags used by the C++ compiler during AddressSanitizer build." FORCE)
