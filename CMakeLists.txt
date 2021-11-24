@@ -105,24 +105,40 @@ target_link_libraries(test_sync ulayfs)
 # sanitizers
 set(CMAKE_CXX_FLAGS_ASAN
     "${CMAKE_CXX_FLAGS_DEBUG} -fsanitize=address -fno-omit-frame-pointer" CACHE STRING
-    "Flags used by the C++ compiler for Asan build type or configuration." FORCE)
+    "Flags used by the C++ compiler during AddressSanitizer build." FORCE)
 
 set(CMAKE_SHARED_LINKER_FLAGS_ASAN
     "${CMAKE_SHARED_LINKER_FLAGS_DEBUG} -fsanitize=address" CACHE STRING
-    "Linker lags to be used to create shared libraries for Asan build type." FORCE)
+    "Flags used by the C++ linker during AddressSanitizer build." FORCE)
 
 set(CMAKE_CXX_FLAGS_UBSAN
     "${CMAKE_CXX_FLAGS_DEBUG} -fsanitize=undefined" CACHE STRING
-    "Flags used by the C++ compiler during UndefinedBehaviourSanitizer builds." FORCE)
+    "Flags used by the C++ compiler during UndefinedBehaviourSanitizer build." FORCE)
 
 set(CMAKE_CXX_FLAGS_MSAN
     "${CMAKE_CXX_FLAGS_DEBUG} -fsanitize=memory -fsanitize-memory-track-origins=2 -fno-omit-frame-pointer" CACHE STRING
-    "Flags used by the C++ compiler during MemorySanitizer builds." FORCE)
+    "Flags used by the C++ compiler during MemorySanitizer build." FORCE)
 
 set(CMAKE_CXX_FLAGS_TSAN
     "${CMAKE_CXX_FLAGS_DEBUG} -fsanitize=thread" CACHE STRING
-    "Flags used by the C++ compiler during ThreadSanitizer builds." FORCE)
+    "Flags used by the C++ compiler during ThreadSanitizer build." FORCE)
 
 set(CMAKE_CXX_FLAGS_PMEMCHECK
-    "${CMAKE_CXX_FLAGS_DEBUG} -mno-avx512f -DUSE_PMEMCHECK" CACHE STRING
-    "Flags used by the C++ compiler during pmemcheck builds." FORCE)
+    "${CMAKE_CXX_FLAGS_DEBUG} -mno-avx512f" CACHE STRING
+    "Flags used by the C++ compiler during Pmemcheck build." FORCE)
+
+if (${CMAKE_BUILD_TYPE} STREQUAL "pmemcheck")
+    add_definitions(-DUSE_PMEMCHECK)
+    FetchContent_Declare(pmemcheck URL https://github.com/ShawnZhong/pmemcheck/releases/download/v3.17/pmemcheck.tgz)
+    FetchContent_MakeAvailable(pmemcheck)
+    include_directories(${pmemcheck_SOURCE_DIR}/include)
+endif ()
+
+set(CMAKE_CXX_FLAGS_PROFILE
+    "${CMAKE_CXX_FLAGS_RELWITHDEBINFO} -ftls-model=initial-exec" CACHE STRING
+    "Flags used by the C++ compiler during Profile build." FORCE)
+
+if (${CMAKE_BUILD_TYPE} STREQUAL "profile")
+    FetchContent_Declare(flamegraph GIT_REPOSITORY https://github.com/brendangregg/FlameGraph)
+    FetchContent_MakeAvailable(flamegraph)
+endif ()
