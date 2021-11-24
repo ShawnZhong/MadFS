@@ -276,9 +276,9 @@ LogicalBlockIdx TxMgr::alloc_next_block(B* block) const {
   // allocate the next block
   LogicalBlockIdx new_block_idx = file->get_local_allocator()->alloc(1);
   pmem::Block* new_block = mem_table->get(new_block_idx);
-  memset(&new_block->cl_view[NUM_CL_PER_BLOCK - 1], 0, CACHELINE_SIZE);
+  memset(&new_block->cache_lines[NUM_CL_PER_BLOCK - 1], 0, CACHELINE_SIZE);
   new_block->tx_block.set_tx_seq(block->get_tx_seq() + 1);
-  pmem::persist_cl_unfenced(&new_block->cl_view[NUM_CL_PER_BLOCK - 1]);
+  pmem::persist_cl_unfenced(&new_block->cache_lines[NUM_CL_PER_BLOCK - 1]);
   new_block->zero_init(0, NUM_CL_PER_BLOCK - 1);
   bool success = block->set_next_tx_block(new_block_idx);
   if (success) {

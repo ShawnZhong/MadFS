@@ -1,18 +1,18 @@
 #pragma once
 
-#ifdef USE_VALGRIND
+#ifdef USE_PMEMCHECK
 #include <valgrind/pmemcheck.h>
 #else
+// see https://pmem.io/valgrind/generated/pmc-manual.html for reference
 #define VALGRIND_PMC_REMOVE_PMEM_MAPPING(...) ({})
 #define VALGRIND_PMC_REGISTER_PMEM_MAPPING(...) ({})
-#define VALGRIND_PMC_DO_FLUSH(...) ({})
 #endif
 
 #include <immintrin.h>
+#include <sys/syscall.h>
+#include <unistd.h>
 
-#include <ctime>
-#include <iomanip>
-#include <iostream>
+#include <chrono>
 
 #include "config.h"
 #include "params.h"
@@ -25,15 +25,17 @@
  * Defined as macros since we want to have access to __FILE__ and __LINE__
  */
 
-#define FPRINTF(file, fmt, ...)                                       \
-  do {                                                                \
-    std::tm tm{};                                                     \
-    std::time_t t = std::time(nullptr);                               \
-    localtime_r(&t, &tm);                                             \
-    const char *s = strrchr(__FILE__, '/');                           \
-    const char *filename = s ? s + 1 : __FILE__;                      \
-    fprintf(file, "%02d:%02d:%02d [%14s:%-3d] " fmt "\n", tm.tm_hour, \
-            tm.tm_min, tm.tm_sec, filename, __LINE__, ##__VA_ARGS__); \
+__attribute__((tls_model("initial-exec"))) extern thread_local const pid_t tid;
+extern FILE *log_file;
+
+#define FPRINTF(file, fmt, ...)                                             \
+  do {                                                                      \
+    auto now = std::chrono::high_resolution_clock::now();                   \
+    std::chrono::duration<double> sec = now.time_since_epoch();             \
+    const char *s = strrchr(__FILE__, '/');                                 \
+    const char *filename = s ? s + 1 : __FILE__;                            \
+    fprintf(file, "[Thread %d] %f [%14s:%-3d] " fmt "\n", tid, sec.count(), \
+            filename, __LINE__, ##__VA_ARGS__);                             \
   } while (0)
 
 // PANIC_IF is active for both debug and release modes
@@ -46,19 +48,17 @@
 #define PANIC(msg, ...) PANIC_IF(true, msg, ##__VA_ARGS__)
 
 // DEBUG, INFO, and WARN are not active in release mode
-static FILE *log_file = stderr;
-#define LOG(level, msg, ...)                                      \
-  do {                                                            \
-    if constexpr (BuildOptions::debug) {                          \
-      if (level < runtime_options.log_level) break;               \
-      constexpr const char *level_str_arr[] = {                   \
-          "[\u001b[32mDEBUG\u001b[0m]",                           \
-          "[\u001b[34m INFO\u001b[0m]",                           \
-          "[\u001b[31m WARN\u001b[0m]",                           \
-      };                                                          \
-      constexpr const char *level_str = level_str_arr[level - 1]; \
-      FPRINTF(log_file, "%s " msg, level_str, ##__VA_ARGS__);     \
-    }                                                             \
+#define LOG(level, msg, ...)                                    \
+  do {                                                          \
+    if constexpr (!BuildOptions::debug) break;                  \
+    if (level < runtime_options.log_level) break;               \
+    constexpr const char *level_str_arr[] = {                   \
+        "[\u001b[32mDEBUG\u001b[0m]",                           \
+        "[\u001b[34mINFO\u001b[0m] ",                           \
+        "[\u001b[31mWARN\u001b[0m] ",                           \
+    };                                                          \
+    constexpr const char *level_str = level_str_arr[level - 1]; \
+    FPRINTF(log_file, "%s " msg, level_str, ##__VA_ARGS__);     \
   } while (0)
 
 #define DEBUG(msg, ...) LOG(1, msg, ##__VA_ARGS__)
@@ -69,7 +69,7 @@ static FILE *log_file = stderr;
 #define ALIGN_MASK(x, mask) (((x) + (mask)) & ~(mask))
 #define ALIGN_UP(x, a) ALIGN_MASK((x), ((a)-1))
 #define ALIGN_DOWN(x, a) ((x) & ~((a)-1))
-#define IS_ALIGNED(x, a) (((uint64_t)x & (a - 1)) == 0)
+#define IS_ALIGNED(x, a) (((x) & ((a)-1)) == 0)
 
 namespace ulayfs::pmem {
 /**

@@ -10,36 +10,28 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v2
-      - uses: DoozyX/clang-format-lint-action@v0.12
+      - uses: DoozyX/clang-format-lint-action@v0.13
         with:
           extensions: "h,h.in,cpp"
           clangFormatVersion: 10
 
   test:
+    runs-on: ubuntu-latest
+    timeout-minutes: 1
     strategy:
       matrix:
-        build_type: [ debug, release, asan, ubsan, msan ]
-
-    runs-on: ubuntu-latest
-
-    timeout-minutes: 1
-
-    defaults:
-      run:
-        working-directory: ${{github.workspace}}/build-${{matrix.build_type}}
-
+        build_type: [ debug, release, pmemcheck, asan, ubsan, msan ]
     steps:
       - uses: actions/checkout@v2
 
       - name: build
-        working-directory: ${{github.workspace}}
         run: make ${{matrix.build_type}}
 
       - name: test_basic
-        run: ./test_basic
+        run: ./run test_basic ${{matrix.build_type}}
 
       - name: test_rw
-        run: ./test_rw
+        run: ./run test_rw ${{matrix.build_type}}
 
       - name: test_sync
-        run: ./test_sync
+        run: ./run test_sync ${{matrix.build_type}}

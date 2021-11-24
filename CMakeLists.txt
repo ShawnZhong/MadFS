@@ -28,7 +28,7 @@ add_library(ulayfs SHARED
     src/params.h
     src/posix.h src/posix.cpp
     src/tx.h src/tx.cpp
-    src/utils.h
+    src/utils.h src/utils.cpp
     )
 
 # external dependencies
@@ -43,7 +43,10 @@ target_link_libraries(ulayfs dl pthread TBB::tbb)
 # enable link time optimization
 set_property(TARGET ulayfs PROPERTY INTERPROCEDURAL_OPTIMIZATION TRUE)
 
+#[[
 # build options
+]]
+
 option(MEM_PROTECT "Enable memory protection to avoid stray writes" OFF)
 option(NO_SHARING "Assume that no two processes concurrently operate on the same file" OFF)
 option(RELAXED "Relax visibility and serialization guarantee on concurrent access" OFF)
@@ -90,7 +93,10 @@ configure_file("src/config.h.in" "config.h")
 
 include_directories(${CMAKE_CURRENT_BINARY_DIR})
 
-# tests
+#[[
+tests
+]]
+
 include_directories(src)
 
 add_executable(test_basic test/test_basic.cpp test/common.h)
@@ -102,27 +108,46 @@ target_link_libraries(test_rw ulayfs)
 add_executable(test_sync test/test_sync.cpp test/common.h)
 target_link_libraries(test_sync ulayfs)
 
-# sanitizers
+#[[
+sanitizers and tooling
+]]
+
 set(CMAKE_CXX_FLAGS_ASAN
     "${CMAKE_CXX_FLAGS_DEBUG} -fsanitize=address -fno-omit-frame-pointer" CACHE STRING
-    "Flags used by the C++ compiler for Asan build type or configuration." FORCE)
+    "Flags used by the C++ compiler during AddressSanitizer build." FORCE)
 
 set(CMAKE_SHARED_LINKER_FLAGS_ASAN
     "${CMAKE_SHARED_LINKER_FLAGS_DEBUG} -fsanitize=address" CACHE STRING
-    "Linker lags to be used to create shared libraries for Asan build type." FORCE)
+    "Flags used by the C++ linker during AddressSanitizer build." FORCE)
 
 set(CMAKE_CXX_FLAGS_UBSAN
     "${CMAKE_CXX_FLAGS_DEBUG} -fsanitize=undefined" CACHE STRING
-    "Flags used by the C++ compiler during UndefinedBehaviourSanitizer builds." FORCE)
+    "Flags used by the C++ compiler during UndefinedBehaviourSanitizer build." FORCE)
 
 set(CMAKE_CXX_FLAGS_MSAN
     "${CMAKE_CXX_FLAGS_DEBUG} -fsanitize=memory -fsanitize-memory-track-origins=2 -fno-omit-frame-pointer" CACHE STRING
-    "Flags used by the C++ compiler during MemorySanitizer builds." FORCE)
+    "Flags used by the C++ compiler during MemorySanitizer build." FORCE)
 
 set(CMAKE_CXX_FLAGS_TSAN
     "${CMAKE_CXX_FLAGS_DEBUG} -fsanitize=thread" CACHE STRING
-    "Flags used by the C++ compiler during ThreadSanitizer builds." FORCE)
+    "Flags used by the C++ compiler during ThreadSanitizer build." FORCE)
 
-set(CMAKE_CXX_FLAGS_VALGRIND
-    "${CMAKE_CXX_FLAGS_DEBUG} -mno-avx512f -DUSE_VALGRIND" CACHE STRING
-    "Flags used by the C++ compiler during Valgrind builds." FORCE)
+set(CMAKE_CXX_FLAGS_PMEMCHECK
+    "${CMAKE_CXX_FLAGS_DEBUG} -mno-avx512f" CACHE STRING
+    "Flags used by the C++ compiler during Pmemcheck build." FORCE)
+
+if (${CMAKE_BUILD_TYPE} STREQUAL "pmemcheck")
+    add_definitions(-DUSE_PMEMCHECK)
+    FetchContent_Declare(pmemcheck URL https://github.com/ShawnZhong/pmemcheck/releases/download/v3.17/pmemcheck.tgz)
+    FetchContent_MakeAvailable(pmemcheck)
+    include_directories(${pmemcheck_SOURCE_DIR}/include)
+endif ()
+
+set(CMAKE_CXX_FLAGS_PROFILE
+    "${CMAKE_CXX_FLAGS_RELWITHDEBINFO}" CACHE STRING
+    "Flags used by the C++ compiler during Profile build." FORCE)
+
+if (${CMAKE_BUILD_TYPE} STREQUAL "profile")
+    FetchContent_Declare(flamegraph GIT_REPOSITORY https://github.com/brendangregg/FlameGraph)
+    FetchContent_MakeAvailable(flamegraph)
+endif ()

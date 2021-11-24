@@ -388,26 +388,31 @@ union Block {
   DataBlock data_block;
 
   // view a block as an array of cache line
-  struct {
-    char cl[CACHELINE_SIZE];
-  } cl_view[NUM_CL_PER_BLOCK];
+  char cache_lines[NUM_CL_PER_BLOCK][CACHELINE_SIZE];
 
   [[nodiscard]] char* data_rw() { return data_block.data; }
   [[nodiscard]] const char* data_ro() const { return data_block.data; }
 
+  /**
+   * zero-out a cache line
+   * @param cl_idx which cache line to zero out
+   * @return whether memset happened
+   */
   bool zero_init_cl(uint16_t cl_idx) {
-    constexpr static const char* zero_cl[CACHELINE_SIZE] = {};
-    if (memcmp(&cl_view[cl_idx], zero_cl, CACHELINE_SIZE) != 0) {
-      memset(&cl_view[cl_idx], 0, CACHELINE_SIZE);
-      persist_cl_unfenced(&cl_view[cl_idx]);
-      return true;
-    }
-    return false;
+    constexpr static const char zero_cl[CACHELINE_SIZE]{};
+    if (memcmp(&cache_lines[cl_idx], zero_cl, CACHELINE_SIZE) == 0)
+      return false;
+    memset(&cache_lines[cl_idx], 0, CACHELINE_SIZE);
+    persist_cl_unfenced(&cache_lines[cl_idx]);
+    return true;
   }
 
-  // memset a block to zero from a given byte offset
-  // offset must be cacheline-aligned
-  // return whether a memset happen (may need fence if true)
+  /**
+   * zero-initialize a block within a given cache-line range
+   * @param cl_idx_begin the beginning cache-line index
+   * @param cl_idx_end the ending cache-line index
+   * @return whether memset happened
+   */
   bool zero_init(uint16_t cl_idx_begin = 0,
                  uint16_t cl_idx_end = NUM_CL_PER_BLOCK) {
     bool do_memset = false;

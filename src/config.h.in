@@ -30,10 +30,10 @@ constexpr static struct BuildOptions {
   constexpr static bool force_map_populate = FORCE_MAP_POPULATE;
   constexpr static bool tx_flush_only_fsync = TX_FLUSH_ONLY_FSYNC;
 
-#ifdef USE_VALGRIND
-  constexpr static bool use_valgrind = true;
+#ifdef USE_PMEMCHECK
+  constexpr static bool use_pmemcheck = true;
 #else
-  constexpr static bool use_valgrind = false;
+  constexpr static bool use_pmemcheck = false;
 #endif
 
 #ifdef NDEBUG
@@ -60,7 +60,7 @@ constexpr static struct BuildOptions {
     out << "\tgit_branch: " << git_branch << "\n";
     out << "\tgit_commit_hash: " << git_commit_hash << "\n";
     out << "\tdebug: " << debug << "\n";
-    out << "\tuse_valgrind: " << use_valgrind << "\n";
+    out << "\tuse_pmemcheck: " << use_pmemcheck << "\n";
     out << "\tmem_protect: " << mem_protect << "\n";
     out << "\tno_sharing: " << no_sharing << "\n";
     out << "\trelaxed: " << relaxed << "\n";
