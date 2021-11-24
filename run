@@ -8,8 +8,10 @@
 
 import argparse
 import os
-
+import sys
 from pathlib import Path
+
+sys.stdout = sys.stderr
 
 
 def system(cmd):
@@ -21,36 +23,41 @@ def system(cmd):
 
 
 def main(build_type, cmake_target):
-    system(f"make {build_type} MAKE_ARGS=\"{cmake_target}\"")
-
     build_path = Path(f"build-{build_type}")
     exe_path = build_path / cmake_target
     deps_path = build_path / "_deps"
 
+    system(f'make {build_type} MAKE_ARGS="{cmake_target}"')
+
     if build_type == "pmemcheck":
         pmemcheck_dir = deps_path / "pmemcheck-src"
 
-        system(f"VALGRIND_LIB={pmemcheck_dir}/libexec/valgrind/ "
-               f"{pmemcheck_dir}/bin/valgrind --tool=pmemcheck {exe_path}")
+        system(
+            f"VALGRIND_LIB={pmemcheck_dir}/libexec/valgrind/ "
+            f"{pmemcheck_dir}/bin/valgrind --tool=pmemcheck {exe_path}"
+        )
 
     elif build_type == "profile":
-        perf_data = build_path / f"{cmake_target}.perf.data"
+        perf_data = build_path / f"{cmake_target}.perf"
 
         system(f"perf record --freq=997 --call-graph dwarf -o {perf_data} {exe_path}")
         system(f"perf report -i {perf_data}")
 
+        # generate flame graph
         flamegraph_output = build_path / f"{cmake_target}.svg"
         flamegraph_dir = deps_path / "flamegraph-src"
-        system(f"perf script -i {perf_data} | "
-               f"{flamegraph_dir}/stackcollapse-perf.pl | "
-               f"{flamegraph_dir}/flamegraph.pl > {flamegraph_output}")
+        system(
+            f"perf script -i {perf_data} | "
+            f"{flamegraph_dir}/stackcollapse-perf.pl | "
+            f"{flamegraph_dir}/flamegraph.pl > {flamegraph_output}"
+        )
         print(f"The flamegraph is available at `{flamegraph_output}`")
 
     else:
         system(exe_path)
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     parser.add_argument("cmake_target")
     parser.add_argument("build_type", nargs="?", default="debug")
