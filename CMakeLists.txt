@@ -144,7 +144,7 @@ if (${CMAKE_BUILD_TYPE} STREQUAL "pmemcheck")
 endif ()
 
 set(CMAKE_CXX_FLAGS_PROFILE
-    "${CMAKE_CXX_FLAGS_RELWITHDEBINFO} -ftls-model=initial-exec" CACHE STRING
+    "${CMAKE_CXX_FLAGS_RELWITHDEBINFO}" CACHE STRING
     "Flags used by the C++ compiler during Profile build." FORCE)
 
 if (${CMAKE_BUILD_TYPE} STREQUAL "profile")

@@ -25,7 +25,7 @@
  * Defined as macros since we want to have access to __FILE__ and __LINE__
  */
 
-extern thread_local const pid_t tid;
+__attribute__((tls_model("initial-exec"))) extern thread_local const pid_t tid;
 extern FILE *log_file;
 
 #define FPRINTF(file, fmt, ...)                                             \
