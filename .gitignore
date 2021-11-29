@@ -31,8 +31,8 @@
 *.out
 *.app
 
-cmake-build-*
-build-*
-.idea
-.vscode
 .DS_Store
+/*build*
+/.idea
+/.vscode
+/test.txt
