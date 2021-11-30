@@ -6,18 +6,18 @@
 #include "block.h"
 #include "lib.h"
 
-#define CHECK_RESULT(expected, actual, length, file) \
-  do {                                               \
-    if (memcmp(expected, actual, length) != 0) {     \
-      std::cerr << *(file) << "\n";                  \
-      std::cerr << "expected: \"";                   \
-      for (char i : expected) putc(i, stderr);       \
-      std::cerr << "\"\n";                           \
-      std::cerr << "actual  : \"";                   \
-      for (char i : actual) putc(i, stderr);         \
-      std::cerr << "\"\n";                           \
-      assert(false);                                 \
-    }                                                \
+#define CHECK_RESULT(expected, actual, length, fd) \
+  do {                                             \
+    if (memcmp(expected, actual, length) != 0) {   \
+      print_file(fd);                              \
+      std::cerr << "expected: \"";                 \
+      for (char i : expected) putc(i, stderr);     \
+      std::cerr << "\"\n";                         \
+      std::cerr << "actual  : \"";                 \
+      for (char i : actual) putc(i, stderr);       \
+      std::cerr << "\"\n";                         \
+      assert(false);                               \
+    }                                              \
   } while (0)
 
 using namespace ulayfs;

@@ -102,16 +102,12 @@ tests and benchmarks
 include_directories(src)
 
 add_executable(test_basic test/test_basic.cpp test/common.h)
-target_link_libraries(test_basic ulayfs)
-
 add_executable(test_rw test/test_rw.cpp test/common.h)
-target_link_libraries(test_rw ulayfs)
-
 add_executable(test_sync test/test_sync.cpp test/common.h)
-target_link_libraries(test_sync ulayfs)
-
 add_executable(bench_rw bench/bench_rw.cpp)
-target_link_libraries(bench_rw ulayfs benchmark::benchmark)
+
+target_link_libraries(test_sync pthread)
+target_link_libraries(bench_rw benchmark::benchmark)
 
 #[[
 sanitizers and tooling

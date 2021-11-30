@@ -22,18 +22,25 @@ def system(cmd):
         exit(ret)
 
 
-def main(cmake_target, build_type, cmake_args, prog_args, no_ulayfs):
+def main(cmake_target, build_type, cmake_args, prog_args, disable_ulayfs):
+    is_bench = cmake_target.startswith("bench")
+    if is_bench:
+        cmake_args += " -DBUILD_BENCH=ON "
+
     if build_type is None:
-        build_type = "release" if cmake_target.startswith("bench") else "debug"
+        build_type = "release" if is_bench else "debug"
 
     build_path = Path(f"build-{build_type}")
+    ulayfs_path = build_path / "libulayfs.so"
     deps_path = build_path / "_deps"
     exe_path = build_path / cmake_target
     cmd = f"{exe_path} {prog_args}"
+    if not disable_ulayfs:
+        cmd = f"env LD_PRELOAD={ulayfs_path} {cmd}"
 
     system(
         f'make {build_type} '
-        f'MAKE_ARGS="{cmake_target}" '
+        f'BUILD_ARGS="{cmake_target} ulayfs" '
         f'CMAKE_ARGS="{cmake_args}"'
     )
 
@@ -42,7 +49,8 @@ def main(cmake_target, build_type, cmake_args, prog_args, no_ulayfs):
 
         system(
             f"VALGRIND_LIB={pmemcheck_dir}/libexec/valgrind/ "
-            f"{pmemcheck_dir}/bin/valgrind --tool=pmemcheck {cmd}"
+            f"{pmemcheck_dir}/bin/valgrind --tool=pmemcheck --trace-children=yes "
+            f"{cmd}"
         )
 
     elif build_type == "profile":
@@ -71,7 +79,7 @@ if __name__ == "__main__":
     parser.add_argument("build_type", nargs=argparse.OPTIONAL)
     parser.add_argument("-c", "--cmake_args", default="")
     parser.add_argument("-p", "--prog_args", default="")
-    parser.add_argument("-n", "--no_ulayfs", action="store_true")
+    parser.add_argument("-d", "--disable_ulayfs", action="store_true")
     args = parser.parse_args()
     print(f"args: {args}")
     main(**vars(args))

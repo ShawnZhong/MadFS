@@ -1,7 +1,7 @@
 #pragma once
 
-#include "file.h"
+#include "params.h"
 
 namespace ulayfs {
-extern std::shared_ptr<dram::File> get_file(int fd);
+extern void print_file(int fd) __attribute__((weak));
 }  // namespace ulayfs
