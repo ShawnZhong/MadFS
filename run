@@ -35,7 +35,7 @@ def main(cmake_target, build_type, cmake_args, prog_args, disable_ulayfs):
     system(
         f'make {build_type} '
         f'BUILD_ARGS="{cmake_target} ulayfs" '
-        f'CMAKE_ARGS="{cmake_args}"'
+        f'CMAKE_ARGS="{cmake_args} -DLINK_ULAYFS=OFF"'
     )
 
     if build_type == "pmemcheck":

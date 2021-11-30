@@ -32,12 +32,9 @@ add_library(ulayfs SHARED
     )
 
 # external dependencies
-set(BENCHMARK_ENABLE_TESTING OFF)
-
 include(FetchContent)
 FetchContent_Declare(tbb URL https://github.com/oneapi-src/oneTBB/releases/download/v2021.4.0/oneapi-tbb-2021.4.0-lin.tgz)
-FetchContent_Declare(benchmark URL https://github.com/google/benchmark/archive/refs/tags/v1.6.0.tar.gz)
-FetchContent_MakeAvailable(tbb benchmark)
+FetchContent_MakeAvailable(tbb)
 
 find_package(TBB REQUIRED HINTS ${tbb_SOURCE_DIR}/lib/cmake/tbb)
 target_link_libraries(ulayfs dl pthread TBB::tbb)
@@ -105,9 +102,24 @@ add_executable(test_basic test/test_basic.cpp test/common.h)
 add_executable(test_rw test/test_rw.cpp test/common.h)
 add_executable(test_sync test/test_sync.cpp test/common.h)
 add_executable(bench_rw bench/bench_rw.cpp)
-
 target_link_libraries(test_sync pthread)
-target_link_libraries(bench_rw benchmark::benchmark)
+
+option(BUILD_BENCH "Build benchmarks" OFF)
+if (BUILD_BENCH)
+    set(BENCHMARK_ENABLE_TESTING OFF)
+    FetchContent_Declare(benchmark URL https://github.com/google/benchmark/archive/refs/tags/v1.6.0.tar.gz)
+    FetchContent_MakeAvailable(benchmark)
+    target_link_libraries(bench_rw benchmark::benchmark)
+endif ()
+
+option(LINK_ULAYFS "Link uLayFS for tests and benchmarks" ON)
+if (LINK_ULAYFS)
+    target_link_libraries(test_basic ulayfs)
+    target_link_libraries(test_rw ulayfs)
+    target_link_libraries(test_sync ulayfs)
+    target_link_libraries(bench_rw ulayfs)
+endif ()
+
 
 #[[
 sanitizers and tooling
