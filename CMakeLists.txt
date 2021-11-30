@@ -101,11 +101,12 @@ include_directories(src)
 add_executable(test_basic test/test_basic.cpp test/common.h)
 add_executable(test_rw test/test_rw.cpp test/common.h)
 add_executable(test_sync test/test_sync.cpp test/common.h)
-add_executable(bench_append bench/bench_append.cpp)
 target_link_libraries(test_sync pthread)
 
 option(BUILD_BENCH "Build benchmarks" OFF)
 if (BUILD_BENCH)
+    add_executable(bench_append bench/bench_append.cpp)
+
     set(BENCHMARK_ENABLE_TESTING OFF)
     FetchContent_Declare(benchmark URL https://github.com/google/benchmark/archive/refs/tags/v1.6.0.tar.gz)
     FetchContent_MakeAvailable(benchmark)
@@ -114,10 +115,7 @@ endif ()
 
 option(LINK_ULAYFS "Link uLayFS for tests and benchmarks" ON)
 if (LINK_ULAYFS)
-    target_link_libraries(test_basic ulayfs)
-    target_link_libraries(test_rw ulayfs)
-    target_link_libraries(test_sync ulayfs)
-    target_link_libraries(bench_append ulayfs)
+    link_libraries(ulayfs)
 endif ()
 
 
