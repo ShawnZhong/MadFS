@@ -4,7 +4,7 @@
 
 constexpr char FILEPATH[] = "test.txt";
 
-static void bench_rw(benchmark::State& state) {
+static void bench(benchmark::State& state) {
   const auto num_bytes = state.range(0);
 
   remove(FILEPATH);
@@ -18,5 +18,5 @@ static void bench_rw(benchmark::State& state) {
                           state.range(0));
 }
 
-BENCHMARK(bench_rw)->RangeMultiplier(2)->Range(8, 4096 * 64)->Iterations(10000);
+BENCHMARK(bench)->RangeMultiplier(2)->Range(8, 4096 * 64)->Iterations(10000);
 BENCHMARK_MAIN();

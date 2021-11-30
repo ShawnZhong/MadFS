@@ -81,5 +81,5 @@ uLayFS is developed on Ubuntu 20.04.3 LTS (with Linux kernel 5.4).
   ./run test_basic
   ./run test_sync tsan
   ./run test_rw pmemcheck -c="-DTX_FLUSH_ONLY_FSYNC=ON"
-  ./run bench_rw profile -p="--benchmark_filter=bench_rw/4096"
+  ./run bench_append profile -p="--benchmark_filter=bench_append/4096"
   ```
