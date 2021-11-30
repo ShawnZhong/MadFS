@@ -1,11 +1,5 @@
 #!/usr/bin/env python3
 
-# Example usages:
-#   ./run test_basic
-#   ./run test_sync tsan
-#   ./run test_rw pmemcheck -c="-DTX_FLUSH_ONLY_FSYNC=ON"
-#   ./run bench_rw profile -p="--benchmark_filter=bench_rw/4096"
-
 import argparse
 import os
 import sys
