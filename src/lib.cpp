@@ -23,6 +23,7 @@ std::shared_ptr<dram::File> get_file(int fd) {
 }
 
 extern "C" {
+
 int open(const char* pathname, int flags, ...) {
   mode_t mode = 0;
 
@@ -48,10 +49,10 @@ int open(const char* pathname, int flags, ...) {
   }
 
   int fd = posix::open(pathname, flags, mode);
+  DEBUG("posix::open(%s, %x, %x) = %d", pathname, flags, mode, fd);
 
   if (unlikely(fd < 0)) {
     WARN("File \"%s\" posix::open failed: %m", pathname);
-    DEBUG("posix::open(%s, %x, %x) = %d", pathname, flags, mode, fd);
     return fd;
   }
 
@@ -59,20 +60,17 @@ int open(const char* pathname, int flags, ...) {
   int rc = posix::fstat(fd, &stat_buf);
   if (unlikely(rc < 0)) {
     WARN("File \"%s\" fstat fialed: %m. Fallback to syscall.", pathname);
-    DEBUG("posix::open(%s, %x, %x) = %d", pathname, flags, mode, fd);
     return fd;
   }
-
+  
   // we don't handle non-normal file (e.g., socket, directory, block dev)
   if (unlikely(!S_ISREG(stat_buf.st_mode) && !S_ISLNK(stat_buf.st_mode))) {
     WARN("Non-normal file \"%s\". Fallback to syscall.", pathname);
-    DEBUG("posix::open(%s, %x, %x) = %d", pathname, flags, mode, fd);
     return fd;
   }
 
   if (!IS_ALIGNED(stat_buf.st_size, BLOCK_SIZE)) {
     WARN("File size not aligned for \"%s\". Fallback to syscall", pathname);
-    DEBUG("posix::open(%s, %x, %x) = %d", pathname, flags, mode, fd);
     return fd;
   }
 

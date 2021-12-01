@@ -29,18 +29,14 @@ pmem::Bitmap* File::open_shm(const struct stat* stat) {
   std::stringstream shm_name;
   shm_name << "/ulayfs_" << stat->st_ino << stat->st_ctim.tv_sec
            << stat->st_ctim.tv_nsec;
-  shm_fd = shm_open(const_cast<char*>(shm_name.str().c_str()), O_RDWR, 00600);
-  int shm_exist = shm_fd >= 0 ? 1 : 0;
+  shm_fd = shm_open(const_cast<char*>(shm_name.str().c_str()), O_RDWR | O_CREAT, 00600);
 
   // If the shared memory corresponding to this file is not present, create it
-  if (shm_exist == 0) {
-    shm_fd = shm_open(const_cast<char*>(shm_name.str().c_str()),
-                      O_RDWR | O_CREAT | O_EXCL, 00600);
-    if (shm_fd < 0) return nullptr;
-    if (fchmod(shm_fd, stat->st_mode)) return nullptr;
-    if (fchown(shm_fd, stat->st_uid, stat->st_gid)) return nullptr;
-    if (ftruncate(shm_fd, shm_size)) return nullptr;
-  }
+  if (shm_fd < 0) return nullptr;
+  if (fchmod(shm_fd, stat->st_mode)) return nullptr;
+  if (fchown(shm_fd, stat->st_uid, stat->st_gid)) return nullptr;
+  if (ftruncate(shm_fd, shm_size)) return nullptr;
+
 
   void* shm = posix::mmap(nullptr, shm_size, PROT_READ | PROT_WRITE,
                           MAP_SHARED_VALIDATE | MAP_SYNC, shm_fd, 0);

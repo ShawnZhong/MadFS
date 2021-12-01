@@ -115,7 +115,12 @@ endif ()
 
 option(LINK_ULAYFS "Link uLayFS for tests and benchmarks" ON)
 if (LINK_ULAYFS)
-    link_libraries(ulayfs)
+    target_link_libraries(test_basic ulayfs)
+    target_link_libraries(test_rw ulayfs)
+    target_link_libraries(test_sync ulayfs)
+    if (BUILD_BENCH)
+        target_link_libraries(bench_append ulayfs)
+    endif ()
 endif ()
 
 
