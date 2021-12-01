@@ -20,7 +20,6 @@ class Allocator {
 
   // dram bitmap
   pmem::Bitmap* bitmap;
-  pthread_mutex_t* bitmap_lock;
 
   // this local free_list maintains blocks allocated from the global free_list
   // and not used yet; pair: <size, idx>
@@ -40,12 +39,11 @@ class Allocator {
  public:
   Allocator() = default;
   Allocator(int fd, pmem::MetaBlock* meta, MemTable* mem_table,
-            pmem::Bitmap* bitmap, pthread_mutex_t* bitmap_lock)
+            pmem::Bitmap* bitmap)
       : fd(fd),
         meta(meta),
         mem_table(mem_table),
         bitmap(bitmap),
-        bitmap_lock(bitmap_lock),
         recent_bitmap_block_id(),
         recent_bitmap_local_idx() {
     free_list.reserve(64);

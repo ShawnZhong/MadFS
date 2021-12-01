@@ -80,13 +80,14 @@ class File {
   const char* get_ro_data_ptr(VirtualBlockIdx virtual_block_idx);
 
   /**
-   * Open the shared memory object corresponding to this file.
+   * Open the shared memory object corresponding to this file. The leading bit
+   * of the bitmap (corresponding to metablock) indicates if the bitmap needs to
+   * be initialized.
    *
-   * @return Return -1 on failure. Return 0 if the shared memory object is newly
-   * created (initialization needed) and return 1 otherwise.
+   * @return Return a pointer to the mmapped bitmap object, or nullptr on
+   * failure.
    */
-  int open_shm(const struct stat* stat, pmem::Bitmap** bitmap,
-               pthread_mutex_t** bitmap_lock);
+  pmem::Bitmap* open_shm(const struct stat* stat);
 
  public:
   friend std::ostream& operator<<(std::ostream& out, const File& f);

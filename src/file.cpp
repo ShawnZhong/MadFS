@@ -35,10 +35,8 @@ File::File(const char* pathname, int flags, mode_t mode)
   }
 
   // open shared memory that contains bitmap
-  pmem::Bitmap* bitmap;
-  pthread_mutex_t* bitmap_lock;
-  int shm_exist = open_shm(&stat_buf, &bitmap, &bitmap_lock);
-  if (shm_exist < 0) {
+  pmem::Bitmap* bitmap = open_shm(&stat_buf);
+  if (bitmap == nullptr) {
     WARN("Failed to open shared memory. Fall back to syscall");
     return;
   }
@@ -46,7 +44,7 @@ File::File(const char* pathname, int flags, mode_t mode)
   // TODO: initialize bitmap if shm_exist == 0
   mem_table = MemTable(fd, stat_buf.st_size);
   meta = mem_table.get_meta();
-  allocator = Allocator(fd, meta, &mem_table, bitmap, bitmap_lock);
+  allocator = Allocator(fd, meta, &mem_table, bitmap);
   log_mgr = LogMgr(meta, &allocator, &mem_table);
   tx_mgr = TxMgr(meta, &allocator, &mem_table, &log_mgr, &blk_table);
   blk_table = BlkTable(meta, &mem_table, &log_mgr, &tx_mgr);
@@ -59,8 +57,7 @@ File::File(const char* pathname, int flags, mode_t mode)
 
 File::~File() { mem_table.unmap(); }
 
-int File::open_shm(const struct stat* stat, pmem::Bitmap** bitmap,
-                   pthread_mutex_t** bitmap_lock) {
+pmem::Bitmap* File::open_shm(const struct stat* stat) {
   // TODO: enable dynamically grow bitmap
   size_t shm_size = 8 * BLOCK_SIZE;
   std::stringstream shm_name;
@@ -73,27 +70,16 @@ int File::open_shm(const struct stat* stat, pmem::Bitmap** bitmap,
   if (shm_exist == 0) {
     shm_fd = shm_open(const_cast<char*>(shm_name.str().c_str()),
                       O_RDWR | O_CREAT | O_EXCL, 00600);
-    if (shm_fd < 0) return -1;
-    if (fchmod(shm_fd, stat->st_mode)) return -1;
-    if (fchown(shm_fd, stat->st_uid, stat->st_gid)) return -1;
-    if (ftruncate(shm_fd, shm_size)) return -1;
+    if (shm_fd < 0) return nullptr;
+    if (fchmod(shm_fd, stat->st_mode)) return nullptr;
+    if (fchown(shm_fd, stat->st_uid, stat->st_gid)) return nullptr;
+    if (ftruncate(shm_fd, shm_size)) return nullptr;
   }
 
   void* shm = posix::mmap(nullptr, shm_size, PROT_READ | PROT_WRITE,
                           MAP_SHARED_VALIDATE | MAP_SYNC, shm_fd, 0);
-  if (shm == MAP_FAILED) return -1;
-  *bitmap_lock = static_cast<pthread_mutex_t*>(shm);
-  auto bitmap_start =
-      ALIGN_UP(reinterpret_cast<size_t>(shm) + sizeof(*bitmap_lock), 8);
-  *bitmap = reinterpret_cast<pmem::Bitmap*>(bitmap_start);
-
-  if (shm_exist == 0) {
-    // initialize bitmap_lock if newly created
-    pthread_mutexattr_t bitmap_lock_attr;
-    pthread_mutexattr_setrobust(&bitmap_lock_attr, PTHREAD_MUTEX_ROBUST);
-    pthread_mutex_init(*bitmap_lock, &bitmap_lock_attr);
-  }
-  return shm_exist;
+  if (shm == MAP_FAILED) return nullptr;
+  return static_cast<pmem::Bitmap*>(shm);
 }
 
 ssize_t File::pwrite(const void* buf, size_t count, size_t offset) {
