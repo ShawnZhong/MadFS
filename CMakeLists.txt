@@ -10,42 +10,49 @@ set(CMAKE_CXX_FLAGS "\
     -Wno-unused-parameter \
     -Wno-unused-function \
     -Wno-unused-variable \
-")
-
-set(CMAKE_CXX_FLAGS_DEBUG "\
-    ${CMAKE_CXX_FLAGS_DEBUG} \
-    -fsanitize=undefined \
+    -Wno-unused-private-field \
 ")
 
 add_library(ulayfs SHARED
     src/alloc.h src/alloc.cpp
     src/bitmap.h
     src/block.h
-    src/btable.h
+    src/btable.h src/btable.cpp
     src/entry.h
     src/file.h src/file.cpp
-    src/futex.h
-    src/layout.h
+    src/idx.h
+    src/const.h
     src/lib.h src/lib.cpp
-    src/log.h
+    src/log.h src/log.cpp
     src/mtable.h
     src/params.h
-    src/posix.h
+    src/posix.h src/posix.cpp
     src/tx.h src/tx.cpp
-    src/utils.h
+    src/utils.h src/utils.cpp
     )
-target_link_libraries(ulayfs dl rt)
+
+# external dependencies
+include(FetchContent)
+FetchContent_Declare(tbb URL https://github.com/oneapi-src/oneTBB/releases/download/v2021.4.0/oneapi-tbb-2021.4.0-lin.tgz)
+FetchContent_MakeAvailable(tbb)
+
+find_package(TBB REQUIRED HINTS ${tbb_SOURCE_DIR}/lib/cmake/tbb)
+target_link_libraries(ulayfs dl pthread TBB::tbb rt)
 
 # enable link time optimization
 set_property(TARGET ulayfs PROPERTY INTERPROCEDURAL_OPTIMIZATION TRUE)
 
+#[[
 # build options
+]]
+
 option(MEM_PROTECT "Enable memory protection to avoid stray writes" OFF)
 option(NO_SHARING "Assume that no two processes concurrently operate on the same file" OFF)
 option(RELAXED "Relax visibility and serialization guarantee on concurrent access" OFF)
 option(USE_HUGE_PAGE "Use huge page for mmap" ON)
 option(USE_MAP_SYNC "Use MAP_SYNC for mmap" ON)
 option(FORCE_MAP_POPULATE "Always use MAP_POPULATE for mmap" OFF)
+option(TX_FLUSH_ONLY_FSYNC "Only flush transaction entries in fsync" OFF)
 
 # check huge page support
 execute_process(
@@ -85,16 +92,73 @@ configure_file("src/config.h.in" "config.h")
 
 include_directories(${CMAKE_CURRENT_BINARY_DIR})
 
-# tests
+#[[
+tests and benchmarks
+]]
+
 include_directories(src)
 
 add_executable(test_basic test/test_basic.cpp test/common.h)
-target_link_libraries(test_basic ulayfs)
-
-add_executable(test_futex test/test_futex.cpp)
-
 add_executable(test_rw test/test_rw.cpp test/common.h)
-target_link_libraries(test_rw ulayfs)
-
 add_executable(test_sync test/test_sync.cpp test/common.h)
-target_link_libraries(test_sync ulayfs pthread)
+target_link_libraries(test_sync pthread)
+
+option(BUILD_BENCH "Build benchmarks" OFF)
+if (BUILD_BENCH)
+    add_executable(bench_append bench/bench_append.cpp)
+
+    set(BENCHMARK_ENABLE_TESTING OFF)
+    FetchContent_Declare(benchmark URL https://github.com/google/benchmark/archive/refs/tags/v1.6.0.tar.gz)
+    FetchContent_MakeAvailable(benchmark)
+    target_link_libraries(bench_append benchmark::benchmark)
+endif ()
+
+option(LINK_ULAYFS "Link uLayFS for tests and benchmarks" ON)
+if (LINK_ULAYFS)
+    link_libraries(ulayfs)
+endif ()
+
+
+#[[
+sanitizers and tooling
+]]
+
+set(CMAKE_CXX_FLAGS_ASAN
+    "${CMAKE_CXX_FLAGS_DEBUG} -fsanitize=address -fno-omit-frame-pointer" CACHE STRING
+    "Flags used by the C++ compiler during AddressSanitizer build." FORCE)
+
+set(CMAKE_SHARED_LINKER_FLAGS_ASAN
+    "${CMAKE_SHARED_LINKER_FLAGS_DEBUG} -fsanitize=address" CACHE STRING
+    "Flags used by the C++ linker during AddressSanitizer build." FORCE)
+
+set(CMAKE_CXX_FLAGS_UBSAN
+    "${CMAKE_CXX_FLAGS_DEBUG} -fsanitize=undefined" CACHE STRING
+    "Flags used by the C++ compiler during UndefinedBehaviourSanitizer build." FORCE)
+
+set(CMAKE_CXX_FLAGS_MSAN
+    "${CMAKE_CXX_FLAGS_DEBUG} -fsanitize=memory -fsanitize-memory-track-origins=2 -fno-omit-frame-pointer" CACHE STRING
+    "Flags used by the C++ compiler during MemorySanitizer build." FORCE)
+
+set(CMAKE_CXX_FLAGS_TSAN
+    "${CMAKE_CXX_FLAGS_DEBUG} -fsanitize=thread" CACHE STRING
+    "Flags used by the C++ compiler during ThreadSanitizer build." FORCE)
+
+set(CMAKE_CXX_FLAGS_PMEMCHECK
+    "${CMAKE_CXX_FLAGS_DEBUG} -mno-avx512f" CACHE STRING
+    "Flags used by the C++ compiler during Pmemcheck build." FORCE)
+
+if (${CMAKE_BUILD_TYPE} STREQUAL "pmemcheck")
+    add_definitions(-DUSE_PMEMCHECK)
+    FetchContent_Declare(pmemcheck URL https://github.com/ShawnZhong/pmemcheck/releases/download/v3.17/pmemcheck.tgz)
+    FetchContent_MakeAvailable(pmemcheck)
+    include_directories(${pmemcheck_SOURCE_DIR}/include)
+endif ()
+
+set(CMAKE_CXX_FLAGS_PROFILE
+    "${CMAKE_CXX_FLAGS_RELWITHDEBINFO}" CACHE STRING
+    "Flags used by the C++ compiler during Profile build." FORCE)
+
+if (${CMAKE_BUILD_TYPE} STREQUAL "profile")
+    FetchContent_Declare(flamegraph GIT_REPOSITORY https://github.com/brendangregg/FlameGraph)
+    FetchContent_MakeAvailable(flamegraph)
+endif ()

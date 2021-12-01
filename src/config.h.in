@@ -7,12 +7,14 @@
 #cmakedefine01 USE_HUGE_PAGE
 #cmakedefine01 USE_MAP_SYNC
 #cmakedefine01 FORCE_MAP_POPULATE
+#cmakedefine01 TX_FLUSH_ONLY_FSYNC
 
 #cmakedefine GIT_BRANCH "@GIT_BRANCH@"
 #cmakedefine GIT_COMMIT_HASH "@GIT_COMMIT_HASH@"
 #cmakedefine CMAKE_BUILD_TYPE "@CMAKE_BUILD_TYPE@"
 
 #include <ostream>
+
 namespace ulayfs {
 
 constexpr static struct BuildOptions {
@@ -26,6 +28,13 @@ constexpr static struct BuildOptions {
   constexpr static bool use_huge_page = USE_HUGE_PAGE;
   constexpr static bool use_map_sync = USE_MAP_SYNC;
   constexpr static bool force_map_populate = FORCE_MAP_POPULATE;
+  constexpr static bool tx_flush_only_fsync = TX_FLUSH_ONLY_FSYNC;
+
+#ifdef USE_PMEMCHECK
+  constexpr static bool use_pmemcheck = true;
+#else
+  constexpr static bool use_pmemcheck = false;
+#endif
 
 #ifdef NDEBUG
   constexpr static bool debug = false;
@@ -51,12 +60,14 @@ constexpr static struct BuildOptions {
     out << "\tgit_branch: " << git_branch << "\n";
     out << "\tgit_commit_hash: " << git_commit_hash << "\n";
     out << "\tdebug: " << debug << "\n";
+    out << "\tuse_pmemcheck: " << use_pmemcheck << "\n";
     out << "\tmem_protect: " << mem_protect << "\n";
     out << "\tno_sharing: " << no_sharing << "\n";
     out << "\trelaxed: " << relaxed << "\n";
     out << "\tuse_huge_page: " << use_huge_page << "\n";
     out << "\tuse_map_sync: " << use_map_sync << "\n";
     out << "\tforce_map_populate: " << force_map_populate << "\n";
+    out << "\ttx_flush_only_fsync: " << tx_flush_only_fsync << "\n";
     out << "\tsupport_clwb: " << support_clwb << "\n";
     out << "\tsupport_clflushopt: " << support_clflushopt << "\n";
     return out;
@@ -64,15 +75,17 @@ constexpr static struct BuildOptions {
 } build_options;
 
 static struct RuntimeOptions {
-  bool show_config;
-  const char* log_file;
-  int log_level;
+  bool show_config{true};
+  const char* log_file{};
+  int log_level{0};
+
   RuntimeOptions() noexcept {
-    show_config = std::getenv("ULAYFS_NO_SHOW_CONFIG") == nullptr;
+    if (std::getenv("ULAYFS_NO_SHOW_CONFIG")) show_config = false;
     log_file = std::getenv("ULAYFS_LOG_FILE");
-    auto log_level_str = std::getenv("ULAYFS_LOG_LEVEL");
-    log_level = log_level_str ? std::atoi(log_level_str) : 2;
+    if (auto str = std::getenv("ULAYFS_LOG_LEVEL"); str)
+      log_level = std::atoi(str);
   };
+
   friend std::ostream& operator<<(std::ostream& out,
                                   const RuntimeOptions& opt) {
     out << "RuntimeOptions: \n";

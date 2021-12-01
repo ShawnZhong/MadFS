@@ -30,11 +30,11 @@ class Bitmap {
     if (b == BITMAP_ALL_USED) return -1;
     uint64_t allocated = (~b) & (b + 1);  // which bit is allocated
     // if bitmap is exactly the same as we saw previously, set it allocated
-    if (!__atomic_compare_exchange_n(&bitmap, &b, b & allocated, true,
+    if (!__atomic_compare_exchange_n(&bitmap, &b, b & allocated, false,
                                      __ATOMIC_ACQ_REL, __ATOMIC_ACQUIRE))
       goto retry;
     persist_cl_fenced(&bitmap);
-    return std::countr_zero(b);
+    return static_cast<BitmapLocalIdx>(std::countr_zero(b));
   }
 
   // allocate all blocks in this bit; return 0 if succeeds, -1 otherwise

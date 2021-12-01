@@ -3,7 +3,6 @@
 #include <cassert>
 
 #include "block.h"
-#include "layout.h"
 
 namespace ulayfs::dram {
 
@@ -67,7 +66,8 @@ add_to_free_list:
 }
 
 void Allocator::free(LogicalBlockIdx block_idx, uint32_t num_blocks) {
-  // TODO: implement this
+  free_list.emplace_back(num_blocks, block_idx);
+  std::sort(free_list.begin(), free_list.end());
 }
 
 }  // namespace ulayfs::dram

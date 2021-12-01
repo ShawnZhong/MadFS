@@ -1,14 +1,14 @@
 #pragma once
 
 #include <linux/mman.h>
+#include <tbb/concurrent_unordered_map.h>
+#include <tbb/concurrent_vector.h>
 
 #include <cstddef>
 #include <stdexcept>
-#include <unordered_map>
 
 #include "block.h"
 #include "config.h"
-#include "layout.h"
 #include "params.h"
 #include "posix.h"
 #include "utils.h"
@@ -34,30 +34,23 @@ class MemTable {
   pmem::MetaBlock* meta;
   int fd;
 
-  // a copy of global num_blocks in MetaBlock to avoid shared memory access
-  // may be out-of-date; must re-read global one if necessary
-  uint32_t num_blocks_local_copy;
-
-  std::unordered_map<LogicalBlockIdx, pmem::Block*> table;
+  tbb::concurrent_unordered_map<LogicalBlockIdx, pmem::Block*> table;
 
   // a vector of <addr, length> pairs
-  std::vector<std::tuple<void*, size_t>> mmap_regions;
+  tbb::concurrent_vector<std::tuple<void*, size_t>> mmap_regions;
 
  private:
   // called by other public functions with lock held
-  void grow_no_lock(LogicalBlockIdx idx) {
-    // we need to revalidate under after acquiring lock
-    if (idx < meta->get_num_blocks()) return;
-
+  void grow(LogicalBlockIdx idx) {
     // the new file size should be a multiple of grow unit
     // we have `idx + 1` since we want to grow the file when idx is a multiple
     // of the number of blocks in a grow unit (e.g., 512 for 2 MB grow)
     size_t file_size =
         ALIGN_UP(static_cast<size_t>(idx + 1) << BLOCK_SHIFT, GROW_UNIT_SIZE);
 
-    int ret = posix::ftruncate(fd, static_cast<off_t>(file_size));
-    PANIC_IF(ret, "ftruncate failed");
-    meta->set_num_blocks_no_lock(file_size >> BLOCK_SHIFT);
+    int ret = posix::fallocate(fd, 0, 0, static_cast<off_t>(file_size));
+    PANIC_IF(ret, "fallocate failed");
+    meta->set_num_blocks_if_larger(file_size >> BLOCK_SHIFT);
   }
 
   /**
@@ -81,11 +74,7 @@ class MemTable {
       // Note that the order of the following two fallback plans matters
       if constexpr (BuildOptions::use_huge_page) {
         if (errno == EINVAL) {
-          WARN(
-              "Huge page not supported for fd = %d. "
-              "Please check `cat /proc/meminfo | grep Huge`. "
-              "Retry w/o huge page",
-              fd);
+          WARN("Huge page not supported for fd = %d. Retry w/o huge page", fd);
           flags &= ~(MAP_HUGETLB | MAP_HUGE_2MB);
           addr = posix::mmap(nullptr, length, prot, flags, fd, offset);
         }
@@ -102,42 +91,41 @@ class MemTable {
 
       PANIC_IF(addr == MAP_FAILED, "mmap fd = %d failed", fd);
     }
+    VALGRIND_PMC_REGISTER_PMEM_MAPPING(addr, length);
     mmap_regions.emplace_back(addr, length);
     return static_cast<pmem::Block*>(addr);
   }
 
  public:
-  MemTable() = default;
-
   MemTable(int fd, off_t file_size) {
     this->fd = fd;
 
-    // grow to multiple of grow_unit_size if the file is empty or the file size
-    // is not grow_unit aligned
+    // grow to multiple of grow_unit_size if the file is empty or the file
+    // size is not grow_unit aligned
     bool should_grow = file_size == 0 || !IS_ALIGNED(file_size, GROW_UNIT_SIZE);
     if (should_grow) {
       file_size =
           file_size == 0 ? PREALLOC_SIZE : ALIGN_UP(file_size, GROW_UNIT_SIZE);
-      int ret = posix::ftruncate(fd, file_size);
-      PANIC_IF(ret, "ftruncate failed");
+      int ret = posix::fallocate(fd, 0, 0, file_size);
+      PANIC_IF(ret, "fallocate failed");
     }
 
     pmem::Block* blocks = mmap_file(file_size, 0);
     meta = &blocks->meta_block;
 
     // compute number of blocks and update the mata block if necessary
-    num_blocks_local_copy = file_size >> BLOCK_SHIFT;
-    if (should_grow) meta->set_num_blocks_no_lock(num_blocks_local_copy);
+    auto num_blocks = file_size >> BLOCK_SHIFT;
+    if (should_grow) meta->set_num_blocks_if_larger(num_blocks);
 
     // initialize the mapping
-    for (LogicalBlockIdx idx = 0; idx < num_blocks_local_copy;
-         idx += NUM_BLOCKS_PER_GROW)
+    for (LogicalBlockIdx idx = 0; idx < num_blocks; idx += NUM_BLOCKS_PER_GROW)
       table.emplace(idx, blocks + idx);
   }
 
-  void unmap() {
+  ~MemTable() {
     for (const auto& [addr, length] : mmap_regions) {
       munmap(addr, length);
+      VALGRIND_PMC_REMOVE_PMEM_MAPPING(addr, length);
     }
   }
 
@@ -145,25 +133,19 @@ class MemTable {
 
   // ask more blocks for the kernel filesystem, so that idx is valid
   void validate(LogicalBlockIdx idx) {
-    // fast path: if smaller than local copy; return
-    if (idx < num_blocks_local_copy) return;
-
-    // medium path: update local copy and retry
-    num_blocks_local_copy = meta->get_num_blocks();
-    if (idx < num_blocks_local_copy) return;
+    // fast path: if smaller than the number of block; return
+    if (idx < meta->get_num_blocks()) return;
 
     // slow path: acquire lock to verify and grow if necessary
-    meta->lock();
-    grow_no_lock(idx);
-    meta->unlock();
+    grow(idx);
   }
 
   /**
    * the idx might pass Allocator's grow() to ensure there is a backing kernel
    * filesystem block
    *
-   * it will then check if it has been mapped into the address space; if not, it
-   * does mapping first
+   * it will then check if it has been mapped into the address space; if not,
+   * it does mapping first
    *
    * @param idx the logical block index
    * @return the Block pointer if idx is not 0; nullptr for idx == 0, and the

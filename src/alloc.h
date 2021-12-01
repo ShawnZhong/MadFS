@@ -5,7 +5,6 @@
 
 #include "block.h"
 #include "config.h"
-#include "layout.h"
 #include "mtable.h"
 #include "posix.h"
 
@@ -37,7 +36,6 @@ class Allocator {
   BitmapLocalIdx recent_bitmap_local_idx;
 
  public:
-  Allocator() = default;
   Allocator(int fd, pmem::MetaBlock* meta, MemTable* mem_table,
             pmem::Bitmap* bitmap)
       : fd(fd),

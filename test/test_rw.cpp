@@ -11,26 +11,39 @@ struct TestOpt {
   int init_offset = 0;
 };
 
-int test(TestOpt test_opt) {
-  auto [num_bytes_per_iter, num_iter, init_offset] = test_opt;
+void test(TestOpt test_opt) {
+  const auto& [num_bytes_per_iter, num_iter, init_offset] = test_opt;
+
+  fprintf(stderr,
+          "\n\n\n====== "
+          "num_bytes_per_iter = %d, "
+          "num_iter = %d, "
+          "init_offset = %d "
+          "======\n",
+          num_bytes_per_iter, num_iter, init_offset);
 
   [[maybe_unused]] ssize_t ret;
 
-  remove(FILEPATH);
-  int fd = open(FILEPATH, O_CREAT | O_RDWR, S_IRUSR | S_IWUSR);
-  auto file = get_file(fd);
+  // write data
+  {
+    remove(FILEPATH);
+    int fd = open(FILEPATH, O_CREAT | O_RDWR, S_IRUSR | S_IWUSR);
+    lseek(fd, init_offset, SEEK_SET);
 
-  lseek(fd, init_offset, SEEK_SET);
-
-  for (int i = 0; i < num_iter; ++i) {
-    char src_buf[num_bytes_per_iter];
-    fill_buff(src_buf, num_bytes_per_iter, num_bytes_per_iter * i);
-    ret = write(fd, src_buf, num_bytes_per_iter);
-    assert(ret == num_bytes_per_iter);
+    for (int i = 0; i < num_iter; ++i) {
+      char src_buf[num_bytes_per_iter];
+      fill_buff(src_buf, num_bytes_per_iter, num_bytes_per_iter * i);
+      ret = write(fd, src_buf, num_bytes_per_iter);
+      assert(ret == num_bytes_per_iter);
+    }
+    fsync(fd);
+    close(fd);
   }
 
+  // reopen the file and check result
+  int fd = open(FILEPATH, O_CREAT | O_RDWR, S_IRUSR | S_IWUSR);
+
   // check that the content before OFFSET are all zeros
-  lseek(fd, 0, SEEK_SET);
   if (init_offset != 0) {
     char actual[init_offset];
     ret = read(fd, actual, init_offset);
@@ -39,7 +52,7 @@ int test(TestOpt test_opt) {
     char expected[init_offset];
     memset(expected, 0, init_offset);
 
-    CHECK_RESULT(expected, actual, init_offset, file);
+    CHECK_RESULT(expected, actual, init_offset, fd);
   }
 
   // check that content after OFFSET are written
@@ -53,21 +66,26 @@ int test(TestOpt test_opt) {
     char expected[length];
     fill_buff(expected, length);
 
-    CHECK_RESULT(expected, actual, length, file);
+    CHECK_RESULT(expected, actual, length, fd);
   }
 
-  return fd;
+  fsync(fd);
+  close(fd);
 }
 
 int main(int argc, char* argv[]) {
   // everything block-aligned
   test({.num_bytes_per_iter = BLOCK_SIZE});
   test({.num_bytes_per_iter = BLOCK_SIZE * 8});
+  test({.num_bytes_per_iter = BLOCK_SIZE * 33});
+  test({.num_bytes_per_iter = BLOCK_SIZE * 63});
   test({.num_bytes_per_iter = BLOCK_SIZE, .num_iter = 2});
   test({.num_bytes_per_iter = BLOCK_SIZE * 8, .num_iter = 2});
 
   // single-block write w/ block-aligned starting offset
   test({.num_bytes_per_iter = 8});
+  test({.num_bytes_per_iter = 1});
+  test({.num_bytes_per_iter = 17});
   test({.num_bytes_per_iter = 64});
   test({.num_bytes_per_iter = BLOCK_SIZE / 2});
   test({.num_bytes_per_iter = BLOCK_SIZE - 1});

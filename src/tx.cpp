@@ -5,10 +5,9 @@
 #include <vector>
 
 #include "block.h"
-#include "btable.h"
 #include "entry.h"
+#include "file.h"
 #include "idx.h"
-#include "layout.h"
 #include "params.h"
 #include "utils.h"
 
@@ -22,20 +21,20 @@ namespace ulayfs::dram {
 void TxMgr::do_write(const char* buf, size_t count, size_t offset) {
   // special case that we have everything aligned, no OCC
   if (count % BLOCK_SIZE == 0 && offset % BLOCK_SIZE == 0) {
-    AlignedTx tx(this, buf, count, offset);
+    AlignedTx tx(file, buf, count, offset);
     tx.do_write();
     return;
   }
 
   // another special case where range is within a single block
   if ((offset >> BLOCK_SHIFT) == ((offset + count - 1) >> BLOCK_SHIFT)) {
-    SingleBlockTx tx(this, buf, count, offset);
+    SingleBlockTx tx(file, buf, count, offset);
     tx.do_write();
     return;
   }
 
   // unaligned multi-block write
-  MultiBlockTx tx(this, buf, count, offset);
+  MultiBlockTx tx(file, buf, count, offset);
   tx.do_write();
 }
 
@@ -58,17 +57,17 @@ ssize_t TxMgr::do_read(char* buf, size_t count, size_t offset) {
 
   TxEntryIdx tail_tx_idx;
   pmem::TxBlock* tail_tx_block;
-  blk_table->get_tail_tx(tail_tx_idx, tail_tx_block);
+  file->blk_table.update(tail_tx_idx, tail_tx_block, /*do_alloc*/ false);
 
   // first handle the first block (which might not be full block)
-  curr_block = vidx_to_addr_ro(begin_vidx);
+  curr_block = file->vidx_to_addr_ro(begin_vidx);
   memcpy(buf, curr_block->data_ro() + first_block_local_offset,
          first_block_size);
   buf_offset = first_block_size;
 
   // then handle middle full blocks (which might not exist)
   for (curr_vidx = begin_vidx + 1; curr_vidx < end_vidx - 1; ++curr_vidx) {
-    curr_block = vidx_to_addr_ro(curr_vidx);
+    curr_block = file->vidx_to_addr_ro(curr_vidx);
     memcpy(buf + buf_offset, curr_block->data_ro(), BLOCK_SIZE);
     buf_offset += BLOCK_SIZE;
   }
@@ -76,7 +75,7 @@ ssize_t TxMgr::do_read(char* buf, size_t count, size_t offset) {
   // if we have multiple blocks to read
   if (begin_vidx != end_vidx - 1) {
     assert(curr_vidx == end_vidx - 1);
-    curr_block = vidx_to_addr_ro(curr_vidx);
+    curr_block = file->vidx_to_addr_ro(curr_vidx);
     memcpy(buf + buf_offset, curr_block->data_ro(), count - buf_offset);
   }
 
@@ -143,6 +142,10 @@ pmem::TxEntry TxMgr::try_commit(pmem::TxEntry entry, TxEntryIdx& tx_idx,
   assert(is_inline == (curr_block == nullptr));
 
   while (true) {
+    if (pmem::TxEntry::need_flush(curr_idx.local_idx)) {
+      flush_tx_entries(meta->get_tx_tail(), curr_idx, curr_block);
+      meta->set_tx_tail(curr_idx);
+    }
     pmem::TxEntry conflict_entry =
         is_inline ? meta->try_append(entry, curr_idx.local_idx)
                   : curr_block->try_append(entry, curr_idx.local_idx);
@@ -155,18 +158,6 @@ pmem::TxEntry TxMgr::try_commit(pmem::TxEntry entry, TxEntryIdx& tx_idx,
     bool success = advance_tx_idx(curr_idx, curr_block, /*do_alloc*/ true);
     assert(success);
   }
-}
-
-pmem::Block* TxMgr::vidx_to_addr_rw(VirtualBlockIdx vidx) const {
-  return tables_vidx_to_addr(this->mem_table, this->blk_table, vidx);
-}
-
-const pmem::Block* TxMgr::vidx_to_addr_ro(VirtualBlockIdx vidx) const {
-  static const char empty_block[BLOCK_SIZE]{};
-
-  LogicalBlockIdx lidx = this->blk_table->get(vidx);
-  if (lidx == 0) return reinterpret_cast<const pmem::Block*>(&empty_block);
-  return this->mem_table->get(lidx);
 }
 
 void TxMgr::find_tail(TxEntryIdx& tx_idx, pmem::TxBlock*& tx_block) const {
@@ -186,7 +177,7 @@ void TxMgr::find_tail(TxEntryIdx& tx_idx, pmem::TxBlock*& tx_block) const {
     curr_block = &mem_table->get(curr_idx.block_idx)->tx_block;
   }
 
-  if (!(next_block_idx = curr_block->get_next())) {
+  if (!(next_block_idx = curr_block->get_next_tx_block())) {
     curr_idx.local_idx = curr_block->find_tail(curr_idx.local_idx);
     if (curr_idx.local_idx < NUM_TX_ENTRY) goto done;
   }
@@ -195,12 +186,12 @@ retry:
   do {
     curr_idx.block_idx = next_block_idx;
     curr_block = &(mem_table->get(next_block_idx)->tx_block);
-  } while ((next_block_idx = curr_block->get_next()));
+  } while ((next_block_idx = curr_block->get_next_tx_block()));
 
   curr_idx.local_idx = curr_block->find_tail();
   if (curr_idx.local_idx < NUM_TX_ENTRY) goto done;
 
-  next_block_idx = alloc_next_block(meta);
+  next_block_idx = alloc_next_block(curr_block);
   goto retry;
 
 done:
@@ -222,20 +213,20 @@ bool TxMgr::handle_conflict(pmem::TxEntry curr_entry,
   VirtualBlockIdx overlap_first_vidx, overlap_last_vidx;
   uint32_t num_blocks;
   bool need_redo = false;
+  auto log_mgr = file->get_local_log_mgr();
 
   do {
-    // TODO: handle linked list
+    // TODO: implement the case where num_blocks is over 64 and there
+    //       are multiple begin_logical_idxs
+    // TODO: handle writev requests
     if (curr_entry.is_commit()) {
       le_begin_lidx = 0;
       num_blocks = curr_entry.commit_entry.num_blocks;
       if (num_blocks) {  // inline tx
         le_first_vidx = curr_entry.commit_entry.begin_virtual_idx;
       } else {  // dereference log_entry_idx
-        pmem::LogEntry log_entry =
-            get_log_entry_from_commit(curr_entry.commit_entry);
-        num_blocks = log_entry.num_blocks;
-        le_first_vidx = log_entry.begin_virtual_idx;
-        le_begin_lidx = log_entry.begin_logical_idx;
+        log_mgr->get_coverage(curr_entry.commit_entry.log_entry_idx,
+                              le_first_vidx, num_blocks);
       }
       le_last_vidx = le_first_vidx + num_blocks - 1;
       if (last_vidx < le_first_vidx || first_vidx > le_last_vidx) goto next;
@@ -245,9 +236,12 @@ bool TxMgr::handle_conflict(pmem::TxEntry curr_entry,
       overlap_last_vidx = le_last_vidx < last_vidx ? le_last_vidx : last_vidx;
 
       need_redo = true;
-      if (le_begin_lidx == 0)  // lazy dereference log idx
-        le_begin_lidx = get_log_entry_from_commit(curr_entry.commit_entry)
-                            .begin_logical_idx;
+      if (le_begin_lidx == 0) {  // lazy dereference log idx
+        std::vector<LogicalBlockIdx> le_begin_lidxs;
+        log_mgr->get_coverage(curr_entry.commit_entry.log_entry_idx,
+                              le_first_vidx, num_blocks, &le_begin_lidxs);
+        le_begin_lidx = le_begin_lidxs.front();
+      }
 
       if (is_range) {
         for (VirtualBlockIdx vidx = overlap_first_vidx;
@@ -280,13 +274,18 @@ bool TxMgr::handle_conflict(pmem::TxEntry curr_entry,
 template <class B>
 LogicalBlockIdx TxMgr::alloc_next_block(B* block) const {
   // allocate the next block
-  auto new_block_id = allocator->alloc(1);
-  bool success = block->set_next_tx_block(new_block_id);
+  LogicalBlockIdx new_block_idx = file->get_local_allocator()->alloc(1);
+  pmem::Block* new_block = mem_table->get(new_block_idx);
+  memset(&new_block->cache_lines[NUM_CL_PER_BLOCK - 1], 0, CACHELINE_SIZE);
+  new_block->tx_block.set_tx_seq(block->get_tx_seq() + 1);
+  pmem::persist_cl_unfenced(&new_block->cache_lines[NUM_CL_PER_BLOCK - 1]);
+  new_block->zero_init(0, NUM_CL_PER_BLOCK - 1);
+  bool success = block->set_next_tx_block(new_block_idx);
   if (success) {
-    return new_block_id;
+    return new_block_idx;
   } else {
     // there is a race condition for adding the new blocks
-    allocator->free(new_block_id, 1);
+    file->get_local_allocator()->free(new_block_idx, 1);
     return block->get_next_tx_block();
   }
 }
@@ -298,16 +297,36 @@ template LogicalBlockIdx TxMgr::alloc_next_block(pmem::TxBlock* block) const;
 std::ostream& operator<<(std::ostream& out, const TxMgr& tx_mgr) {
   out << "Transactions: \n";
 
+  auto log_mgr = tx_mgr.file->get_local_log_mgr();
+
   TxEntryIdx tx_idx = {0, 0};
   pmem::TxBlock* tx_block = nullptr;
 
   while (true) {
     auto tx_entry = tx_mgr.get_entry_from_block(tx_idx, tx_block);
     if (!tx_entry.is_valid()) break;
-    auto commit_entry = tx_entry.commit_entry;
-    out << "\t" << tx_idx << " -> " << commit_entry << "\n";
-    out << "\t\t" << commit_entry.log_entry_idx << " -> "
-        << tx_mgr.get_log_entry_from_commit(commit_entry) << "\n";
+
+    // print tx entry
+    out << "\t" << tx_idx << " -> " << tx_entry << "\n";
+
+    // print log head
+    auto head_entry_idx = tx_entry.commit_entry.log_entry_idx;
+    auto head_entry = log_mgr->get_head_entry(head_entry_idx);
+    out << "\t\t" << *head_entry << "\n";
+
+    // print log coverage
+    uint32_t num_blocks;
+    VirtualBlockIdx begin_virtual_idx;
+    std::vector<LogicalBlockIdx> begin_logical_idxs;
+    log_mgr->get_coverage(head_entry_idx, begin_virtual_idx, num_blocks,
+                          &begin_logical_idxs);
+    out << "\t\tLogCoverage{";
+    out << "n_blk=" << num_blocks << ", ";
+    out << "vidx=" << begin_virtual_idx << ", ";
+    out << "begin_lidxs=[";
+    for (const auto& idx : begin_logical_idxs) out << idx << ", ";
+    out << "]}\n";
+
     if (!tx_mgr.advance_tx_idx(tx_idx, tx_block, /*do_alloc*/ false)) break;
   }
 
@@ -318,8 +337,11 @@ std::ostream& operator<<(std::ostream& out, const TxMgr& tx_mgr) {
  * Tx
  */
 
-TxMgr::Tx::Tx(TxMgr* tx_mgr, const char* buf, size_t count, size_t offset)
-    : tx_mgr(tx_mgr),
+TxMgr::Tx::Tx(File* file, const char* buf, size_t count, size_t offset)
+    : file(file),
+      tx_mgr(&file->tx_mgr),
+      log_mgr(file->get_local_log_mgr()),
+      allocator(file->get_local_allocator()),
 
       // input properties
       buf(buf),
@@ -332,42 +354,39 @@ TxMgr::Tx::Tx(TxMgr* tx_mgr, const char* buf, size_t count, size_t offset)
       end_vidx(ALIGN_UP(end_offset, BLOCK_SIZE) >> BLOCK_SHIFT),
       num_blocks(end_vidx - begin_vidx),
 
-      dst_idx(tx_mgr->allocator->alloc(num_blocks)),
-      dst_blocks(tx_mgr->mem_table->get(dst_idx)),
-
-      log_idx([&] {  // IIFE for complex initialization
-        // for overwrite, "last_remaining" is zero;
-        // only in append we will care so
-        // TODO: handle linked list
-        pmem::LogEntry log_entry = {
-            pmem::LogOp::LOG_OVERWRITE,        // op
-            0,                                 // last_remaining
-            static_cast<uint8_t>(num_blocks),  // num_blocks
-            {},                                // next
-            begin_vidx,                        // begin_virtual_idx
-            dst_idx,                           // begin_logical_idx
-        };
-        // append log without fence because we only care flush completion before
-        // try_commit
-        return tx_mgr->log_mgr->append(log_entry, /* fenced */ false);
-        // it's fine that we append log first as long we don't publish it by tx
-      }()) {}
+      dst_idx(allocator->alloc(num_blocks)),
+      dst_blocks(tx_mgr->mem_table->get(dst_idx)) {
+  // TODO: implement the case where num_blocks is over 64 and there
+  //       are multiple begin_logical_idxs
+  // TODO: handle writev requests
+  // for overwrite, "leftover_bytes" is zero; only in append we care
+  // append log without fence because we only care flush completion
+  // before try_commit
+  this->log_idx = log_mgr->append(pmem::LogOp::LOG_OVERWRITE,  // op
+                                  0,                           // leftover_bytes
+                                  num_blocks,                  // total_blocks
+                                  begin_vidx,  // begin_virtual_idx
+                                  {dst_idx},   // begin_logical_idxs
+                                  false        // fenced
+  );
+  // it's fine that we append log first as long we don't publish it by tx
+}
 
 /*
  * AlignedTx
  */
 
-TxMgr::AlignedTx::AlignedTx(TxMgr* tx_mgr, const char* buf, size_t count,
+TxMgr::AlignedTx::AlignedTx(File* file, const char* buf, size_t count,
                             size_t offset)
-    : Tx(tx_mgr, buf, count, offset) {}
+    : Tx(file, buf, count, offset) {}
 
 void TxMgr::AlignedTx::do_write() {
   // since everything is block-aligned, we can copy data directly
-  memcpy(dst_blocks->data(), buf, count);
+  memcpy(dst_blocks->data_rw(), buf, count);
   persist_fenced(dst_blocks, count);
 
   // make a local copy of the tx tail
-  tx_mgr->blk_table->get_tail_tx(tail_tx_idx, tail_tx_block);
+  file->blk_table.update(tail_tx_idx, tail_tx_block, /*do_alloc*/ true);
   // commit the transaction, it's fine if the tx fails due to race condition
   pmem::TxCommitEntry entry(num_blocks, begin_vidx, log_idx);
   tx_mgr->try_commit(entry, tail_tx_idx, tail_tx_block, /*cont_if_fail*/ true);
@@ -377,8 +396,8 @@ void TxMgr::AlignedTx::do_write() {
  * CoWTx
  */
 
-TxMgr::CoWTx::CoWTx(TxMgr* tx_mgr, const char* buf, size_t count, size_t offset)
-    : Tx(tx_mgr, buf, count, offset),
+TxMgr::CoWTx::CoWTx(File* file, const char* buf, size_t count, size_t offset)
+    : Tx(file, buf, count, offset),
       entry(pmem::TxCommitEntry(num_blocks, begin_vidx, log_idx)),
       begin_full_vidx(ALIGN_UP(offset, BLOCK_SIZE) >> BLOCK_SHIFT),
       end_full_vidx(end_offset >> BLOCK_SHIFT),
@@ -392,9 +411,9 @@ TxMgr::CoWTx::CoWTx(TxMgr* tx_mgr, const char* buf, size_t count, size_t offset)
  * SingleBlockTx
  */
 
-TxMgr::SingleBlockTx::SingleBlockTx(TxMgr* tx_mgr, const char* buf,
-                                    size_t count, size_t offset)
-    : CoWTx(tx_mgr, buf, count, offset),
+TxMgr::SingleBlockTx::SingleBlockTx(File* file, const char* buf, size_t count,
+                                    size_t offset)
+    : CoWTx(file, buf, count, offset),
       local_offset(offset - begin_vidx * BLOCK_SIZE) {
   assert(num_blocks == 1);
   copy_last = false;
@@ -402,19 +421,19 @@ TxMgr::SingleBlockTx::SingleBlockTx(TxMgr* tx_mgr, const char* buf,
 
 void TxMgr::SingleBlockTx::do_write() {
   // must acquire the tx tail before any get
-  tx_mgr->blk_table->get_tail_tx(tail_tx_idx, tail_tx_block);
+  file->blk_table.update(tail_tx_idx, tail_tx_block, /*do_alloc*/ true);
 
   // src block is the block to be copied over
   // we only use first_* but not last_* because they are the same one
-  src_first_lidx = tx_mgr->blk_table->get(begin_vidx);
+  src_first_lidx = file->blk_table.get(begin_vidx);
 
 redo:
   // copy original data
   if (src_first_lidx)  // TODO: handle src_first_lidx == 0
-    memcpy(dst_blocks->data(),
+    memcpy(dst_blocks->data_rw(),
            tx_mgr->mem_table->get(src_first_lidx)->data_ro(), BLOCK_SIZE);
   // copy data from buf
-  memcpy(dst_blocks->data() + local_offset, buf, count);
+  memcpy(dst_blocks->data_rw() + local_offset, buf, count);
 
   // persist the data
   persist_fenced(dst_blocks, BLOCK_SIZE);
@@ -438,9 +457,9 @@ retry:
  * MultiBlockTx
  */
 
-TxMgr::MultiBlockTx::MultiBlockTx(TxMgr* tx_mgr, const char* buf, size_t count,
+TxMgr::MultiBlockTx::MultiBlockTx(File* file, const char* buf, size_t count,
                                   size_t offset)
-    : CoWTx(tx_mgr, buf, count, offset),
+    : CoWTx(file, buf, count, offset),
       first_block_local_offset(ALIGN_UP(offset, BLOCK_SIZE) - offset),
       last_block_local_offset(end_offset - ALIGN_DOWN(end_offset, BLOCK_SIZE)) {
 }
@@ -450,20 +469,20 @@ void TxMgr::MultiBlockTx::do_write() {
   if (num_full_blocks > 0) {
     pmem::Block* full_blocks = dst_blocks + (begin_full_vidx - begin_vidx);
     const size_t num_bytes = num_full_blocks << BLOCK_SHIFT;
-    memcpy(full_blocks->data(), buf + first_block_local_offset, num_bytes);
+    memcpy(full_blocks->data_rw(), buf + first_block_local_offset, num_bytes);
     persist_unfenced(full_blocks, num_bytes);
   }
 
   // only get a snapshot of the tail when starting critical piece
-  tx_mgr->blk_table->get_tail_tx(tail_tx_idx, tail_tx_block);
+  file->blk_table.update(tail_tx_idx, tail_tx_block, /*do_alloc*/ true);
 
   if (copy_first) {
     assert(begin_full_vidx - begin_vidx == 1);
-    src_first_lidx = tx_mgr->blk_table->get(begin_vidx);
+    src_first_lidx = file->blk_table.get(begin_vidx);
   }
   if (copy_last) {
     assert(end_vidx - end_full_vidx == 1);
-    src_last_lidx = tx_mgr->blk_table->get(end_full_vidx);
+    src_last_lidx = file->blk_table.get(end_full_vidx);
   }
 
 redo:
@@ -471,11 +490,11 @@ redo:
   if (copy_first) {
     // copy the data from the source block if exits
     if (src_first_lidx)  // TODO: handle src_first_lidx == 0
-      memcpy(dst_blocks->data(),
+      memcpy(dst_blocks->data_rw(),
              tx_mgr->mem_table->get(src_first_lidx)->data_ro(), BLOCK_SIZE);
 
     // write data from the buf to the first block
-    char* dst = dst_blocks->data() + BLOCK_SIZE - first_block_local_offset;
+    char* dst = dst_blocks->data_rw() + BLOCK_SIZE - first_block_local_offset;
     memcpy(dst, buf, first_block_local_offset);
 
     persist_unfenced(dst_blocks, BLOCK_SIZE);
@@ -487,12 +506,12 @@ redo:
 
     // copy the data from the source block if exits
     if (src_last_lidx)  // TODO: handle src_last_lidx == 0
-      memcpy(last_dst_block->data(),
+      memcpy(last_dst_block->data_rw(),
              tx_mgr->mem_table->get(src_last_lidx)->data_ro(), BLOCK_SIZE);
 
     // write data from the buf to the last block
     const char* src = buf + (count - last_block_local_offset);
-    memcpy(last_dst_block->data(), src, last_block_local_offset);
+    memcpy(last_dst_block->data_rw(), src, last_block_local_offset);
 
     persist_unfenced(last_dst_block, BLOCK_SIZE);
   }

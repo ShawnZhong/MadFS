@@ -1,9 +1,7 @@
 #pragma once
 
-#include <unordered_map>
-
-#include "file.h"
+#include "params.h"
 
 namespace ulayfs {
-extern dram::File* get_file(int fd);
+extern void print_file(int fd) __attribute__((weak));
 }  // namespace ulayfs

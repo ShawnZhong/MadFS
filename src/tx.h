@@ -8,23 +8,17 @@
 #include "block.h"
 #include "entry.h"
 #include "idx.h"
-#include "layout.h"
 #include "log.h"
 #include "mtable.h"
 #include "utils.h"
 
 namespace ulayfs::dram {
 
-// forward declaration
-class BlkTable;
-
 class TxMgr {
  private:
+  File* file;
   pmem::MetaBlock* meta;
-  Allocator* allocator;
   MemTable* mem_table;
-  LogMgr* log_mgr;
-  BlkTable* blk_table;
 
   class Tx;
   class AlignedTx;
@@ -33,22 +27,24 @@ class TxMgr {
   class MultiBlockTx;
 
  public:
-  TxMgr() = default;
-  TxMgr(pmem::MetaBlock* meta, Allocator* allocator, MemTable* mem_table,
-        LogMgr* log_mgr, BlkTable* blk_table)
-      : meta(meta),
-        allocator(allocator),
-        mem_table(mem_table),
-        log_mgr(log_mgr),
-        blk_table(blk_table) {}
+  TxMgr(File* file, pmem::MetaBlock* meta, MemTable* mem_table)
+      : file(file), meta(meta), mem_table(mem_table) {}
+
+  bool tx_idx_greater(TxEntryIdx lhs, TxEntryIdx rhs) {
+    if (lhs.block_idx == rhs.block_idx) return lhs.local_idx > rhs.local_idx;
+    if (lhs.block_idx == 0) return false;
+    if (rhs.block_idx == 0) return true;
+    return mem_table->get(lhs.block_idx)->tx_block.get_tx_seq() >
+           mem_table->get(rhs.block_idx)->tx_block.get_tx_seq();
+  }
 
   /**
-   * Same argurments as pwrite
+   * Same arguments as pwrite
    */
   void do_write(const char* buf, size_t count, size_t offset);
 
   /**
-   * Same argurments as pread
+   * Same arguments as pread
    */
   ssize_t do_read(char* buf, size_t count, size_t offset);
 
@@ -69,7 +65,7 @@ class TxMgr {
                                     pmem::TxBlock*& tx_block,
                                     bool do_alloc) const {
     assert(tx_idx.local_idx >= 0);
-    tx_idx.local_idx++;
+    __atomic_fetch_add(&tx_idx.local_idx, 1, __ATOMIC_ACQ_REL);
     return handle_idx_overflow(tx_idx, tx_block, do_alloc);
   }
 
@@ -106,12 +102,16 @@ class TxMgr {
   LogicalBlockIdx alloc_next_block(B* block) const;
 
   /**
-   * If the given idx is in an overflow state, update it if allowed. Return if
-   * it's in a non-overflow state now
+   * If the given idx is in an overflow state, update it if allowed.
+   *
+   * @param[in,out] tx_idx the transaction index to be handled, might be updated
+   * @param[in,out] tx_block the block corresponding to the tx, might be updated
+   * @param[in] do_alloc whether allocation is allowed
+   * @return whether if it's in a non-overflow state now
    */
   bool handle_idx_overflow(TxEntryIdx& tx_idx, pmem::TxBlock*& tx_block,
                            bool do_alloc) const {
-    const bool is_inline = tx_idx.block_idx == 0;
+    const bool is_inline = tx_idx.is_inline();
     uint16_t capacity = is_inline ? NUM_INLINE_TX_ENTRY : NUM_TX_ENTRY;
     if (unlikely(tx_idx.local_idx >= capacity)) {
       LogicalBlockIdx block_idx =
@@ -128,26 +128,50 @@ class TxMgr {
     return true;
   }
 
- private:
-  [[nodiscard]] pmem::LogEntry get_log_entry_from_commit(
-      pmem::TxCommitEntry commit_entry) const {
-    pmem::LogEntryBlock* log_block =
-        &mem_table->get(commit_entry.log_entry_idx.block_idx)->log_entry_block;
-    return log_block->get(commit_entry.log_entry_idx.local_idx);
+  /**
+   * Flush tx entries from tx_idx_begin to tx_idx_end
+   * A typical use pattern is use meta->tx_tail as begin and the latest tail as
+   * end. Thus, we usually don't know the block address that corresponds to
+   * tx_idx_begin, but we know the block address that corresponds to tx_idx_end
+   *
+   * @param tx_idx_begin which tx entry to begin
+   * @param tx_idx_end which tx entry to stop (non-inclusive)
+   * @param tx_block_end if tx_idx_end is known, could optionally provide to
+   * save one access to mem_table (this should be a common case)
+   */
+  void flush_tx_entries(TxEntryIdx tx_idx_begin, TxEntryIdx tx_idx_end,
+                        pmem::TxBlock* tx_block_end = nullptr) {
+    if (!tx_idx_greater(tx_idx_end, tx_idx_begin)) return;
+    pmem::TxBlock* tx_block_begin;
+    // handle special case of inline tx
+    if (tx_idx_begin.block_idx == 0) {
+      if (tx_idx_end.block_idx == 0) {
+        meta->flush_tx_entries(tx_idx_begin.local_idx, tx_idx_end.local_idx);
+        goto done;
+      }
+      meta->flush_tx_block(tx_idx_begin.local_idx);
+      // now the next block is the "new begin"
+      tx_idx_begin = {meta->get_next_tx_block(), 0};
+    }
+    while (tx_idx_begin.block_idx != tx_idx_end.block_idx) {
+      tx_block_begin = &mem_table->get(tx_idx_begin.block_idx)->tx_block;
+      tx_block_begin->flush_tx_block(tx_idx_begin.local_idx);
+      tx_idx_begin = {tx_block_begin->get_next_tx_block(), 0};
+      // special case: tx_idx_end is the first entry of the next block, which
+      // means we only need to flush the current block and no need to
+      // dereference to get the last block
+    }
+    if (tx_idx_begin.local_idx == tx_idx_end.local_idx) goto done;
+    if (!tx_block_end)
+      tx_block_end = &mem_table->get(tx_idx_end.block_idx)->tx_block;
+    tx_block_end->flush_tx_entries(tx_idx_begin.local_idx,
+                                   tx_idx_end.local_idx);
+
+  done:
+    _mm_sfence();
   }
 
-  /**
-   * Return a write-only pointer to the block given a virtual block index
-   * A nullptr is returned if the block is not allocated yet (e.g., a hole)
-   */
-  [[nodiscard]] pmem::Block* vidx_to_addr_rw(VirtualBlockIdx vidx) const;
-
-  /**
-   * Return a read-only pointer to the block given a virtual block index
-   * An empty block is returned if the block is not allocated yet (e.g., a hole)
-   */
-  [[nodiscard]] const pmem::Block* vidx_to_addr_ro(VirtualBlockIdx vidx) const;
-
+ private:
   /**
    * Move along the linked list of TxBlock and find the tail. The returned
    * tail may not be up-to-date due to race conditon. No new blocks will be
@@ -193,11 +217,14 @@ class TxMgr {
  */
 class TxMgr::Tx {
  public:
-  Tx(TxMgr* tx_mgr, const char* buf, size_t count, size_t offset);
+  Tx(File* file, const char* buf, size_t count, size_t offset);
 
  protected:
   // pointer to the outer class
+  File* file;
   TxMgr* tx_mgr;
+  LogMgr* log_mgr;
+  Allocator* allocator;
 
   /*
    * Input (read-only) properties
@@ -228,8 +255,9 @@ class TxMgr::Tx {
   // the pointer to the destination data block
   pmem::Block* const dst_blocks;
 
-  // the index of the current log entry
-  const LogEntryIdx log_idx;
+  // the index of the first LogHeadEntry, can be used to locate the whole
+  // group of log entries for this transaction
+  LogEntryIdx log_idx;
 
   /*
    * Mutable states
@@ -243,13 +271,13 @@ class TxMgr::Tx {
 
 class TxMgr::AlignedTx : public TxMgr::Tx {
  public:
-  AlignedTx(TxMgr* tx_mgr, const char* buf, size_t count, size_t offset);
+  AlignedTx(File* file, const char* buf, size_t count, size_t offset);
   void do_write();
 };
 
 class TxMgr::CoWTx : public TxMgr::Tx {
  protected:
-  CoWTx(TxMgr* tx_mgr, const char* buf, size_t count, size_t offset);
+  CoWTx(File* file, const char* buf, size_t count, size_t offset);
 
   // the tx entry to be committed
   const pmem::TxCommitEntry entry;
@@ -285,7 +313,7 @@ class TxMgr::CoWTx : public TxMgr::Tx {
 
 class TxMgr::SingleBlockTx : public TxMgr::CoWTx {
  public:
-  SingleBlockTx(TxMgr* tx_mgr, const char* buf, size_t count, size_t offset);
+  SingleBlockTx(File* file, const char* buf, size_t count, size_t offset);
   void do_write();
 
  private:
@@ -295,7 +323,7 @@ class TxMgr::SingleBlockTx : public TxMgr::CoWTx {
 
 class TxMgr::MultiBlockTx : public TxMgr::CoWTx {
  public:
-  MultiBlockTx(TxMgr* tx_mgr, const char* buf, size_t count, size_t offset);
+  MultiBlockTx(File* file, const char* buf, size_t count, size_t offset);
   void do_write();
 
  private:

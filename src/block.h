@@ -1,8 +1,16 @@
 #pragma once
 
+#include <pthread.h>
+
+#include <cassert>
+#include <cstring>
+
 #include "bitmap.h"
+#include "const.h"
 #include "entry.h"
-#include "layout.h"
+#include "idx.h"
+#include "params.h"
+#include "utils.h"
 
 namespace ulayfs::pmem {
 /**
@@ -66,9 +74,15 @@ class BitmapBlock : public BaseBlock {
 };
 
 class TxBlock : public BaseBlock {
-  LogicalBlockIdx prev;
-  LogicalBlockIdx next;
   TxEntry tx_entries[NUM_TX_ENTRY];
+  // next is placed after tx_entires so that it could be flushed with tx_entries
+  LogicalBlockIdx next;
+  // seq is used to construct total order between tx entries, so it must
+  // increase monotonically
+  // when compare two TxEntryIdx
+  // if within same block, compare local index
+  // if not, compare their block's seq number
+  uint32_t tx_seq;
 
  public:
   TxLocalIdx find_tail(TxLocalIdx hint = 0) {
@@ -84,10 +98,10 @@ class TxBlock : public BaseBlock {
     return tx_entries[idx];
   }
 
-  [[nodiscard]] LogicalBlockIdx get_next() { return next; }
-  [[nodiscard]] LogicalBlockIdx get_prev() { return prev; }
-
   [[nodiscard]] LogicalBlockIdx get_next_tx_block() const { return next; }
+
+  void set_tx_seq(uint32_t seq) { tx_seq = seq; }
+  [[nodiscard]] uint32_t get_tx_seq() const { return tx_seq; }
 
   /**
    * Set the next block index
@@ -96,9 +110,30 @@ class TxBlock : public BaseBlock {
   bool set_next_tx_block(LogicalBlockIdx block_idx) {
     LogicalBlockIdx expected = 0;
     bool success = __atomic_compare_exchange_n(
-        &next, &expected, block_idx, true, __ATOMIC_ACQ_REL, __ATOMIC_ACQUIRE);
-    if (success) persist_cl_fenced(&next);
+        &next, &expected, block_idx, false, __ATOMIC_ACQ_REL, __ATOMIC_ACQUIRE);
     return success;
+  }
+
+  /**
+   * flush the current block starting from `begin_idx` (including two pointers)
+   *
+   * @param begin_idx where to start flush
+   */
+  void flush_tx_block(TxLocalIdx begin_idx = 0) {
+    persist_unfenced(&tx_entries[begin_idx],
+                     sizeof(TxEntry) * (NUM_TX_ENTRY - begin_idx) +
+                         2 * sizeof(LogicalBlockIdx));
+  }
+
+  /**
+   * flush a range of tx entries
+   *
+   * @param begin_idx
+   */
+  void flush_tx_entries(TxLocalIdx begin_idx, TxLocalIdx end_idx) {
+    assert(end_idx > begin_idx);
+    persist_unfenced(&tx_entries[begin_idx],
+                     sizeof(TxEntry) * (end_idx - begin_idx));
   }
 };
 
@@ -107,20 +142,18 @@ class LogEntryBlock : public BaseBlock {
   LogEntry log_entries[NUM_LOG_ENTRY];
 
  public:
-  [[nodiscard]] const LogEntry& get(LogLocalIdx idx) {
+  [[nodiscard]] LogEntry* get(LogLocalUnpackIdx idx) {
     assert(idx >= 0 && idx < NUM_LOG_ENTRY);
-    return log_entries[idx];
+    return &log_entries[idx];
   }
 
-  // TODO: linked list
-  void set(LogLocalIdx idx, pmem::LogEntry entry, bool fenced = true,
-           bool flushed = true) {
-    log_entries[idx] = entry;
-    if (!flushed) return;
+  void persist(LogLocalUnpackIdx start_idx, LogLocalUnpackIdx end_idx,
+               bool fenced = true) {
+    size_t len = (end_idx - start_idx) * sizeof(LogEntry);
     if (fenced)
-      persist_cl_fenced(&log_entries[idx]);
+      persist_fenced(&log_entries[start_idx], len);
     else
-      persist_cl_unfenced(&log_entries[idx]);
+      persist_unfenced(&log_entries[start_idx], len);
   }
 };
 
@@ -144,6 +177,7 @@ class MetaBlock : public BaseBlock {
       LogicalBlockIdx next_tx_block;
 
       // hint to find tx log tail; not necessarily up-to-date
+      // all tx entries before it must be flushed
       TxEntryIdx tx_tail;
     };
 
@@ -151,13 +185,12 @@ class MetaBlock : public BaseBlock {
     char cl1[CACHELINE_SIZE];
   };
 
-  // set futex to another cacheline to avoid futex's contention affect
-  // reading the metadata above
+  // move mutex to another cache line to avoid contention on reading the
+  // metadata above
   union {
     struct {
-      // address for futex to lock, 4 bytes in size
-      // this lock is ONLY used for ftruncate
-      Futex meta_lock;
+      // this lock is ONLY used for bitmap rebuild
+      pthread_mutex_t mutex;
 
       // file size in bytes (logical size to users)
       // modifications to this usually requires meta_lock being held
@@ -188,13 +221,21 @@ class MetaBlock : public BaseBlock {
  public:
   /**
    * only called if a new file is created
-   * We can assume that all other fields are zero-initialized upon ftruncate
+   * We can assume that all other fields are zero-initialized upon fallocate
    */
   void init() {
     // the first block is always used (by MetaBlock itself)
-    meta_lock.init();
-    memcpy(signature, FILE_SIGNATURE, SIGNATURE_SIZE);
 
+    VALGRIND_PMC_REMOVE_PMEM_MAPPING(&mutex, sizeof(mutex));
+
+    // initialize the mutex
+    pthread_mutexattr_t attr;
+    pthread_mutexattr_init(&attr);
+    pthread_mutexattr_setrobust(&attr, PTHREAD_MUTEX_ROBUST);
+    pthread_mutex_init(&mutex, &attr);
+
+    // initialize the signature
+    memcpy(signature, FILE_SIGNATURE, SIGNATURE_SIZE);
     persist_cl_fenced(&cl1);
   }
 
@@ -204,41 +245,95 @@ class MetaBlock : public BaseBlock {
   }
 
   // acquire/release meta lock (usually only during allocation)
-  // we don't need to call persistence since futex is robust to crash
-  void lock() { meta_lock.acquire(); }
-  void unlock() { meta_lock.release(); }
+  // we don't need to call persistence since mutex is robust to crash
+  void lock() {
+    int rc = pthread_mutex_lock(&mutex);
+    if (rc == EOWNERDEAD) {
+      WARN("Mutex owner died");
+      rc = pthread_mutex_consistent(&mutex);
+      PANIC_IF(rc != 0, "pthread_mutex_consistent failed");
+    }
+  }
+  void unlock() {
+    int rc = pthread_mutex_unlock(&mutex);
+    PANIC_IF(rc != 0, "Mutex unlock failed");
+  }
 
   /*
    * Getters and setters
    */
 
-  size_t get_file_size() { return file_size; }
+  [[nodiscard]] size_t get_file_size() const { return file_size; }
 
   // called by other public functions with lock held
-  void set_num_blocks_no_lock(uint32_t num_blocks) {
-    this->num_blocks = num_blocks;
-    persist_cl_fenced(&cl1);
+  void set_num_blocks_if_larger(uint32_t new_num_blocks) {
+    uint32_t old_num_blocks =
+        __atomic_load_n(&this->num_blocks, __ATOMIC_ACQUIRE);
+  retry:
+    if (unlikely(old_num_blocks >= new_num_blocks)) return;
+    if (__atomic_compare_exchange_n(&this->num_blocks, &old_num_blocks,
+                                    new_num_blocks, false, __ATOMIC_ACQ_REL,
+                                    __ATOMIC_ACQUIRE))
+      goto retry;
+    // if num_blocks is out-of-date, it's fine...
+    // in the worst case, we just do unnecessary fallocate...
+    // so we don't wait for it to persist
+    persist_cl_unfenced(&cl2);
   }
+
+  [[nodiscard]] uint32_t get_tx_seq() const { return 0; }
 
   /**
    * Set the next tx block index
+   * No flush+fence but leave it to flush_tx_block
    * @return true on success, false if there is a race condition
    */
   bool set_next_tx_block(LogicalBlockIdx block_idx) {
     LogicalBlockIdx expected = 0;
     bool success =
-        __atomic_compare_exchange_n(&next_tx_block, &expected, block_idx, true,
+        __atomic_compare_exchange_n(&next_tx_block, &expected, block_idx, false,
                                     __ATOMIC_ACQ_REL, __ATOMIC_ACQUIRE);
-    if (success) persist_cl_fenced(&next_tx_block);
     return success;
   }
 
-  void set_tx_tail(TxEntryIdx tx_tail) {
+  /**
+   * Set the tx tail
+   * tx_tail is mostly just a hint, so it's fine to be not up-to-date; thus by
+   * default, we don't do concurrency control and no fence by default
+   *
+   * @param tx_tail tail value to set
+   * @param fenced whether use fence
+   */
+  void set_tx_tail(TxEntryIdx tx_tail, bool fenced = false) {
     this->tx_tail = tx_tail;
-    persist_cl_fenced(&cl1);
+    persist_cl(&cl1, fenced);
   }
 
-  [[nodiscard]] uint32_t get_num_blocks() const { return num_blocks; }
+  /**
+   * similar to the one in TxBlock:
+   * flush the current block starting from `begin_idx` (including two pointers)
+   *
+   * @param begin_idx where to start flush
+   */
+  void flush_tx_block(TxLocalIdx begin_idx = 0) {
+    persist_unfenced(&inline_tx_entries[begin_idx],
+                     sizeof(TxEntry) * (NUM_INLINE_TX_ENTRY - begin_idx));
+    persist_cl_unfenced(cl1);
+  }
+
+  /**
+   * flush a range of tx entries
+   *
+   * @param begin_idx
+   */
+  void flush_tx_entries(TxLocalIdx begin_idx, TxLocalIdx end_idx) {
+    persist_unfenced(&inline_tx_entries[begin_idx],
+                     sizeof(TxEntry) * (end_idx - begin_idx));
+  }
+
+  [[nodiscard]] uint32_t get_num_blocks() const {
+    return __atomic_load_n(&this->num_blocks, __ATOMIC_ACQUIRE);
+  }
   [[nodiscard]] LogicalBlockIdx get_next_tx_block() const {
     return next_tx_block;
   }
@@ -246,7 +341,7 @@ class MetaBlock : public BaseBlock {
 
   [[nodiscard]] TxEntry get_tx_entry(TxLocalIdx idx) const {
     assert(idx >= 0 && idx < NUM_INLINE_TX_ENTRY);
-    return inline_tx_entries[idx];
+    return __atomic_load_n(&inline_tx_entries[idx].raw_bits, __ATOMIC_ACQUIRE);
   }
 
   /*
@@ -293,8 +388,40 @@ union Block {
   LogEntryBlock log_entry_block;
   DataBlock data_block;
 
-  char* data() { return data_block.data; }
-  const char* data_ro() const { return data_block.data; }
+  // view a block as an array of cache line
+  char cache_lines[NUM_CL_PER_BLOCK][CACHELINE_SIZE];
+
+  [[nodiscard]] char* data_rw() { return data_block.data; }
+  [[nodiscard]] const char* data_ro() const { return data_block.data; }
+
+  /**
+   * zero-out a cache line
+   * @param cl_idx which cache line to zero out
+   * @return whether memset happened
+   */
+  bool zero_init_cl(uint16_t cl_idx) {
+    constexpr static const char zero_cl[CACHELINE_SIZE]{};
+    if (memcmp(&cache_lines[cl_idx], zero_cl, CACHELINE_SIZE) == 0)
+      return false;
+    memset(&cache_lines[cl_idx], 0, CACHELINE_SIZE);
+    persist_cl_unfenced(&cache_lines[cl_idx]);
+    return true;
+  }
+
+  /**
+   * zero-initialize a block within a given cache-line range
+   * @param cl_idx_begin the beginning cache-line index
+   * @param cl_idx_end the ending cache-line index
+   * @return whether memset happened
+   */
+  bool zero_init(uint16_t cl_idx_begin = 0,
+                 uint16_t cl_idx_end = NUM_CL_PER_BLOCK) {
+    bool do_memset = false;
+    for (uint16_t cl_idx = cl_idx_begin; cl_idx < cl_idx_end; ++cl_idx)
+      do_memset |= zero_init_cl(cl_idx);
+    if (do_memset) _mm_sfence();
+    return do_memset;
+  }
 };
 
 static_assert(sizeof(MetaBlock) == BLOCK_SIZE,

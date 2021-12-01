@@ -2,60 +2,26 @@
 
 namespace ulayfs::dram {
 
-File::File(const char* pathname, int flags, mode_t mode)
-    : open_flags(flags), valid(false) {
-  if ((flags & O_ACCMODE) == O_WRONLY) {
-    INFO("File \"%s\" opened with O_WRONLY. Changed to O_RDWR.", pathname);
-    flags &= ~O_WRONLY;
-    flags |= O_RDWR;
-  }
+thread_local std::unordered_map<int, Allocator> File::allocators;
+thread_local std::unordered_map<int, LogMgr> File::log_mgrs;
 
-  fd = posix::open(pathname, flags, mode);
-  if (fd < 0) return;  // fail to open the file
-
-  // TODO: support read-only files
-  if ((flags & O_ACCMODE) == O_RDONLY) {
-    WARN("File \"%s\" opened with O_RDONLY. Fallback to syscall.", pathname);
-    return;
-  }
-
-  struct stat stat_buf;  // NOLINT(cppcoreguidelines-pro-type-member-init)
-  int ret = posix::fstat(fd, &stat_buf);
-  PANIC_IF(ret, "fstat failed");
-
-  // we don't handle non-normal file (e.g., socket, directory, block dev)
-  if (!S_ISREG(stat_buf.st_mode) && !S_ISLNK(stat_buf.st_mode)) {
-    WARN("Unable to handle non-normal file \"%s\"", pathname);
-    return;
-  }
-
-  if (!IS_ALIGNED(stat_buf.st_size, BLOCK_SIZE)) {
-    WARN("File size not aligned for \"%s\". Fall back to syscall", pathname);
-    return;
-  }
-
-  // open shared memory that contains bitmap
-  pmem::Bitmap* bitmap = open_shm(&stat_buf);
+File::File(int fd, struct stat stat_buf)
+    : fd(fd),
+      bitmap(open_shm(&stat_buf)),
+      mem_table(fd, stat_buf.st_size),
+      meta(mem_table.get_meta()),
+      tx_mgr(this, meta, &mem_table),
+      blk_table(this, &tx_mgr),
+      file_offset(0) {
   if (bitmap == nullptr) {
-    WARN("Failed to open shared memory. Fall back to syscall");
-    return;
+    PANIC("Failed to open shared memory. Fall back to syscall");
   }
-
-  // TODO: initialize bitmap if shm_exist == 0
-  mem_table = MemTable(fd, stat_buf.st_size);
-  meta = mem_table.get_meta();
-  allocator = Allocator(fd, meta, &mem_table, bitmap);
-  log_mgr = LogMgr(meta, &allocator, &mem_table);
-  tx_mgr = TxMgr(meta, &allocator, &mem_table, &log_mgr, &blk_table);
-  blk_table = BlkTable(meta, &mem_table, &log_mgr, &tx_mgr);
-  blk_table.update();
-
   if (stat_buf.st_size == 0) meta->init();
-
-  valid = true;
 }
 
-File::~File() { mem_table.unmap(); }
+/*
+ * POSIX I/O operations
+ */
 
 pmem::Bitmap* File::open_shm(const struct stat* stat) {
   // TODO: enable dynamically grow bitmap
@@ -84,9 +50,6 @@ pmem::Bitmap* File::open_shm(const struct stat* stat) {
 
 ssize_t File::pwrite(const void* buf, size_t count, size_t offset) {
   if (count == 0) return 0;
-  // we allow (and only allow) allocation here since the index of the next tx
-  // entry needs to be valid so that we have a slot to start from
-  blk_table.update(/*do_alloc*/ true);
   tx_mgr.do_write(static_cast<const char*>(buf), count, offset);
   // TODO: handle write fails i.e. return value != count
   return static_cast<ssize_t>(count);
@@ -94,7 +57,6 @@ ssize_t File::pwrite(const void* buf, size_t count, size_t offset) {
 
 ssize_t File::pread(void* buf, size_t count, off_t offset) {
   if (count == 0) return 0;
-  blk_table.update();
   return tx_mgr.do_read(static_cast<char*>(buf), count, offset);
 }
 
@@ -114,7 +76,7 @@ off_t File::lseek(off_t offset, int whence) {
         new_off = old_off + offset;
         if (new_off < 0) return -1;
       } while (!__atomic_compare_exchange_n(&file_offset, &old_off, new_off,
-                                            true, __ATOMIC_ACQ_REL,
+                                            false, __ATOMIC_ACQ_REL,
                                             __ATOMIC_RELAXED));
       return file_offset;
     }
@@ -147,10 +109,69 @@ ssize_t File::read(void* buf, size_t count) {
   do {
     // TODO: place file_offset to EOF when entire file is read
     new_off = old_off + static_cast<off_t>(count);
-  } while (!__atomic_compare_exchange_n(&file_offset, &old_off, new_off, true,
+  } while (!__atomic_compare_exchange_n(&file_offset, &old_off, new_off, false,
                                         __ATOMIC_ACQ_REL, __ATOMIC_RELAXED));
 
   return pread(buf, count, old_off);
+}
+
+int File::fsync() {
+  TxEntryIdx tail_tx_idx;
+  pmem::TxBlock* tail_tx_block;
+  blk_table.update(tail_tx_idx, tail_tx_block, /*do_alloc*/ false);
+  tx_mgr.flush_tx_entries(meta->get_tx_tail(), tail_tx_idx, tail_tx_block);
+  // we keep an invariant that tx_tail must be a valid (non-overflow) idx
+  // an overflow index implies that the `next` pointer of the block is not set
+  // (and thus not flushed) yet, so we cannot assume it is equivalent to the
+  // first index of the next block
+  // here we use the last index of the block to enforce reflush later
+  uint16_t capacity =
+      tail_tx_idx.block_idx == 0 ? NUM_INLINE_TX_ENTRY : NUM_TX_ENTRY;
+  if (unlikely(tail_tx_idx.local_idx >= capacity))
+    tail_tx_idx.local_idx = capacity - 1;
+  meta->set_tx_tail(tail_tx_idx);
+  return 0;
+}
+
+/*
+ * Getters for thread-local data structures
+ */
+
+Allocator* File::get_local_allocator() {
+  if (auto it = allocators.find(fd); it != allocators.end()) {
+    return &it->second;
+  }
+
+  auto [it, ok] =
+      allocators.emplace(fd, Allocator(fd, meta, &mem_table, bitmap));
+  PANIC_IF(!ok, "insert to thread-local allocators failed");
+  return &it->second;
+}
+
+LogMgr* File::get_local_log_mgr() {
+  if (auto it = log_mgrs.find(fd); it != log_mgrs.end()) {
+    return &it->second;
+  }
+
+  auto [it, ok] = log_mgrs.emplace(fd, LogMgr(this, meta, &mem_table));
+  PANIC_IF(!ok, "insert to thread-local log_mgrs failed");
+  return &it->second;
+}
+
+/*
+ * Helper functions
+ */
+
+const pmem::Block* File::vidx_to_addr_ro(VirtualBlockIdx vidx) {
+  static const char empty_block[BLOCK_SIZE]{};
+
+  LogicalBlockIdx lidx = blk_table.get(vidx);
+  if (lidx == 0) return reinterpret_cast<const pmem::Block*>(&empty_block);
+  return mem_table.get(lidx);
+}
+
+pmem::Block* File::vidx_to_addr_rw(VirtualBlockIdx vidx) {
+  return mem_table.get(blk_table.get(vidx));
 }
 
 std::ostream& operator<<(std::ostream& out, const File& f) {

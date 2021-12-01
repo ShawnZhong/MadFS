@@ -1,21 +1,25 @@
 #include "lib.h"
 
+#include <tbb/concurrent_unordered_map.h>
+
 #include <cstdarg>
 #include <cstdio>
+#include <unordered_map>
 
 #include "config.h"
-#include "layout.h"
+#include "file.h"
 #include "posix.h"
 
 namespace ulayfs {
 
 // mapping between fd and in-memory file handle
-std::unordered_map<int, dram::File*> files;
+// shared across threads within the same process
+tbb::concurrent_unordered_map<int, std::shared_ptr<dram::File>> files;
 
-dram::File* get_file(int fd) {
+std::shared_ptr<dram::File> get_file(int fd) {
   auto it = files.find(fd);
   if (it != files.end()) return it->second;
-  return nullptr;
+  return {};
 }
 
 extern "C" {
@@ -29,22 +33,58 @@ int open(const char* pathname, int flags, ...) {
     va_end(arg);
   }
 
-  auto file = new dram::File(pathname, flags, mode);
-  auto fd = file->get_fd();
-  if (file->is_valid()) {
-    INFO("ulayfs::open(%s, %x, %x) = %d", pathname, flags, mode, fd);
-    files[fd] = file;
-  } else {
+  // TODO: support read-only files
+  if ((flags & O_ACCMODE) == O_RDONLY) {
+    WARN("File \"%s\" opened with O_RDONLY. Fallback to syscall.", pathname);
+    int fd = posix::open(pathname, flags, mode);
     DEBUG("posix::open(%s, %x, %x) = %d", pathname, flags, mode, fd);
-    delete file;
+    return fd;
   }
 
+  if ((flags & O_ACCMODE) == O_WRONLY) {
+    INFO("File \"%s\" opened with O_WRONLY. Changed to O_RDWR.", pathname);
+    flags &= ~O_WRONLY;
+    flags |= O_RDWR;
+  }
+
+  int fd = posix::open(pathname, flags, mode);
+
+  if (unlikely(fd < 0)) {
+    WARN("File \"%s\" posix::open failed: %m", pathname);
+    DEBUG("posix::open(%s, %x, %x) = %d", pathname, flags, mode, fd);
+    return fd;
+  }
+
+  struct stat stat_buf;  // NOLINT(cppcoreguidelines-pro-type-member-init)
+  int rc = posix::fstat(fd, &stat_buf);
+  if (unlikely(rc < 0)) {
+    WARN("File \"%s\" fstat fialed: %m. Fallback to syscall.", pathname);
+    DEBUG("posix::open(%s, %x, %x) = %d", pathname, flags, mode, fd);
+    return fd;
+  }
+
+  // we don't handle non-normal file (e.g., socket, directory, block dev)
+  if (unlikely(!S_ISREG(stat_buf.st_mode) && !S_ISLNK(stat_buf.st_mode))) {
+    WARN("Non-normal file \"%s\". Fallback to syscall.", pathname);
+    DEBUG("posix::open(%s, %x, %x) = %d", pathname, flags, mode, fd);
+    return fd;
+  }
+
+  if (!IS_ALIGNED(stat_buf.st_size, BLOCK_SIZE)) {
+    WARN("File size not aligned for \"%s\". Fallback to syscall", pathname);
+    DEBUG("posix::open(%s, %x, %x) = %d", pathname, flags, mode, fd);
+    return fd;
+  }
+
+  files.emplace(fd, std::make_shared<dram::File>(fd, stat_buf));
+  INFO("ulayfs::open(%s, %x, %x) = %d", pathname, flags, mode, fd);
   return fd;
 }
 
 int close(int fd) {
-  if (files.erase(fd) == 1) {
+  if (auto file = get_file(fd)) {
     INFO("ulayfs::close(%d)", fd);
+    files.unsafe_erase(fd);
     return 0;
   } else {
     DEBUG("posix::close(%d)", fd);
@@ -102,6 +142,16 @@ ssize_t pread(int fd, void* buf, size_t count, off_t offset) {
   }
 }
 
+int fsync(int fd) {
+  if (auto file = get_file(fd)) {
+    INFO("ulayfs::fsync(%d)", fd);
+    return file->fsync();
+  } else {
+    DEBUG("posix::fsync(%d)", fd);
+    return posix::fsync(fd);
+  }
+}
+
 int fstat(int fd, struct stat* buf) {
   if (auto file = get_file(fd)) {
     INFO("ulayfs::fstat(%d)", fd);
@@ -132,6 +182,14 @@ void __attribute__((constructor)) ulayfs_ctor() {
 /**
  * Called when the shared library is unloaded
  */
-void __attribute__((destructor)) ulayfs_dtor() {}
+void __attribute__((destructor)) ulayfs_dtor() { INFO("ulayfs_dtor called"); }
 }  // extern "C"
+
+void print_file(int fd) {
+  if (auto file = get_file(fd)) {
+    std::cerr << *file << "\n";
+  } else {
+    std::cerr << "fd " << fd << " is not a uLayFS file. \n";
+  }
+}
 }  // namespace ulayfs
