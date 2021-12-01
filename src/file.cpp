@@ -5,44 +5,20 @@ namespace ulayfs::dram {
 thread_local std::unordered_map<int, Allocator> File::allocators;
 thread_local std::unordered_map<int, LogMgr> File::log_mgrs;
 
-File::File(int fd, struct stat stat_buf)
+File::File(int fd, off_t init_file_size, pmem::Bitmap* bitmap)
     : fd(fd),
-      bitmap(open_shm(&stat_buf)),
-      mem_table(fd, stat_buf.st_size),
+      bitmap(bitmap),
+      mem_table(fd, init_file_size),
       meta(mem_table.get_meta()),
       tx_mgr(this, meta, &mem_table),
       blk_table(this, &tx_mgr),
       file_offset(0) {
-  if (bitmap == nullptr) {
-    PANIC("Failed to open shared memory. Fall back to syscall");
-  }
-  if (stat_buf.st_size == 0) meta->init();
+  if (init_file_size == 0) meta->init();
 }
 
 /*
  * POSIX I/O operations
  */
-
-pmem::Bitmap* File::open_shm(const struct stat* stat) {
-  // TODO: enable dynamically grow bitmap
-  size_t shm_size = 8 * BLOCK_SIZE;
-  std::stringstream shm_name;
-  shm_name << "/ulayfs_" << stat->st_ino << stat->st_ctim.tv_sec
-           << stat->st_ctim.tv_nsec;
-  shm_fd = shm_open(const_cast<char*>(shm_name.str().c_str()), O_RDWR | O_CREAT, 00600);
-
-  // If the shared memory corresponding to this file is not present, create it
-  if (shm_fd < 0) return nullptr;
-  if (fchmod(shm_fd, stat->st_mode)) return nullptr;
-  if (fchown(shm_fd, stat->st_uid, stat->st_gid)) return nullptr;
-  if (ftruncate(shm_fd, shm_size)) return nullptr;
-
-
-  void* shm = posix::mmap(nullptr, shm_size, PROT_READ | PROT_WRITE,
-                          MAP_SHARED_VALIDATE | MAP_SYNC, shm_fd, 0);
-  if (shm == MAP_FAILED) return nullptr;
-  return static_cast<pmem::Bitmap*>(shm);
-}
 
 ssize_t File::pwrite(const void* buf, size_t count, size_t offset) {
   if (count == 0) return 0;

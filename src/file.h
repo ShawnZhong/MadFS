@@ -1,8 +1,6 @@
 #pragma once
 
 #include <iostream>
-#include <mutex>
-#include <sstream>
 #include <stdexcept>
 
 #include "alloc.h"
@@ -42,7 +40,7 @@ class File {
   friend class BlkTable;
 
  public:
-  File(int fd, struct stat stat_buf);
+  File(int fd, off_t init_file_size, pmem::Bitmap* bitmap);
 
   /*
    * POSIX I/O operations
@@ -72,16 +70,6 @@ class File {
    * An empty block is returned if the block is not allocated yet (e.g., a hole)
    */
   [[nodiscard]] const pmem::Block* vidx_to_addr_ro(VirtualBlockIdx vidx);
-
-  /**
-   * Open the shared memory object corresponding to this file. The leading bit
-   * of the bitmap (corresponding to metablock) indicates if the bitmap needs to
-   * be initialized.
-   *
-   * @return Return a pointer to the mmapped bitmap object, or nullptr on
-   * failure.
-   */
-  pmem::Bitmap* open_shm(const struct stat* stat);
 
  public:
   friend std::ostream& operator<<(std::ostream& out, const File& f);
