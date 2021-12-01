@@ -71,7 +71,6 @@ class File {
    */
   [[nodiscard]] const pmem::Block* vidx_to_addr_ro(VirtualBlockIdx vidx);
 
- public:
   friend std::ostream& operator<<(std::ostream& out, const File& f);
 };
 

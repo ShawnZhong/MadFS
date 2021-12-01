@@ -23,6 +23,65 @@ std::shared_ptr<dram::File> get_file(int fd) {
   return {};
 }
 
+/**
+ * Open the shared memory object corresponding to this file. The leading bit
+ * of the bitmap (corresponding to metablock) indicates if the bitmap needs to
+ * be initialized.
+ *
+ * @return Return a pointer to the mmapped bitmap object, or nullptr on
+ * failure.
+ */
+pmem::Bitmap* open_shm(const char* pathname, const struct stat* stat) {
+  // TODO: enable dynamically grow bitmap
+  size_t shm_size = 8 * BLOCK_SIZE;
+  std::stringstream shm_name_stream;
+  shm_name_stream << "/dev/shm/ulayfs_" << stat->st_ino << stat->st_ctim.tv_sec
+                  << stat->st_ctim.tv_nsec;
+  // use posix::open instead of shm_open since shm_open calls open, which is
+  // overloaded by ulayfs
+  int shm_fd = posix::open(shm_name_stream.str().c_str(),
+                           O_RDWR | O_CREAT | O_NOFOLLOW | O_CLOEXEC, 00600);
+  if (unlikely(shm_fd < 0)) {
+    WARN("File \"%s\" failed to open bitmap shared memory object: %m",
+         pathname);
+    return nullptr;
+  }
+
+  struct stat shm_stat_buf;
+  int shm_rc = posix::fstat(shm_fd, &shm_stat_buf);
+  if (unlikely(shm_rc < 0)) {
+    WARN("File \"%s\" fstat on shared memory fialed: %m", pathname);
+    return nullptr;
+  }
+
+  // if shm is newly created, set ownership and permissions and allocate blocks
+  // to it.
+  if (shm_stat_buf.st_size == 0) {
+    if (fchmod(shm_fd, stat->st_mode)) {
+      WARN("File \"%s\" fchmod on shared memory fialed: %m", pathname);
+      return nullptr;
+    }
+    if (fchown(shm_fd, stat->st_uid, stat->st_gid)) {
+      WARN("File \"%s\" fchown on shared memory fialed: %m", pathname);
+      return nullptr;
+    }
+    if (ftruncate(shm_fd, shm_size)) {
+      WARN("File \"%s\" ftruncate on shared memory fialed: %m", pathname);
+      return nullptr;
+    }
+  }
+
+  // mmap bitmap
+  void* shm = posix::mmap(nullptr, shm_size, PROT_READ | PROT_WRITE, MAP_SHARED,
+                          shm_fd, 0);
+  if (shm == MAP_FAILED) {
+    WARN("File \"%s\" mmap bitmap fialed: %m", pathname);
+    return nullptr;
+  }
+
+  return static_cast<pmem::Bitmap*>(shm);
+}
+
 extern "C" {
 
 int open(const char* pathname, int flags, ...) {
@@ -197,56 +256,4 @@ void print_file(int fd) {
     std::cerr << "fd " << fd << " is not a uLayFS file. \n";
   }
 }
-
-pmem::Bitmap* open_shm(const char* pathname, const struct stat* stat) {
-  // TODO: enable dynamically grow bitmap
-  size_t shm_size = 8 * BLOCK_SIZE;
-  std::stringstream shm_name_stream;
-  shm_name_stream << "/dev/shm/ulayfs_" << stat->st_ino << stat->st_ctim.tv_sec
-                  << stat->st_ctim.tv_nsec;
-  // use posix::open instead of shm_open since shm_open calls open, which is
-  // overloaded by ulayfs
-  int shm_fd = posix::open(shm_name_stream.str().c_str(),
-                           O_RDWR | O_CREAT | O_NOFOLLOW | O_CLOEXEC, 00600);
-  if (unlikely(shm_fd < 0)) {
-    WARN("File \"%s\" failed to open bitmap shared memory object: %m",
-         pathname);
-    return nullptr;
-  }
-
-  struct stat shm_stat_buf;
-  int shm_rc = posix::fstat(shm_fd, &shm_stat_buf);
-  if (unlikely(shm_rc < 0)) {
-    WARN("File \"%s\" fstat on shared memory fialed: %m", pathname);
-    return nullptr;
-  }
-
-  // if shm is newly created, set ownership and permissions and allocate blocks
-  // to it.
-  if (shm_stat_buf.st_size == 0) {
-    if (fchmod(shm_fd, stat->st_mode)) {
-      WARN("File \"%s\" fchmod on shared memory fialed: %m", pathname);
-      return nullptr;
-    }
-    if (fchown(shm_fd, stat->st_uid, stat->st_gid)) {
-      WARN("File \"%s\" fchown on shared memory fialed: %m", pathname);
-      return nullptr;
-    }
-    if (ftruncate(shm_fd, shm_size)) {
-      WARN("File \"%s\" ftruncate on shared memory fialed: %m", pathname);
-      return nullptr;
-    }
-  }
-
-  // mmap bitmap
-  void* shm = posix::mmap(nullptr, shm_size, PROT_READ | PROT_WRITE, MAP_SHARED,
-                          shm_fd, 0);
-  if (shm == MAP_FAILED) {
-    WARN("File \"%s\" mmap bitmap fialed: %m", pathname);
-    return nullptr;
-  }
-
-  return static_cast<pmem::Bitmap*>(shm);
-}
-
 }  // namespace ulayfs
