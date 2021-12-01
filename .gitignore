@@ -31,8 +31,11 @@
 *.out
 *.app
 
+*.pyc
+
 .DS_Store
 /*build*
 /.idea
 /.vscode
 /test.txt
+/results

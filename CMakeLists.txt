@@ -49,7 +49,7 @@ set_property(TARGET ulayfs PROPERTY INTERPROCEDURAL_OPTIMIZATION TRUE)
 option(MEM_PROTECT "Enable memory protection to avoid stray writes" OFF)
 option(NO_SHARING "Assume that no two processes concurrently operate on the same file" OFF)
 option(RELAXED "Relax visibility and serialization guarantee on concurrent access" OFF)
-option(USE_HUGE_PAGE "Use huge page for mmap" ON)
+option(USE_HUGE_PAGE "Use huge page for mmap" OFF)
 option(USE_MAP_SYNC "Use MAP_SYNC for mmap" ON)
 option(FORCE_MAP_POPULATE "Always use MAP_POPULATE for mmap" OFF)
 option(TX_FLUSH_ONLY_FSYNC "Only flush transaction entries in fsync" OFF)
@@ -69,10 +69,8 @@ endif ()
 # get the current working branch
 execute_process(
     COMMAND git rev-parse --abbrev-ref HEAD
-    WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}
     OUTPUT_VARIABLE GIT_BRANCH
     OUTPUT_STRIP_TRAILING_WHITESPACE)
-
 if (NOT GIT_BRANCH)
     set(GIT_BRANCH Unknown)
 endif ()
@@ -80,10 +78,8 @@ endif ()
 # get the latest commit hash
 execute_process(
     COMMAND git rev-parse HEAD
-    WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}
     OUTPUT_VARIABLE GIT_COMMIT_HASH
     OUTPUT_STRIP_TRAILING_WHITESPACE)
-
 if (NOT GIT_COMMIT_HASH)
     set(GIT_COMMIT_HASH Unknown)
 endif ()
@@ -95,13 +91,15 @@ include_directories(${CMAKE_CURRENT_BINARY_DIR})
 #[[
 tests and benchmarks
 ]]
+option(BUILD_TESTS "Build tests" ON)
+if (BUILD_TESTS)
+    include_directories(src)
 
-include_directories(src)
-
-add_executable(test_basic test/test_basic.cpp test/common.h)
-add_executable(test_rw test/test_rw.cpp test/common.h)
-add_executable(test_sync test/test_sync.cpp test/common.h)
-target_link_libraries(test_sync pthread)
+    add_executable(test_basic test/test_basic.cpp test/common.h)
+    add_executable(test_rw test/test_rw.cpp test/common.h)
+    add_executable(test_sync test/test_sync.cpp test/common.h)
+    target_link_libraries(test_sync pthread)
+endif ()
 
 option(BUILD_BENCH "Build benchmarks" OFF)
 if (BUILD_BENCH)
