@@ -14,7 +14,6 @@ int main(int argc, char* argv[]) {
 
   remove(FILEPATH);
   int fd = open(FILEPATH, O_CREAT | O_RDWR, S_IRUSR | S_IWUSR);
-  auto file = get_file(fd);
 
   char empty_buf[NUM_BYTES]{};
   ret = pwrite(fd, empty_buf, NUM_BYTES, 0);
@@ -46,7 +45,7 @@ int main(int argc, char* argv[]) {
     char expected[NUM_BYTES];
     fill_buff(expected, NUM_BYTES);
 
-    CHECK_RESULT(expected, actual, NUM_BYTES, file);
+    CHECK_RESULT(expected, actual, NUM_BYTES, fd);
   }
 
   fsync(fd);

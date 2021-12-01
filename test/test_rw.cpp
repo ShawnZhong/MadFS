@@ -42,7 +42,6 @@ void test(TestOpt test_opt) {
 
   // reopen the file and check result
   int fd = open(FILEPATH, O_CREAT | O_RDWR, S_IRUSR | S_IWUSR);
-  auto file = get_file(fd);
 
   // check that the content before OFFSET are all zeros
   if (init_offset != 0) {
@@ -53,7 +52,7 @@ void test(TestOpt test_opt) {
     char expected[init_offset];
     memset(expected, 0, init_offset);
 
-    CHECK_RESULT(expected, actual, init_offset, file);
+    CHECK_RESULT(expected, actual, init_offset, fd);
   }
 
   // check that content after OFFSET are written
@@ -67,7 +66,7 @@ void test(TestOpt test_opt) {
     char expected[length];
     fill_buff(expected, length);
 
-    CHECK_RESULT(expected, actual, length, file);
+    CHECK_RESULT(expected, actual, length, fd);
   }
 
   fsync(fd);
