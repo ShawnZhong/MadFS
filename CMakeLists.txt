@@ -18,6 +18,7 @@ add_library(ulayfs SHARED
     src/bitmap.h
     src/block.h
     src/btable.h src/btable.cpp
+    src/debug.h src/debug.cpp
     src/entry.h
     src/file.h src/file.cpp
     src/idx.h
