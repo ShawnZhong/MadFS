@@ -15,6 +15,7 @@ def run(cmake_target, build_type, cmake_args, prog_args, disable_ulayfs, output_
     is_bench = cmake_target.startswith("bench")
     if is_bench:
         cmake_args += " -DULAYFS_BUILD_BENCH=ON "
+        prog_args += " --benchmark_counters_tabular=true "
     if build_type is None:
         build_type = "release" if is_bench else "debug"
 
