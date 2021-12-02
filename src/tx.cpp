@@ -53,7 +53,8 @@ ssize_t TxMgr::do_read(char* buf, size_t count, size_t offset) {
   pmem::TxEntry curr_entry;
   size_t buf_offset;
 
-  std::vector<LogicalBlockIdx> redo_image(end_vidx - begin_vidx, 0);
+  LogicalBlockIdx redo_image[end_vidx - begin_vidx];
+  memset(redo_image, 0, sizeof(LogicalBlockIdx) * (end_vidx - begin_vidx));
 
   TxEntryIdx tail_tx_idx;
   pmem::TxBlock* tail_tx_block;
@@ -88,7 +89,7 @@ ssize_t TxMgr::do_read(char* buf, size_t count, size_t offset) {
     // then scan the log and build redo_image; if no redo needed, we are done
     if (!handle_conflict(curr_entry, begin_vidx, end_vidx - 1, tail_tx_idx,
                          tail_tx_block, /*is_range*/ true, nullptr, nullptr,
-                         nullptr, nullptr, &redo_image))
+                         nullptr, nullptr, redo_image))
       goto done;
 
     // redo:
@@ -123,7 +124,7 @@ ssize_t TxMgr::do_read(char* buf, size_t count, size_t offset) {
     }
 
     // reset redo_image
-    std::fill(redo_image.begin(), redo_image.end(), 0);
+    memset(redo_image, 0, sizeof(LogicalBlockIdx) * (end_vidx - begin_vidx));
   } while (true);
 
 done:
@@ -206,7 +207,7 @@ bool TxMgr::handle_conflict(pmem::TxEntry curr_entry,
                             bool* redo_first, bool* redo_last,
                             LogicalBlockIdx* first_lidx,
                             LogicalBlockIdx* last_lidx,
-                            std::vector<LogicalBlockIdx>* redo_image) {
+                            LogicalBlockIdx redo_image[]) {
   // `le` prefix stands for "log entry", meaning read from log entry
   VirtualBlockIdx le_first_vidx, le_last_vidx;
   LogicalBlockIdx le_begin_lidx;
@@ -247,7 +248,7 @@ bool TxMgr::handle_conflict(pmem::TxEntry curr_entry,
         for (VirtualBlockIdx vidx = overlap_first_vidx;
              vidx <= overlap_last_vidx; ++vidx) {
           auto offset = vidx - first_vidx;
-          (*redo_image)[offset] = le_begin_lidx + offset;
+          redo_image[offset] = le_begin_lidx + offset;
         }
       } else {
         if (overlap_first_vidx == first_vidx) {
