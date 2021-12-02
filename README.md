@@ -82,7 +82,7 @@ uLayFS is developed on Ubuntu 20.04.3 LTS (with Linux kernel 5.4).
   ./run test_sync tsan
   
   # run read/write test with pmemcheck
-  ./run test_rw pmemcheck --cmake_args="-DTX_FLUSH_ONLY_FSYNC=ON"
+  ./run test_rw pmemcheck --cmake_args="-DULAYFS_TX_FLUSH_ONLY_FSYNC=ON"
   
   # profile 4K append with uLayFS
   ./run bench_append profile --prog_args="--benchmark_filter=bench/4096"

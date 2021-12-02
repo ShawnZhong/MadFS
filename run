@@ -38,7 +38,7 @@ def run(cmake_target, build_type, cmake_args, prog_args, disable_ulayfs, output_
     # build
     system(
         f"make {build_type} "
-        f"CMAKE_ARGS='{cmake_args} -DLINK_ULAYFS=OFF' "
+        f"CMAKE_ARGS='{cmake_args} -DULAYFS_LINK_LIBRARY=OFF' "
         f"BUILD_TARGETS='{build_targets}' ",
         log_path=build_log_path,
     )
@@ -46,7 +46,7 @@ def run(cmake_target, build_type, cmake_args, prog_args, disable_ulayfs, output_
     # save config
     with open(config_log_path, "w") as fout:
         pprint.pprint(locals(), stream=fout)
-    system(f"cmake -LA -N {build_path} >> {config_log_path}")
+    system(f"cmake -L -N {build_path} >> {config_log_path}")
 
     # execute
     if build_type == "pmemcheck":

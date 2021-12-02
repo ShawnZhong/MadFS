@@ -46,13 +46,13 @@ set_property(TARGET ulayfs PROPERTY INTERPROCEDURAL_OPTIMIZATION TRUE)
 # build options
 ]]
 
-option(MEM_PROTECT "Enable memory protection to avoid stray writes" OFF)
-option(NO_SHARING "Assume that no two processes concurrently operate on the same file" OFF)
-option(RELAXED "Relax visibility and serialization guarantee on concurrent access" OFF)
-option(USE_HUGE_PAGE "Use huge page for mmap" OFF)
-option(USE_MAP_SYNC "Use MAP_SYNC for mmap" ON)
-option(FORCE_MAP_POPULATE "Always use MAP_POPULATE for mmap" OFF)
-option(TX_FLUSH_ONLY_FSYNC "Only flush transaction entries in fsync" OFF)
+option(ULAYFS_MEM_PROTECT "Enable memory protection to avoid stray writes" OFF)
+option(ULAYFS_NO_SHARING "Assume that no two processes concurrently operate on the same file" OFF)
+option(ULAYFS_RELAXED "Relax visibility and serialization guarantee on concurrent access" OFF)
+option(ULAYFS_USE_HUGE_PAGE "Use huge page for mmap" OFF)
+option(ULAYFS_USE_MAP_SYNC "Use MAP_SYNC for mmap" ON)
+option(ULAYFS_FORCE_MAP_POPULATE "Always use MAP_POPULATE for mmap" OFF)
+option(ULAYFS_TX_FLUSH_ONLY_FSYNC "Only flush transaction entries in fsync" OFF)
 
 # check huge page support
 execute_process(
@@ -91,8 +91,8 @@ include_directories(${CMAKE_CURRENT_BINARY_DIR})
 #[[
 tests and benchmarks
 ]]
-option(BUILD_TESTS "Build tests" ON)
-if (BUILD_TESTS)
+option(ULAYFS_BUILD_TESTS "Build tests" ON)
+if (ULAYFS_BUILD_TESTS)
     include_directories(src)
 
     add_executable(test_basic test/test_basic.cpp test/common.h)
@@ -101,8 +101,8 @@ if (BUILD_TESTS)
     target_link_libraries(test_sync pthread)
 endif ()
 
-option(BUILD_BENCH "Build benchmarks" OFF)
-if (BUILD_BENCH)
+option(ULAYFS_BUILD_BENCH "Build benchmarks" OFF)
+if (ULAYFS_BUILD_BENCH)
     add_executable(bench_append bench/bench_append.cpp)
 
     set(BENCHMARK_ENABLE_TESTING OFF)
@@ -111,8 +111,8 @@ if (BUILD_BENCH)
     target_link_libraries(bench_append benchmark::benchmark)
 endif ()
 
-option(LINK_ULAYFS "Link uLayFS for tests and benchmarks" ON)
-if (LINK_ULAYFS)
+option(ULAYFS_LINK_LIBRARY "Link uLayFS for tests and benchmarks" ON)
+if (ULAYFS_LINK_LIBRARY)
     link_libraries(ulayfs)
 endif ()
 
@@ -145,8 +145,9 @@ set(CMAKE_CXX_FLAGS_PMEMCHECK
     "${CMAKE_CXX_FLAGS_DEBUG} -mno-avx512f" CACHE STRING
     "Flags used by the C++ compiler during Pmemcheck build." FORCE)
 
+option(ULAYFS_USE_PMEMCHECK "Enable pmemcheck" OFF)
 if (${CMAKE_BUILD_TYPE} STREQUAL "pmemcheck")
-    add_definitions(-DUSE_PMEMCHECK)
+    set(ULAYFS_USE_PMEMCHECK ON)
     FetchContent_Declare(pmemcheck URL https://github.com/ShawnZhong/pmemcheck/releases/download/v3.17/pmemcheck.tgz)
     FetchContent_MakeAvailable(pmemcheck)
     include_directories(${pmemcheck_SOURCE_DIR}/include)
