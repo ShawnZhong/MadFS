@@ -11,18 +11,20 @@ uLayFS is developed on Ubuntu 20.04.3 LTS (with Linux kernel 5.4).
 - Install dependencies
 
     ```shell
-    # build dependencies
-    sudo apt update
-    sudo apt install -y cmake build-essential
-    
-    # dev dependencies (optional)
-    sudo apt install -y clang clang-tidy libstdc++-10-dev # for sanitizers
-    sudo apt install -y linux-tools-common linux-tools-generic linux-tools-`uname -r` # for perf
-    sudo apt install -y ndctl
+    ./scripts/init --install_build_deps
+    ./scripts/init --install_dev_deps # optional
     ```
 
-- To emulate a persistent memory device, follow the
+- Configure the system
+
+    ```shell
+    # may need to run this everytime after a reboot
+    ./scripts/init --configure
+    ```
+
+- To emulate a persistent memory device using DRAM, follow the
   guide [here](https://docs.pmem.io/persistent-memory/getting-started-guide/creating-development-environments/linux-environments/linux-memmap)
+  .
 
 - Configure persistent memory
 
@@ -36,26 +38,10 @@ uLayFS is developed on Ubuntu 20.04.3 LTS (with Linux kernel 5.4).
     # mount the filesystem
     sudo mkdir -p /mnt/${PMEM}
     sudo mount -o dax /dev/${PMEM} /mnt/${PMEM}
-  
-    # verify mount
     sudo mount -v | grep /mnt/${PMEM}
   
-    # set permission
-    sudo chown -R $USER:$GROUP /mnt/${PMEM}
-    ```
-
-- Additional system configutations (optional)
-
-    ```shell
-    # to collect kernel traces in `perf`
-    sudo sysctl -w kernel.kptr_restrict=0
-    sudo sysctl -w kernel.perf_event_paranoid=-1
-  
-    # enable huge page
-    sudo sysctl -w vm.nr_hugepages=512
-  
-    # for consistent benchmark result
-    sudo cpupower frequency-set --governor performance
+    # change permission
+    sudo chmod a+w /mnt/${PMEM}
     ```
 
 ### Build and Run
@@ -68,18 +54,39 @@ uLayFS is developed on Ubuntu 20.04.3 LTS (with Linux kernel 5.4).
   git submodule update --init --recursive
   ```
 
-- Build (optional)
+- Build the uLayFS shared library
   ```shell
-  # usage: make [build_mode] [CMAKE_ARGS="-DKEY=VAL"] [BUILD_ARGS="TARGETS"]
-  make release
+  # usage: make [build_type] 
+  #             [CMAKE_ARGS="-DKEY1=VAL1 -DKEY2=VAL2 ..."] 
+  #             [BUILD_TARGETS="target1 target2 ..."] 
+  #             [BUILD_ARGS="..."]
+  make release BUILD_TARGETS="ulayfs"
   ```
 
-- Build and run tests and benchmarks
+- Run your program with uLayFS
 
   ```shell
-  # usage: see `./run --help`
+  LD_PRELOAD=./build-release/libulayfs.so ./your_program
+  ```
+
+- Build and run tests or benchmarks
+
+  ```shell
+  # print help message
+  ./run
+  
+  # run smoke test in debug mode
   ./run test_basic
+  
+  # run synchronization test with thread sanitizer
   ./run test_sync tsan
-  ./run test_rw pmemcheck -c="-DTX_FLUSH_ONLY_FSYNC=ON"
-  ./run bench_append profile -p="--benchmark_filter=bench_append/4096"
+  
+  # run read/write test with pmemcheck
+  ./run test_rw pmemcheck --cmake_args="-DULAYFS_TX_FLUSH_ONLY_FSYNC=ON"
+  
+  # profile 4K append with uLayFS
+  ./run bench_append profile --prog_args="--benchmark_filter='bench/4096'"
+  
+  # profile append benchmark with kernel filesystem
+  ./run bench_append profile --disable_ulayfs
   ```

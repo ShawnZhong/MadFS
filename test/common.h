@@ -4,7 +4,7 @@
 #include <cstdio>
 
 #include "block.h"
-#include "lib.h"
+#include "debug.h"
 
 #define CHECK_RESULT(expected, actual, length, fd) \
   do {                                             \
@@ -20,7 +20,13 @@
     }                                              \
   } while (0)
 
-using namespace ulayfs;
+void print_file(int fd) {
+  if (ulayfs::print_file) {
+    ulayfs::print_file(fd);
+  } else {
+    printf("uLayFS not linked\n");
+  }
+}
 
 constexpr char FILEPATH[] = "test.txt";
 constexpr char TEST_STR[] = "test str\n";
