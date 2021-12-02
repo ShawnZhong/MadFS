@@ -100,6 +100,8 @@ if (ULAYFS_BUILD_TESTS)
     add_executable(test_rw test/test_rw.cpp test/common.h)
     add_executable(test_sync test/test_sync.cpp test/common.h)
     target_link_libraries(test_sync pthread)
+
+    list(APPEND EXECUTABLES test_basic test_rw test_sync)
 endif ()
 
 option(ULAYFS_BUILD_BENCH "Build benchmarks" OFF)
@@ -110,11 +112,15 @@ if (ULAYFS_BUILD_BENCH)
     FetchContent_Declare(benchmark URL https://github.com/google/benchmark/archive/refs/tags/v1.6.0.tar.gz)
     FetchContent_MakeAvailable(benchmark)
     target_link_libraries(bench_append benchmark::benchmark)
+
+    list(APPEND EXECUTABLES bench_append)
 endif ()
 
 option(ULAYFS_LINK_LIBRARY "Link uLayFS for tests and benchmarks" ON)
 if (ULAYFS_LINK_LIBRARY)
-    link_libraries(ulayfs)
+    foreach (EXECUTABLE ${EXECUTABLES})
+        target_link_libraries(${EXECUTABLE} ulayfs)
+    endforeach ()
 endif ()
 
 

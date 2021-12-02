@@ -28,17 +28,14 @@ def run(cmake_target, build_type, cmake_args, prog_args, disable_ulayfs, output_
     ulayfs_path = build_path / "libulayfs.so"
     exe_path = build_path / cmake_target
 
-    if disable_ulayfs:
-        build_targets = cmake_target
-        cmd = f"{exe_path} {prog_args}"
-    else:
-        build_targets = f"{cmake_target} ulayfs"
-        cmd = f"env LD_PRELOAD={ulayfs_path} {exe_path} {prog_args}"
+    cmd = f"{exe_path} {prog_args}"
+    build_targets = cmake_target if disable_ulayfs else f"{cmake_target} ulayfs"
+    cmake_args += f" -DULAYFS_LINK_LIBRARY={'OFF' if disable_ulayfs else 'ON'} "
 
     # build
     system(
         f"make {build_type} "
-        f"CMAKE_ARGS='{cmake_args} -DULAYFS_LINK_LIBRARY=OFF' "
+        f"CMAKE_ARGS='{cmake_args}' "
         f"BUILD_TARGETS='{build_targets}' ",
         log_path=build_log_path,
     )
