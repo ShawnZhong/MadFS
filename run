@@ -14,16 +14,16 @@ logger = logging.getLogger("run")
 def run(cmake_target, build_type, cmake_args, prog_args, disable_ulayfs, output_dir):
     is_bench = cmake_target.startswith("bench")
     if is_bench:
-        cmake_args += " -DBUILD_BENCH=ON "
+        cmake_args += " -DULAYFS_BUILD_BENCH=ON "
     if build_type is None:
         build_type = "release" if is_bench else "debug"
 
     # set up paths
-    output_dir.mkdir(exist_ok=True)
-    output_path = output_dir / f"{cmake_target}-{build_type}-{get_timestamp()}"
-    run_log_path = output_path.with_suffix(".run.log")
-    build_log_path = output_path.with_suffix(".build.log")
-    config_log_path = output_path.with_suffix(".config.log")
+    output_path = output_dir / cmake_target / build_type / get_timestamp()
+    output_path.mkdir(parents=True, exist_ok=True)
+    run_log_path = output_path / "run.log"
+    build_log_path = output_path / "build.log"
+    config_log_path = output_path / "config.log"
     build_path = Path(f"build-{build_type}")
     ulayfs_path = build_path / "libulayfs.so"
     exe_path = build_path / cmake_target
@@ -59,8 +59,8 @@ def run(cmake_target, build_type, cmake_args, prog_args, disable_ulayfs, output_
         )
 
     elif build_type == "profile":
-        perf_data = output_path.with_suffix(".perf")
-        flamegraph_output = output_path.with_suffix(".svg")
+        perf_data = output_path / "perf.data"
+        flamegraph_output = output_path / "flamegraph.svg"
         flamegraph_dir = build_path / "_deps" / "flamegraph-src"
 
         # record perf data
