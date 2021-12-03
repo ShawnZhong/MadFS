@@ -18,20 +18,22 @@ LogicalBlockIdx Allocator::alloc(uint32_t num_blocks) {
   auto it =
       std::lower_bound(free_list.begin(), free_list.end(),
                        std::pair<uint32_t, LogicalBlockIdx>(num_blocks, 0));
-  if (it->first == num_blocks) {
-    auto idx = it->second;
-    free_list.erase(it);
-    return idx;
-  }
+  if (it != free_list.end()) {
+    if (it->first == num_blocks) {
+      auto idx = it->second;
+      free_list.erase(it);
+      return idx;
+    }
 
-  // split a free list element
-  if (it->first > num_blocks) {
-    auto idx = it->second;
-    it->first -= num_blocks;
-    it->second += num_blocks;
-    // re-sort these elements
-    std::sort(free_list.begin(), it + 1);
-    return idx;
+    // split a free list element
+    if (it->first > num_blocks) {
+      auto idx = it->second;
+      it->first -= num_blocks;
+      it->second += num_blocks;
+      // re-sort these elements
+      std::sort(free_list.begin(), it + 1);
+      return idx;
+    }
   }
 
   // TODO: move bitmap to DRAM here
