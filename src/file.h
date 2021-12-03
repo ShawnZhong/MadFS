@@ -63,7 +63,7 @@ class File {
    * Initialize the file object. It will initialize meta block, bitmap, and
    * block table as needed.
    */
-  void init(int init_file_size);
+  void init();
 
   /**
    * Return a write-only pointer to the block given a virtual block index

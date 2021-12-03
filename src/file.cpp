@@ -14,7 +14,8 @@ File::File(int fd, off_t init_file_size, pmem::Bitmap* bitmap, int shm_fd)
       blk_table(this, &tx_mgr),
       shm_fd(shm_fd),
       file_offset(0) {
-  init(init_file_size);
+  if (init_file_size == 0) meta->init();
+  init();
 }
 
 /*
@@ -135,8 +136,7 @@ LogMgr* File::get_local_log_mgr() {
  * Helper functions
  */
 
-void File::init(int init_file_size) {
-  if (init_file_size == 0) meta->init();
+void File::init() {
   meta->lock();
   // The first bit corresponds to the meta block which should always be set
   // to 1. If it is not, then bitmap needs to be initialized.
