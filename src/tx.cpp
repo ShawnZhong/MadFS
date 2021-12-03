@@ -38,7 +38,6 @@ void TxMgr::do_write(const char* buf, size_t count, size_t offset) {
   tx.do_write();
 }
 
-// TODO: handle read reaching EOF
 // TODO: more fancy handle_conflict strategy
 ssize_t TxMgr::do_read(char* buf, size_t count, size_t offset) {
   size_t end_offset = offset + count;
@@ -365,12 +364,13 @@ TxMgr::Tx::Tx(File* file, const char* buf, size_t count, size_t offset)
   // for overwrite, "leftover_bytes" is zero; only in append we care
   // append log without fence because we only care flush completion
   // before try_commit
-  this->log_idx = log_mgr->append(pmem::LogOp::LOG_OVERWRITE,  // op
-                                  0,                           // leftover_bytes
-                                  num_blocks,                  // total_blocks
-                                  begin_vidx,  // begin_virtual_idx
-                                  {dst_idx},   // begin_logical_idxs
-                                  false        // fenced
+  this->log_idx = log_mgr->append(
+    pmem::LogOp::LOG_OVERWRITE,                     // op
+    ALIGN_UP(end_offset, BLOCK_SIZE) - end_offset,  // leftover_bytes
+    num_blocks,                                     // total_blocks
+    begin_vidx,                                     // begin_virtual_idx
+    {dst_idx},                                      // begin_logical_idxs
+    false                                           // fenced
   );
   // it's fine that we append log first as long we don't publish it by tx
 }

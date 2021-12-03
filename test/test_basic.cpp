@@ -4,6 +4,7 @@
 #include <cassert>
 #include <cstdio>
 #include <cstring>
+#include <string>
 
 #include "common.h"
 
@@ -26,13 +27,25 @@ void test_write() {
 void test_read() {
   [[maybe_unused]] off_t res;
 
+  assert(TEST_STR_LEN > 3);
+  std::string test_str = TEST_STR;
+
   int fd = open(FILEPATH, O_RDWR);
   assert(fd >= 0);
 
   char buff[TEST_STR_LEN + 1]{};
-  ssize_t sz = read(fd, buff, TEST_STR_LEN);
-  assert(sz == TEST_STR_LEN);
-  assert(strcmp(buff, TEST_STR) == 0);
+  ssize_t sz = read(fd, buff, TEST_STR_LEN-3);
+  assert(sz == TEST_STR_LEN-3);
+  buff[sz] = '\0';
+  assert(test_str.compare(0, TEST_STR_LEN-3, buff) == 0);
+
+  sz = read(fd, buff, 5);
+  assert(sz == 3);
+  buff[sz] = '\0';
+  assert(test_str.compare(TEST_STR_LEN-3, 3, buff) == 0);
+
+  sz = read(fd, buff, 7);
+  assert(sz == 0);
 
   res = fsync(fd);
   assert(res == 0);
@@ -59,6 +72,13 @@ void test_lseek() {
   assert(strcmp(buff, TEST_STR) == 0);
 
   res = lseek(fd, -TEST_STR_LEN, SEEK_CUR);
+  assert(res == 0);
+
+  res = read(fd, buff, TEST_STR_LEN);
+  assert(res == TEST_STR_LEN);
+  assert(strcmp(buff, TEST_STR) == 0);
+
+  res = lseek(fd, -TEST_STR_LEN, SEEK_END);
   assert(res == 0);
 
   res = read(fd, buff, TEST_STR_LEN);

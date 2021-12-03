@@ -23,6 +23,12 @@ File::File(int fd, off_t init_file_size, pmem::Bitmap* bitmap, int shm_fd)
 
 ssize_t File::pwrite(const void* buf, size_t count, size_t offset) {
   if (count == 0) return 0;
+
+  // TODO: support writing to offset beyond file_size. In POSIX standard
+  // this is allowd and will create a hole for the gap region (where reads
+  // return null bytes). Related to SEEK_HOLE and SEEK_DATA in lseek()
+  if (offset > meta->get_file_size()) return 0;
+
   tx_mgr.do_write(static_cast<const char*>(buf), count, offset);
   // TODO: handle write fails i.e. return value != count
   return static_cast<ssize_t>(count);
@@ -30,11 +36,21 @@ ssize_t File::pwrite(const void* buf, size_t count, size_t offset) {
 
 ssize_t File::pread(void* buf, size_t count, off_t offset) {
   if (count == 0) return 0;
+
+  // check against current file_size
+  // if offset >= file_size, return zero to indicate EOF
+  // if offset < file_size while offset + count > file_size, cut count to EOF
+  off_t file_size = static_cast<off_t>(meta->get_file_size());
+  if (offset >= file_size) return 0;
+  else if (offset + static_cast<off_t>(count) > file_size)
+    count = file_size - offset;
+
   return tx_mgr.do_read(static_cast<char*>(buf), count, offset);
 }
 
 off_t File::lseek(off_t offset, int whence) {
   off_t old_off = file_offset;
+  off_t new_off;
 
   switch (whence) {
     case SEEK_SET: {
@@ -44,7 +60,6 @@ off_t File::lseek(off_t offset, int whence) {
     }
 
     case SEEK_CUR: {
-      off_t new_off;
       do {
         new_off = old_off + offset;
         if (new_off < 0) return -1;
@@ -54,12 +69,17 @@ off_t File::lseek(off_t offset, int whence) {
       return file_offset;
     }
 
-    case SEEK_END:
-      // TODO: enable this code after file_size is implemented
-      // new_off = meta->get_file_size() + offset;
-      // break;
+    case SEEK_END: {
+      do {
+        new_off = meta->get_file_size() + offset;
+        if (new_off < 0) return -1;
+      } while (!__atomic_compare_exchange_n(&file_offset, &old_off, new_off,
+                                            false, __ATOMIC_ACQ_REL,
+                                            __ATOMIC_RELAXED));
+      return file_offset;      
+    }
 
-      // TODO: add SEEK_DATA and SEEK_HOLE
+    // TODO: add SEEK_DATA and SEEK_HOLE
     case SEEK_DATA:
     case SEEK_HOLE:
     default:
@@ -79,8 +99,15 @@ ssize_t File::read(void* buf, size_t count) {
   off_t new_off;
   off_t old_off = file_offset;
 
+  // check against current file_size
+  // if offset >= file_size, return zero to indicate EOF
+  // if offset < file_size while offset + count > file_size, cut count to EOF
+  off_t file_size = static_cast<off_t>(meta->get_file_size());
+  if (old_off >= file_size) return 0;
+  else if (old_off + static_cast<off_t>(count) > file_size)
+    count = file_size - old_off;
+
   do {
-    // TODO: place file_offset to EOF when entire file is read
     new_off = old_off + static_cast<off_t>(count);
   } while (!__atomic_compare_exchange_n(&file_offset, &old_off, new_off, false,
                                         __ATOMIC_ACQ_REL, __ATOMIC_RELAXED));
