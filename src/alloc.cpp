@@ -73,6 +73,7 @@ add_to_free_list:
 }
 
 void Allocator::free(LogicalBlockIdx block_idx, uint32_t num_blocks) {
+  assert(block_idx != 0);
   free_list.emplace_back(num_blocks, block_idx);
   std::sort(free_list.begin(), free_list.end());
 }
@@ -88,11 +89,13 @@ void Allocator::free(const LogicalBlockIdx recycle_image[],
 
   for (uint32_t curr = group_begin + 1; curr < image_size; ++curr) {
     if (recycle_image[curr] != group_begin_lidx + (curr - group_begin)) {
+      assert(group_begin_lidx != 0);
       free_list.emplace_back(curr - group_begin, group_begin_lidx);
       group_begin = curr;
       group_begin_lidx = recycle_image[group_begin];
     }
   }
+  assert(group_begin_lidx != 0);
   free_list.emplace_back(image_size - group_begin, group_begin_lidx);
 
   std::sort(free_list.begin(), free_list.end());
