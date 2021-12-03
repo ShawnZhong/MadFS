@@ -1,10 +1,7 @@
 #pragma once
 
-#include <sys/stat.h>
-
-#include "bitmap.h"
-#include "params.h"
+#include "file.h"
 
 namespace ulayfs {
-extern void print_file(int fd) __attribute__((weak));
+std::shared_ptr<dram::File> get_file(int fd);
 }  // namespace ulayfs

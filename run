@@ -1,79 +1,125 @@
 #!/usr/bin/env python3
 
 import argparse
-import os
-import sys
+import logging
+import pprint
 from pathlib import Path
 
-sys.stdout = sys.stderr
+from scripts.utils import system, check_any_args_passed, get_timestamp
+
+logging.basicConfig(level=logging.DEBUG)
+logger = logging.getLogger("run")
 
 
-def system(cmd):
-    print(f"Executing command: `{cmd}`")
-    ret = os.system(cmd)
-    if ret != 0:
-        print(f"Command `{cmd}` failed with return code {ret}")
-        exit(ret)
-
-
-def main(cmake_target, build_type, cmake_args, prog_args, disable_ulayfs):
+def run(cmake_target, build_type, cmake_args, prog_args, disable_ulayfs, output_dir):
     is_bench = cmake_target.startswith("bench")
     if is_bench:
-        cmake_args += " -DBUILD_BENCH=ON "
-
+        cmake_args += " -DULAYFS_BUILD_BENCH=ON "
+        prog_args += " --benchmark_counters_tabular=true "
     if build_type is None:
         build_type = "release" if is_bench else "debug"
 
+    # set up paths
+    output_path = output_dir / cmake_target / build_type / get_timestamp()
+    output_path.mkdir(parents=True, exist_ok=True)
+    run_log_path = output_path / "run.log"
+    build_log_path = output_path / "build.log"
+    config_log_path = output_path / "config.log"
     build_path = Path(f"build-{build_type}")
     ulayfs_path = build_path / "libulayfs.so"
-    deps_path = build_path / "_deps"
     exe_path = build_path / cmake_target
-    cmd = f"{exe_path} {prog_args}"
-    if not disable_ulayfs:
-        cmd = f"env LD_PRELOAD={ulayfs_path} {cmd}"
 
+    cmd = f"{exe_path} {prog_args}"
+    build_targets = cmake_target if disable_ulayfs else f"{cmake_target} ulayfs"
+    cmake_args += f" -DULAYFS_LINK_LIBRARY={'OFF' if disable_ulayfs else 'ON'} "
+
+    # build
     system(
-        f'make {build_type} '
-        f'BUILD_ARGS="{cmake_target} ulayfs" '
-        f'CMAKE_ARGS="{cmake_args} -DLINK_ULAYFS=OFF"'
+        f"make {build_type} "
+        f"CMAKE_ARGS='{cmake_args}' "
+        f"BUILD_TARGETS='{build_targets}' ",
+        log_path=build_log_path,
     )
 
-    if build_type == "pmemcheck":
-        pmemcheck_dir = deps_path / "pmemcheck-src"
+    # save config
+    with open(config_log_path, "w") as fout:
+        pprint.pprint(locals(), stream=fout)
+    system(f"cmake -L -N {build_path} >> {config_log_path}")
 
+    # execute
+    if build_type == "pmemcheck":
+        pmemcheck_dir = build_path / "_deps" / "pmemcheck-src"
         system(
             f"VALGRIND_LIB={pmemcheck_dir}/libexec/valgrind/ "
             f"{pmemcheck_dir}/bin/valgrind --tool=pmemcheck --trace-children=yes "
-            f"{cmd}"
+            f"{cmd}",
+            log_path=run_log_path,
         )
 
     elif build_type == "profile":
-        perf_data = build_path / f"{cmake_target}.perf"
+        perf_data = output_path / "perf.data"
+        flamegraph_output = output_path / "flamegraph.svg"
+        flamegraph_dir = build_path / "_deps" / "flamegraph-src"
 
-        system(f"perf record --freq=997 --call-graph dwarf -o {perf_data} {cmd}")
+        # record perf data
+        system(
+            f"perf record --freq=997 --call-graph dwarf -o {perf_data} {cmd}",
+            log_path=run_log_path,
+        )
+
+        # show perf results in terminal
         system(f"perf report -i {perf_data}")
 
-        # generate flame graph
-        flamegraph_output = build_path / f"{cmake_target}.svg"
-        flamegraph_dir = deps_path / "flamegraph-src"
+        # generate flamegraph
         system(
             f"perf script -i {perf_data} | "
             f"{flamegraph_dir}/stackcollapse-perf.pl | "
             f"{flamegraph_dir}/flamegraph.pl > {flamegraph_output}"
         )
-        print(f"The flamegraph is available at `{flamegraph_output}`")
+        logger.info(f"The flamegraph is available at `{flamegraph_output}`")
 
     else:
-        system(cmd)
+        system(cmd, log_path=run_log_path)
 
 
 if __name__ == "__main__":
-    parser = argparse.ArgumentParser()
-    parser.add_argument("cmake_target")
-    parser.add_argument("build_type", nargs=argparse.OPTIONAL)
-    parser.add_argument("-c", "--cmake_args", default="")
-    parser.add_argument("-p", "--prog_args", default="")
-    parser.add_argument("-d", "--disable_ulayfs", action="store_true")
+    parser = argparse.ArgumentParser(description="Build and run tests or benchmarks")
+    parser.add_argument(
+        "cmake_target",
+        help="see .cpp files in `test` and `bench` for available targets",
+    )
+    parser.add_argument(
+        "build_type",
+        nargs=argparse.OPTIONAL,
+        help="see Makefile for available build types",
+    )
+    parser.add_argument(
+        "-c",
+        "--cmake_args",
+        default="",
+        help="additional build arguments to be passed to CMake",
+    )
+    parser.add_argument(
+        "-p",
+        "--prog_args",
+        default="",
+        help="arguments to be passed to the program during execution",
+    )
+    parser.add_argument(
+        "-d",
+        "--disable_ulayfs",
+        action="store_true",
+        help="use kernel filesystem instead of uLayFS",
+    )
+    parser.add_argument(
+        "-o",
+        "--output_dir",
+        default="results",
+        type=Path,
+        help="specify the output directory (default: `results`)",
+    )
+    check_any_args_passed(parser)
     args = parser.parse_args()
-    print(f"args: {args}")
-    main(**vars(args))
+    logger.debug(f"args={args}")
+
+    run(**vars(args))

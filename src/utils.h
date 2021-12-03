@@ -1,6 +1,6 @@
 #pragma once
 
-#ifdef USE_PMEMCHECK
+#ifdef ULAYFS_USE_PMEMCHECK
 #include <valgrind/pmemcheck.h>
 #else
 // see https://pmem.io/valgrind/generated/pmc-manual.html for reference

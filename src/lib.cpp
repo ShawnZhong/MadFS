@@ -8,7 +8,6 @@
 #include <unordered_map>
 
 #include "config.h"
-#include "file.h"
 #include "posix.h"
 
 namespace ulayfs {
@@ -261,12 +260,4 @@ void __attribute__((constructor)) ulayfs_ctor() {
  */
 void __attribute__((destructor)) ulayfs_dtor() { INFO("ulayfs_dtor called"); }
 }  // extern "C"
-
-void print_file(int fd) {
-  if (auto file = get_file(fd)) {
-    std::cerr << *file << "\n";
-  } else {
-    std::cerr << "fd " << fd << " is not a uLayFS file. \n";
-  }
-}
 }  // namespace ulayfs

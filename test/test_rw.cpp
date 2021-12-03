@@ -5,6 +5,10 @@
 
 #include "common.h"
 
+using ulayfs::BLOCK_SIZE;
+using ulayfs::NUM_INLINE_TX_ENTRY;
+using ulayfs::NUM_TX_ENTRY;
+
 struct TestOpt {
   int num_bytes_per_iter = BLOCK_SIZE;
   int num_iter = 1;

@@ -1,0 +1,44 @@
+#!/usr/bin/env python3
+
+import argparse
+import logging
+
+from utils import system, check_any_args_passed
+
+logging.basicConfig(level=logging.DEBUG)
+logger = logging.getLogger("init")
+
+install_dev_deps_cmds = """
+sudo apt install -y clang clang-tidy libstdc++-10-dev &&    # for sanitizers
+sudo apt install -y linux-tools-common linux-tools-generic linux-tools-`uname -r` && # for perf
+sudo apt install -y ndctl                                   # for managing persistent memory
+"""
+
+configure_cmds = """
+sudo sysctl -w vm.nr_hugepages=512 &&               # enable huge pages
+sudo sysctl -w kernel.kptr_restrict=0 &&            # expose kernel addresses for perf
+sudo sysctl -w kernel.perf_event_paranoid=-1 &&     # allow kernel profiling
+sudo cpupower frequency-set --governor performance  # for consistent benchmark result
+"""
+
+
+def init(install_build_deps=False, install_dev_deps=False, configure=False):
+    if install_build_deps or install_dev_deps:
+        system("sudo apt update")
+    if install_build_deps:
+        system("sudo apt install -y cmake build-essential")
+    if install_dev_deps:
+        system(install_dev_deps_cmds)
+    if configure:
+        system(configure_cmds)
+
+
+if __name__ == "__main__":
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--install_build_deps", action="store_true")
+    parser.add_argument("--install_dev_deps", action="store_true")
+    parser.add_argument("--configure", action="store_true")
+    check_any_args_passed(parser)
+    args = parser.parse_args()
+    logger.debug(f"args={args}")
+    init(**vars(args))

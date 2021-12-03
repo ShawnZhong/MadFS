@@ -206,7 +206,7 @@ class TxMgr {
                        pmem::TxBlock*& tail_tx_block, bool is_range,
                        bool* redo_first, bool* redo_last,
                        LogicalBlockIdx* first_lidx, LogicalBlockIdx* last_lidx,
-                       std::vector<LogicalBlockIdx>* redo_image);
+                       LogicalBlockIdx redo_image[]);
 
  public:
   friend std::ostream& operator<<(std::ostream& out, const TxMgr& tx_mgr);
