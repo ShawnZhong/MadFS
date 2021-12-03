@@ -372,15 +372,15 @@ void TxMgr::AlignedTx::do_write() {
   for (uint32_t i = 0; i < num_blocks; ++i)
     recycle_image[i] = file->vidx_to_lidx(begin_vidx + i);
 
-  while (true) {
-    conflict_entry =
-        tx_mgr->try_commit(commit_entry, tail_tx_idx, tail_tx_block);
-    if (!conflict_entry.is_valid()) break;
-    // we don't check the return value of handle_conflict here because we don't
-    // care whether there is a conflict, as long as recycle_image gets updated
-    handle_conflict(conflict_entry, begin_vidx, end_vidx - 1, recycle_image);
-  }
+retry:
+  conflict_entry = tx_mgr->try_commit(commit_entry, tail_tx_idx, tail_tx_block);
+  if (!conflict_entry.is_valid()) goto done;
+  // we don't check the return value of handle_conflict here because we don't
+  // care whether there is a conflict, as long as recycle_image gets updated
+  handle_conflict(conflict_entry, begin_vidx, end_vidx - 1, recycle_image);
+  goto retry;
 
+done:
   // recycle the data blocks being overwritten
   allocator->free(recycle_image, num_blocks);
 }
