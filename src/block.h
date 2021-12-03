@@ -265,12 +265,12 @@ class MetaBlock : public BaseBlock {
    * Getters and setters
    */
 
-  [[nodiscard]] size_t get_file_size() const {
+  [[nodiscard]] uint64_t get_file_size() const {
     return __atomic_load_n(&this->file_size, __ATOMIC_ACQUIRE);
   }
 
-  void set_file_size_if_larger(uint32_t new_file_size) {
-    uint32_t old_file_size = get_file_size();
+  void set_file_size_if_larger(uint64_t new_file_size) {
+    uint64_t old_file_size = get_file_size();
   retry:
     if (old_file_size >= new_file_size) return;
     if (__atomic_compare_exchange_n(&this->file_size, &old_file_size,
