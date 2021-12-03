@@ -57,6 +57,9 @@ void BlkTable::apply_tx(pmem::TxCommitEntry tx_commit_entry, LogMgr* log_mgr) {
   resize_to_fit(end_virtual_idx);
 
   // update block table mapping
+  // TODO: for writes at offset beyond file_size, POSIX standard supports
+  // creating a hole for the gap (where reads return null bytes). Related
+  // to SEEK_DATA and SEEK_HOLE in lseek()
   while (now_virtual_idx < end_virtual_idx) {
     uint16_t chunk_blocks =
         end_virtual_idx > now_virtual_idx + MAX_BLOCKS_PER_BODY

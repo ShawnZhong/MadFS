@@ -23,12 +23,6 @@ File::File(int fd, off_t init_file_size, pmem::Bitmap* bitmap, int shm_fd)
 
 ssize_t File::pwrite(const void* buf, size_t count, size_t offset) {
   if (count == 0) return 0;
-
-  // TODO: support writing to offset beyond file_size. In POSIX standard
-  // this is allowd and will create a hole for the gap region (where reads
-  // return null bytes). Related to SEEK_HOLE and SEEK_DATA in lseek()
-  if (offset > meta->get_file_size()) return 0;
-
   tx_mgr.do_write(static_cast<const char*>(buf), count, offset);
   // TODO: handle write fails i.e. return value != count
   return static_cast<ssize_t>(count);
