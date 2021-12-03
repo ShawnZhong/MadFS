@@ -61,18 +61,10 @@ class File {
 
  private:
   /**
-   * @param allow_hole If allow_hole = false (default), and the virtual block
-   * index is not mapped to a virtual index, then the program will panic. If
-   * allow_hole is set to true, the caller needs to check whether the returned
-   * logical block index is 0 or not.
-   *
    * @return the logical block index corresponding to the virtual index
    */
-  [[nodiscard]] LogicalBlockIdx vidx_to_lidx(VirtualBlockIdx vidx,
-                                             bool allow_hole = false) {
-    LogicalBlockIdx lidx = blk_table.get(vidx);
-    assert(lidx != 0 || allow_hole);
-    return lidx;
+  [[nodiscard]] LogicalBlockIdx vidx_to_lidx(VirtualBlockIdx vidx) {
+    return blk_table.get(vidx);
   }
 
   /**
@@ -98,7 +90,7 @@ class File {
    * A nullptr is returned if the block is not allocated yet (e.g., a hole)
    */
   [[nodiscard]] pmem::Block* vidx_to_addr_rw(VirtualBlockIdx vidx) {
-    return lidx_to_addr_rw(vidx_to_lidx(vidx, /*allow_hole*/ true));
+    return lidx_to_addr_rw(vidx_to_lidx(vidx));
   }
 
   /**
@@ -106,7 +98,7 @@ class File {
    * An empty block is returned if the block is not allocated yet (e.g., a hole)
    */
   [[nodiscard]] const pmem::Block* vidx_to_addr_ro(VirtualBlockIdx vidx) {
-    return lidx_to_addr_ro(vidx_to_lidx(vidx, /*allow_hole*/ true));
+    return lidx_to_addr_ro(vidx_to_lidx(vidx));
   }
 
   friend std::ostream& operator<<(std::ostream& out, const File& f);

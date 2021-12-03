@@ -428,7 +428,7 @@ void TxMgr::AlignedTx::do_write() {
   // make a local copy of the tx tail
   file->blk_table.update(tail_tx_idx, tail_tx_block, /*do_alloc*/ true);
   for (uint32_t i = 0; i < num_blocks; ++i) {
-    recycle_image[i] = file->vidx_to_lidx(begin_vidx + i, /*allow_hole*/ true);
+    recycle_image[i] = file->vidx_to_lidx(begin_vidx + i);
   }
 
 retry:
@@ -450,7 +450,7 @@ void TxMgr::SingleBlockTx::do_write() {
 
   // must acquire the tx tail before any get
   file->blk_table.update(tail_tx_idx, tail_tx_block, /*do_alloc*/ true);
-  recycle_image[0] = file->vidx_to_lidx(begin_vidx, /*allow_hole*/ true);
+  recycle_image[0] = file->vidx_to_lidx(begin_vidx);
 
 redo:
   // copy original data
@@ -496,7 +496,7 @@ void TxMgr::MultiBlockTx::do_write() {
   // only get a snapshot of the tail when starting critical piece
   file->blk_table.update(tail_tx_idx, tail_tx_block, /*do_alloc*/ true);
   for (uint32_t i = 0; i < num_blocks; ++i) {
-    recycle_image[i] = file->vidx_to_lidx(begin_vidx + i, /*allow_hole*/ true);
+    recycle_image[i] = file->vidx_to_lidx(begin_vidx + i);
   }
   LogicalBlockIdx src_first_lidx = -1;
   LogicalBlockIdx src_last_lidx = -1;
