@@ -20,11 +20,13 @@ namespace ulayfs::dram {
 
 class File {
   const int fd;
+  pmem::Bitmap* bitmap;
   MemTable mem_table;
   pmem::MetaBlock* meta;
   TxMgr tx_mgr;
   BlkTable blk_table;
 
+  int shm_fd;
   off_t file_offset;
 
   // each thread maintain a mapping from fd to allocator
@@ -39,7 +41,7 @@ class File {
   friend class BlkTable;
 
  public:
-  File(int fd, off_t init_file_size);
+  File(int fd, off_t init_file_size, pmem::Bitmap* bitmap, int shm_fd);
 
   /*
    * POSIX I/O operations
