@@ -85,19 +85,25 @@ void Allocator::free(const LogicalBlockIdx recycle_image[],
   // searching is too expensive
   if (image_size == 0) return;
   uint32_t group_begin = 0;
-  LogicalBlockIdx group_begin_lidx = recycle_image[group_begin];
+  LogicalBlockIdx group_begin_lidx = 0;
 
-  for (uint32_t curr = group_begin + 1; curr < image_size; ++curr) {
-    if (recycle_image[curr] == group_begin_lidx + (curr - group_begin))
-      continue;
-    if (group_begin_lidx == 0) continue;
-    free_list.emplace_back(curr - group_begin, group_begin_lidx);
-    group_begin = curr;
-    group_begin_lidx = recycle_image[group_begin];
+  for (uint32_t curr = group_begin; curr < image_size; ++curr) {
+    if (group_begin_lidx == 0) {  // new group not started yet
+      if (recycle_image[curr] == 0) continue;
+      // start a new group
+      group_begin = curr;
+      group_begin_lidx = recycle_image[curr];
+    } else {
+      // contine the group if it matches the expectation
+      if (recycle_image[curr] == group_begin_lidx + (curr - group_begin))
+        continue;
+      free_list.emplace_back(curr - group_begin, group_begin_lidx);
+      group_begin_lidx = recycle_image[group_begin];
+      if (group_begin_lidx != 0) group_begin = curr;
+    }
   }
-  if (group_begin_lidx != 0) {
+  if (group_begin_lidx != 0)
     free_list.emplace_back(image_size - group_begin, group_begin_lidx);
-  }
   std::sort(free_list.begin(), free_list.end());
 }
 

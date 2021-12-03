@@ -427,9 +427,8 @@ void TxMgr::AlignedTx::do_write() {
 
   // make a local copy of the tx tail
   file->blk_table.update(tail_tx_idx, tail_tx_block, /*do_alloc*/ true);
-  for (uint32_t i = 0; i < num_blocks; ++i) {
+  for (uint32_t i = 0; i < num_blocks; ++i)
     recycle_image[i] = file->vidx_to_lidx(begin_vidx + i);
-  }
 
 retry:
   conflict_entry = tx_mgr->try_commit(commit_entry, tail_tx_idx, tail_tx_block);
@@ -482,7 +481,16 @@ done:
  */
 
 void TxMgr::MultiBlockTx::do_write() {
+  // if need_copy_first/last is false, this means it is handled by the full
+  // block copy and never need redo
+  const bool need_copy_first = begin_full_vidx != begin_vidx;
+  const bool need_copy_last = end_full_vidx != end_vidx;
+  // do_copy_first/last indicates do we actually need to do copy; in the case of
+  // redo, we may skip if no change is maded
+  bool do_copy_first = true;
+  bool do_copy_last = true;
   pmem::TxEntry conflict_entry;
+  LogicalBlockIdx src_first_lidx, src_last_lidx;
   LogicalBlockIdx recycle_image[num_blocks];
 
   // copy full blocks first
@@ -495,17 +503,12 @@ void TxMgr::MultiBlockTx::do_write() {
 
   // only get a snapshot of the tail when starting critical piece
   file->blk_table.update(tail_tx_idx, tail_tx_block, /*do_alloc*/ true);
-  for (uint32_t i = 0; i < num_blocks; ++i) {
+  for (uint32_t i = 0; i < num_blocks; ++i)
     recycle_image[i] = file->vidx_to_lidx(begin_vidx + i);
-  }
-  LogicalBlockIdx src_first_lidx = -1;
-  LogicalBlockIdx src_last_lidx = -1;
 
 redo:
   // copy first block
-  if (src_first_lidx != recycle_image[0] && first_block_local_offset != 0) {
-    src_first_lidx = recycle_image[0];
-
+  if (need_copy_first && do_copy_first) {
     // copy the data from the first source block if exists
     const char* src = file->lidx_to_addr_ro(src_first_lidx)->data_ro();
     memcpy(dst_blocks->data_rw(), src, BLOCK_SIZE);
@@ -518,9 +521,7 @@ redo:
   }
 
   // copy last block
-  if (src_last_lidx != recycle_image[num_blocks - 1] &&
-      last_block_local_offset != 0) {
-    src_last_lidx = recycle_image[num_blocks - 1];
+  if (need_copy_last && do_copy_last) {
     pmem::Block* last_dst_block = dst_blocks + (end_full_vidx - begin_vidx);
 
     // copy the data from the last source block if exits
@@ -539,16 +540,19 @@ retry:
   // try to commit the transaction
   conflict_entry = tx_mgr->try_commit(commit_entry, tail_tx_idx, tail_tx_block);
   if (!conflict_entry.is_valid()) goto done;  // success
-
+  // make a copy of the first and last
+  src_first_lidx = recycle_image[0];
+  src_last_lidx = recycle_image[num_blocks - 1];
   if (!handle_conflict(conflict_entry, begin_vidx, end_full_vidx,
                        recycle_image))
     goto retry;  // we have moved to the new tail, retry commit
   else {
-    // we don't redo if the conflict happens in the middle
-    if (src_first_lidx == recycle_image[0] &&
-        src_last_lidx == recycle_image[num_blocks - 1])
+    do_copy_first = src_first_lidx != recycle_image[0];
+    do_copy_last = src_last_lidx != recycle_image[num_blocks - 1];
+    if (do_copy_first || do_copy_last)
+      goto redo;
+    else
       goto retry;
-    goto redo;  // conflict is detected, redo copy
   }
 
 done:
