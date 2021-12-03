@@ -109,7 +109,7 @@ class TxMgr {
    * @param[in,out] tx_idx the transaction index to be handled, might be updated
    * @param[in,out] tx_block the block corresponding to the tx, might be updated
    * @param[in] do_alloc whether allocation is allowed
-   * @return whether if it's in a non-overflow state now
+   * @return true if overflow is successfully handled; false otherwise
    */
   bool handle_idx_overflow(TxEntryIdx& tx_idx, pmem::TxBlock*& tx_block,
                            bool do_alloc) const {
@@ -346,8 +346,5 @@ class TxMgr::MultiBlockTx : public TxMgr::CoWTx {
   // number of bytes to be written for the last block
   // If the end_offset is 4097, then this var should be 1.
   const size_t last_block_local_offset;
-
-  LogicalBlockIdx src_first_lidx;
-  LogicalBlockIdx src_last_lidx;
 };
 }  // namespace ulayfs::dram
