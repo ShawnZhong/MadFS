@@ -6,15 +6,15 @@ logger = logging.getLogger("utils")
 
 def system(cmd, log_path=None):
     import os
+    import sys
 
     if log_path:
         cmd = f"({cmd}) 2>&1 | tee -a {log_path}"
 
     logger.info(f"Executing command: `{cmd}`")
-    ret = os.system(cmd)
+    ret = os.system(f'/bin/bash -o pipefail -c "{cmd}"')
     if ret != 0:
-        logger.warning(f"Command `{cmd}` failed with return code {ret}")
-        exit(ret)
+        sys.exit(f"Command `{cmd}` failed with return code {ret}")
 
 
 def check_any_args_passed(parser):
