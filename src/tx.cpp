@@ -518,7 +518,8 @@ redo:
   }
 
   // copy last block
-  if (src_last_lidx != recycle_image[num_blocks - 1]) {
+  if (src_last_lidx != recycle_image[num_blocks - 1] &&
+      last_block_local_offset != 0) {
     src_last_lidx = recycle_image[num_blocks - 1];
     pmem::Block* last_dst_block = dst_blocks + (end_full_vidx - begin_vidx);
 
