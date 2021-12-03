@@ -47,10 +47,10 @@ int open(const char* pathname, int flags, ...) {
   }
 
   int fd = posix::open(pathname, flags, mode);
+  DEBUG("posix::open(%s, %x, %x) = %d", pathname, flags, mode, fd);
 
   if (unlikely(fd < 0)) {
     WARN("File \"%s\" posix::open failed: %m", pathname);
-    DEBUG("posix::open(%s, %x, %x) = %d", pathname, flags, mode, fd);
     return fd;
   }
 
@@ -58,24 +58,29 @@ int open(const char* pathname, int flags, ...) {
   int rc = posix::fstat(fd, &stat_buf);
   if (unlikely(rc < 0)) {
     WARN("File \"%s\" fstat fialed: %m. Fallback to syscall.", pathname);
-    DEBUG("posix::open(%s, %x, %x) = %d", pathname, flags, mode, fd);
     return fd;
   }
 
   // we don't handle non-normal file (e.g., socket, directory, block dev)
   if (unlikely(!S_ISREG(stat_buf.st_mode) && !S_ISLNK(stat_buf.st_mode))) {
     WARN("Non-normal file \"%s\". Fallback to syscall.", pathname);
-    DEBUG("posix::open(%s, %x, %x) = %d", pathname, flags, mode, fd);
     return fd;
   }
 
   if (!IS_ALIGNED(stat_buf.st_size, BLOCK_SIZE)) {
     WARN("File size not aligned for \"%s\". Fallback to syscall", pathname);
-    DEBUG("posix::open(%s, %x, %x) = %d", pathname, flags, mode, fd);
     return fd;
   }
 
-  files.emplace(fd, std::make_shared<dram::File>(fd, stat_buf.st_size));
+  pmem::Bitmap* bitmap;
+  int shm_fd = open_shm(pathname, &stat_buf, bitmap);
+  if (shm_fd < 0) {
+    WARN("Failed to open bitmap for \"%s\". Fallback to syscall", pathname);
+    return fd;
+  }
+
+  files.emplace(
+      fd, std::make_shared<dram::File>(fd, stat_buf.st_size, bitmap, shm_fd));
   INFO("ulayfs::open(%s, %x, %x) = %d", pathname, flags, mode, fd);
   return fd;
 }
@@ -183,4 +188,82 @@ void __attribute__((constructor)) ulayfs_ctor() {
  */
 void __attribute__((destructor)) ulayfs_dtor() { INFO("ulayfs_dtor called"); }
 }  // extern "C"
+
+/*
+ * helper functions
+ */
+
+int open_shm(const char* pathname, const struct stat* stat,
+             pmem::Bitmap*& bitmap) {
+  // TODO: enable dynamically grow bitmap
+  size_t shm_size = 8 * BLOCK_SIZE;
+  char shm_path[PATH_MAX];
+  sprintf(shm_path, "/dev/shm/ulayfs_%ld%ld%ld", stat->st_ino,
+          stat->st_ctim.tv_sec, stat->st_ctim.tv_nsec);
+  // use posix::open instead of shm_open since shm_open calls open, which is
+  // overloaded by ulayfs
+  int shm_fd =
+      posix::open(shm_path, O_RDWR | O_NOFOLLOW | O_CLOEXEC, S_IRUSR | S_IWUSR);
+
+  // if the file does not exist, create it
+  if (shm_fd < 0) {
+    // We create a temporary file first, and then use `linkat` to put the file
+    // into the directory `/dev/shm`. This ensures the atomicity of the creating
+    // the shared memory file and setting its permission.
+    shm_fd =
+        posix::open("/dev/shm", O_TMPFILE | O_RDWR | O_NOFOLLOW | O_CLOEXEC,
+                    S_IRUSR | S_IWUSR);
+    if (unlikely(shm_fd < 0)) {
+      WARN("File \"%s\": create the temporary file failed: %m", pathname);
+      return -1;
+    }
+
+    // change permission and ownership of the new shared memory
+    if (fchmod(shm_fd, stat->st_mode) < 0) {
+      WARN("File \"%s\": fchmod on shared memory failed: %m", pathname);
+      posix::close(shm_fd);
+      return -1;
+    }
+    if (fchown(shm_fd, stat->st_uid, stat->st_gid) < 0) {
+      WARN("File \"%s\": fchown on shared memory failed: %m", pathname);
+      posix::close(shm_fd);
+      return -1;
+    }
+    if (posix::fallocate(shm_fd, 0, 0, static_cast<off_t>(shm_size)) < 0) {
+      WARN("File \"%s\": fallocate on shared memory failed: %m", pathname);
+      posix::close(shm_fd);
+      return -1;
+    }
+
+    // publish the created tmpfile.
+    char tmpfile_path[PATH_MAX];
+    sprintf(tmpfile_path, "/proc/self/fd/%d", shm_fd);
+    int rc =
+        linkat(AT_FDCWD, tmpfile_path, AT_FDCWD, shm_path, AT_SYMLINK_FOLLOW);
+    if (rc < 0) {
+      // Another process may have created a new shared memory before us. Retry
+      // opening.
+      posix::close(shm_fd);
+      shm_fd = posix::open(shm_path, O_RDWR | O_NOFOLLOW | O_CLOEXEC,
+                           S_IRUSR | S_IWUSR);
+      if (shm_fd < 0) {
+        WARN("File \"%s\" cannot open or create the shared memory object: %m",
+             pathname);
+        return -1;
+      }
+    }
+  }
+
+  // mmap bitmap
+  void* shm = posix::mmap(nullptr, shm_size, PROT_READ | PROT_WRITE, MAP_SHARED,
+                          shm_fd, 0);
+  if (shm == MAP_FAILED) {
+    WARN("File \"%s\" mmap bitmap failed: %m", pathname);
+    posix::close(shm_fd);
+    return -1;
+  }
+
+  bitmap = static_cast<pmem::Bitmap*>(shm);
+  return shm_fd;
+}
 }  // namespace ulayfs

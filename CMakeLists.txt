@@ -38,7 +38,7 @@ FetchContent_Declare(tbb URL https://github.com/oneapi-src/oneTBB/releases/downl
 FetchContent_MakeAvailable(tbb)
 
 find_package(TBB REQUIRED HINTS ${tbb_SOURCE_DIR}/lib/cmake/tbb)
-target_link_libraries(ulayfs dl pthread TBB::tbb)
+target_link_libraries(ulayfs dl pthread TBB::tbb rt)
 
 # enable link time optimization
 set_property(TARGET ulayfs PROPERTY INTERPROCEDURAL_OPTIMIZATION TRUE)
@@ -50,22 +50,9 @@ set_property(TARGET ulayfs PROPERTY INTERPROCEDURAL_OPTIMIZATION TRUE)
 option(ULAYFS_MEM_PROTECT "Enable memory protection to avoid stray writes" OFF)
 option(ULAYFS_NO_SHARING "Assume that no two processes concurrently operate on the same file" OFF)
 option(ULAYFS_RELAXED "Relax visibility and serialization guarantee on concurrent access" OFF)
-option(ULAYFS_USE_HUGE_PAGE "Use huge page for mmap" OFF)
 option(ULAYFS_USE_MAP_SYNC "Use MAP_SYNC for mmap" ON)
 option(ULAYFS_FORCE_MAP_POPULATE "Always use MAP_POPULATE for mmap" OFF)
 option(ULAYFS_TX_FLUSH_ONLY_FSYNC "Only flush transaction entries in fsync" OFF)
-
-# check huge page support
-execute_process(
-    COMMAND sysctl -n vm.nr_hugepages
-    OUTPUT_VARIABLE NR_HUGEPAGES
-    OUTPUT_STRIP_TRAILING_WHITESPACE)
-if (${NR_HUGEPAGES} EQUAL "0")
-    message(WARNING
-        "Huge page not available. Disable huge page support for mmap. \
-        Please use `sudo sysctl -w vm.nr_hugepages=512` to configure huge page.")
-    set(USE_HUGE_PAGE OFF)
-endif ()
 
 # get the current working branch
 execute_process(
@@ -92,6 +79,9 @@ include_directories(${CMAKE_CURRENT_BINARY_DIR})
 #[[
 tests and benchmarks
 ]]
+
+option(ULAYFS_LINK_LIBRARY "Link uLayFS for tests and benchmarks" ON)
+
 option(ULAYFS_BUILD_TESTS "Build tests" ON)
 if (ULAYFS_BUILD_TESTS)
     include_directories(src)
@@ -99,9 +89,14 @@ if (ULAYFS_BUILD_TESTS)
     add_executable(test_basic test/test_basic.cpp test/common.h)
     add_executable(test_rw test/test_rw.cpp test/common.h)
     add_executable(test_sync test/test_sync.cpp test/common.h)
-    target_link_libraries(test_sync pthread)
 
-    list(APPEND EXECUTABLES test_basic test_rw test_sync)
+    if (ULAYFS_LINK_LIBRARY)
+        target_link_libraries(test_basic ulayfs)
+        target_link_libraries(test_rw ulayfs)
+        target_link_libraries(test_sync ulayfs pthread)
+    else ()
+        target_link_libraries(test_sync pthread)
+    endif ()
 endif ()
 
 option(ULAYFS_BUILD_BENCH "Build benchmarks" OFF)
@@ -111,18 +106,13 @@ if (ULAYFS_BUILD_BENCH)
     set(BENCHMARK_ENABLE_TESTING OFF)
     FetchContent_Declare(benchmark URL https://github.com/google/benchmark/archive/refs/tags/v1.6.0.tar.gz)
     FetchContent_MakeAvailable(benchmark)
-    target_link_libraries(bench_append benchmark::benchmark)
 
-    list(APPEND EXECUTABLES bench_append)
+    if (ULAYFS_LINK_LIBRARY)
+        target_link_libraries(bench_append benchmark::benchmark ulayfs)
+    else ()
+        target_link_libraries(bench_append benchmark::benchmark)
+    endif ()
 endif ()
-
-option(ULAYFS_LINK_LIBRARY "Link uLayFS for tests and benchmarks" ON)
-if (ULAYFS_LINK_LIBRARY)
-    foreach (EXECUTABLE ${EXECUTABLES})
-        target_link_libraries(${EXECUTABLE} ulayfs)
-    endforeach ()
-endif ()
-
 
 #[[
 sanitizers and tooling
