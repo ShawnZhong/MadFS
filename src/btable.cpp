@@ -1,6 +1,7 @@
 #include "btable.h"
 
 #include "file.h"
+#include "idx.h"
 
 namespace ulayfs::dram {
 
@@ -21,7 +22,10 @@ void BlkTable::update(TxEntryIdx& tx_idx, pmem::TxBlock*& tx_block,
   while (true) {
     auto tx_entry = tx_mgr->get_entry_from_block(tail_tx_idx, tail_tx_block);
     if (!tx_entry.is_valid()) break;
-    if (tx_entry.is_commit()) apply_tx(tx_entry.commit_entry, log_mgr);
+    if (tx_entry.is_inline())
+      apply_tx(tx_entry.commit_inline_entry);
+    else
+      apply_tx(tx_entry.commit_entry, log_mgr);
     if (!tx_mgr->advance_tx_idx(tail_tx_idx, tail_tx_block, do_alloc)) break;
   }
 
@@ -66,6 +70,17 @@ void BlkTable::apply_tx(pmem::TxCommitEntry tx_commit_entry, LogMgr* log_mgr) {
     now_virtual_idx += chunk_blocks;
     now_logical_idx_off++;
   }
+}
+
+void BlkTable::apply_tx(pmem::TxCommitInlineEntry tx_commit_inline_entry) {
+  uint32_t num_blocks;
+  VirtualBlockIdx begin_vidx;
+  LogicalBlockIdx begin_lidx;
+  num_blocks = tx_commit_inline_entry.num_blocks;
+  begin_vidx = tx_commit_inline_entry.begin_virtual_idx;
+  begin_lidx = tx_commit_inline_entry.begin_logical_idx;
+  for (uint32_t i = 0; i < num_blocks; ++i)
+    table[begin_vidx + i] = begin_lidx + i;
 }
 
 std::ostream& operator<<(std::ostream& out, const BlkTable& b) {
