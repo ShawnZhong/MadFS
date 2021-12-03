@@ -1,13 +1,14 @@
 #pragma once
 
 // see https://cmake.org/cmake/help/latest/command/configure_file.html
-#cmakedefine01 MEM_PROTECT
-#cmakedefine01 NO_SHARING
-#cmakedefine01 RELAXED
-#cmakedefine01 USE_HUGE_PAGE
-#cmakedefine01 USE_MAP_SYNC
-#cmakedefine01 FORCE_MAP_POPULATE
-#cmakedefine01 TX_FLUSH_ONLY_FSYNC
+#cmakedefine01 ULAYFS_MEM_PROTECT
+#cmakedefine01 ULAYFS_NO_SHARING
+#cmakedefine01 ULAYFS_RELAXED
+#cmakedefine01 ULAYFS_USE_HUGE_PAGE
+#cmakedefine01 ULAYFS_USE_MAP_SYNC
+#cmakedefine01 ULAYFS_FORCE_MAP_POPULATE
+#cmakedefine01 ULAYFS_TX_FLUSH_ONLY_FSYNC
+#cmakedefine01 ULAYFS_USE_PMEMCHECK
 
 #cmakedefine GIT_BRANCH "@GIT_BRANCH@"
 #cmakedefine GIT_COMMIT_HASH "@GIT_COMMIT_HASH@"
@@ -22,19 +23,14 @@ constexpr static struct BuildOptions {
   constexpr static const char* git_branch = GIT_BRANCH;
   constexpr static const char* git_commit_hash = GIT_COMMIT_HASH;
 
-  constexpr static bool mem_protect = MEM_PROTECT;
-  constexpr static bool no_sharing = NO_SHARING;
-  constexpr static bool relaxed = NO_SHARING || RELAXED;
-  constexpr static bool use_huge_page = USE_HUGE_PAGE;
-  constexpr static bool use_map_sync = USE_MAP_SYNC;
-  constexpr static bool force_map_populate = FORCE_MAP_POPULATE;
-  constexpr static bool tx_flush_only_fsync = TX_FLUSH_ONLY_FSYNC;
-
-#ifdef USE_PMEMCHECK
-  constexpr static bool use_pmemcheck = true;
-#else
-  constexpr static bool use_pmemcheck = false;
-#endif
+  constexpr static bool mem_protect = ULAYFS_MEM_PROTECT;
+  constexpr static bool no_sharing = ULAYFS_NO_SHARING;
+  constexpr static bool relaxed = ULAYFS_NO_SHARING || ULAYFS_RELAXED;
+  constexpr static bool use_huge_page = ULAYFS_USE_HUGE_PAGE;
+  constexpr static bool use_map_sync = ULAYFS_USE_MAP_SYNC;
+  constexpr static bool force_map_populate = ULAYFS_FORCE_MAP_POPULATE;
+  constexpr static bool tx_flush_only_fsync = ULAYFS_TX_FLUSH_ONLY_FSYNC;
+  constexpr static bool use_pmemcheck = ULAYFS_USE_PMEMCHECK;
 
 #ifdef NDEBUG
   constexpr static bool debug = false;

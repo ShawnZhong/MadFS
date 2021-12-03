@@ -8,7 +8,7 @@ asan ubsan msan tsan: export CXX := clang++
 
 debug release profile pmemcheck asan ubsan msan tsan:
 	cmake -S . -B build-$@ -DCMAKE_BUILD_TYPE=$@ $(CMAKE_ARGS)
-	cmake --build build-$@ -j -- --quiet $(BUILD_ARGS)
+	cmake --build build-$@ -j --target $(BUILD_TARGETS) -- --quiet $(BUILD_ARGS)
 
 .PHONY: clean
 clean:
