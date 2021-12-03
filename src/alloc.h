@@ -58,6 +58,12 @@ class Allocator {
   void free(LogicalBlockIdx block_idx, uint32_t num_blocks);
 
   /**
+   * Free an array of blocks, but the logical block indexes are not necessary
+   * continuous
+   */
+  void free(const LogicalBlockIdx recycle_image[], uint32_t image_size);
+
+  /**
    * Mark the logical block as allocated. This is not thread safe and should
    * only be used on startup if the bitmap is newly created.
    */

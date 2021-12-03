@@ -8,6 +8,7 @@
 #include "btable.h"
 #include "config.h"
 #include "entry.h"
+#include "idx.h"
 #include "log.h"
 #include "mtable.h"
 #include "posix.h"
@@ -59,17 +60,41 @@ class File {
   [[nodiscard]] LogMgr* get_local_log_mgr();
 
  private:
+  [[nodiscard]] LogicalBlockIdx vidx_to_lidx(VirtualBlockIdx vidx) {
+    return blk_table.get(vidx);
+  }
+
   /**
-   * Return a write-only pointer to the block given a virtual block index
+   * Return a writable pointer to the block given a logical block index
+   */
+  [[nodiscard]] pmem::Block* lidx_to_addr_rw(LogicalBlockIdx lidx) {
+    return mem_table.get(lidx);
+  }
+
+  /**
+   * Return a read-only pointer to the block given a logical block index
+   */
+  [[nodiscard]] const pmem::Block* lidx_to_addr_ro(LogicalBlockIdx lidx) {
+    constexpr static const char empty_block[BLOCK_SIZE]{};
+    if (lidx == 0) return reinterpret_cast<const pmem::Block*>(&empty_block);
+    return mem_table.get(lidx);
+  }
+
+  /**
+   * Return a writable pointer to the block given a virtual block index
    * A nullptr is returned if the block is not allocated yet (e.g., a hole)
    */
-  [[nodiscard]] pmem::Block* vidx_to_addr_rw(VirtualBlockIdx vidx);
+  [[nodiscard]] pmem::Block* vidx_to_addr_rw(VirtualBlockIdx vidx) {
+    return lidx_to_addr_rw(vidx_to_lidx(vidx));
+  }
 
   /**
    * Return a read-only pointer to the block given a virtual block index
    * An empty block is returned if the block is not allocated yet (e.g., a hole)
    */
-  [[nodiscard]] const pmem::Block* vidx_to_addr_ro(VirtualBlockIdx vidx);
+  [[nodiscard]] const pmem::Block* vidx_to_addr_ro(VirtualBlockIdx vidx) {
+    return lidx_to_addr_ro(vidx_to_lidx(vidx));
+  }
 
   friend std::ostream& operator<<(std::ostream& out, const File& f);
 };
