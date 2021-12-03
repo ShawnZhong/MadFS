@@ -429,7 +429,6 @@ void TxMgr::AlignedTx::do_write() {
   file->blk_table.update(tail_tx_idx, tail_tx_block, /*do_alloc*/ true);
   for (uint32_t i = 0; i < num_blocks; ++i) {
     recycle_image[i] = file->vidx_to_lidx(begin_vidx + i);
-    assert(recycle_image[i] != 0);
   }
 
 retry:

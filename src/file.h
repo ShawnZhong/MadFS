@@ -60,19 +60,26 @@ class File {
   [[nodiscard]] LogMgr* get_local_log_mgr();
 
  private:
-  [[nodiscard]] LogicalBlockIdx vidx_to_lidx(VirtualBlockIdx vidx) {
-    return blk_table.get(vidx);
+  /**
+   * @return the logical block index corresponding to the virtual index
+   */
+  [[nodiscard]] LogicalBlockIdx vidx_to_lidx(VirtualBlockIdx vidx,
+                                             bool allow_hole = false) {
+    LogicalBlockIdx lidx = blk_table.get(vidx);
+    PANIC_IF(lidx == 0 && !allow_hole,
+             "virtual block %u is not mapped to any logical block", vidx);
+    return lidx;
   }
 
   /**
-   * Return a writable pointer to the block given a logical block index
+   * @return a writable pointer to the block given a logical block index
    */
   [[nodiscard]] pmem::Block* lidx_to_addr_rw(LogicalBlockIdx lidx) {
     return mem_table.get(lidx);
   }
 
   /**
-   * Return a read-only pointer to the block given a logical block index
+   * @return a read-only pointer to the block given a logical block index
    */
   [[nodiscard]] const pmem::Block* lidx_to_addr_ro(LogicalBlockIdx lidx) {
     constexpr static const char empty_block[BLOCK_SIZE]{};
@@ -81,19 +88,19 @@ class File {
   }
 
   /**
-   * Return a writable pointer to the block given a virtual block index
+   * @return a writable pointer to the block given a virtual block index
    * A nullptr is returned if the block is not allocated yet (e.g., a hole)
    */
   [[nodiscard]] pmem::Block* vidx_to_addr_rw(VirtualBlockIdx vidx) {
-    return lidx_to_addr_rw(vidx_to_lidx(vidx));
+    return lidx_to_addr_rw(vidx_to_lidx(vidx, /*allow_hole*/ true));
   }
 
   /**
-   * Return a read-only pointer to the block given a virtual block index
+   * @return a read-only pointer to the block given a virtual block index
    * An empty block is returned if the block is not allocated yet (e.g., a hole)
    */
   [[nodiscard]] const pmem::Block* vidx_to_addr_ro(VirtualBlockIdx vidx) {
-    return lidx_to_addr_ro(vidx_to_lidx(vidx));
+    return lidx_to_addr_ro(vidx_to_lidx(vidx, /*allow_hole*/ true));
   }
 
   friend std::ostream& operator<<(std::ostream& out, const File& f);
