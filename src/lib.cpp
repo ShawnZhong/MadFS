@@ -68,8 +68,7 @@ pmem::Bitmap* open_shm(const char* pathname, const struct stat* stat) {
     // Publish the created tmpfile.
     char tmpfile_path[PATH_MAX];
     sprintf(tmpfile_path, "/proc/self/fd/%d", shm_fd);
-    if (linkat(AT_FDCWD, tmpfile_path, AT_FDCWD, shm_path,
-               AT_SYMLINK_FOLLOW)) {
+    if (linkat(AT_FDCWD, tmpfile_path, AT_FDCWD, shm_path, AT_SYMLINK_FOLLOW)) {
       // Another process may have created a new shared memory before us. Retry
       // opening.
       posix::close(shm_fd);
