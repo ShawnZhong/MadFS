@@ -63,23 +63,12 @@ class MemTable {
     else
       flags |= MAP_SHARED;
     if constexpr (BuildOptions::force_map_populate) flags |= MAP_POPULATE;
-    if constexpr (BuildOptions::use_huge_page)
-      flags |= MAP_HUGETLB | MAP_HUGE_2MB;
 
     int prot = PROT_READ | PROT_WRITE;
 
     void* addr = posix::mmap(nullptr, length, prot, flags, fd, offset);
 
     if (unlikely(addr == MAP_FAILED)) {
-      // Note that the order of the following two fallback plans matters
-      if constexpr (BuildOptions::use_huge_page) {
-        if (errno == EINVAL) {
-          WARN("Huge page not supported for fd = %d. Retry w/o huge page", fd);
-          flags &= ~(MAP_HUGETLB | MAP_HUGE_2MB);
-          addr = posix::mmap(nullptr, length, prot, flags, fd, offset);
-        }
-      }
-
       if constexpr (BuildOptions::use_map_sync) {
         if (errno == EOPNOTSUPP) {
           WARN("MAP_SYNC not supported for fd = %d. Retry w/o MAP_SYNC", fd);
