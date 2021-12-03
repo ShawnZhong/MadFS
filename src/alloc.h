@@ -56,6 +56,12 @@ class Allocator {
    * Free the blocks in the range [block_idx, block_idx + num_blocks)
    */
   void free(LogicalBlockIdx block_idx, uint32_t num_blocks);
+
+  /**
+   * Free an array of blocks, but the logical block indexes are not necessary
+   * continuous
+   */
+  void free(const LogicalBlockIdx recycle_image[], uint32_t image_size);
 };
 
 }  // namespace ulayfs::dram

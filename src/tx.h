@@ -18,35 +18,29 @@ class TxMgr {
  private:
   File* file;
   pmem::MetaBlock* meta;
-  MemTable* mem_table;
 
   class Tx;
+  class ReadTx;
+  class WriteTx;
   class AlignedTx;
   class CoWTx;
   class SingleBlockTx;
   class MultiBlockTx;
 
  public:
-  TxMgr(File* file, pmem::MetaBlock* meta, MemTable* mem_table)
-      : file(file), meta(meta), mem_table(mem_table) {}
+  TxMgr(File* file, pmem::MetaBlock* meta) : file(file), meta(meta) {}
 
-  bool tx_idx_greater(TxEntryIdx lhs, TxEntryIdx rhs) {
-    if (lhs.block_idx == rhs.block_idx) return lhs.local_idx > rhs.local_idx;
-    if (lhs.block_idx == 0) return false;
-    if (rhs.block_idx == 0) return true;
-    return mem_table->get(lhs.block_idx)->tx_block.get_tx_seq() >
-           mem_table->get(rhs.block_idx)->tx_block.get_tx_seq();
-  }
+  /**
+   * Same arguments as pread
+   */
+  ssize_t do_read(char* buf, size_t count, size_t offset);
 
   /**
    * Same arguments as pwrite
    */
   void do_write(const char* buf, size_t count, size_t offset);
 
-  /**
-   * Same arguments as pread
-   */
-  ssize_t do_read(char* buf, size_t count, size_t offset);
+  bool tx_idx_greater(TxEntryIdx lhs, TxEntryIdx rhs);
 
   /**
    * Move to the next transaction entry
@@ -107,26 +101,10 @@ class TxMgr {
    * @param[in,out] tx_idx the transaction index to be handled, might be updated
    * @param[in,out] tx_block the block corresponding to the tx, might be updated
    * @param[in] do_alloc whether allocation is allowed
-   * @return whether if it's in a non-overflow state now
+   * @return true if the idx is not in overflow state; false otherwise
    */
   bool handle_idx_overflow(TxEntryIdx& tx_idx, pmem::TxBlock*& tx_block,
-                           bool do_alloc) const {
-    const bool is_inline = tx_idx.is_inline();
-    uint16_t capacity = is_inline ? NUM_INLINE_TX_ENTRY : NUM_TX_ENTRY;
-    if (unlikely(tx_idx.local_idx >= capacity)) {
-      LogicalBlockIdx block_idx =
-          is_inline ? meta->get_next_tx_block() : tx_block->get_next_tx_block();
-      if (block_idx == 0) {
-        if (!do_alloc) return false;
-        block_idx =
-            is_inline ? alloc_next_block(meta) : alloc_next_block(tx_block);
-      }
-      tx_idx.block_idx = block_idx;
-      tx_idx.local_idx -= capacity;
-      tx_block = &mem_table->get(tx_idx.block_idx)->tx_block;
-    }
-    return true;
-  }
+                           bool do_alloc) const;
 
   /**
    * Flush tx entries from tx_idx_begin to tx_idx_end
@@ -140,36 +118,7 @@ class TxMgr {
    * save one access to mem_table (this should be a common case)
    */
   void flush_tx_entries(TxEntryIdx tx_idx_begin, TxEntryIdx tx_idx_end,
-                        pmem::TxBlock* tx_block_end = nullptr) {
-    if (!tx_idx_greater(tx_idx_end, tx_idx_begin)) return;
-    pmem::TxBlock* tx_block_begin;
-    // handle special case of inline tx
-    if (tx_idx_begin.block_idx == 0) {
-      if (tx_idx_end.block_idx == 0) {
-        meta->flush_tx_entries(tx_idx_begin.local_idx, tx_idx_end.local_idx);
-        goto done;
-      }
-      meta->flush_tx_block(tx_idx_begin.local_idx);
-      // now the next block is the "new begin"
-      tx_idx_begin = {meta->get_next_tx_block(), 0};
-    }
-    while (tx_idx_begin.block_idx != tx_idx_end.block_idx) {
-      tx_block_begin = &mem_table->get(tx_idx_begin.block_idx)->tx_block;
-      tx_block_begin->flush_tx_block(tx_idx_begin.local_idx);
-      tx_idx_begin = {tx_block_begin->get_next_tx_block(), 0};
-      // special case: tx_idx_end is the first entry of the next block, which
-      // means we only need to flush the current block and no need to
-      // dereference to get the last block
-    }
-    if (tx_idx_begin.local_idx == tx_idx_end.local_idx) goto done;
-    if (!tx_block_end)
-      tx_block_end = &mem_table->get(tx_idx_end.block_idx)->tx_block;
-    tx_block_end->flush_tx_entries(tx_idx_begin.local_idx,
-                                   tx_idx_end.local_idx);
-
-  done:
-    _mm_sfence();
-  }
+                        pmem::TxBlock* tx_block_end = nullptr);
 
  private:
   /**
@@ -180,6 +129,17 @@ class TxMgr {
    */
   void find_tail(TxEntryIdx& curr_idx, pmem::TxBlock*& curr_block) const;
 
+ public:
+  friend std::ostream& operator<<(std::ostream& out, const TxMgr& tx_mgr);
+};
+
+/**
+ * Tx is an inner class of TxMgr that represents a single transaction
+ */
+class TxMgr::Tx {
+ protected:
+  Tx(File* file, size_t count, size_t offset);
+
   /**
    * Move to the real tx and update first/last_src_block to indicate whether to
    * redo
@@ -189,47 +149,20 @@ class TxMgr {
    * dereference to some shared memory
    * @param[in] first_vidx the first block's virtual idx; ignored if !copy_first
    * @param[in] last_vidx the last block's virtual idx; ignored if !copy_last
-   * @param[in,out] tail_tx_idx current tail index
-   * @param[in,out] tail_tx_block current tail block
-   * @param[in] is_range whether it is range conflict: if false, only handle the
-   * conflict with the first/last; if true, any conflict in the range will be
-   * handled
-   * @param[out] redo_first whether redo the first; only valid if !is_range
-   * @param[out] redo_last whether redo the lsat; only valid if !is_range
-   * @param[out] first_lidx if redo_first, which logical block to copy from
-   * @param[out] last_lidx if redo_last, which logical block to copy from
-   * @param[out] redo_image if is_range and need redo, copy from the image
-   * @return true if needs redo; false otherwise
+   * @param[out] conflict_image a list of lidx that conflict with the current tx
+   * @return true if there exits conflict and requires redo
    */
   bool handle_conflict(pmem::TxEntry curr_entry, VirtualBlockIdx first_vidx,
-                       VirtualBlockIdx last_vidx, TxEntryIdx& tail_tx_idx,
-                       pmem::TxBlock*& tail_tx_block, bool is_range,
-                       bool* redo_first, bool* redo_last,
-                       LogicalBlockIdx* first_lidx, LogicalBlockIdx* last_lidx,
-                       LogicalBlockIdx redo_image[]);
+                       VirtualBlockIdx last_vidx,
+                       LogicalBlockIdx conflict_image[]);
 
- public:
-  friend std::ostream& operator<<(std::ostream& out, const TxMgr& tx_mgr);
-};
-
-/**
- * Tx is an inner class of TxMgr that represents a single transaction
- */
-class TxMgr::Tx {
- public:
-  Tx(File* file, const char* buf, size_t count, size_t offset);
-
- protected:
   // pointer to the outer class
   File* file;
   TxMgr* tx_mgr;
-  LogMgr* log_mgr;
-  Allocator* allocator;
 
   /*
    * Input (read-only) properties
    */
-  const char* const buf;
   const size_t count;
   const size_t offset;
 
@@ -250,15 +183,6 @@ class TxMgr::Tx {
   // total number of blocks
   const size_t num_blocks;
 
-  // the logical index of the destination data block
-  const LogicalBlockIdx dst_idx;
-  // the pointer to the destination data block
-  pmem::Block* const dst_blocks;
-
-  // the index of the first LogHeadEntry, can be used to locate the whole
-  // group of log entries for this transaction
-  LogEntryIdx log_idx;
-
   /*
    * Mutable states
    */
@@ -269,18 +193,57 @@ class TxMgr::Tx {
   pmem::TxBlock* tail_tx_block;
 };
 
-class TxMgr::AlignedTx : public TxMgr::Tx {
+class TxMgr::ReadTx : public TxMgr::Tx {
  public:
-  AlignedTx(File* file, const char* buf, size_t count, size_t offset);
+  ReadTx(File* file, char* buf, size_t count, size_t offset)
+      : Tx(file, count, offset), buf(buf) {}
+  ssize_t do_read();
+
+ protected:
+  /*
+   * read-specific arguments
+   */
+  char* const buf;
+};
+
+class TxMgr::WriteTx : public TxMgr::Tx {
+ protected:
+  WriteTx(File* file, const char* buf, size_t count, size_t offset);
+
+  /*
+   * write-specific arguments
+   */
+  const char* const buf;
+
+  LogMgr* log_mgr;
+  Allocator* allocator;
+
+  // the logical index of the destination data block
+  const LogicalBlockIdx dst_idx;
+  // the pointer to the destination data block
+  pmem::Block* const dst_blocks;
+
+  // the index of the first LogHeadEntry, can be used to locate the whole
+  // group of log entries for this transaction
+  LogEntryIdx log_idx;
+  // the tx entry to be committed
+  pmem::TxCommitEntry commit_entry;
+};
+
+class TxMgr::AlignedTx : public TxMgr::WriteTx {
+ public:
+  AlignedTx(File* file, const char* buf, size_t count, size_t offset)
+      : WriteTx(file, buf, count, offset) {}
   void do_write();
 };
 
-class TxMgr::CoWTx : public TxMgr::Tx {
+class TxMgr::CoWTx : public TxMgr::WriteTx {
  protected:
-  CoWTx(File* file, const char* buf, size_t count, size_t offset);
-
-  // the tx entry to be committed
-  const pmem::TxCommitEntry entry;
+  CoWTx(File* file, const char* buf, size_t count, size_t offset)
+      : WriteTx(file, buf, count, offset),
+        begin_full_vidx(ALIGN_UP(offset, BLOCK_SIZE) >> BLOCK_SHIFT),
+        end_full_vidx(end_offset >> BLOCK_SHIFT),
+        num_full_blocks(end_full_vidx - begin_full_vidx) {}
 
   /*
    * Read-only properties
@@ -295,25 +258,16 @@ class TxMgr::CoWTx : public TxMgr::Tx {
   // full blocks are blocks that can be written from buf directly without
   // copying the src data
   size_t num_full_blocks;
-
-  /*
-   * Mutable states
-   */
-
-  // whether copy the first block
-  bool copy_first;
-  // whether copy the last block
-  bool copy_last;
-
-  // if copy_first, which logical block to copy from
-  LogicalBlockIdx src_first_lidx;
-  // if copy_last, which logical block to copy from
-  LogicalBlockIdx src_last_lidx;
 };
 
 class TxMgr::SingleBlockTx : public TxMgr::CoWTx {
  public:
-  SingleBlockTx(File* file, const char* buf, size_t count, size_t offset);
+  SingleBlockTx(File* file, const char* buf, size_t count, size_t offset)
+      : CoWTx(file, buf, count, offset),
+        local_offset(offset - begin_vidx * BLOCK_SIZE) {
+    assert(num_blocks == 1);
+  }
+
   void do_write();
 
  private:
@@ -323,7 +277,12 @@ class TxMgr::SingleBlockTx : public TxMgr::CoWTx {
 
 class TxMgr::MultiBlockTx : public TxMgr::CoWTx {
  public:
-  MultiBlockTx(File* file, const char* buf, size_t count, size_t offset);
+  MultiBlockTx(File* file, const char* buf, size_t count, size_t offset)
+      : CoWTx(file, buf, count, offset),
+        first_block_local_offset(ALIGN_UP(offset, BLOCK_SIZE) - offset),
+        last_block_local_offset(end_offset -
+                                ALIGN_DOWN(end_offset, BLOCK_SIZE)) {}
+
   void do_write();
 
  private:

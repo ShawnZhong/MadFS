@@ -10,7 +10,7 @@ File::File(int fd, off_t init_file_size, pmem::Bitmap* bitmap, int shm_fd)
       bitmap(bitmap),
       mem_table(fd, init_file_size),
       meta(mem_table.get_meta()),
-      tx_mgr(this, meta, &mem_table),
+      tx_mgr(this, meta),
       blk_table(this, &tx_mgr),
       shm_fd(shm_fd),
       file_offset(0) {
@@ -127,7 +127,7 @@ LogMgr* File::get_local_log_mgr() {
     return &it->second;
   }
 
-  auto [it, ok] = log_mgrs.emplace(fd, LogMgr(this, meta, &mem_table));
+  auto [it, ok] = log_mgrs.emplace(fd, LogMgr(this, meta));
   PANIC_IF(!ok, "insert to thread-local log_mgrs failed");
   return &it->second;
 }
@@ -148,18 +148,6 @@ void File::init() {
     bitmap[0].set_allocated(0);
   }
   meta->unlock();
-}
-
-const pmem::Block* File::vidx_to_addr_ro(VirtualBlockIdx vidx) {
-  static const char empty_block[BLOCK_SIZE]{};
-
-  LogicalBlockIdx lidx = blk_table.get(vidx);
-  if (lidx == 0) return reinterpret_cast<const pmem::Block*>(&empty_block);
-  return mem_table.get(lidx);
-}
-
-pmem::Block* File::vidx_to_addr_rw(VirtualBlockIdx vidx) {
-  return mem_table.get(blk_table.get(vidx));
 }
 
 std::ostream& operator<<(std::ostream& out, const File& f) {
