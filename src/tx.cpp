@@ -505,6 +505,8 @@ void TxMgr::MultiBlockTx::do_write() {
   file->blk_table.update(tail_tx_idx, tail_tx_block, /*do_alloc*/ true);
   for (uint32_t i = 0; i < num_blocks; ++i)
     recycle_image[i] = file->vidx_to_lidx(begin_vidx + i);
+  src_first_lidx = recycle_image[0];
+  src_last_lidx = recycle_image[num_blocks - 1];
 
 redo:
   // copy first block
@@ -540,7 +542,7 @@ retry:
   // try to commit the transaction
   conflict_entry = tx_mgr->try_commit(commit_entry, tail_tx_idx, tail_tx_block);
   if (!conflict_entry.is_valid()) goto done;  // success
-  // make a copy of the first and last
+  // make a copy of the first and last again
   src_first_lidx = recycle_image[0];
   src_last_lidx = recycle_image[num_blocks - 1];
   if (!handle_conflict(conflict_entry, begin_vidx, end_full_vidx,
