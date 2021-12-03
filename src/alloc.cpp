@@ -83,21 +83,21 @@ void Allocator::free(const LogicalBlockIdx recycle_image[],
   // try to group blocks
   // we don't try to merge the blocks with existing free list since the
   // searching is too expensive
-  assert(image_size > 0);
+  if (image_size == 0) return;
   uint32_t group_begin = 0;
   LogicalBlockIdx group_begin_lidx = recycle_image[group_begin];
 
   for (uint32_t curr = group_begin + 1; curr < image_size; ++curr) {
-    if (recycle_image[curr] != group_begin_lidx + (curr - group_begin)) {
-      assert(group_begin_lidx != 0);
-      free_list.emplace_back(curr - group_begin, group_begin_lidx);
-      group_begin = curr;
-      group_begin_lidx = recycle_image[group_begin];
-    }
+    if (recycle_image[curr] == group_begin_lidx + (curr - group_begin))
+      continue;
+    if (group_begin_lidx == 0) continue;
+    free_list.emplace_back(curr - group_begin, group_begin_lidx);
+    group_begin = curr;
+    group_begin_lidx = recycle_image[group_begin];
   }
-  assert(group_begin_lidx != 0);
-  free_list.emplace_back(image_size - group_begin, group_begin_lidx);
-
+  if (group_begin_lidx != 0) {
+    free_list.emplace_back(image_size - group_begin, group_begin_lidx);
+  }
   std::sort(free_list.begin(), free_list.end());
 }
 

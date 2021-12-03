@@ -428,7 +428,7 @@ void TxMgr::AlignedTx::do_write() {
   // make a local copy of the tx tail
   file->blk_table.update(tail_tx_idx, tail_tx_block, /*do_alloc*/ true);
   for (uint32_t i = 0; i < num_blocks; ++i) {
-    recycle_image[i] = file->vidx_to_lidx(begin_vidx + i);
+    recycle_image[i] = file->vidx_to_lidx(begin_vidx + i, /*allow_hole*/ true);
   }
 
 retry:
@@ -447,10 +447,12 @@ done:
 void TxMgr::SingleBlockTx::do_write() {
   pmem::TxEntry conflict_entry;
   LogicalBlockIdx recycle_image[1];
+  bool need_recycle = false;
 
   // must acquire the tx tail before any get
   file->blk_table.update(tail_tx_idx, tail_tx_block, /*do_alloc*/ true);
-  recycle_image[0] = file->vidx_to_lidx(begin_vidx);
+  recycle_image[0] = file->vidx_to_lidx(begin_vidx, /*allow_hole*/ true);
+  need_recycle = (recycle_image[0] != 0);
 
 redo:
   // copy original data
@@ -474,7 +476,9 @@ retry:
     goto redo;
 
 done:
-  allocator->free(recycle_image[0], 1);
+  if (need_recycle) {
+    allocator->free(recycle_image[0], 1);
+  }
 }
 
 /*
@@ -495,17 +499,22 @@ void TxMgr::MultiBlockTx::do_write() {
 
   // only get a snapshot of the tail when starting critical piece
   file->blk_table.update(tail_tx_idx, tail_tx_block, /*do_alloc*/ true);
-  for (uint32_t i = 0; i < num_blocks; ++i)
-    recycle_image[i] = file->vidx_to_lidx(begin_vidx + i);
-  LogicalBlockIdx src_first_lidx = recycle_image[0];
-  LogicalBlockIdx src_last_lidx = recycle_image[num_blocks - 1];
+  for (uint32_t i = 0; i < num_blocks; ++i) {
+    recycle_image[i] = file->vidx_to_lidx(begin_vidx + i, /*allow_hole*/ true);
+  }
+  LogicalBlockIdx src_first_lidx = -1;
+  LogicalBlockIdx src_last_lidx = -1;
 
 redo:
   // copy first block
   if (src_first_lidx != recycle_image[0]) {
     src_first_lidx = recycle_image[0];
-    memcpy(dst_blocks->data_rw(),
-           file->lidx_to_addr_ro(src_first_lidx)->data_ro(), BLOCK_SIZE);
+
+    // copy the data from the first source block if exists
+    if (src_first_lidx != 0) {
+      const char* src = file->lidx_to_addr_ro(src_first_lidx)->data_ro();
+      memcpy(dst_blocks->data_rw(), src, BLOCK_SIZE);
+    }
 
     // write data from the buf to the first block
     char* dst = dst_blocks->data_rw() + BLOCK_SIZE - first_block_local_offset;
@@ -519,9 +528,11 @@ redo:
     src_last_lidx = recycle_image[num_blocks - 1];
     pmem::Block* last_dst_block = dst_blocks + (end_full_vidx - begin_vidx);
 
-    // copy the data from the source block if exits
-    memcpy(last_dst_block->data_rw(),
-           file->lidx_to_addr_ro(src_last_lidx)->data_ro(), BLOCK_SIZE);
+    // copy the data from the last source block if exits
+    if (src_last_lidx != 0) {
+      const char* src = file->lidx_to_addr_ro(src_last_lidx)->data_ro();
+      memcpy(last_dst_block->data_rw(), src, BLOCK_SIZE);
+    }
 
     // write data from the buf to the last block
     const char* src = buf + (count - last_block_local_offset);

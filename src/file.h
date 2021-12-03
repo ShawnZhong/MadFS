@@ -61,6 +61,11 @@ class File {
 
  private:
   /**
+   * @param allow_hole If allow_hole = false (default), and the virtual block
+   * index is not mapped to a virtual index, then the program will panic. If
+   * allow_hole is set to true, the caller needs to check whether the returned
+   * logical block index is 0 or not.
+   *
    * @return the logical block index corresponding to the virtual index
    */
   [[nodiscard]] LogicalBlockIdx vidx_to_lidx(VirtualBlockIdx vidx,
@@ -73,6 +78,7 @@ class File {
 
   /**
    * @return a writable pointer to the block given a logical block index
+   * A nullptr is returned if the block is not allocated yet (e.g., a hole)
    */
   [[nodiscard]] pmem::Block* lidx_to_addr_rw(LogicalBlockIdx lidx) {
     return mem_table.get(lidx);
@@ -80,6 +86,7 @@ class File {
 
   /**
    * @return a read-only pointer to the block given a logical block index
+   * An empty block is returned if the block is not allocated yet (e.g., a hole)
    */
   [[nodiscard]] const pmem::Block* lidx_to_addr_ro(LogicalBlockIdx lidx) {
     constexpr static const char empty_block[BLOCK_SIZE]{};
