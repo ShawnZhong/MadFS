@@ -34,29 +34,25 @@ std::shared_ptr<dram::File> get_file(int fd) {
 pmem::Bitmap* open_shm(const char* pathname, const struct stat* stat) {
   // TODO: enable dynamically grow bitmap
   size_t shm_size = 8 * BLOCK_SIZE;
-  std::stringstream shm_name_stream;
-  shm_name_stream << "/dev/shm/ulayfs_" << stat->st_ino << stat->st_ctim.tv_sec
-                  << stat->st_ctim.tv_nsec;
+  char shm_path[PATH_MAX];
+  sprintf(shm_path, "/dev/shm/ulayfs_%ld%ld%ld", stat->st_ino,
+          stat->st_ctim.tv_sec, stat->st_ctim.tv_nsec);
   // use posix::open instead of shm_open since shm_open calls open, which is
   // overloaded by ulayfs
-  int shm_fd = posix::open(shm_name_stream.str().c_str(),
-                           O_RDWR | O_CREAT | O_NOFOLLOW | O_CLOEXEC, 00600);
-  if (unlikely(shm_fd < 0)) {
-    WARN("File \"%s\" failed to open bitmap shared memory object: %m",
-         pathname);
-    return nullptr;
-  }
+  int shm_fd =
+      posix::open(shm_path, O_RDWR | O_NOFOLLOW | O_CLOEXEC, S_IRUSR | S_IWUSR);
+  if (shm_fd < 0) {
+    // File may not be present. Try to create a new tmp file first.
+    shm_fd =
+        posix::open("/dev/shm", O_TMPFILE | O_RDWR | O_NOFOLLOW | O_CLOEXEC,
+                    S_IRUSR | S_IWUSR);
+    if (shm_fd < 0) {
+      WARN("File \"%s\" cannot open or create the shared memory object: %m",
+           pathname);
+      return nullptr;
+    }
 
-  struct stat shm_stat_buf;
-  int shm_rc = posix::fstat(shm_fd, &shm_stat_buf);
-  if (unlikely(shm_rc < 0)) {
-    WARN("File \"%s\" fstat on shared memory fialed: %m", pathname);
-    return nullptr;
-  }
-
-  // if shm is newly created, set ownership and permissions and allocate blocks
-  // to it.
-  if (shm_stat_buf.st_size == 0) {
+    // Change permission and ownership of the new shared memory.
     if (fchmod(shm_fd, stat->st_mode)) {
       WARN("File \"%s\" fchmod on shared memory fialed: %m", pathname);
       return nullptr;
@@ -68,6 +64,23 @@ pmem::Bitmap* open_shm(const char* pathname, const struct stat* stat) {
     if (ftruncate(shm_fd, shm_size)) {
       WARN("File \"%s\" ftruncate on shared memory fialed: %m", pathname);
       return nullptr;
+    }
+
+    // Publish the created tmpfile.
+    char tmpfile_path[PATH_MAX];
+    sprintf(tmpfile_path, "/proc/self/fd/%d", shm_fd);
+    if (linkat(AT_FDCWD, tmpfile_path, AT_FDCWD, shm_path,
+               AT_SYMLINK_FOLLOW)) {
+      // Another process may have created a new shared memory before us. Retry
+      // opening.
+      posix::close(shm_fd);
+      shm_fd = posix::open(shm_path, O_RDWR | O_NOFOLLOW | O_CLOEXEC,
+                           S_IRUSR | S_IWUSR);
+      if (shm_fd < 0) {
+        WARN("File \"%s\" cannot open or create the shared memory object: %m",
+             pathname);
+        return nullptr;
+      }
     }
   }
 
