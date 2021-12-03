@@ -50,22 +50,9 @@ set_property(TARGET ulayfs PROPERTY INTERPROCEDURAL_OPTIMIZATION TRUE)
 option(ULAYFS_MEM_PROTECT "Enable memory protection to avoid stray writes" OFF)
 option(ULAYFS_NO_SHARING "Assume that no two processes concurrently operate on the same file" OFF)
 option(ULAYFS_RELAXED "Relax visibility and serialization guarantee on concurrent access" OFF)
-option(ULAYFS_USE_HUGE_PAGE "Use huge page for mmap" OFF)
 option(ULAYFS_USE_MAP_SYNC "Use MAP_SYNC for mmap" ON)
 option(ULAYFS_FORCE_MAP_POPULATE "Always use MAP_POPULATE for mmap" OFF)
 option(ULAYFS_TX_FLUSH_ONLY_FSYNC "Only flush transaction entries in fsync" OFF)
-
-# check huge page support
-execute_process(
-    COMMAND sysctl -n vm.nr_hugepages
-    OUTPUT_VARIABLE NR_HUGEPAGES
-    OUTPUT_STRIP_TRAILING_WHITESPACE)
-if (${NR_HUGEPAGES} EQUAL "0")
-    message(WARNING
-        "Huge page not available. Disable huge page support for mmap. \
-        Please use `sudo sysctl -w vm.nr_hugepages=512` to configure huge page.")
-    set(USE_HUGE_PAGE OFF)
-endif ()
 
 # get the current working branch
 execute_process(
