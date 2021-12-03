@@ -35,6 +35,8 @@ struct TxCommitEntry {
   // transaction
   LogEntryIdx log_entry_idx;
 
+  TxCommitEntry() = default;
+
   // It's an optimization that num_blocks and virtual_block_idx could inline
   // with TxCommitEntry, but only if they could fit in.
   TxCommitEntry(uint32_t num_blocks, uint32_t begin_virtual_idx,
