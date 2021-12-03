@@ -71,8 +71,7 @@ class File {
   [[nodiscard]] LogicalBlockIdx vidx_to_lidx(VirtualBlockIdx vidx,
                                              bool allow_hole = false) {
     LogicalBlockIdx lidx = blk_table.get(vidx);
-    PANIC_IF(lidx == 0 && !allow_hole,
-             "virtual block %u is not mapped to any logical block", vidx);
+    assert(lidx != 0 || allow_hole);
     return lidx;
   }
 

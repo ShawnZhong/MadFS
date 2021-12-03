@@ -503,14 +503,12 @@ void TxMgr::MultiBlockTx::do_write() {
 
 redo:
   // copy first block
-  if (src_first_lidx != recycle_image[0]) {
+  if (src_first_lidx != recycle_image[0] && first_block_local_offset != 0) {
     src_first_lidx = recycle_image[0];
 
     // copy the data from the first source block if exists
-    if (src_first_lidx != 0) {
-      const char* src = file->lidx_to_addr_ro(src_first_lidx)->data_ro();
-      memcpy(dst_blocks->data_rw(), src, BLOCK_SIZE);
-    }
+    const char* src = file->lidx_to_addr_ro(src_first_lidx)->data_ro();
+    memcpy(dst_blocks->data_rw(), src, BLOCK_SIZE);
 
     // write data from the buf to the first block
     char* dst = dst_blocks->data_rw() + BLOCK_SIZE - first_block_local_offset;
@@ -525,14 +523,12 @@ redo:
     pmem::Block* last_dst_block = dst_blocks + (end_full_vidx - begin_vidx);
 
     // copy the data from the last source block if exits
-    if (src_last_lidx != 0) {
-      const char* src = file->lidx_to_addr_ro(src_last_lidx)->data_ro();
-      memcpy(last_dst_block->data_rw(), src, BLOCK_SIZE);
-    }
+    const char* block_src = file->lidx_to_addr_ro(src_last_lidx)->data_ro();
+    memcpy(last_dst_block->data_rw(), block_src, BLOCK_SIZE);
 
     // write data from the buf to the last block
-    const char* src = buf + (count - last_block_local_offset);
-    memcpy(last_dst_block->data_rw(), src, last_block_local_offset);
+    const char* buf_src = buf + (count - last_block_local_offset);
+    memcpy(last_dst_block->data_rw(), buf_src, last_block_local_offset);
 
     persist_unfenced(last_dst_block, BLOCK_SIZE);
   }
