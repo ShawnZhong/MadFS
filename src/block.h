@@ -192,7 +192,7 @@ class MetaBlock : public BaseBlock {
       // this lock is ONLY used for bitmap rebuild
       pthread_mutex_t mutex;
 
-      // file size in bytes (logical size to users)
+      // file size in bytes (virtual size to users)
       // modifications to this should be through the getter/setter functions
       // that use atomic instructions
       uint64_t file_size;
