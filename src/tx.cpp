@@ -18,25 +18,29 @@ namespace ulayfs::dram {
  */
 
 ssize_t TxMgr::do_read(char* buf, size_t count, size_t offset) {
-  return ReadTx(file, buf, count, offset).do_read();
+  ReadTx tx(file, buf, count, offset);
+  return tx.do_read();
 }
 
 // TODO: maybe reclaim the old blocks right after commit?
 void TxMgr::do_write(const char* buf, size_t count, size_t offset) {
   // special case that we have everything aligned, no OCC
   if (count % BLOCK_SIZE == 0 && offset % BLOCK_SIZE == 0) {
-    AlignedTx(file, buf, count, offset).do_write();
+    AlignedTx tx(file, buf, count, offset);
+    tx.do_write();
     return;
   }
 
   // another special case where range is within a single block
   if ((offset >> BLOCK_SHIFT) == ((offset + count - 1) >> BLOCK_SHIFT)) {
-    SingleBlockTx(file, buf, count, offset).do_write();
+    SingleBlockTx tx(file, buf, count, offset);
+    tx.do_write();
     return;
   }
 
   // unaligned multi-block write
-  MultiBlockTx(file, buf, count, offset).do_write();
+  MultiBlockTx tx(file, buf, count, offset);
+  tx.do_write();
 }
 
 bool TxMgr::tx_idx_greater(TxEntryIdx lhs, TxEntryIdx rhs) {
@@ -341,15 +345,16 @@ ssize_t TxMgr::ReadTx::do_read() {
     memcpy(buf + buf_offset, curr_block->data_ro(), count - buf_offset);
   }
 
-  while (true) {
+  do {
     // check the tail is still tail
-    if (!tx_mgr->handle_idx_overflow(tail_tx_idx, tail_tx_block, false)) break;
+    if (!tx_mgr->handle_idx_overflow(tail_tx_idx, tail_tx_block, false))
+      goto done;
     curr_entry = tx_mgr->get_entry_from_block(tail_tx_idx, tail_tx_block);
-    if (!curr_entry.is_valid()) break;
+    if (!curr_entry.is_valid()) goto done;
 
     // then scan the log and build redo_image; if no redo needed, we are done
     if (!handle_conflict(curr_entry, begin_vidx, end_vidx - 1, redo_image))
-      break;
+      goto done;
 
     // redo:
     LogicalBlockIdx redo_lidx;
@@ -384,9 +389,10 @@ ssize_t TxMgr::ReadTx::do_read() {
         redo_image[curr_vidx - begin_vidx] = 0;
       }
     }
-  }
+  } while (true);
 
-  return static_cast<ssize_t>(count);
+done:
+  return count;
 }
 
 TxMgr::WriteTx::WriteTx(File* file, const char* buf, size_t count,
@@ -496,8 +502,8 @@ void TxMgr::MultiBlockTx::do_write() {
   file->blk_table.update(tail_tx_idx, tail_tx_block, /*do_alloc*/ true);
   for (uint32_t i = 0; i < num_blocks; ++i)
     recycle_image[i] = file->vidx_to_lidx(begin_vidx + i);
-  LogicalBlockIdx src_first_lidx = recycle_image[0];
-  LogicalBlockIdx src_last_lidx = recycle_image[num_blocks - 1];
+  src_first_lidx = recycle_image[0];
+  src_last_lidx = recycle_image[num_blocks - 1];
 
 redo:
   // copy first block

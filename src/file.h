@@ -65,7 +65,7 @@ class File {
   }
 
   /**
-   * Return a writable pointer to the block given a logical block index
+   * Return a read-only pointer to the block given a logical block index
    */
   [[nodiscard]] pmem::Block* lidx_to_addr_rw(LogicalBlockIdx lidx) {
     return mem_table.get(lidx);
@@ -81,7 +81,7 @@ class File {
   }
 
   /**
-   * Return a writable pointer to the block given a virtual block index
+   * Return a write-only pointer to the block given a virtual block index
    * A nullptr is returned if the block is not allocated yet (e.g., a hole)
    */
   [[nodiscard]] pmem::Block* vidx_to_addr_rw(VirtualBlockIdx vidx) {
