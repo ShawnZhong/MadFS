@@ -21,6 +21,8 @@ class TxMgr {
   MemTable* mem_table;
 
   class Tx;
+  class ReadTx;
+  class WriteTx;
   class AlignedTx;
   class CoWTx;
   class SingleBlockTx;
@@ -39,14 +41,14 @@ class TxMgr {
   }
 
   /**
-   * Same arguments as pwrite
-   */
-  void do_write(const char* buf, size_t count, size_t offset);
-
-  /**
    * Same arguments as pread
    */
   ssize_t do_read(char* buf, size_t count, size_t offset);
+
+  /**
+   * Same arguments as pwrite
+   */
+  void do_write(const char* buf, size_t count, size_t offset);
 
   /**
    * Move to the next transaction entry
@@ -216,20 +218,19 @@ class TxMgr {
  * Tx is an inner class of TxMgr that represents a single transaction
  */
 class TxMgr::Tx {
- public:
-  Tx(File* file, const char* buf, size_t count, size_t offset);
-
  protected:
+  Tx(File* file, size_t count, size_t offset);
+  bool handle_conflict(pmem::TxEntry curr_entry, VirtualBlockIdx first_vidx,
+                       VirtualBlockIdx last_vidx,
+                       LogicalBlockIdx conflict_image[]);
+
   // pointer to the outer class
   File* file;
   TxMgr* tx_mgr;
-  LogMgr* log_mgr;
-  Allocator* allocator;
 
   /*
    * Input (read-only) properties
    */
-  const char* const buf;
   const size_t count;
   const size_t offset;
 
@@ -250,15 +251,6 @@ class TxMgr::Tx {
   // total number of blocks
   const size_t num_blocks;
 
-  // the logical index of the destination data block
-  const LogicalBlockIdx dst_idx;
-  // the pointer to the destination data block
-  pmem::Block* const dst_blocks;
-
-  // the index of the first LogHeadEntry, can be used to locate the whole
-  // group of log entries for this transaction
-  LogEntryIdx log_idx;
-
   /*
    * Mutable states
    */
@@ -269,18 +261,57 @@ class TxMgr::Tx {
   pmem::TxBlock* tail_tx_block;
 };
 
-class TxMgr::AlignedTx : public TxMgr::Tx {
+class TxMgr::ReadTx : public TxMgr::Tx {
  public:
-  AlignedTx(File* file, const char* buf, size_t count, size_t offset);
+  ReadTx(File* file, char* buf, size_t count, size_t offset)
+      : Tx(file, count, offset), buf(buf) {}
+  ssize_t do_read();
+
+ protected:
+  /*
+   * read-specific arguments
+   */
+  char* const buf;
+};
+
+class TxMgr::WriteTx : public TxMgr::Tx {
+ protected:
+  WriteTx(File* file, const char* buf, size_t count, size_t offset);
+
+  /*
+   * write-specific arguments
+   */
+  const char* const buf;
+
+  LogMgr* log_mgr;
+  Allocator* allocator;
+
+  // the logical index of the destination data block
+  const LogicalBlockIdx dst_idx;
+  // the pointer to the destination data block
+  pmem::Block* const dst_blocks;
+
+  // the index of the first LogHeadEntry, can be used to locate the whole
+  // group of log entries for this transaction
+  LogEntryIdx log_idx;
+  // the tx entry to be committed
+  pmem::TxCommitEntry commit_entry;
+};
+
+class TxMgr::AlignedTx : public TxMgr::WriteTx {
+ public:
+  AlignedTx(File* file, const char* buf, size_t count, size_t offset)
+      : WriteTx(file, buf, count, offset) {}
   void do_write();
 };
 
-class TxMgr::CoWTx : public TxMgr::Tx {
+class TxMgr::CoWTx : public TxMgr::WriteTx {
  protected:
-  CoWTx(File* file, const char* buf, size_t count, size_t offset);
-
-  // the tx entry to be committed
-  const pmem::TxCommitEntry entry;
+  CoWTx(File* file, const char* buf, size_t count, size_t offset)
+      : WriteTx(file, buf, count, offset),
+        begin_full_vidx(ALIGN_UP(offset, BLOCK_SIZE) >> BLOCK_SHIFT),
+        end_full_vidx(end_offset >> BLOCK_SHIFT),
+        num_full_blocks(end_full_vidx - begin_full_vidx) {}
 
   /*
    * Read-only properties
@@ -295,25 +326,16 @@ class TxMgr::CoWTx : public TxMgr::Tx {
   // full blocks are blocks that can be written from buf directly without
   // copying the src data
   size_t num_full_blocks;
-
-  /*
-   * Mutable states
-   */
-
-  // whether copy the first block
-  bool copy_first;
-  // whether copy the last block
-  bool copy_last;
-
-  // if copy_first, which logical block to copy from
-  LogicalBlockIdx src_first_lidx;
-  // if copy_last, which logical block to copy from
-  LogicalBlockIdx src_last_lidx;
 };
 
 class TxMgr::SingleBlockTx : public TxMgr::CoWTx {
  public:
-  SingleBlockTx(File* file, const char* buf, size_t count, size_t offset);
+  SingleBlockTx(File* file, const char* buf, size_t count, size_t offset)
+      : CoWTx(file, buf, count, offset),
+        local_offset(offset - begin_vidx * BLOCK_SIZE) {
+    assert(num_blocks == 1);
+  }
+
   void do_write();
 
  private:
@@ -323,7 +345,12 @@ class TxMgr::SingleBlockTx : public TxMgr::CoWTx {
 
 class TxMgr::MultiBlockTx : public TxMgr::CoWTx {
  public:
-  MultiBlockTx(File* file, const char* buf, size_t count, size_t offset);
+  MultiBlockTx(File* file, const char* buf, size_t count, size_t offset)
+      : CoWTx(file, buf, count, offset),
+        first_block_local_offset(ALIGN_UP(offset, BLOCK_SIZE) - offset),
+        last_block_local_offset(end_offset -
+                                ALIGN_DOWN(end_offset, BLOCK_SIZE)) {}
+
   void do_write();
 
  private:
@@ -334,5 +361,8 @@ class TxMgr::MultiBlockTx : public TxMgr::CoWTx {
   // number of bytes to be written for the last block
   // If the end_offset is 4097, then this var should be 1.
   const size_t last_block_local_offset;
+
+  LogicalBlockIdx src_first_lidx;
+  LogicalBlockIdx src_last_lidx;
 };
 }  // namespace ulayfs::dram
