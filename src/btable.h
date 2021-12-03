@@ -50,8 +50,10 @@ class BlkTable {
    * @param[out] tx_idx the index of the current transaction tail
    * @param[out] tx_block the log block corresponding to the transaction
    * @param[in] do_alloc whether we allow allocation when iterating the tx_idx
+   * @param[in] init_bitmap whether we need to initialize the bitmap object
    */
-  void update(TxEntryIdx& tx_idx, pmem::TxBlock*& tx_block, bool do_alloc);
+  void update(TxEntryIdx& tx_idx, pmem::TxBlock*& tx_block, bool do_alloc,
+              bool init_bitmap = false);
 
  private:
   void resize_to_fit(VirtualBlockIdx idx);
@@ -62,8 +64,10 @@ class BlkTable {
    *
    * @param tx_commit_entry the entry to be applied
    * @param log_mgr a thread-local log_mgr to be used
+   * @param init_bitmap whether we need to initialize the bitmap object
    */
-  void apply_tx(pmem::TxCommitEntry tx_commit_entry, LogMgr* log_mgr);
+  void apply_tx(pmem::TxCommitEntry tx_commit_entry, LogMgr* log_mgr,
+                bool init_bitmap);
 
   friend std::ostream& operator<<(std::ostream& out, const BlkTable& b);
 };
