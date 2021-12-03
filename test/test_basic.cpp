@@ -34,15 +34,15 @@ void test_read() {
   assert(fd >= 0);
 
   char buff[TEST_STR_LEN + 1]{};
-  ssize_t sz = read(fd, buff, TEST_STR_LEN-3);
-  assert(sz == TEST_STR_LEN-3);
+  ssize_t sz = read(fd, buff, TEST_STR_LEN - 3);
+  assert(sz == TEST_STR_LEN - 3);
   buff[sz] = '\0';
-  assert(test_str.compare(0, TEST_STR_LEN-3, buff) == 0);
+  assert(test_str.compare(0, TEST_STR_LEN - 3, buff) == 0);
 
   sz = read(fd, buff, 5);
   assert(sz == 3);
   buff[sz] = '\0';
-  assert(test_str.compare(TEST_STR_LEN-3, 3, buff) == 0);
+  assert(test_str.compare(TEST_STR_LEN - 3, 3, buff) == 0);
 
   sz = read(fd, buff, 7);
   assert(sz == 0);

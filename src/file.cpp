@@ -41,7 +41,8 @@ ssize_t File::pread(void* buf, size_t count, off_t offset) {
   // if offset >= file_size, return zero to indicate EOF
   // if offset < file_size while offset + count > file_size, cut count to EOF
   off_t file_size = static_cast<off_t>(meta->get_file_size());
-  if (offset >= file_size) return 0;
+  if (offset >= file_size)
+    return 0;
   else if (offset + static_cast<off_t>(count) > file_size)
     count = file_size - offset;
 
@@ -76,7 +77,7 @@ off_t File::lseek(off_t offset, int whence) {
       } while (!__atomic_compare_exchange_n(&file_offset, &old_off, new_off,
                                             false, __ATOMIC_ACQ_REL,
                                             __ATOMIC_RELAXED));
-      return file_offset;      
+      return file_offset;
     }
 
     // TODO: add SEEK_DATA and SEEK_HOLE
@@ -103,7 +104,8 @@ ssize_t File::read(void* buf, size_t count) {
   // if offset >= file_size, return zero to indicate EOF
   // if offset < file_size while offset + count > file_size, cut count to EOF
   off_t file_size = static_cast<off_t>(meta->get_file_size());
-  if (old_off >= file_size) return 0;
+  if (old_off >= file_size)
+    return 0;
   else if (old_off + static_cast<off_t>(count) > file_size)
     count = file_size - old_off;
 

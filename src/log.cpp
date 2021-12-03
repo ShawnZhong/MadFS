@@ -50,8 +50,7 @@ void LogMgr::get_coverage(LogEntryIdx first_head_idx,
       head_entry = get_head_entry(idx);
     } else {
       // last segment holds the true leftover_bytes for this group
-      if (leftover_bytes)
-        *leftover_bytes = head_entry->leftover_bytes;
+      if (leftover_bytes) *leftover_bytes = head_entry->leftover_bytes;
       head_entry = nullptr;
     }
   }
