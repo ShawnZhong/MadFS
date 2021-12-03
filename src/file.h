@@ -60,6 +60,12 @@ class File {
 
  private:
   /**
+   * Initialize the file object. It will initialize meta block, bitmap, and
+   * block table as needed.
+   */
+  void init(int init_file_size);
+
+  /**
    * Return a write-only pointer to the block given a virtual block index
    * A nullptr is returned if the block is not allocated yet (e.g., a hole)
    */
@@ -70,6 +76,15 @@ class File {
    * An empty block is returned if the block is not allocated yet (e.g., a hole)
    */
   [[nodiscard]] const pmem::Block* vidx_to_addr_ro(VirtualBlockIdx vidx);
+
+  /**
+   * Mark the logical block as allocated. This is not thread safe and should
+   * only be used on startup if the bitmap is newly created.
+   */
+  void set_allocated(LogicalBlockIdx block_idx) {
+    bitmap[block_idx >> BITMAP_CAPACITY_SHIFT].set_allocated(
+        block_idx & (BITMAP_CAPACITY - 1));
+  }
 
   friend std::ostream& operator<<(std::ostream& out, const File& f);
 };
