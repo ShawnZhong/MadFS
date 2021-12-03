@@ -317,12 +317,14 @@ std::ostream& operator<<(std::ostream& out, const TxMgr& tx_mgr) {
 
     // print log coverage
     uint32_t num_blocks;
+    uint16_t leftover_bytes;
     VirtualBlockIdx begin_virtual_idx;
     std::vector<LogicalBlockIdx> begin_logical_idxs;
     log_mgr->get_coverage(head_entry_idx, begin_virtual_idx, num_blocks,
-                          &begin_logical_idxs);
+                          &begin_logical_idxs, &leftover_bytes);
     out << "\t\tLogCoverage{";
     out << "n_blk=" << num_blocks << ", ";
+    out << "left_bytes=" << leftover_bytes << ", ";
     out << "vidx=" << begin_virtual_idx << ", ";
     out << "begin_lidxs=[";
     for (const auto& idx : begin_logical_idxs) out << idx << ", ";

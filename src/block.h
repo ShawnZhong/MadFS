@@ -193,11 +193,13 @@ class MetaBlock : public BaseBlock {
       pthread_mutex_t mutex;
 
       // file size in bytes (logical size to users)
-      // modifications to this usually requires meta_lock being held
+      // modifications to this should be through the getter/setter functions
+      // that use atomic instructions
       uint64_t file_size;
 
       // total number of blocks actually in this file (including unused ones)
-      // modifications to this usually requires meta_lock being held
+      // modifications to this should be through the getter/setter functions
+      // that use atomic instructions
       uint32_t num_blocks;
     };
 
@@ -263,9 +265,22 @@ class MetaBlock : public BaseBlock {
    * Getters and setters
    */
 
-  [[nodiscard]] size_t get_file_size() const { return file_size; }
+  [[nodiscard]] size_t get_file_size() const {
+    return __atomic_load_n(&this->file_size, __ATOMIC_ACQUIRE);
+  }
 
-  // called by other public functions with lock held
+  void set_file_size_if_larger(uint32_t new_file_size) {
+    uint32_t old_file_size = get_file_size();
+  retry:
+    if (old_file_size >= new_file_size) return;
+    if (__atomic_compare_exchange_n(&this->file_size, &old_file_size,
+                                    new_file_size, false, __ATOMIC_ACQ_REL,
+                                    __ATOMIC_ACQUIRE))
+      goto retry;
+    // file_size should be fenced to be up-to-date
+    persist_cl_fenced(&cl2);
+  }
+
   void set_num_blocks_if_larger(uint32_t new_num_blocks) {
     uint32_t old_num_blocks =
         __atomic_load_n(&this->num_blocks, __ATOMIC_ACQUIRE);

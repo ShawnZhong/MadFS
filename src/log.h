@@ -37,6 +37,8 @@ class LogMgr {
         curr_block(nullptr),
         free_local_idx(NUM_LOG_ENTRY) {}
 
+  [[nodiscard]] pmem::MetaBlock* get_meta() const { return meta; }
+
  private:
   /**
    * get pointer to entry data from 6-byte unpacked index
@@ -62,7 +64,7 @@ class LogMgr {
     return get_head_entry(LogEntryUnpackIdx::from_pack_idx(idx));
   }
 
-  // TODO: return op and leftover_bytes
+  // TODO: return op
   // TODO: handle writev requests
   /**
    * get total coverage of the group of log entries starting at the head at idx
@@ -75,10 +77,14 @@ class LogMgr {
    *                                logical indices; pass one when applying
    *                                the transaction, and pass nullptr when
    *                                first checking OCC
+   * @param[out] leftover_bytes pointer to an uint16_t, if nonnull, will be
+   *                            filled with the number of leftover bytes for
+   *                            this transaction
    */
   void get_coverage(LogEntryIdx first_head_idx,
                     VirtualBlockIdx& begin_virtual_idx, uint32_t& num_blocks,
-                    std::vector<LogicalBlockIdx>* begin_logical_idxs = nullptr);
+                    std::vector<LogicalBlockIdx>* begin_logical_idxs = nullptr,
+                    uint16_t* leftover_bytes = nullptr);
 
   // TODO: handle writev requests
   /**

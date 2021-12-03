@@ -45,16 +45,18 @@ void BlkTable::apply_tx(pmem::TxCommitEntry tx_commit_entry, LogMgr* log_mgr) {
   auto log_entry_idx = tx_commit_entry.log_entry_idx;
 
   uint32_t num_blocks;
+  uint16_t leftover_bytes;
   VirtualBlockIdx begin_virtual_idx;
   std::vector<LogicalBlockIdx> begin_logical_idxs;
   log_mgr->get_coverage(log_entry_idx, begin_virtual_idx, num_blocks,
-                        &begin_logical_idxs);
+                        &begin_logical_idxs, &leftover_bytes);
 
   size_t now_logical_idx_off = 0;
   VirtualBlockIdx now_virtual_idx = begin_virtual_idx;
   VirtualBlockIdx end_virtual_idx = begin_virtual_idx + num_blocks;
   resize_to_fit(end_virtual_idx);
 
+  // update block table mapping
   while (now_virtual_idx < end_virtual_idx) {
     uint16_t chunk_blocks =
         end_virtual_idx > now_virtual_idx + MAX_BLOCKS_PER_BODY
@@ -66,6 +68,10 @@ void BlkTable::apply_tx(pmem::TxCommitEntry tx_commit_entry, LogMgr* log_mgr) {
     now_virtual_idx += chunk_blocks;
     now_logical_idx_off++;
   }
+
+  // update file size if this write exceeds current file size
+  uint64_t now_file_size = end_virtual_idx * BLOCK_SIZE - leftover_bytes;
+  log_mgr->get_meta()->set_file_size_if_larger(now_file_size);
 }
 
 std::ostream& operator<<(std::ostream& out, const BlkTable& b) {

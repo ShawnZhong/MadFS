@@ -12,7 +12,8 @@ namespace ulayfs::dram {
 void LogMgr::get_coverage(LogEntryIdx first_head_idx,
                           VirtualBlockIdx& begin_virtual_idx,
                           uint32_t& num_blocks,
-                          std::vector<LogicalBlockIdx>* begin_logical_idxs) {
+                          std::vector<LogicalBlockIdx>* begin_logical_idxs,
+                          uint16_t* leftover_bytes) {
   LogEntryUnpackIdx idx = LogEntryUnpackIdx::from_pack_idx(first_head_idx);
   const pmem::LogHeadEntry* head_entry = get_head_entry(first_head_idx);
 
@@ -47,8 +48,12 @@ void LogMgr::get_coverage(LogEntryIdx first_head_idx,
     if (head_entry->overflow) {
       idx = LogEntryUnpackIdx{head_entry->next.next_block_idx, 0};
       head_entry = get_head_entry(idx);
-    } else
+    } else {
+      // last segment holds the true leftover_bytes for this group
+      if (leftover_bytes)
+        *leftover_bytes = head_entry->leftover_bytes;
       head_entry = nullptr;
+    }
   }
 }
 
@@ -73,8 +78,9 @@ LogEntryIdx LogMgr::append(
       num_blocks = max_blocks;
       head_entry->overflow = true;
       head_entry->saturate = true;
-    } else if (num_blocks > max_blocks - MAX_BLOCKS_PER_BODY) {
-      head_entry->saturate = true;
+    } else {
+      if (num_blocks > max_blocks - MAX_BLOCKS_PER_BODY)
+        head_entry->saturate = true;
       head_entry->leftover_bytes = leftover_bytes;
     }
 
