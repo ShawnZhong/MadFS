@@ -132,18 +132,6 @@ LogMgr* File::get_local_log_mgr() {
  * Helper functions
  */
 
-const pmem::Block* File::vidx_to_addr_ro(VirtualBlockIdx vidx) {
-  static const char empty_block[BLOCK_SIZE]{};
-
-  LogicalBlockIdx lidx = blk_table.get(vidx);
-  if (lidx == 0) return reinterpret_cast<const pmem::Block*>(&empty_block);
-  return mem_table.get(lidx);
-}
-
-pmem::Block* File::vidx_to_addr_rw(VirtualBlockIdx vidx) {
-  return mem_table.get(blk_table.get(vidx));
-}
-
 std::ostream& operator<<(std::ostream& out, const File& f) {
   out << "File: fd = " << f.fd << ", offset = " << f.file_offset << "\n";
   out << *f.meta;
