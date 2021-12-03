@@ -23,14 +23,14 @@ std::shared_ptr<dram::File> get_file(int fd) {
 }
 
 /**
- * Open the shared memory object corresponding to this file. The leading bit
- * of the bitmap (corresponding to metablock) indicates if the bitmap needs to
- * be initialized.
+ * Open the shared memory object corresponding to this file and save the mmapped
+ * address to bitmap. The leading bit of the bitmap (corresponding to metablock)
+ * indicates if the bitmap needs to be initialized.
  *
- * @return Return a pointer to the mmapped bitmap object, or nullptr on
- * failure.
+ * @return Return the file descriptor for the shared memory object
  */
-pmem::Bitmap* open_shm(const char* pathname, const struct stat* stat) {
+int open_shm(const char* pathname, const struct stat* stat,
+             pmem::Bitmap** bitmap) {
   // TODO: enable dynamically grow bitmap
   size_t shm_size = 8 * BLOCK_SIZE;
   char shm_path[PATH_MAX];
@@ -48,21 +48,24 @@ pmem::Bitmap* open_shm(const char* pathname, const struct stat* stat) {
     if (shm_fd < 0) {
       WARN("File \"%s\" cannot open or create the shared memory object: %m",
            pathname);
-      return nullptr;
+      return -1;
     }
 
     // Change permission and ownership of the new shared memory.
     if (fchmod(shm_fd, stat->st_mode)) {
       WARN("File \"%s\" fchmod on shared memory fialed: %m", pathname);
-      return nullptr;
+      posix::close(shm_fd);
+      return -1;
     }
     if (fchown(shm_fd, stat->st_uid, stat->st_gid)) {
       WARN("File \"%s\" fchown on shared memory fialed: %m", pathname);
-      return nullptr;
+      posix::close(shm_fd);
+      return -1;
     }
     if (ftruncate(shm_fd, shm_size)) {
       WARN("File \"%s\" ftruncate on shared memory fialed: %m", pathname);
-      return nullptr;
+      posix::close(shm_fd);
+      return -1;
     }
 
     // Publish the created tmpfile.
@@ -77,7 +80,7 @@ pmem::Bitmap* open_shm(const char* pathname, const struct stat* stat) {
       if (shm_fd < 0) {
         WARN("File \"%s\" cannot open or create the shared memory object: %m",
              pathname);
-        return nullptr;
+        return -1;
       }
     }
   }
@@ -87,10 +90,12 @@ pmem::Bitmap* open_shm(const char* pathname, const struct stat* stat) {
                           shm_fd, 0);
   if (shm == MAP_FAILED) {
     WARN("File \"%s\" mmap bitmap fialed: %m", pathname);
-    return nullptr;
+    posix::close(shm_fd);
+    return -1;
   }
 
-  return static_cast<pmem::Bitmap*>(shm);
+  *bitmap = static_cast<pmem::Bitmap*>(shm);
+  return shm_fd;
 }
 
 extern "C" {
@@ -145,13 +150,15 @@ int open(const char* pathname, int flags, ...) {
     return fd;
   }
 
-  pmem::Bitmap* bitmap = open_shm(pathname, &stat_buf);
-  if (bitmap == nullptr) {
+  pmem::Bitmap* bitmap;
+  int shm_fd = open_shm(pathname, &stat_buf, &bitmap);
+  if (shm_fd < 0) {
     WARN("Failed to open bitmap for \"%s\". Fallback to syscall", pathname);
     return fd;
   }
 
-  files.emplace(fd, std::make_shared<dram::File>(fd, stat_buf.st_size, bitmap));
+  files.emplace(
+      fd, std::make_shared<dram::File>(fd, stat_buf.st_size, bitmap, shm_fd));
   INFO("ulayfs::open(%s, %x, %x) = %d", pathname, flags, mode, fd);
   return fd;
 }

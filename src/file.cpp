@@ -5,13 +5,14 @@ namespace ulayfs::dram {
 thread_local std::unordered_map<int, Allocator> File::allocators;
 thread_local std::unordered_map<int, LogMgr> File::log_mgrs;
 
-File::File(int fd, off_t init_file_size, pmem::Bitmap* bitmap)
+File::File(int fd, off_t init_file_size, pmem::Bitmap* bitmap, int shm_fd)
     : fd(fd),
       bitmap(bitmap),
       mem_table(fd, init_file_size),
       meta(mem_table.get_meta()),
       tx_mgr(this, meta, &mem_table),
       blk_table(this, &tx_mgr),
+      shm_fd(shm_fd),
       file_offset(0) {
   if (init_file_size == 0) meta->init();
 }

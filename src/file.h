@@ -40,7 +40,7 @@ class File {
   friend class BlkTable;
 
  public:
-  File(int fd, off_t init_file_size, pmem::Bitmap* bitmap);
+  File(int fd, off_t init_file_size, pmem::Bitmap* bitmap, int shm_fd);
 
   /*
    * POSIX I/O operations
