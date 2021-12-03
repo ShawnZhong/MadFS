@@ -74,10 +74,10 @@ int open(const char* pathname, int flags, ...) {
 
   pmem::Bitmap* bitmap;
   int shm_fd = open_shm(pathname, &stat_buf, bitmap);
-  // if (shm_fd < 0) {
-  //   WARN("Failed to open bitmap for \"%s\". Fallback to syscall", pathname);
-  //   return fd;
-  // }
+  if (shm_fd < 0) {
+    WARN("Failed to open bitmap for \"%s\". Fallback to syscall", pathname);
+    return fd;
+  }
 
   files.emplace(
       fd, std::make_shared<dram::File>(fd, stat_buf.st_size, bitmap, shm_fd));
