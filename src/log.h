@@ -18,6 +18,7 @@ class LogMgr {
  private:
   File* file;
   pmem::MetaBlock* meta;
+  MemTable* mem_table;
 
   // blocks for storing log entries, max 512 entries per block
   std::vector<LogicalBlockIdx> log_blocks;
@@ -28,9 +29,10 @@ class LogMgr {
   LogLocalUnpackIdx free_local_idx;
 
  public:
-  LogMgr(File* file, pmem::MetaBlock* meta)
+  LogMgr(File* file, pmem::MetaBlock* meta, MemTable* mem_table)
       : file(file),
         meta(meta),
+        mem_table(mem_table),
         log_blocks(),
         curr_block(nullptr),
         free_local_idx(NUM_LOG_ENTRY) {}
@@ -39,7 +41,9 @@ class LogMgr {
   /**
    * get pointer to entry data from 6-byte unpacked index
    */
-  const pmem::LogEntry* get_entry(LogEntryUnpackIdx idx);
+  const pmem::LogEntry* get_entry(LogEntryUnpackIdx idx) {
+    return mem_table->get(idx.block_idx)->log_entry_block.get(idx.local_idx);
+  }
 
   // syntax sugar for union dispatching
   const pmem::LogHeadEntry* get_head_entry(LogEntryUnpackIdx idx) {

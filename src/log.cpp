@@ -9,11 +9,6 @@
 
 namespace ulayfs::dram {
 
-const pmem::LogEntry* LogMgr::get_entry(LogEntryUnpackIdx idx) {
-  return file->lidx_to_addr_rw(idx.block_idx)
-      ->log_entry_block.get(idx.local_idx);
-}
-
 void LogMgr::get_coverage(LogEntryIdx first_head_idx,
                           VirtualBlockIdx& begin_virtual_idx,
                           uint32_t& num_blocks,
@@ -116,7 +111,7 @@ pmem::LogEntry* LogMgr::alloc_entry(bool pack_align,
   if (free_local_idx == NUM_LOG_ENTRY) {
     LogicalBlockIdx idx = file->get_local_allocator()->alloc(1);
     log_blocks.push_back(idx);
-    curr_block = &file->lidx_to_addr_rw(idx)->log_entry_block;
+    curr_block = &mem_table->get(idx)->log_entry_block;
     free_local_idx = 0;
     if (prev_head_entry) prev_head_entry->next.next_block_idx = idx;
   } else {

@@ -35,8 +35,6 @@ struct TxCommitEntry {
   // transaction
   LogEntryIdx log_entry_idx;
 
-  TxCommitEntry() = default;
-
   // It's an optimization that num_blocks and virtual_block_idx could inline
   // with TxCommitEntry, but only if they could fit in.
   TxCommitEntry(uint32_t num_blocks, uint32_t begin_virtual_idx,
@@ -83,7 +81,7 @@ union TxEntry {
    * @return the local index of next available TxEntry; NUM_ENTRIES if not found
    */
   template <uint16_t NUM_ENTRIES>
-  static TxLocalIdx find_tail(const TxEntry entries[], TxLocalIdx hint = 0) {
+  static TxLocalIdx find_tail(TxEntry entries[], TxLocalIdx hint = 0) {
     for (TxLocalIdx idx = hint; idx < NUM_ENTRIES; ++idx)
       if (!entries[idx].is_valid()) return idx;
     return NUM_ENTRIES;

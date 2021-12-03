@@ -85,7 +85,7 @@ class TxBlock : public BaseBlock {
   uint32_t tx_seq;
 
  public:
-  TxLocalIdx find_tail(TxLocalIdx hint = 0) const {
+  TxLocalIdx find_tail(TxLocalIdx hint = 0) {
     return TxEntry::find_tail<NUM_TX_ENTRY>(tx_entries, hint);
   }
 
@@ -93,7 +93,7 @@ class TxBlock : public BaseBlock {
     return TxEntry::try_append(tx_entries, entry, idx);
   }
 
-  [[nodiscard]] TxEntry get(TxLocalIdx idx) const {
+  [[nodiscard]] TxEntry get(TxLocalIdx idx) {
     assert(idx >= 0 && idx < NUM_TX_ENTRY);
     return tx_entries[idx];
   }
@@ -361,7 +361,7 @@ class MetaBlock : public BaseBlock {
     return Bitmap::alloc_batch(inline_bitmaps, NUM_INLINE_BITMAP, hint);
   }
 
-  TxLocalIdx find_tail(TxLocalIdx hint = 0) const {
+  TxLocalIdx find_tail(TxLocalIdx hint = 0) {
     return TxEntry::find_tail<NUM_INLINE_TX_ENTRY>(inline_tx_entries, hint);
   }
 
