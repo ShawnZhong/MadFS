@@ -447,12 +447,10 @@ done:
 void TxMgr::SingleBlockTx::do_write() {
   pmem::TxEntry conflict_entry;
   LogicalBlockIdx recycle_image[1];
-  bool need_recycle = false;
 
   // must acquire the tx tail before any get
   file->blk_table.update(tail_tx_idx, tail_tx_block, /*do_alloc*/ true);
   recycle_image[0] = file->vidx_to_lidx(begin_vidx, /*allow_hole*/ true);
-  need_recycle = (recycle_image[0] != 0);
 
 redo:
   // copy original data
@@ -476,9 +474,7 @@ retry:
     goto redo;
 
 done:
-  if (need_recycle) {
-    allocator->free(recycle_image[0], 1);
-  }
+  allocator->free(recycle_image[0]);
 }
 
 /*
