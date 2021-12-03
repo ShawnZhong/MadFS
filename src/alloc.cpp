@@ -19,15 +19,17 @@ LogicalBlockIdx Allocator::alloc(uint32_t num_blocks) {
       std::lower_bound(free_list.begin(), free_list.end(),
                        std::pair<uint32_t, LogicalBlockIdx>(num_blocks, 0));
   if (it != free_list.end()) {
+    auto idx = it->second;
+    assert(idx != 0);
+
+    // exact match, remove from free list
     if (it->first == num_blocks) {
-      auto idx = it->second;
       free_list.erase(it);
       return idx;
     }
 
     // split a free list element
     if (it->first > num_blocks) {
-      auto idx = it->second;
       it->first -= num_blocks;
       it->second += num_blocks;
       // re-sort these elements
