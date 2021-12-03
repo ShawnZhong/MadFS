@@ -83,7 +83,7 @@ union TxEntry {
    * @return the local index of next available TxEntry; NUM_ENTRIES if not found
    */
   template <uint16_t NUM_ENTRIES>
-  static TxLocalIdx find_tail(TxEntry entries[], TxLocalIdx hint = 0) {
+  static TxLocalIdx find_tail(const TxEntry entries[], TxLocalIdx hint = 0) {
     for (TxLocalIdx idx = hint; idx < NUM_ENTRIES; ++idx)
       if (!entries[idx].is_valid()) return idx;
     return NUM_ENTRIES;

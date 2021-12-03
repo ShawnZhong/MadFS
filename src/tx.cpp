@@ -43,6 +43,14 @@ void TxMgr::do_write(const char* buf, size_t count, size_t offset) {
   tx.do_write();
 }
 
+bool TxMgr::tx_idx_greater(TxEntryIdx lhs, TxEntryIdx rhs) {
+  if (lhs.block_idx == rhs.block_idx) return lhs.local_idx > rhs.local_idx;
+  if (lhs.block_idx == 0) return false;
+  if (rhs.block_idx == 0) return true;
+  return file->lidx_to_addr_ro(lhs.block_idx)->tx_block.get_tx_seq() >
+         file->lidx_to_addr_ro(rhs.block_idx)->tx_block.get_tx_seq();
+}
+
 pmem::TxEntry TxMgr::try_commit(pmem::TxEntry entry, TxEntryIdx& tx_idx,
                                 pmem::TxBlock*& tx_block,
                                 bool cont_if_fail = false) {
@@ -73,6 +81,56 @@ pmem::TxEntry TxMgr::try_commit(pmem::TxEntry entry, TxEntryIdx& tx_idx,
   }
 }
 
+bool TxMgr::handle_idx_overflow(TxEntryIdx& tx_idx, pmem::TxBlock*& tx_block,
+                                bool do_alloc) const {
+  const bool is_inline = tx_idx.is_inline();
+  uint16_t capacity = is_inline ? NUM_INLINE_TX_ENTRY : NUM_TX_ENTRY;
+  if (unlikely(tx_idx.local_idx >= capacity)) {
+    LogicalBlockIdx block_idx =
+        is_inline ? meta->get_next_tx_block() : tx_block->get_next_tx_block();
+    if (block_idx == 0) {
+      if (!do_alloc) return false;
+      block_idx =
+          is_inline ? alloc_next_block(meta) : alloc_next_block(tx_block);
+    }
+    tx_idx.block_idx = block_idx;
+    tx_idx.local_idx -= capacity;
+    tx_block = &file->lidx_to_addr_rw(tx_idx.block_idx)->tx_block;
+  }
+  return true;
+}
+
+void TxMgr::flush_tx_entries(TxEntryIdx tx_idx_begin, TxEntryIdx tx_idx_end,
+                             pmem::TxBlock* tx_block_end) {
+  if (!tx_idx_greater(tx_idx_end, tx_idx_begin)) return;
+  pmem::TxBlock* tx_block_begin;
+  // handle special case of inline tx
+  if (tx_idx_begin.block_idx == 0) {
+    if (tx_idx_end.block_idx == 0) {
+      meta->flush_tx_entries(tx_idx_begin.local_idx, tx_idx_end.local_idx);
+      goto done;
+    }
+    meta->flush_tx_block(tx_idx_begin.local_idx);
+    // now the next block is the "new begin"
+    tx_idx_begin = {meta->get_next_tx_block(), 0};
+  }
+  while (tx_idx_begin.block_idx != tx_idx_end.block_idx) {
+    tx_block_begin = &file->lidx_to_addr_rw(tx_idx_begin.block_idx)->tx_block;
+    tx_block_begin->flush_tx_block(tx_idx_begin.local_idx);
+    tx_idx_begin = {tx_block_begin->get_next_tx_block(), 0};
+    // special case: tx_idx_end is the first entry of the next block, which
+    // means we only need to flush the current block and no need to
+    // dereference to get the last block
+  }
+  if (tx_idx_begin.local_idx == tx_idx_end.local_idx) goto done;
+  if (!tx_block_end)
+    tx_block_end = &file->lidx_to_addr_rw(tx_idx_end.block_idx)->tx_block;
+  tx_block_end->flush_tx_entries(tx_idx_begin.local_idx, tx_idx_end.local_idx);
+
+done:
+  _mm_sfence();
+}
+
 void TxMgr::find_tail(TxEntryIdx& tx_idx, pmem::TxBlock*& tx_block) const {
   TxEntryIdx& curr_idx = tx_idx;
   pmem::TxBlock*& curr_block = tx_block;
@@ -87,7 +145,7 @@ void TxMgr::find_tail(TxEntryIdx& tx_idx, pmem::TxBlock*& tx_block) const {
     }
     curr_idx.block_idx = next_block_idx;
     curr_idx.local_idx = 0;
-    curr_block = &mem_table->get(curr_idx.block_idx)->tx_block;
+    curr_block = &file->lidx_to_addr_rw(curr_idx.block_idx)->tx_block;
   }
 
   if (!(next_block_idx = curr_block->get_next_tx_block())) {
@@ -98,7 +156,7 @@ void TxMgr::find_tail(TxEntryIdx& tx_idx, pmem::TxBlock*& tx_block) const {
 retry:
   do {
     curr_idx.block_idx = next_block_idx;
-    curr_block = &(mem_table->get(next_block_idx)->tx_block);
+    curr_block = &(file->lidx_to_addr_rw(next_block_idx)->tx_block);
   } while ((next_block_idx = curr_block->get_next_tx_block()));
 
   curr_idx.local_idx = curr_block->find_tail();
@@ -116,7 +174,7 @@ template <class B>
 LogicalBlockIdx TxMgr::alloc_next_block(B* block) const {
   // allocate the next block
   LogicalBlockIdx new_block_idx = file->get_local_allocator()->alloc(1);
-  pmem::Block* new_block = mem_table->get(new_block_idx);
+  pmem::Block* new_block = file->lidx_to_addr_rw(new_block_idx);
   memset(&new_block->cache_lines[NUM_CL_PER_BLOCK - 1], 0, CACHELINE_SIZE);
   new_block->tx_block.set_tx_seq(block->get_tx_seq() + 1);
   pmem::persist_cl_unfenced(&new_block->cache_lines[NUM_CL_PER_BLOCK - 1]);

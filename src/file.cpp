@@ -9,7 +9,7 @@ File::File(int fd, off_t init_file_size)
     : fd(fd),
       mem_table(fd, init_file_size),
       meta(mem_table.get_meta()),
-      tx_mgr(this, meta, &mem_table),
+      tx_mgr(this, meta),
       blk_table(this, &tx_mgr),
       file_offset(0) {
   if (init_file_size == 0) meta->init();
@@ -123,7 +123,7 @@ LogMgr* File::get_local_log_mgr() {
     return &it->second;
   }
 
-  auto [it, ok] = log_mgrs.emplace(fd, LogMgr(this, meta, &mem_table));
+  auto [it, ok] = log_mgrs.emplace(fd, LogMgr(this, meta));
   PANIC_IF(!ok, "insert to thread-local log_mgrs failed");
   return &it->second;
 }
