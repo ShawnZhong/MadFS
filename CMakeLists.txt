@@ -92,6 +92,9 @@ include_directories(${CMAKE_CURRENT_BINARY_DIR})
 #[[
 tests and benchmarks
 ]]
+
+option(ULAYFS_LINK_LIBRARY "Link uLayFS for tests and benchmarks" ON)
+
 option(ULAYFS_BUILD_TESTS "Build tests" ON)
 if (ULAYFS_BUILD_TESTS)
     include_directories(src)
@@ -99,9 +102,14 @@ if (ULAYFS_BUILD_TESTS)
     add_executable(test_basic test/test_basic.cpp test/common.h)
     add_executable(test_rw test/test_rw.cpp test/common.h)
     add_executable(test_sync test/test_sync.cpp test/common.h)
-    target_link_libraries(test_sync pthread)
 
-    list(APPEND EXECUTABLES test_basic test_rw test_sync)
+    if (ULAYFS_LINK_LIBRARY)
+        target_link_libraries(test_basic ulayfs)
+        target_link_libraries(test_rw ulayfs)
+        target_link_libraries(test_sync ulayfs pthread)
+    else ()
+        target_link_libraries(test_sync pthread)
+    endif ()
 endif ()
 
 option(ULAYFS_BUILD_BENCH "Build benchmarks" OFF)
@@ -111,18 +119,13 @@ if (ULAYFS_BUILD_BENCH)
     set(BENCHMARK_ENABLE_TESTING OFF)
     FetchContent_Declare(benchmark URL https://github.com/google/benchmark/archive/refs/tags/v1.6.0.tar.gz)
     FetchContent_MakeAvailable(benchmark)
-    target_link_libraries(bench_append benchmark::benchmark)
 
-    list(APPEND EXECUTABLES bench_append)
+    if (ULAYFS_LINK_LIBRARY)
+        target_link_libraries(bench_append benchmark::benchmark ulayfs)
+    else ()
+        target_link_libraries(bench_append benchmark::benchmark)
+    endif ()
 endif ()
-
-option(ULAYFS_LINK_LIBRARY "Link uLayFS for tests and benchmarks" ON)
-if (ULAYFS_LINK_LIBRARY)
-    foreach (EXECUTABLE ${EXECUTABLES})
-        target_link_libraries(${EXECUTABLE} ulayfs)
-    endforeach ()
-endif ()
-
 
 #[[
 sanitizers and tooling
