@@ -73,12 +73,11 @@ void BlkTable::apply_tx(pmem::TxCommitEntry tx_commit_entry, LogMgr* log_mgr) {
 }
 
 void BlkTable::apply_tx(pmem::TxCommitInlineEntry tx_commit_inline_entry) {
-  uint32_t num_blocks;
-  VirtualBlockIdx begin_vidx;
-  LogicalBlockIdx begin_lidx;
-  num_blocks = tx_commit_inline_entry.num_blocks;
-  begin_vidx = tx_commit_inline_entry.begin_virtual_idx;
-  begin_lidx = tx_commit_inline_entry.begin_logical_idx;
+  uint32_t num_blocks = tx_commit_inline_entry.num_blocks;
+  VirtualBlockIdx begin_vidx = tx_commit_inline_entry.begin_virtual_idx;
+  LogicalBlockIdx begin_lidx = tx_commit_inline_entry.begin_logical_idx;
+  VirtualBlockIdx end_vidx = begin_vidx + num_blocks;
+  resize_to_fit(end_vidx);
   for (uint32_t i = 0; i < num_blocks; ++i)
     table[begin_vidx + i] = begin_lidx + i;
 }

@@ -262,7 +262,7 @@ bool TxMgr::Tx::handle_conflict(pmem::TxEntry curr_entry,
     // TODO: implement the case where num_blocks is over 64 and there
     //       are multiple begin_logical_idxs
     // TODO: handle writev requests
-    if (curr_entry.is_inline()) {
+    if (curr_entry.is_inline()) {  // inline tx entry
       num_blocks = curr_entry.commit_inline_entry.num_blocks;
       le_first_vidx = curr_entry.commit_inline_entry.begin_virtual_idx;
       le_begin_lidx = curr_entry.commit_inline_entry.begin_logical_idx;
@@ -279,10 +279,10 @@ bool TxMgr::Tx::handle_conflict(pmem::TxEntry curr_entry,
         auto offset = vidx - first_vidx;
         conflict_image[offset] = le_begin_lidx + offset;
       }
-    } else {
+    } else {  // non-inline tx entry
       le_begin_lidx = 0;
       num_blocks = curr_entry.commit_entry.num_blocks;
-      if (num_blocks) {  // inline tx
+      if (num_blocks) {  // some info in log entries is partially inline
         le_first_vidx = curr_entry.commit_entry.begin_virtual_idx;
       } else {  // dereference log_entry_idx
         log_mgr->get_coverage(curr_entry.commit_entry.log_entry_idx,
