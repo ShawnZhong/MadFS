@@ -55,7 +55,7 @@ class Allocator {
   /**
    * Free the blocks in the range [block_idx, block_idx + num_blocks)
    */
-  void free(LogicalBlockIdx block_idx, uint32_t num_blocks);
+  void free(LogicalBlockIdx block_idx, uint32_t num_blocks = 1);
 
   /**
    * Free an array of blocks, but the logical block indexes are not necessary

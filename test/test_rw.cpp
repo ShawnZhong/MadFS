@@ -114,6 +114,7 @@ int main(int argc, char* argv[]) {
   // multi-block write w/o alignment
   test({.num_bytes_per_iter = BLOCK_SIZE, .init_offset = 8});
   test({.num_bytes_per_iter = BLOCK_SIZE * 7 + 1, .init_offset = 8});
+  test({.num_bytes_per_iter = BLOCK_SIZE + 1, .init_offset = 1});
   test({.num_bytes_per_iter = BLOCK_SIZE + 1, .init_offset = BLOCK_SIZE - 1});
   test({.num_bytes_per_iter = BLOCK_SIZE * 16 - 13, .init_offset = 13});
   test({.num_bytes_per_iter = 123, .num_iter = 6, .init_offset = 7890});

@@ -18,20 +18,24 @@ LogicalBlockIdx Allocator::alloc(uint32_t num_blocks) {
   auto it =
       std::lower_bound(free_list.begin(), free_list.end(),
                        std::pair<uint32_t, LogicalBlockIdx>(num_blocks, 0));
-  if (it->first == num_blocks) {
+  if (it != free_list.end()) {
     auto idx = it->second;
-    free_list.erase(it);
-    return idx;
-  }
+    assert(idx != 0);
 
-  // split a free list element
-  if (it->first > num_blocks) {
-    auto idx = it->second;
-    it->first -= num_blocks;
-    it->second += num_blocks;
-    // re-sort these elements
-    std::sort(free_list.begin(), it + 1);
-    return idx;
+    // exact match, remove from free list
+    if (it->first == num_blocks) {
+      free_list.erase(it);
+      return idx;
+    }
+
+    // split a free list element
+    if (it->first > num_blocks) {
+      it->first -= num_blocks;
+      it->second += num_blocks;
+      // re-sort these elements
+      std::sort(free_list.begin(), it + 1);
+      return idx;
+    }
   }
 
   // TODO: move bitmap to DRAM here
@@ -69,6 +73,7 @@ add_to_free_list:
 }
 
 void Allocator::free(LogicalBlockIdx block_idx, uint32_t num_blocks) {
+  if (block_idx == 0) return;
   free_list.emplace_back(num_blocks, block_idx);
   std::sort(free_list.begin(), free_list.end());
 }
@@ -78,19 +83,27 @@ void Allocator::free(const LogicalBlockIdx recycle_image[],
   // try to group blocks
   // we don't try to merge the blocks with existing free list since the
   // searching is too expensive
-  assert(image_size > 0);
+  if (image_size == 0) return;
   uint32_t group_begin = 0;
-  LogicalBlockIdx group_begin_lidx = recycle_image[group_begin];
+  LogicalBlockIdx group_begin_lidx = 0;
 
-  for (uint32_t curr = group_begin + 1; curr < image_size; ++curr) {
-    if (recycle_image[curr] != group_begin_lidx + (curr - group_begin)) {
-      free_list.emplace_back(curr - group_begin, group_begin_lidx);
+  for (uint32_t curr = group_begin; curr < image_size; ++curr) {
+    if (group_begin_lidx == 0) {  // new group not started yet
+      if (recycle_image[curr] == 0) continue;
+      // start a new group
       group_begin = curr;
+      group_begin_lidx = recycle_image[curr];
+    } else {
+      // contine the group if it matches the expectation
+      if (recycle_image[curr] == group_begin_lidx + (curr - group_begin))
+        continue;
+      free_list.emplace_back(curr - group_begin, group_begin_lidx);
       group_begin_lidx = recycle_image[group_begin];
+      if (group_begin_lidx != 0) group_begin = curr;
     }
   }
-  free_list.emplace_back(image_size - group_begin, group_begin_lidx);
-
+  if (group_begin_lidx != 0)
+    free_list.emplace_back(image_size - group_begin, group_begin_lidx);
   std::sort(free_list.begin(), free_list.end());
 }
 

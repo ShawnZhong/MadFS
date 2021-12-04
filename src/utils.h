@@ -43,6 +43,7 @@ extern FILE *log_file;
   do {                                                     \
     if (likely(!(expr))) break;                            \
     FPRINTF(stderr, "[PANIC] " msg ": %m", ##__VA_ARGS__); \
+    assert(false);                                         \
     exit(EXIT_FAILURE);                                    \
   } while (0)
 #define PANIC(msg, ...) PANIC_IF(true, msg, ##__VA_ARGS__)
