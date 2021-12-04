@@ -68,8 +68,6 @@ void test_lseek() {
   res = fsync(fd);
   assert(res == 0);
 
-  print_file(fd);
-
   res = close(fd);
   assert(res == 0);
 }
