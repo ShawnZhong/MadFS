@@ -205,22 +205,26 @@ std::ostream& operator<<(std::ostream& out, const TxMgr& tx_mgr) {
     out << "\t" << tx_idx << " -> " << tx_entry << "\n";
 
     // print log head
-    auto head_entry_idx = tx_entry.commit_entry.log_entry_idx;
-    auto head_entry = log_mgr->get_head_entry(head_entry_idx);
-    out << "\t\t" << *head_entry << "\n";
+    if (tx_entry.is_inline()) {
+      out << tx_entry.commit_inline_entry;
+    } else {
+      auto head_entry_idx = tx_entry.commit_entry.log_entry_idx;
+      auto head_entry = log_mgr->get_head_entry(head_entry_idx);
+      out << "\t\t" << *head_entry << "\n";
 
-    // print log coverage
-    uint32_t num_blocks;
-    VirtualBlockIdx begin_virtual_idx;
-    std::vector<LogicalBlockIdx> begin_logical_idxs;
-    log_mgr->get_coverage(head_entry_idx, begin_virtual_idx, num_blocks,
-                          &begin_logical_idxs);
-    out << "\t\tLogCoverage{";
-    out << "n_blk=" << num_blocks << ", ";
-    out << "vidx=" << begin_virtual_idx << ", ";
-    out << "begin_lidxs=[";
-    for (const auto& idx : begin_logical_idxs) out << idx << ", ";
-    out << "]}\n";
+      // print log coverage
+      uint32_t num_blocks;
+      VirtualBlockIdx begin_virtual_idx;
+      std::vector<LogicalBlockIdx> begin_logical_idxs;
+      log_mgr->get_coverage(head_entry_idx, begin_virtual_idx, num_blocks,
+                            &begin_logical_idxs);
+      out << "\t\tLogCoverage{";
+      out << "n_blk=" << num_blocks << ", ";
+      out << "vidx=" << begin_virtual_idx << ", ";
+      out << "begin_lidxs=[";
+      for (const auto& idx : begin_logical_idxs) out << idx << ", ";
+      out << "]}\n";
+    }
 
     if (!tx_mgr.advance_tx_idx(tx_idx, tx_block, /*do_alloc*/ false)) break;
   }
@@ -428,6 +432,7 @@ TxMgr::WriteTx::WriteTx(File* file, const char* buf, size_t count,
                                          {dst_lidx},  // begin_logical_idxs
                                          false        // fenced
     );
+
     commit_entry = pmem::TxCommitEntry(num_blocks, begin_vidx, log_entry_idx);
   }
 }
