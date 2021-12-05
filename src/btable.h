@@ -69,7 +69,8 @@ class BlkTable {
   void apply_tx(pmem::TxCommitEntry tx_commit_entry, LogMgr* log_mgr,
                 bool init_bitmap);
 
-  void apply_tx(pmem::TxCommitInlineEntry tx_commit_inline_entry);
+  void apply_tx(pmem::TxCommitInlineEntry tx_commit_inline_entry,
+                bool init_bitmap);
 
   friend std::ostream& operator<<(std::ostream& out, const BlkTable& b);
 };
