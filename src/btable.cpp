@@ -90,7 +90,6 @@ void BlkTable::apply_tx(pmem::TxCommitInlineEntry tx_commit_inline_entry,
       file->set_allocated(begin_lidx + i);
     }
   }
-
 }
 
 std::ostream& operator<<(std::ostream& out, const BlkTable& b) {

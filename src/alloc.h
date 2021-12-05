@@ -45,14 +45,13 @@ class Allocator {
         recent_bitmap_block_id(),
         recent_bitmap_local_idx() {
     free_list.reserve(64);
-    DEBUG("Allocator constructed. ");
   }
 
   ~Allocator() {
-    DEBUG("Allocator destructed. ");
-    // for (const auto& free : free_list)
-    //   bitmap[free.second >> BITMAP_CAPACITY_SHIFT].free(
-    //       free.second & (BITMAP_CAPACITY_SHIFT - 1), free.first);
+    DEBUG("~Allocator called for fd = %d", fd);
+    for (const auto& free : free_list)
+      bitmap[free.second >> BITMAP_CAPACITY_SHIFT].free(
+          free.second & (BITMAP_CAPACITY_SHIFT - 1), free.first);
   };
 
   // allocate contiguous blocks (num_blocks must <= 64)

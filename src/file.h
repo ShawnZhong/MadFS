@@ -42,6 +42,7 @@ class File {
 
  public:
   File(int fd, off_t init_file_size, pmem::Bitmap* bitmap, int shm_fd);
+  ~File();
 
   /*
    * POSIX I/O operations
@@ -84,12 +85,6 @@ class File {
     if (lidx == 0) return reinterpret_cast<const pmem::Block*>(&empty_block);
     return mem_table.get(lidx);
   }
-
-  /**
-   * Initialize the file object. It will initialize meta block, bitmap, and
-   * block table as needed.
-   */
-  void init();
 
   /**
    * @return a writable pointer to the block given a virtual block index

@@ -65,6 +65,7 @@ void cleanup() {
 }
 
 int main() {
+  unlink(FILEPATH);
   create_file();
   check_bitmap();
 

@@ -15,7 +15,23 @@ File::File(int fd, off_t init_file_size, pmem::Bitmap* bitmap, int shm_fd)
       shm_fd(shm_fd),
       file_offset(0) {
   if (init_file_size == 0) meta->init();
-  init();
+
+  meta->lock();
+  // The first bit corresponds to the meta block which should always be set
+  // to 1. If it is not, then bitmap needs to be initialized.
+  if ((bitmap[0].get() & 1) == 0) {
+    TxEntryIdx tail_tx_idx;
+    pmem::TxBlock* tail_tx_block;
+    blk_table.update(tail_tx_idx, tail_tx_block, /*do_alloc*/ false, true);
+    // mark meta block as allocated
+    bitmap[0].set_allocated(0);
+  }
+  meta->unlock();
+}
+
+File::~File() {
+  DEBUG("~File called for fd=%d", fd);
+  allocators.erase(fd);
 }
 
 /*
@@ -135,20 +151,6 @@ LogMgr* File::get_local_log_mgr() {
 /*
  * Helper functions
  */
-
-void File::init() {
-  meta->lock();
-  // The first bit corresponds to the meta block which should always be set
-  // to 1. If it is not, then bitmap needs to be initialized.
-  if ((bitmap[0].get() & 1) == 0) {
-    TxEntryIdx tail_tx_idx;
-    pmem::TxBlock* tail_tx_block;
-    blk_table.update(tail_tx_idx, tail_tx_block, /*do_alloc*/ false, true);
-    // mark meta block as allocated
-    bitmap[0].set_allocated(0);
-  }
-  meta->unlock();
-}
 
 std::ostream& operator<<(std::ostream& out, const File& f) {
   out << "File: fd = " << f.fd << ", offset = " << f.file_offset << "\n";
