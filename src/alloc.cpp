@@ -55,6 +55,11 @@ LogicalBlockIdx Allocator::alloc(uint32_t num_blocks) {
 
 add_to_free_list:
   assert(recent_bitmap_local_idx >= 0);
+  int dram_bitmap_id = recent_bitmap_local_idx >> BITMAP_CAPACITY_SHIFT;
+  if (recent_bitmap_block_id > 0)
+    dram_bitmap_id +=
+        (recent_bitmap_block_id - 1) * NUM_BITMAP + NUM_INLINE_BITMAP;
+  bitmap[dram_bitmap_id].alloc_all();
   // push in decreasing order so pop will in increasing order
   LogicalBlockIdx allocated = pmem::BitmapBlock::get_block_idx(
       recent_bitmap_block_id, recent_bitmap_local_idx);

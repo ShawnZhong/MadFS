@@ -39,50 +39,21 @@ void create_file() {
           stat.st_ctim.tv_sec, stat.st_ctim.tv_nsec);
   num_blocks = stat.st_blocks;
 
+  print_file(fd);
+
   res = close(fd);
   assert(res == 0);
 }
 
 void check_bitmap() {
-  // remove the shared memory object so that it will recreate a new bitmap on
-  // next opening.
-  int res = unlink(shm_path);
-  //  assert(res == 0);
-
   // reopen the file to build the dram bitmap
   int fd = open(FILEPATH, O_RDWR, S_IRUSR | S_IWUSR);
   assert(fd >= 0);
 
+  // to ensure that dram and pmem bitmaps match
   print_file(fd);
 
-  size_t sz;
-
-  // this file is small so all bitmap should fit into inline bitmap
-  char pmem_bitmap[ulayfs::BLOCK_SIZE];
-  off_t inline_bitmap_begin = ulayfs::CACHELINE_SIZE * 2;
-  size_t inline_bitmap_size = ulayfs::INLINE_BITMAP_CAPACITY / 8;
-  sz = ulayfs::posix::pread(fd, pmem_bitmap, inline_bitmap_size,
-                            inline_bitmap_begin);
-  assert(sz == inline_bitmap_size);
-
-  // read dram bitmap directly
-  char dram_bitmap[ulayfs::BLOCK_SIZE];
-  int shm_fd = ulayfs::posix::open(shm_path, O_RDWR, S_IRUSR | S_IWUSR);
-  assert(shm_fd >= 0);
-  sz = ulayfs::posix::pread(shm_fd, dram_bitmap, ulayfs::BLOCK_SIZE, 0);
-  assert(sz == ulayfs::BLOCK_SIZE);
-
-  // compare if they are equal for the first few bits corresponding to the valid
-  // blocks
-  for (int i = 0; i < num_blocks; i++) {
-    int pmem_val = pmem_bitmap[i / 8] & (1 << (i % 8));
-    int dram_val = dram_bitmap[i / 8] & (1 << (i % 8));
-    if (pmem_val != dram_val || dram_val != 0)
-      printf("i: %d - pmem_val: %d; dram_val: %d\n", i, pmem_val, dram_val);
-  }
-
   close(fd);
-  close(shm_fd);
 }
 
 void cleanup() {
@@ -96,6 +67,13 @@ void cleanup() {
 int main() {
   create_file();
   check_bitmap();
+
+  // remove the shared memory object so that it will recreate a new bitmap on
+  // next opening.
+  int res = unlink(shm_path);
+  assert(res == 0);
+  check_bitmap();
+
   cleanup();
   return 0;
 }

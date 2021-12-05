@@ -50,6 +50,17 @@ class Bitmap {
     return 0;
   }
 
+  // free blocks in [begin_idx, begin_idx + len)
+  void free(BitmapLocalIdx begin_idx, uint32_t len) {
+  retry:
+    uint64_t b = __atomic_load_n(&bitmap, __ATOMIC_ACQUIRE);
+    uint64_t freed = b & ~(((1 << len) - 1) << begin_idx);
+    if (!__atomic_compare_exchange_n(&bitmap, &b, freed, false,
+                                     __ATOMIC_ACQ_REL, __ATOMIC_ACQUIRE))
+      goto retry;
+    persist_cl_fenced(&bitmap);
+  }
+
   // WARN: not thread-safe
   void set_allocated(uint32_t idx) {
     bitmap |= (1 << idx);
