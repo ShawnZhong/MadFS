@@ -102,6 +102,9 @@ int main(int argc, char* argv[]) {
   test({.num_bytes_per_iter = 8,
         .num_iter = NUM_INLINE_TX_ENTRY + NUM_TX_ENTRY + 1});
   test({.num_bytes_per_iter = 8, .num_iter = BLOCK_SIZE / 8});
+  test({.num_bytes_per_iter = 8, .num_iter = BLOCK_SIZE * 2 / 8});
+  test({.num_bytes_per_iter = 9, .num_iter = BLOCK_SIZE / 9});
+  test({.num_bytes_per_iter = 9, .num_iter = BLOCK_SIZE * 2 / 9});
   test({.num_bytes_per_iter = 42, .num_iter = 12, .init_offset = 123});
 
   // multi-block write w/ block-aligned starting offset
