@@ -21,6 +21,8 @@ LogicalBlockIdx Allocator::alloc(uint32_t num_blocks) {
   if (it != free_list.end()) {
     auto idx = it->second;
     assert(idx != 0);
+    TRACE("Allocator::alloc: allocating from free list: [%u, %u)", idx,
+          idx + num_blocks);
 
     // exact match, remove from free list
     if (it->first == num_blocks) {
@@ -74,11 +76,15 @@ add_to_free_list:
   }
   // this recent is not useful because we have taken all bits; move on
   recent_bitmap_local_idx++;
+  TRACE("Allocator::alloc: allocating from bitmap: [%u, %u)", allocated,
+        num_blocks + allocated);
   return allocated;
 }
 
 void Allocator::free(LogicalBlockIdx block_idx, uint32_t num_blocks) {
   if (block_idx == 0) return;
+  TRACE("Allocator::alloc: adding to free list: [%u, %u)", block_idx,
+        num_blocks + block_idx);
   free_list.emplace_back(num_blocks, block_idx);
   std::sort(free_list.begin(), free_list.end());
 }
@@ -99,16 +105,21 @@ void Allocator::free(const LogicalBlockIdx recycle_image[],
       group_begin = curr;
       group_begin_lidx = recycle_image[curr];
     } else {
-      // contine the group if it matches the expectation
+      // continue the group if it matches the expectation
       if (recycle_image[curr] == group_begin_lidx + (curr - group_begin))
         continue;
+      TRACE("Allocator::free: adding to free list: [%u, %u)", group_begin_lidx,
+            curr - group_begin + group_begin_lidx);
       free_list.emplace_back(curr - group_begin, group_begin_lidx);
-      group_begin_lidx = recycle_image[group_begin];
+      group_begin_lidx = recycle_image[curr];
       if (group_begin_lidx != 0) group_begin = curr;
     }
   }
-  if (group_begin_lidx != 0)
+  if (group_begin_lidx != 0) {
+    TRACE("Allocator::free: adding to free list: [%u, %u)", group_begin_lidx,
+          group_begin_lidx + image_size - group_begin);
     free_list.emplace_back(image_size - group_begin, group_begin_lidx);
+  }
   std::sort(free_list.begin(), free_list.end());
 }
 
