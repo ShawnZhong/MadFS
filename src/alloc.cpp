@@ -106,7 +106,7 @@ void Allocator::free(const LogicalBlockIdx recycle_image[],
       TRACE("Allocator::free: adding to free list: [%u, %u)", group_begin_lidx,
             curr - group_begin + group_begin_lidx);
       free_list.emplace_back(curr - group_begin, group_begin_lidx);
-      group_begin_lidx = recycle_image[group_begin];
+      group_begin_lidx = recycle_image[curr];
       if (group_begin_lidx != 0) group_begin = curr;
     }
   }
