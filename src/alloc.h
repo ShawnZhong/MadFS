@@ -48,10 +48,11 @@ class Allocator {
   }
 
   ~Allocator() {
-    DEBUG("~Allocator called for fd = %d", fd);
-    for (const auto& free : free_list)
+    for (const auto& free : free_list) {
+      DEBUG("Freeing [%d, %d)", free.second, free.second + free.first);
       bitmap[free.second >> BITMAP_CAPACITY_SHIFT].free(
           free.second & (BITMAP_CAPACITY_SHIFT - 1), free.first);
+    }
   };
 
   // allocate contiguous blocks (num_blocks must <= 64)
