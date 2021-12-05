@@ -262,10 +262,27 @@ bool TxMgr::Tx::handle_conflict(pmem::TxEntry curr_entry,
     // TODO: implement the case where num_blocks is over 64 and there
     //       are multiple begin_logical_idxs
     // TODO: handle writev requests
-    if (curr_entry.is_commit()) {
+    if (curr_entry.is_inline()) {  // inline tx entry
+      num_blocks = curr_entry.commit_inline_entry.num_blocks;
+      le_first_vidx = curr_entry.commit_inline_entry.begin_virtual_idx;
+      le_begin_lidx = curr_entry.commit_inline_entry.begin_logical_idx;
+      le_last_vidx = le_first_vidx + num_blocks - 1;
+
+      if (last_vidx < le_first_vidx || first_vidx > le_last_vidx) goto next;
+      has_conflict = true;
+      overlap_first_vidx =
+          le_first_vidx > first_vidx ? le_first_vidx : first_vidx;
+      overlap_last_vidx = le_last_vidx < last_vidx ? le_last_vidx : last_vidx;
+
+      for (VirtualBlockIdx vidx = overlap_first_vidx; vidx <= overlap_last_vidx;
+           ++vidx) {
+        auto offset = vidx - first_vidx;
+        conflict_image[offset] = le_begin_lidx + offset;
+      }
+    } else {  // non-inline tx entry
       le_begin_lidx = 0;
       num_blocks = curr_entry.commit_entry.num_blocks;
-      if (num_blocks) {  // inline tx
+      if (num_blocks) {  // some info in log entries is partially inline
         le_first_vidx = curr_entry.commit_entry.begin_virtual_idx;
       } else {  // dereference log_entry_idx
         log_mgr->get_coverage(curr_entry.commit_entry.log_entry_idx,
@@ -274,11 +291,11 @@ bool TxMgr::Tx::handle_conflict(pmem::TxEntry curr_entry,
       le_last_vidx = le_first_vidx + num_blocks - 1;
       if (last_vidx < le_first_vidx || first_vidx > le_last_vidx) goto next;
 
+      has_conflict = true;
       overlap_first_vidx =
           le_first_vidx > first_vidx ? le_first_vidx : first_vidx;
       overlap_last_vidx = le_last_vidx < last_vidx ? le_last_vidx : last_vidx;
 
-      has_conflict = true;
       if (le_begin_lidx == 0) {  // lazy dereference log idx
         std::vector<LogicalBlockIdx> le_begin_lidxs;
         log_mgr->get_coverage(curr_entry.commit_entry.log_entry_idx,
@@ -291,9 +308,6 @@ bool TxMgr::Tx::handle_conflict(pmem::TxEntry curr_entry,
         auto offset = vidx - first_vidx;
         conflict_image[offset] = le_begin_lidx + offset;
       }
-    } else {
-      // FIXME: there should not be any other one
-      assert(0);
     }
   next:
     if (!tx_mgr->advance_tx_idx(tail_tx_idx, tail_tx_block, /*do_alloc*/ false))
@@ -395,23 +409,27 @@ TxMgr::WriteTx::WriteTx(File* file, const char* buf, size_t count,
       buf(buf),
       log_mgr(file->get_local_log_mgr()),
       allocator(file->get_local_allocator()),
-      dst_idx(allocator->alloc(num_blocks)),
-      dst_blocks(file->lidx_to_addr_rw(dst_idx)) {
+      dst_lidx(allocator->alloc(num_blocks)),
+      dst_blocks(file->lidx_to_addr_rw(dst_lidx)) {
   // TODO: implement the case where num_blocks is over 64 and there
   //       are multiple begin_logical_idxs
   // TODO: handle writev requests
   // for overwrite, "leftover_bytes" is zero; only in append we care
   // append log without fence because we only care flush completion
   // before try_commit
-  this->log_idx = log_mgr->append(pmem::LogOp::LOG_OVERWRITE,  // op
-                                  0,                           // leftover_bytes
-                                  num_blocks,                  // total_blocks
-                                  begin_vidx,  // begin_virtual_idx
-                                  {dst_idx},   // begin_logical_idxs
-                                  false        // fenced
-  );
-  // it's fine that we append log first as long we don't publish it by tx
-  this->commit_entry = pmem::TxCommitEntry(num_blocks, begin_vidx, log_idx);
+  if (pmem::TxCommitInlineEntry::can_inline(num_blocks, begin_vidx, dst_lidx)) {
+    commit_entry = pmem::TxCommitInlineEntry(num_blocks, begin_vidx, dst_lidx);
+  } else {
+    // it's fine that we append log first as long we don't publish it by tx
+    auto log_entry_idx = log_mgr->append(pmem::LogOp::LOG_OVERWRITE,  // op
+                                         0,           // leftover_bytes
+                                         num_blocks,  // total_blocks
+                                         begin_vidx,  // begin_virtual_idx
+                                         {dst_lidx},  // begin_logical_idxs
+                                         false        // fenced
+    );
+    commit_entry = pmem::TxCommitEntry(num_blocks, begin_vidx, log_entry_idx);
+  }
 }
 
 /*
