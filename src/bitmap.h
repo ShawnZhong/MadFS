@@ -1,7 +1,9 @@
 #pragma once
 
 #include <bit>
+#include <bitset>
 #include <cstdint>
+#include <ostream>
 
 #include "idx.h"
 #include "utils.h"
@@ -114,6 +116,11 @@ class Bitmap {
       return idx << BITMAP_CAPACITY_SHIFT;
     }
     return -1;
+  }
+
+  friend std::ostream& operator<<(std::ostream& out, const Bitmap& b) {
+    out << std::bitset<64>(b.bitmap);
+    return out;
   }
 };
 

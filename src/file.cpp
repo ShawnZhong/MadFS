@@ -156,6 +156,11 @@ std::ostream& operator<<(std::ostream& out, const File& f) {
   out << f.mem_table;
   out << f.tx_mgr;
   out << f.blk_table;
+  out << "Dram_bitmap: \n";
+  for (size_t i = 0; i < f.meta->get_num_blocks() / 64; ++i) {
+    out << "\t" << i * 64 << "-" << (i + 1) * 64 - 1 << ": " << f.bitmap[i]
+        << "\n";
+  }
   out << "\n";
 
   return out;

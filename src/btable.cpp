@@ -77,7 +77,7 @@ void BlkTable::apply_tx(pmem::TxCommitEntry tx_commit_entry, LogMgr* log_mgr,
 }
 
 std::ostream& operator<<(std::ostream& out, const BlkTable& b) {
-  out << "BlkTable:\n";
+  out << "BlkTable: (virtual block index -> logical block index)\n";
   for (size_t i = 0; i < b.table.size(); ++i) {
     if (b.table[i] != 0) {
       out << "\t" << i << " -> " << b.table[i] << "\n";

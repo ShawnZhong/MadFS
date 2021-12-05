@@ -200,7 +200,7 @@ int open_shm(const char* pathname, const struct stat* stat,
   char shm_path[PATH_MAX];
   sprintf(shm_path, "/dev/shm/ulayfs_%ld%ld%ld", stat->st_ino,
           stat->st_ctim.tv_sec, stat->st_ctim.tv_nsec);
-  INFO("Opening shared memory %s", shm_path);
+  DEBUG("Opening shared memory %s", shm_path);
   // use posix::open instead of shm_open since shm_open calls open, which is
   // overloaded by ulayfs
   int shm_fd =

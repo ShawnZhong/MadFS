@@ -376,6 +376,12 @@ class MetaBlock : public BaseBlock {
     out << "\tnum_blocks: " << block.num_blocks << "\n";
     out << "\tnext_tx_block: " << block.next_tx_block << "\n";
     out << "\ttx_tail: " << block.tx_tail << "\n";
+    out << "\tpmem_bitmap: \n";
+    for (size_t i = 0; i < block.get_num_blocks() / 64; ++i) {
+      out << "\t\t" << i * 64 << "-" << (i + 1) * 64 - 1 << ": "
+          << block.inline_bitmaps[i] << "\n";
+    }
+
     return out;
   }
 };

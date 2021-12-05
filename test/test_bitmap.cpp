@@ -45,13 +45,15 @@ void create_file() {
 
 void check_bitmap() {
   // remove the shared memory object so that it will recreate a new bitmap on
-  // next openning.
+  // next opening.
   int res = unlink(shm_path);
-  assert(res == 0);
+  //  assert(res == 0);
 
   // reopen the file to build the dram bitmap
   int fd = open(FILEPATH, O_RDWR, S_IRUSR | S_IWUSR);
   assert(fd >= 0);
+
+  print_file(fd);
 
   size_t sz;
 
@@ -76,7 +78,7 @@ void check_bitmap() {
     int pmem_val = pmem_bitmap[i / 8] & (1 << (i % 8));
     int dram_val = dram_bitmap[i / 8] & (1 << (i % 8));
     if (pmem_val != dram_val || dram_val != 0)
-        printf("i: %d - pmem_val: %d; dram_val: %d\n", i, pmem_val, dram_val);
+      printf("i: %d - pmem_val: %d; dram_val: %d\n", i, pmem_val, dram_val);
   }
 
   close(fd);
