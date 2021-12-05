@@ -204,10 +204,8 @@ std::ostream& operator<<(std::ostream& out, const TxMgr& tx_mgr) {
     // print tx entry
     out << "\t" << tx_idx << " -> " << tx_entry << "\n";
 
-    // print log head
-    if (tx_entry.is_inline()) {
-      out << tx_entry.commit_inline_entry;
-    } else {
+    // print log entries if the tx is not inlined
+    if (!tx_entry.is_inline()) {
       auto head_entry_idx = tx_entry.commit_entry.log_entry_idx;
       auto head_entry = log_mgr->get_head_entry(head_entry_idx);
       out << "\t\t" << *head_entry << "\n";
@@ -473,11 +471,12 @@ void TxMgr::SingleBlockTx::do_write() {
   // must acquire the tx tail before any get
   file->blk_table.update(tail_tx_idx, tail_tx_block, /*do_alloc*/ true);
   recycle_image[0] = file->vidx_to_lidx(begin_vidx);
+  assert(recycle_image[0] != dst_lidx);
 
 redo:
   // copy original data
-  memcpy(dst_blocks->data_rw(),
-         file->lidx_to_addr_ro(recycle_image[0])->data_ro(), BLOCK_SIZE);
+  const pmem::Block* src_block = file->lidx_to_addr_ro(recycle_image[0]);
+  memcpy(dst_blocks->data_rw(), src_block->data_ro(), BLOCK_SIZE);
   // copy data from buf
   memcpy(dst_blocks->data_rw() + local_offset, buf, count);
 
