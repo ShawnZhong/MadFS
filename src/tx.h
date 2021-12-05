@@ -219,15 +219,12 @@ class TxMgr::WriteTx : public TxMgr::Tx {
   Allocator* allocator;
 
   // the logical index of the destination data block
-  const LogicalBlockIdx dst_idx;
+  const LogicalBlockIdx dst_lidx;
   // the pointer to the destination data block
   pmem::Block* const dst_blocks;
 
-  // the index of the first LogHeadEntry, can be used to locate the whole
-  // group of log entries for this transaction
-  LogEntryIdx log_idx;
-  // the tx entry to be committed
-  pmem::TxCommitEntry commit_entry;
+  // the tx entry to be committed (may or may not inline)
+  pmem::TxEntry commit_entry;
 };
 
 class TxMgr::AlignedTx : public TxMgr::WriteTx {

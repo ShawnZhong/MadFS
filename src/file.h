@@ -60,19 +60,24 @@ class File {
   [[nodiscard]] LogMgr* get_local_log_mgr();
 
  private:
+  /**
+   * @return the logical block index corresponding to the virtual index
+   */
   [[nodiscard]] LogicalBlockIdx vidx_to_lidx(VirtualBlockIdx vidx) {
     return blk_table.get(vidx);
   }
 
   /**
-   * Return a writable pointer to the block given a logical block index
+   * @return a writable pointer to the block given a logical block index
+   * A nullptr is returned if the block is not allocated yet (e.g., a hole)
    */
   [[nodiscard]] pmem::Block* lidx_to_addr_rw(LogicalBlockIdx lidx) {
     return mem_table.get(lidx);
   }
 
   /**
-   * Return a read-only pointer to the block given a logical block index
+   * @return a read-only pointer to the block given a logical block index
+   * An empty block is returned if the block is not allocated yet (e.g., a hole)
    */
   [[nodiscard]] const pmem::Block* lidx_to_addr_ro(LogicalBlockIdx lidx) {
     constexpr static const char empty_block[BLOCK_SIZE]{};
@@ -87,7 +92,7 @@ class File {
   void init();
 
   /**
-   * Return a writable pointer to the block given a virtual block index
+   * @return a writable pointer to the block given a virtual block index
    * A nullptr is returned if the block is not allocated yet (e.g., a hole)
    */
   [[nodiscard]] pmem::Block* vidx_to_addr_rw(VirtualBlockIdx vidx) {
@@ -95,7 +100,7 @@ class File {
   }
 
   /**
-   * Return a read-only pointer to the block given a virtual block index
+   * @return a read-only pointer to the block given a virtual block index
    * An empty block is returned if the block is not allocated yet (e.g., a hole)
    */
   [[nodiscard]] const pmem::Block* vidx_to_addr_ro(VirtualBlockIdx vidx) {

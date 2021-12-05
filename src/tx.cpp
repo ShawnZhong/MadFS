@@ -262,10 +262,27 @@ bool TxMgr::Tx::handle_conflict(pmem::TxEntry curr_entry,
     // TODO: implement the case where num_blocks is over 64 and there
     //       are multiple begin_logical_idxs
     // TODO: handle writev requests
-    if (curr_entry.is_commit()) {
+    if (curr_entry.is_inline()) {  // inline tx entry
+      num_blocks = curr_entry.commit_inline_entry.num_blocks;
+      le_first_vidx = curr_entry.commit_inline_entry.begin_virtual_idx;
+      le_begin_lidx = curr_entry.commit_inline_entry.begin_logical_idx;
+      le_last_vidx = le_first_vidx + num_blocks - 1;
+
+      if (last_vidx < le_first_vidx || first_vidx > le_last_vidx) goto next;
+      has_conflict = true;
+      overlap_first_vidx =
+          le_first_vidx > first_vidx ? le_first_vidx : first_vidx;
+      overlap_last_vidx = le_last_vidx < last_vidx ? le_last_vidx : last_vidx;
+
+      for (VirtualBlockIdx vidx = overlap_first_vidx; vidx <= overlap_last_vidx;
+           ++vidx) {
+        auto offset = vidx - first_vidx;
+        conflict_image[offset] = le_begin_lidx + offset;
+      }
+    } else {  // non-inline tx entry
       le_begin_lidx = 0;
       num_blocks = curr_entry.commit_entry.num_blocks;
-      if (num_blocks) {  // inline tx
+      if (num_blocks) {  // some info in log entries is partially inline
         le_first_vidx = curr_entry.commit_entry.begin_virtual_idx;
       } else {  // dereference log_entry_idx
         log_mgr->get_coverage(curr_entry.commit_entry.log_entry_idx,
@@ -274,11 +291,11 @@ bool TxMgr::Tx::handle_conflict(pmem::TxEntry curr_entry,
       le_last_vidx = le_first_vidx + num_blocks - 1;
       if (last_vidx < le_first_vidx || first_vidx > le_last_vidx) goto next;
 
+      has_conflict = true;
       overlap_first_vidx =
           le_first_vidx > first_vidx ? le_first_vidx : first_vidx;
       overlap_last_vidx = le_last_vidx < last_vidx ? le_last_vidx : last_vidx;
 
-      has_conflict = true;
       if (le_begin_lidx == 0) {  // lazy dereference log idx
         std::vector<LogicalBlockIdx> le_begin_lidxs;
         log_mgr->get_coverage(curr_entry.commit_entry.log_entry_idx,
@@ -291,9 +308,6 @@ bool TxMgr::Tx::handle_conflict(pmem::TxEntry curr_entry,
         auto offset = vidx - first_vidx;
         conflict_image[offset] = le_begin_lidx + offset;
       }
-    } else {
-      // FIXME: there should not be any other one
-      assert(0);
     }
   next:
     if (!tx_mgr->advance_tx_idx(tail_tx_idx, tail_tx_block, /*do_alloc*/ false))
@@ -395,23 +409,27 @@ TxMgr::WriteTx::WriteTx(File* file, const char* buf, size_t count,
       buf(buf),
       log_mgr(file->get_local_log_mgr()),
       allocator(file->get_local_allocator()),
-      dst_idx(allocator->alloc(num_blocks)),
-      dst_blocks(file->lidx_to_addr_rw(dst_idx)) {
+      dst_lidx(allocator->alloc(num_blocks)),
+      dst_blocks(file->lidx_to_addr_rw(dst_lidx)) {
   // TODO: implement the case where num_blocks is over 64 and there
   //       are multiple begin_logical_idxs
   // TODO: handle writev requests
   // for overwrite, "leftover_bytes" is zero; only in append we care
   // append log without fence because we only care flush completion
   // before try_commit
-  this->log_idx = log_mgr->append(pmem::LogOp::LOG_OVERWRITE,  // op
-                                  0,                           // leftover_bytes
-                                  num_blocks,                  // total_blocks
-                                  begin_vidx,  // begin_virtual_idx
-                                  {dst_idx},   // begin_logical_idxs
-                                  false        // fenced
-  );
-  // it's fine that we append log first as long we don't publish it by tx
-  this->commit_entry = pmem::TxCommitEntry(num_blocks, begin_vidx, log_idx);
+  if (pmem::TxCommitInlineEntry::can_inline(num_blocks, begin_vidx, dst_lidx)) {
+    commit_entry = pmem::TxCommitInlineEntry(num_blocks, begin_vidx, dst_lidx);
+  } else {
+    // it's fine that we append log first as long we don't publish it by tx
+    auto log_entry_idx = log_mgr->append(pmem::LogOp::LOG_OVERWRITE,  // op
+                                         0,           // leftover_bytes
+                                         num_blocks,  // total_blocks
+                                         begin_vidx,  // begin_virtual_idx
+                                         {dst_lidx},  // begin_logical_idxs
+                                         false        // fenced
+    );
+    commit_entry = pmem::TxCommitEntry(num_blocks, begin_vidx, log_entry_idx);
+  }
 }
 
 /*
@@ -473,7 +491,7 @@ retry:
     goto redo;
 
 done:
-  allocator->free(recycle_image[0], 1);
+  allocator->free(recycle_image[0]);
 }
 
 /*
@@ -481,7 +499,16 @@ done:
  */
 
 void TxMgr::MultiBlockTx::do_write() {
+  // if need_copy_first/last is false, this means it is handled by the full
+  // block copy and never need redo
+  const bool need_copy_first = begin_full_vidx != begin_vidx;
+  const bool need_copy_last = end_full_vidx != end_vidx;
+  // do_copy_first/last indicates do we actually need to do copy; in the case of
+  // redo, we may skip if no change is maded
+  bool do_copy_first = true;
+  bool do_copy_last = true;
   pmem::TxEntry conflict_entry;
+  LogicalBlockIdx src_first_lidx, src_last_lidx;
   LogicalBlockIdx recycle_image[num_blocks];
 
   // copy full blocks first
@@ -496,15 +523,15 @@ void TxMgr::MultiBlockTx::do_write() {
   file->blk_table.update(tail_tx_idx, tail_tx_block, /*do_alloc*/ true);
   for (uint32_t i = 0; i < num_blocks; ++i)
     recycle_image[i] = file->vidx_to_lidx(begin_vidx + i);
-  LogicalBlockIdx src_first_lidx = recycle_image[0];
-  LogicalBlockIdx src_last_lidx = recycle_image[num_blocks - 1];
+  src_first_lidx = recycle_image[0];
+  src_last_lidx = recycle_image[num_blocks - 1];
 
 redo:
   // copy first block
-  if (src_first_lidx != recycle_image[0]) {
-    src_first_lidx = recycle_image[0];
-    memcpy(dst_blocks->data_rw(),
-           file->lidx_to_addr_ro(src_first_lidx)->data_ro(), BLOCK_SIZE);
+  if (need_copy_first && do_copy_first) {
+    // copy the data from the first source block if exists
+    const char* src = file->lidx_to_addr_ro(src_first_lidx)->data_ro();
+    memcpy(dst_blocks->data_rw(), src, BLOCK_SIZE);
 
     // write data from the buf to the first block
     char* dst = dst_blocks->data_rw() + BLOCK_SIZE - first_block_local_offset;
@@ -514,17 +541,16 @@ redo:
   }
 
   // copy last block
-  if (src_last_lidx != recycle_image[num_blocks - 1]) {
-    src_last_lidx = recycle_image[num_blocks - 1];
+  if (need_copy_last && do_copy_last) {
     pmem::Block* last_dst_block = dst_blocks + (end_full_vidx - begin_vidx);
 
-    // copy the data from the source block if exits
-    memcpy(last_dst_block->data_rw(),
-           file->lidx_to_addr_ro(src_last_lidx)->data_ro(), BLOCK_SIZE);
+    // copy the data from the last source block if exits
+    const char* block_src = file->lidx_to_addr_ro(src_last_lidx)->data_ro();
+    memcpy(last_dst_block->data_rw(), block_src, BLOCK_SIZE);
 
     // write data from the buf to the last block
-    const char* src = buf + (count - last_block_local_offset);
-    memcpy(last_dst_block->data_rw(), src, last_block_local_offset);
+    const char* buf_src = buf + (count - last_block_local_offset);
+    memcpy(last_dst_block->data_rw(), buf_src, last_block_local_offset);
 
     persist_unfenced(last_dst_block, BLOCK_SIZE);
   }
@@ -534,16 +560,19 @@ retry:
   // try to commit the transaction
   conflict_entry = tx_mgr->try_commit(commit_entry, tail_tx_idx, tail_tx_block);
   if (!conflict_entry.is_valid()) goto done;  // success
-
+  // make a copy of the first and last again
+  src_first_lidx = recycle_image[0];
+  src_last_lidx = recycle_image[num_blocks - 1];
   if (!handle_conflict(conflict_entry, begin_vidx, end_full_vidx,
                        recycle_image))
     goto retry;  // we have moved to the new tail, retry commit
   else {
-    // we don't redo if the conflict happens in the middle
-    if (src_first_lidx == recycle_image[0] &&
-        src_last_lidx == recycle_image[num_blocks - 1])
+    do_copy_first = src_first_lidx != recycle_image[0];
+    do_copy_last = src_last_lidx != recycle_image[num_blocks - 1];
+    if (do_copy_first || do_copy_last)
+      goto redo;
+    else
       goto retry;
-    goto redo;  // conflict is detected, redo copy
   }
 
 done:
