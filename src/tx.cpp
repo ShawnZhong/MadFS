@@ -424,13 +424,12 @@ TxMgr::WriteTx::WriteTx(File* file, const char* buf, size_t count,
     commit_entry = pmem::TxCommitInlineEntry(num_blocks, begin_vidx, dst_lidx);
   } else {
     // it's fine that we append log first as long we don't publish it by tx
-    auto log_entry_idx = log_mgr->append(
-        pmem::LogOp::LOG_OVERWRITE, // op
-        leftover_bytes,             // leftover_bytes
-        num_blocks,                 // total_blocks
-        begin_vidx,                 // begin_virtual_idx
-        {dst_lidx},                 // begin_logical_idxs
-        false                       // fenced
+    auto log_entry_idx = log_mgr->append(pmem::LogOp::LOG_OVERWRITE,  // op
+                                         leftover_bytes,  // leftover_bytes
+                                         num_blocks,      // total_blocks
+                                         begin_vidx,      // begin_virtual_idx
+                                         {dst_lidx},      // begin_logical_idxs
+                                         false            // fenced
     );
     commit_entry = pmem::TxCommitEntry(num_blocks, begin_vidx, log_entry_idx);
   }
