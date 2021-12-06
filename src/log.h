@@ -35,8 +35,6 @@ class LogMgr {
         curr_block(nullptr),
         free_local_idx(NUM_LOG_ENTRY) {}
 
-  [[nodiscard]] pmem::MetaBlock* get_meta() const { return meta; }
-
  private:
   /**
    * get pointer to entry data from 6-byte unpacked index

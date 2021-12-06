@@ -1,6 +1,7 @@
 #include "btable.h"
 
 #include "file.h"
+#include "idx.h"
 
 namespace ulayfs::dram {
 
@@ -21,7 +22,10 @@ void BlkTable::update(TxEntryIdx& tx_idx, pmem::TxBlock*& tx_block,
   while (true) {
     auto tx_entry = tx_mgr->get_entry_from_block(tail_tx_idx, tail_tx_block);
     if (!tx_entry.is_valid()) break;
-    if (tx_entry.is_commit()) apply_tx(tx_entry.commit_entry, log_mgr);
+    if (tx_entry.is_inline())
+      apply_tx(tx_entry.commit_inline_entry);
+    else
+      apply_tx(tx_entry.commit_entry, log_mgr);
     if (!tx_mgr->advance_tx_idx(tail_tx_idx, tail_tx_block, do_alloc)) break;
   }
 
@@ -57,9 +61,6 @@ void BlkTable::apply_tx(pmem::TxCommitEntry tx_commit_entry, LogMgr* log_mgr) {
   resize_to_fit(end_virtual_idx);
 
   // update block table mapping
-  // TODO: for writes at offset beyond file_size, POSIX standard supports
-  // creating a hole for the gap (where reads return null bytes). Related
-  // to SEEK_DATA and SEEK_HOLE in lseek()
   while (now_virtual_idx < end_virtual_idx) {
     uint16_t chunk_blocks =
         end_virtual_idx > now_virtual_idx + MAX_BLOCKS_PER_BODY
@@ -74,7 +75,24 @@ void BlkTable::apply_tx(pmem::TxCommitEntry tx_commit_entry, LogMgr* log_mgr) {
 
   // update file size if this write exceeds current file size
   uint64_t now_file_size = end_virtual_idx * BLOCK_SIZE - leftover_bytes;
-  log_mgr->get_meta()->set_file_size_if_larger(now_file_size);
+  file->meta->set_file_size_if_larger(now_file_size);
+}
+
+void BlkTable::apply_tx(pmem::TxCommitInlineEntry tx_commit_inline_entry) {
+  uint32_t num_blocks = tx_commit_inline_entry.num_blocks;
+  VirtualBlockIdx begin_vidx = tx_commit_inline_entry.begin_virtual_idx;
+  LogicalBlockIdx begin_lidx = tx_commit_inline_entry.begin_logical_idx;
+  VirtualBlockIdx end_vidx = begin_vidx + num_blocks;
+  resize_to_fit(end_vidx);
+
+  // update block table mapping
+  for (uint32_t i = 0; i < num_blocks; ++i)
+    table[begin_vidx + i] = begin_lidx + i;
+
+  // update file size if this write exceeds current file size
+  // inline tx must be aligned to BLOCK_SIZE boundary
+  uint64_t now_file_size = end_vidx * BLOCK_SIZE;
+  file->meta->set_file_size_if_larger(now_file_size);
 }
 
 std::ostream& operator<<(std::ostream& out, const BlkTable& b) {

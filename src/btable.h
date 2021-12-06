@@ -65,6 +65,8 @@ class BlkTable {
    */
   void apply_tx(pmem::TxCommitEntry tx_commit_entry, LogMgr* log_mgr);
 
+  void apply_tx(pmem::TxCommitInlineEntry tx_commit_inline_entry);
+
   friend std::ostream& operator<<(std::ostream& out, const BlkTable& b);
 };
 

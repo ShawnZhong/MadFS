@@ -9,33 +9,28 @@
 
 namespace ulayfs::pmem {
 
-enum class TxEntryType : bool {
-  TX_COMMIT = true,
-};
-
-struct TxCommitEntry {
+struct __attribute__((packed)) TxCommitEntry {
  private:
-  static constexpr int NUM_BLOCKS_BITS = 6;
-  static constexpr int BEGIN_VIRTUAL_IDX_BITS = 17;
+  constexpr static const int NUM_BLOCKS_BITS = 6;
+  constexpr static const int BEGIN_VIRTUAL_IDX_BITS = 17;
 
-  static constexpr int NUM_BLOCKS_MAX = (1 << NUM_BLOCKS_BITS) - 1;
-  static constexpr int BEGIN_VIRTUAL_IDX_MAX =
+  constexpr static const int NUM_BLOCKS_MAX = (1 << NUM_BLOCKS_BITS) - 1;
+  constexpr static const int BEGIN_VIRTUAL_IDX_MAX =
       (1 << BEGIN_VIRTUAL_IDX_BITS) - 1;
 
   friend union TxEntry;
 
-  enum TxEntryType type : 1 = TxEntryType::TX_COMMIT;
+ private:
+  bool is_inline : 1 = false;
 
  public:
   // optionally, set these bits so OCC conflict detection can be done inline
   uint32_t num_blocks : NUM_BLOCKS_BITS;
-  uint32_t begin_virtual_idx : BEGIN_VIRTUAL_IDX_BITS;
+  VirtualBlockIdx begin_virtual_idx : BEGIN_VIRTUAL_IDX_BITS;
 
   // points to the first LogHeadEntry for the group of log entries for this
   // transaction
   LogEntryIdx log_entry_idx;
-
-  TxCommitEntry() = default;
 
   // It's an optimization that num_blocks and virtual_block_idx could inline
   // with TxCommitEntry, but only if they could fit in.
@@ -59,18 +54,72 @@ struct TxCommitEntry {
   }
 };
 
+struct __attribute__((packed)) TxCommitInlineEntry {
+ private:
+  constexpr static const int NUM_BLOCKS_BITS = 6;
+  constexpr static const int BEGIN_VIRTUAL_IDX_BITS = 29;
+  constexpr static const int BEGIN_LOGICAL_IDX_BITS = 28;
+
+  constexpr static const int NUM_BLOCKS_MAX = (1 << NUM_BLOCKS_BITS) - 1;
+  constexpr static const int BEGIN_VIRTUAL_IDX_MAX =
+      (1 << BEGIN_VIRTUAL_IDX_BITS) - 1;
+  constexpr static const int BEGIN_LOGICAL_IDX_MAX =
+      (1 << BEGIN_LOGICAL_IDX_BITS) - 1;
+
+  friend union TxEntry;
+
+ private:
+  bool is_inline : 1 = true;
+
+ public:
+  uint32_t num_blocks : NUM_BLOCKS_BITS;
+  VirtualBlockIdx begin_virtual_idx : BEGIN_VIRTUAL_IDX_BITS;
+  LogicalBlockIdx begin_logical_idx : BEGIN_LOGICAL_IDX_BITS;
+
+  static bool can_inline(uint32_t num_blocks, uint32_t begin_virtual_idx,
+                         uint32_t begin_logical_idx,
+                         uint16_t leftover_bytes = 0) {
+    return leftover_bytes == 0 && num_blocks <= NUM_BLOCKS_MAX &&
+           begin_virtual_idx <= BEGIN_VIRTUAL_IDX_MAX &&
+           begin_logical_idx <= BEGIN_LOGICAL_IDX_MAX;
+  }
+
+  TxCommitInlineEntry(uint32_t num_blocks, uint32_t begin_virtual_idx,
+                      uint32_t begin_logical_idx)
+      : num_blocks(num_blocks),
+        begin_virtual_idx(begin_virtual_idx),
+        begin_logical_idx(begin_logical_idx) {
+    assert(can_inline(num_blocks, begin_virtual_idx, begin_logical_idx));
+  }
+
+  friend std::ostream& operator<<(std::ostream& out,
+                                  const TxCommitInlineEntry& entry) {
+    out << "TxCommitInlineEntry{";
+    out << "n_blk=" << entry.num_blocks << ", ";
+    out << "vidx=" << entry.begin_virtual_idx << ", ";
+    out << "lidx=" << entry.begin_logical_idx;
+    out << "}";
+    return out;
+  }
+};
+
 union TxEntry {
  public:
   uint64_t raw_bits;
   TxCommitEntry commit_entry;
+  TxCommitInlineEntry commit_inline_entry;
+  struct {
+    bool is_inline : 1;
+    uint64_t payload : 63;
+  } fields;
 
   TxEntry(){};
   TxEntry(uint64_t raw_bits) : raw_bits(raw_bits) {}
   TxEntry(TxCommitEntry commit_entry) : commit_entry(commit_entry) {}
+  TxEntry(TxCommitInlineEntry commit_inline_entry)
+      : commit_inline_entry(commit_inline_entry) {}
 
-  [[nodiscard]] bool is_commit() const {
-    return commit_entry.type == TxEntryType::TX_COMMIT;
-  }
+  [[nodiscard]] bool is_inline() const { return fields.is_inline; }
 
   [[nodiscard]] bool is_valid() const { return raw_bits != 0; }
 
@@ -116,13 +165,18 @@ union TxEntry {
   }
 
   friend std::ostream& operator<<(std::ostream& out, const TxEntry& tx_entry) {
-    if (tx_entry.is_commit()) out << tx_entry.commit_entry;
+    if (tx_entry.is_inline())
+      out << tx_entry.commit_inline_entry;
+    else
+      out << tx_entry.commit_entry;
     return out;
   }
 };
 
 static_assert(sizeof(TxEntry) == 8, "TxEntry must be 64 bits");
-static_assert(sizeof(TxCommitEntry) == 8, "TxEntry must be 64 bits");
+static_assert(sizeof(TxCommitEntry) == 8, "TxCommitEntry must be 64 bits");
+static_assert(sizeof(TxCommitInlineEntry) == 8,
+              "TxCommitInlineEntry must be 64 bits");
 
 enum class LogOp {
   LOG_INVALID = 0,
