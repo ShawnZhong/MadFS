@@ -2,11 +2,9 @@
 
 [![workflow](https://github.com/shawnzhong/uLayFS/actions/workflows/default.yml/badge.svg)](https://github.com/ShawnZhong/uLayFS/actions/workflows/default.yml)
 
-## Getting Started
+## Prerequisites
 
-uLayFS is developed on Ubuntu 20.04.3 LTS (with Linux kernel 5.4).
-
-### Prerequisites
+- uLayFS is developed on Ubuntu 20.04.3 LTS (with Linux kernel 5.4)
 
 - Install dependencies and configure the system
 
@@ -42,22 +40,20 @@ uLayFS is developed on Ubuntu 20.04.3 LTS (with Linux kernel 5.4).
 
   </details>
 
-### Build and Run
+## Build and Run
 
-- Clone
+- Build the project
 
-  ```shell
-  git clone git@github.com:ShawnZhong/uLayFS.git
-  cd uLayFS
-  git submodule update --init --recursive
-  ```
-
-- Build the uLayFS shared library
   ```shell
   # usage: make [build_type] 
   #             [CMAKE_ARGS="-DKEY1=VAL1 -DKEY2=VAL2 ..."] 
   #             [BUILD_TARGETS="target1 target2 ..."] 
   #             [BUILD_ARGS="..."]
+  
+  # build the uLayFS shared library and tests in debug mode
+  make
+  
+  # build just the uLayFS shared library in release mode
   make release BUILD_TARGETS="ulayfs"
   ```
 
