@@ -2,64 +2,58 @@
 
 [![workflow](https://github.com/shawnzhong/uLayFS/actions/workflows/default.yml/badge.svg)](https://github.com/ShawnZhong/uLayFS/actions/workflows/default.yml)
 
-## Getting Started
+## Prerequisites
 
-uLayFS is developed on Ubuntu 20.04.3 LTS (with Linux kernel 5.4).
+- uLayFS is developed on Ubuntu 20.04.3 LTS (with Linux kernel 5.4)
 
-### Prerequisites
-
-- Install dependencies
+- Install dependencies and configure the system
 
     ```shell
     ./scripts/init --install_build_deps
     ./scripts/init --install_dev_deps # optional
+    ./scripts/init --configure # run this after every reboot
     ```
 
-- Configure the system
+- To emulate a persistent memory device using DRAM, please follow the
+  guide [here][1].
 
-    ```shell
-    # may need to run this everytime after a reboot
-    ./scripts/init --configure
-    ```
+  [1]: https://docs.pmem.io/persistent-memory/getting-started-guide/creating-development-environments/linux-environments/linux-memmap
 
-- To emulate a persistent memory device using DRAM, follow the
-  guide [here](https://docs.pmem.io/persistent-memory/getting-started-guide/creating-development-environments/linux-environments/linux-memmap)
-  .
-
-- Configure persistent memory
-
-    ```shell
-    # replace pmem0 with the name of your pmem device
-    PMEM="pmem0"
-  
-    # create ext4 filesystem
-    sudo mkfs.ext4 /dev/${PMEM}
-  
-    # mount the filesystem
-    sudo mkdir -p /mnt/${PMEM}
-    sudo mount -o dax /dev/${PMEM} /mnt/${PMEM}
-    sudo mount -v | grep /mnt/${PMEM}
-  
-    # change permission
-    sudo chmod a+w /mnt/${PMEM}
-    ```
-
-### Build and Run
-
-- Clone
+- <details>
+  <summary>Configure persistent memory</summary>
 
   ```shell
-  git clone git@github.com:ShawnZhong/uLayFS.git
-  cd uLayFS
-  git submodule update --init --recursive
+  # replace pmem0 with the name of your pmem device
+  PMEM="pmem0"
+  
+  # create ext4 filesystem
+  sudo mkfs.ext4 /dev/${PMEM}
+  
+  # mount the filesystem
+  sudo mkdir -p /mnt/${PMEM} 
+  sudo mount -o dax /dev/${PMEM} /mnt/${PMEM} 
+  sudo mount -v | grep /mnt/${PMEM}
+  
+  # change permission
+  sudo chmod a+w /mnt/${PMEM}
   ```
 
-- Build the uLayFS shared library
+  </details>
+
+## Build and Run
+
+- Build the project
+
   ```shell
   # usage: make [build_type] 
   #             [CMAKE_ARGS="-DKEY1=VAL1 -DKEY2=VAL2 ..."] 
   #             [BUILD_TARGETS="target1 target2 ..."] 
   #             [BUILD_ARGS="..."]
+  
+  # build the uLayFS shared library and tests in debug mode
+  make
+  
+  # build just the uLayFS shared library in release mode
   make release BUILD_TARGETS="ulayfs"
   ```
 
@@ -68,6 +62,8 @@ uLayFS is developed on Ubuntu 20.04.3 LTS (with Linux kernel 5.4).
   ```shell
   LD_PRELOAD=./build-release/libulayfs.so ./your_program
   ```
+
+## Development
 
 - Build and run tests or benchmarks
 
@@ -90,3 +86,15 @@ uLayFS is developed on Ubuntu 20.04.3 LTS (with Linux kernel 5.4).
   # profile append benchmark with kernel filesystem
   ./run bench_append profile --disable_ulayfs
   ```
+
+- Environment variables
+    - `ULAYFS_NO_SHOW_CONFIG`: if defined, disable showing configuration when
+      the program starts
+
+    - `ULAYFS_LOG_FILE`: redirect log output to a file
+
+    - `ULAYFS_LOG_LEVEL`: set the numerical log level: 0 for printing all
+      messages, 1 for printing debug messages and above (default), and 4 for
+      suppressing everything. 
+
+ 
