@@ -1,17 +1,6 @@
 cmake_minimum_required(VERSION 3.16)
 project(uLayFS)
-
 set(CMAKE_CXX_STANDARD 20)
-
-set(CMAKE_CXX_FLAGS "\
-    ${CMAKE_CXX_FLAGS} \
-    -march=native \
-    -Werror -Wall -Wextra \
-    -Wno-unused-parameter \
-    -Wno-unused-function \
-    -Wno-unused-variable \
-    -Wno-unused-private-field \
-")
 
 add_library(ulayfs SHARED
     src/alloc.h src/alloc.cpp
@@ -32,19 +21,36 @@ add_library(ulayfs SHARED
     src/utils.h src/utils.cpp
     )
 
-# external dependencies
+#[[
+dependencies
+]]
+
 include(FetchContent)
 FetchContent_Declare(tbb URL https://github.com/oneapi-src/oneTBB/releases/download/v2021.4.0/oneapi-tbb-2021.4.0-lin.tgz)
 FetchContent_MakeAvailable(tbb)
 
 find_package(TBB REQUIRED HINTS ${tbb_SOURCE_DIR}/lib/cmake/tbb)
-target_link_libraries(ulayfs dl pthread TBB::tbb rt)
+target_link_libraries(ulayfs dl pthread TBB::tbb)
 
-# enable link time optimization
-set_property(TARGET ulayfs PROPERTY INTERPROCEDURAL_OPTIMIZATION TRUE)
 
 #[[
-# build options
+build flags
+]]
+
+set(CMAKE_CXX_FLAGS "\
+    ${CMAKE_CXX_FLAGS} \
+    -march=native \
+    -Werror -Wall -Wextra \
+    -Wno-unused-parameter \
+    -Wno-unused-function \
+    -Wno-unused-variable \
+    -Wno-unused-private-field \
+")
+
+set_property(TARGET ulayfs PROPERTY INTERPROCEDURAL_OPTIMIZATION TRUE) # LTO
+
+#[[
+build options
 ]]
 
 option(ULAYFS_MEM_PROTECT "Enable memory protection to avoid stray writes" OFF)
@@ -53,19 +59,16 @@ option(ULAYFS_RELAXED "Relax visibility and serialization guarantee on concurren
 option(ULAYFS_USE_MAP_SYNC "Use MAP_SYNC for mmap" ON)
 option(ULAYFS_FORCE_MAP_POPULATE "Always use MAP_POPULATE for mmap" OFF)
 option(ULAYFS_TX_FLUSH_ONLY_FSYNC "Only flush transaction entries in fsync" OFF)
+option(ULAYFS_USE_PMEMCHECK "Enable pmemcheck macros" OFF)
 
-# get the current working branch
-execute_process(
-    COMMAND git rev-parse --abbrev-ref HEAD
+execute_process(COMMAND git rev-parse --abbrev-ref HEAD
     OUTPUT_VARIABLE GIT_BRANCH
     OUTPUT_STRIP_TRAILING_WHITESPACE)
 if (NOT GIT_BRANCH)
     set(GIT_BRANCH Unknown)
 endif ()
 
-# get the latest commit hash
-execute_process(
-    COMMAND git rev-parse HEAD
+execute_process(COMMAND git rev-parse HEAD
     OUTPUT_VARIABLE GIT_COMMIT_HASH
     OUTPUT_STRIP_TRAILING_WHITESPACE)
 if (NOT GIT_COMMIT_HASH)
@@ -73,7 +76,6 @@ if (NOT GIT_COMMIT_HASH)
 endif ()
 
 configure_file("src/config.h.in" "config.h")
-
 include_directories(${CMAKE_CURRENT_BINARY_DIR})
 
 #[[
@@ -81,8 +83,9 @@ tests and benchmarks
 ]]
 
 option(ULAYFS_LINK_LIBRARY "Link uLayFS for tests and benchmarks" ON)
-
 option(ULAYFS_BUILD_TESTS "Build tests" ON)
+option(ULAYFS_BUILD_BENCH "Build benchmarks" OFF)
+
 if (ULAYFS_BUILD_TESTS)
     include_directories(src)
 
@@ -99,7 +102,6 @@ if (ULAYFS_BUILD_TESTS)
     endif ()
 endif ()
 
-option(ULAYFS_BUILD_BENCH "Build benchmarks" OFF)
 if (ULAYFS_BUILD_BENCH)
     add_executable(bench_append bench/bench_append.cpp)
 
@@ -142,7 +144,6 @@ set(CMAKE_CXX_FLAGS_PMEMCHECK
     "${CMAKE_CXX_FLAGS_DEBUG} -mno-avx512f" CACHE STRING
     "Flags used by the C++ compiler during Pmemcheck build." FORCE)
 
-option(ULAYFS_USE_PMEMCHECK "Enable pmemcheck" OFF)
 if (${CMAKE_BUILD_TYPE} STREQUAL "pmemcheck")
     set(ULAYFS_USE_PMEMCHECK ON)
     FetchContent_Declare(pmemcheck URL https://github.com/ShawnZhong/pmemcheck/releases/download/v3.17/pmemcheck.tgz)

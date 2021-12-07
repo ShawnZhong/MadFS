@@ -8,41 +8,39 @@ uLayFS is developed on Ubuntu 20.04.3 LTS (with Linux kernel 5.4).
 
 ### Prerequisites
 
-- Install dependencies
+- Install dependencies and configure the system
 
     ```shell
     ./scripts/init --install_build_deps
     ./scripts/init --install_dev_deps # optional
+    ./scripts/init --configure # run this after every reboot
     ```
 
-- Configure the system
+- To emulate a persistent memory device using DRAM, please follow the
+  guide [here][1].
 
-    ```shell
-    # may need to run this everytime after a reboot
-    ./scripts/init --configure
-    ```
+  [1]: https://docs.pmem.io/persistent-memory/getting-started-guide/creating-development-environments/linux-environments/linux-memmap
 
-- To emulate a persistent memory device using DRAM, follow the
-  guide [here](https://docs.pmem.io/persistent-memory/getting-started-guide/creating-development-environments/linux-environments/linux-memmap)
-  .
+- <details>
+  <summary>Configure persistent memory</summary>
 
-- Configure persistent memory
-
-    ```shell
-    # replace pmem0 with the name of your pmem device
-    PMEM="pmem0"
+  ```shell
+  # replace pmem0 with the name of your pmem device
+  PMEM="pmem0"
   
-    # create ext4 filesystem
-    sudo mkfs.ext4 /dev/${PMEM}
+  # create ext4 filesystem
+  sudo mkfs.ext4 /dev/${PMEM}
   
-    # mount the filesystem
-    sudo mkdir -p /mnt/${PMEM}
-    sudo mount -o dax /dev/${PMEM} /mnt/${PMEM}
-    sudo mount -v | grep /mnt/${PMEM}
+  # mount the filesystem
+  sudo mkdir -p /mnt/${PMEM} 
+  sudo mount -o dax /dev/${PMEM} /mnt/${PMEM} 
+  sudo mount -v | grep /mnt/${PMEM}
   
-    # change permission
-    sudo chmod a+w /mnt/${PMEM}
-    ```
+  # change permission
+  sudo chmod a+w /mnt/${PMEM}
+  ```
+
+  </details>
 
 ### Build and Run
 
@@ -69,6 +67,8 @@ uLayFS is developed on Ubuntu 20.04.3 LTS (with Linux kernel 5.4).
   LD_PRELOAD=./build-release/libulayfs.so ./your_program
   ```
 
+## Development
+
 - Build and run tests or benchmarks
 
   ```shell
@@ -90,3 +90,15 @@ uLayFS is developed on Ubuntu 20.04.3 LTS (with Linux kernel 5.4).
   # profile append benchmark with kernel filesystem
   ./run bench_append profile --disable_ulayfs
   ```
+
+- Environment variables
+    - `ULAYFS_NO_SHOW_CONFIG`: if defined, disable showing configuration when
+      the program starts
+
+    - `ULAYFS_LOG_FILE`: redirect log output to a file
+
+    - `ULAYFS_LOG_LEVEL`: set the numerical log level: 0 for printing all
+      messages, 1 for printing debug messages and above (default), and 4 for
+      suppressing everything. 
+
+ 
