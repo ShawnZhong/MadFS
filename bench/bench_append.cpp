@@ -29,6 +29,6 @@ BENCHMARK(bench)
     ->RangeMultiplier(2)
     ->Range(8, MAX_SIZE)
     ->ThreadRange(1, 16)
-    ->Iterations(1000)
+    ->Iterations(10000)
     ->UseRealTime();
 BENCHMARK_MAIN();
