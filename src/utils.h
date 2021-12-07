@@ -48,7 +48,7 @@ extern FILE *log_file;
   } while (0)
 #define PANIC(msg, ...) PANIC_IF(true, msg, ##__VA_ARGS__)
 
-// DEBUG, INFO, and WARN are not active in release mode
+// TRACE, DEBUG, INFO, and WARN are not active in release mode
 #define LOG(level, msg, ...)                                \
   do {                                                      \
     if constexpr (!BuildOptions::debug) break;              \
