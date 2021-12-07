@@ -24,16 +24,33 @@ class BlkTable {
   // keep track of the next TxEntry to apply
   TxEntryIdx tail_tx_idx;
   pmem::TxBlock* tail_tx_block;
-  pthread_spinlock_t spinlock;
+
+  struct spinlock {
+    std::atomic<bool> lock_{false};
+
+    void lock() noexcept {
+      for (;;) {
+        // Optimistically assume the lock is free on the first try
+        if (!lock_.exchange(true, std::memory_order_acquire)) {
+          return;
+        }
+        // Wait for lock to be released without generating cache misses
+        while (lock_.load(std::memory_order_relaxed)) {
+          // Issue X86 PAUSE or ARM YIELD instruction to reduce contention
+          // between hyper-threads
+          __builtin_ia32_pause();
+        }
+      }
+    }
+
+    void unlock() noexcept { lock_.store(false, std::memory_order_release); }
+  } spinlock;
 
  public:
   explicit BlkTable(File* file, TxMgr* tx_mgr)
       : file(file), tx_mgr(tx_mgr), tail_tx_idx(), tail_tx_block(nullptr) {
     table.resize(16);
-    pthread_spin_init(&spinlock, PTHREAD_PROCESS_PRIVATE);
   }
-
-  ~BlkTable() { pthread_spin_destroy(&spinlock); }
 
   /**
    * @return the logical block index corresponding the the virtual block index

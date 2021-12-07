@@ -7,7 +7,7 @@ namespace ulayfs::dram {
 
 void BlkTable::update(TxEntryIdx& tx_idx, pmem::TxBlock*& tx_block,
                       bool do_alloc) {
-  pthread_spin_lock(&spinlock);
+  spinlock.lock();
 
   // it's possible that the previous update move idx to overflow state
   if (!tx_mgr->handle_idx_overflow(tail_tx_idx, tail_tx_block, do_alloc)) {
@@ -33,7 +33,7 @@ void BlkTable::update(TxEntryIdx& tx_idx, pmem::TxBlock*& tx_block,
   tx_idx = tail_tx_idx;
   tx_block = tail_tx_block;
 
-  pthread_spin_unlock(&spinlock);
+  spinlock.unlock();
 }
 
 void BlkTable::resize_to_fit(VirtualBlockIdx idx) {
