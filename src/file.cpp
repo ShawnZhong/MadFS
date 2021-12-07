@@ -155,14 +155,14 @@ LogMgr* File::get_local_log_mgr() {
 std::ostream& operator<<(std::ostream& out, const File& f) {
   out << "File: fd = " << f.fd << ", offset = " << f.file_offset << "\n";
   out << *f.meta;
-  out << f.mem_table;
-  out << f.tx_mgr;
   out << f.blk_table;
+  out << f.mem_table;
   out << "Dram_bitmap: \n";
   for (size_t i = 0; i < f.meta->get_num_blocks() / 64; ++i) {
     out << "\t" << i * 64 << "-" << (i + 1) * 64 - 1 << ": " << f.bitmap[i]
         << "\n";
   }
+  out << f.tx_mgr;
   out << "\n";
 
   return out;
