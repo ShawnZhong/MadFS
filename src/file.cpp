@@ -204,7 +204,7 @@ int File::open_shm(const struct stat* stat, Bitmap*& bitmap) {
                            S_IRUSR | S_IWUSR);
       if (shm_fd < 0) {
         PANIC("Fd \"%d\" cannot open or create the shared memory object: %m",
-             fd);
+              fd);
       }
     }
   }

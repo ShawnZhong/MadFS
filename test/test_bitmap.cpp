@@ -14,8 +14,8 @@
 char shm_path[ulayfs::CACHELINE_SIZE];
 
 void create_file() {
-  off_t res;
-  ssize_t sz;
+  [[maybe_unused]] off_t res;
+  [[maybe_unused]] ssize_t sz;
 
   int fd = open(FILEPATH, O_CREAT | O_RDWR, S_IRUSR | S_IWUSR);
   assert(fd >= 0);
@@ -48,7 +48,7 @@ void check_bitmap() {
   char buffer[TEST_STR_LEN];
   int rc = read(fd, buffer, TEST_STR_LEN);
   assert(rc == TEST_STR_LEN);
-  
+
   // to ensure that dram and pmem bitmaps match
   print_file(fd);
 
@@ -56,7 +56,9 @@ void check_bitmap() {
 }
 
 void cleanup() {
-  int rc = unlink(FILEPATH);
+  [[maybe_unused]] int rc;
+
+  rc = unlink(FILEPATH);
   assert(rc == 0);
 
   rc = unlink(shm_path);
