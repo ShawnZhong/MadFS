@@ -29,7 +29,11 @@ class BlkTable {
 
  public:
   explicit BlkTable(File* file, TxMgr* tx_mgr)
-      : file(file), tx_mgr(tx_mgr), tail_tx_idx(), tail_tx_block(nullptr) {
+      : file(file),
+        tx_mgr(tx_mgr),
+        tail_tx_idx(),
+        tail_tx_block(nullptr),
+        file_size(0) {
     table.resize(16);
     pthread_spin_init(&spinlock, PTHREAD_PROCESS_PRIVATE);
   }
