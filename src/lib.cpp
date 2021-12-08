@@ -72,7 +72,7 @@ int open(const char* pathname, int flags, ...) {
     return fd;
   }
 
-  pmem::Bitmap* bitmap;
+  dram::Bitmap* bitmap;
   int shm_fd = open_shm(pathname, &stat_buf, bitmap);
   if (shm_fd < 0) {
     WARN("Failed to open bitmap for \"%s\". Fallback to syscall", pathname);
@@ -194,9 +194,8 @@ void __attribute__((destructor)) ulayfs_dtor() { INFO("ulayfs_dtor called"); }
  */
 
 int open_shm(const char* pathname, const struct stat* stat,
-             pmem::Bitmap*& bitmap) {
-  // TODO: enable dynamically grow bitmap
-  size_t shm_size = 8 * BLOCK_SIZE;
+             dram::Bitmap*& bitmap) {
+  // TODO: enable dynamically grow bitmapF
   char shm_path[PATH_MAX];
   sprintf(shm_path, "/dev/shm/ulayfs_%ld%ld%ld", stat->st_ino,
           stat->st_ctim.tv_sec, stat->st_ctim.tv_nsec);
@@ -230,7 +229,8 @@ int open_shm(const char* pathname, const struct stat* stat,
       posix::close(shm_fd);
       return -1;
     }
-    if (posix::fallocate(shm_fd, 0, 0, static_cast<off_t>(shm_size)) < 0) {
+    if (posix::fallocate(shm_fd, 0, 0, static_cast<off_t>(DRAM_BITMAP_SIZE)) <
+        0) {
       WARN("File \"%s\": fallocate on shared memory failed: %m", pathname);
       posix::close(shm_fd);
       return -1;
@@ -256,15 +256,15 @@ int open_shm(const char* pathname, const struct stat* stat,
   }
 
   // mmap bitmap
-  void* shm = posix::mmap(nullptr, shm_size, PROT_READ | PROT_WRITE, MAP_SHARED,
-                          shm_fd, 0);
+  void* shm = posix::mmap(nullptr, DRAM_BITMAP_SIZE, PROT_READ | PROT_WRITE,
+                          MAP_SHARED, shm_fd, 0);
   if (shm == MAP_FAILED) {
     WARN("File \"%s\" mmap bitmap failed: %m", pathname);
     posix::close(shm_fd);
     return -1;
   }
 
-  bitmap = static_cast<pmem::Bitmap*>(shm);
+  bitmap = static_cast<dram::Bitmap*>(shm);
   return shm_fd;
 }
 }  // namespace ulayfs

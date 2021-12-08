@@ -18,7 +18,7 @@ class Allocator {
   MemTable* mem_table;
 
   // dram bitmap
-  pmem::Bitmap* bitmap;
+  Bitmap* bitmap;
 
   // this local free_list maintains blocks allocated from the global free_list
   // and not used yet; pair: <size, idx>
@@ -31,18 +31,17 @@ class Allocator {
 
   // used as a hint for search; recent is defined to be "the next one to search"
   // keep id for idx translation
-  BitmapBlockId recent_bitmap_block_id;
+  // TODO: this may be useful for dynamically growing bitmap
+  // BitmapBlockId recent_bitmap_block_id;
   // NOTE: this is the index within recent_bitmap_block
   BitmapLocalIdx recent_bitmap_local_idx;
 
  public:
-  Allocator(int fd, pmem::MetaBlock* meta, MemTable* mem_table,
-            pmem::Bitmap* bitmap)
+  Allocator(int fd, pmem::MetaBlock* meta, MemTable* mem_table, Bitmap* bitmap)
       : fd(fd),
         meta(meta),
         mem_table(mem_table),
         bitmap(bitmap),
-        recent_bitmap_block_id(),
         recent_bitmap_local_idx() {
     free_list.reserve(64);
   }

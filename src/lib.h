@@ -17,5 +17,5 @@ std::shared_ptr<dram::File> get_file(int fd);
  * -1 otherwise
  */
 int open_shm(const char* pathname, const struct stat* stat,
-             pmem::Bitmap*& bitmap);
+             dram::Bitmap*& bitmap);
 }  // namespace ulayfs

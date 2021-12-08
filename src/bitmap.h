@@ -15,7 +15,7 @@ namespace ulayfs {
 constexpr static uint32_t BITMAP_CAPACITY_SHIFT = 6;
 constexpr static uint32_t BITMAP_CAPACITY = 1 << BITMAP_CAPACITY_SHIFT;
 
-namespace pmem {
+namespace dram {
 // All member functions are thread-safe and require no locks
 // TODO: move to namespace dram
 class Bitmap {
@@ -35,7 +35,6 @@ class Bitmap {
     if (!__atomic_compare_exchange_n(&bitmap, &b, b & allocated, false,
                                      __ATOMIC_ACQ_REL, __ATOMIC_ACQUIRE))
       goto retry;
-    persist_cl_fenced(&bitmap);
     return static_cast<BitmapLocalIdx>(std::countr_zero(b));
   }
 
@@ -46,7 +45,6 @@ class Bitmap {
     if (!__atomic_compare_exchange_n(&bitmap, &expected, BITMAP_ALL_USED, false,
                                      __ATOMIC_ACQ_REL, __ATOMIC_ACQUIRE))
       return -1;
-    persist_cl_fenced(&bitmap);
     return 0;
   }
 
@@ -58,20 +56,13 @@ class Bitmap {
     if (!__atomic_compare_exchange_n(&bitmap, &b, freed, false,
                                      __ATOMIC_ACQ_REL, __ATOMIC_ACQUIRE))
       goto retry;
-    persist_cl_fenced(&bitmap);
   }
 
   // WARN: not thread-safe
-  void set_allocated(uint32_t idx) {
-    bitmap |= (1 << idx);
-    persist_cl_fenced(&bitmap);
-  }
+  void set_allocated(uint32_t idx) { bitmap |= (1 << idx); }
 
   // WARN: not thread-safe
-  void set_unallocated(uint32_t idx) {
-    bitmap &= ~(1 << idx);
-    persist_cl_fenced(&bitmap);
-  }
+  void set_unallocated(uint32_t idx) { bitmap &= ~(1 << idx); }
 
   // get a read-only snapshot of bitmap
   [[nodiscard]] uint64_t get() const { return bitmap; }
@@ -129,6 +120,15 @@ class Bitmap {
     return -1;
   }
 
+  /**
+   * free the blocks within index range [begin, begin + len)
+   * 
+   * @param bitmaps a pointer to an array of bitmaps
+   * @param begin the BitmapLocalIndex starting from which it will be freed
+   * @param len the number of bits to be freed
+   */
+  static void free(Bitmap bitmaps[], BitmapLocalIdx begin, size_t len) {}
+
   friend std::ostream& operator<<(std::ostream& out, const Bitmap& b) {
     out << std::bitset<64>(b.bitmap);
     return out;
@@ -137,5 +137,5 @@ class Bitmap {
 
 static_assert(sizeof(Bitmap) == 8, "Bitmap must of 64 bits");
 
-}  // namespace pmem
+}  // namespace dram
 }  // namespace ulayfs

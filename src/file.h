@@ -20,7 +20,7 @@ namespace ulayfs::dram {
 
 class File {
   const int fd;
-  pmem::Bitmap* bitmap;
+  Bitmap* bitmap;
   MemTable mem_table;
   pmem::MetaBlock* meta;
   TxMgr tx_mgr;
@@ -41,7 +41,7 @@ class File {
   friend class BlkTable;
 
  public:
-  File(int fd, off_t init_file_size, pmem::Bitmap* bitmap, int shm_fd);
+  File(int fd, off_t init_file_size, Bitmap* bitmap, int shm_fd);
   ~File();
 
   /*

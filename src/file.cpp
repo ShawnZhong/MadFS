@@ -5,7 +5,7 @@ namespace ulayfs::dram {
 thread_local std::unordered_map<int, Allocator> File::allocators;
 thread_local std::unordered_map<int, LogMgr> File::log_mgrs;
 
-File::File(int fd, off_t init_file_size, pmem::Bitmap* bitmap, int shm_fd)
+File::File(int fd, off_t init_file_size, Bitmap* bitmap, int shm_fd)
     : fd(fd),
       bitmap(bitmap),
       mem_table(fd, init_file_size),
