@@ -5,18 +5,17 @@ namespace ulayfs::dram {
 thread_local std::unordered_map<int, Allocator> File::allocators;
 thread_local std::unordered_map<int, LogMgr> File::log_mgrs;
 
-File::File(int fd, off_t init_file_size, Bitmap* bitmap, int shm_fd)
+File::File(int fd, const struct stat* stat)
     : fd(fd),
-      bitmap(bitmap),
-      mem_table(fd, init_file_size),
+      mem_table(fd, stat->st_size),
       meta(mem_table.get_meta()),
       tx_mgr(this, meta),
       blk_table(this, &tx_mgr),
-      shm_fd(shm_fd),
       file_offset(0) {
-  if (init_file_size == 0) meta->init();
+  if (stat->st_size == 0) meta->init();
 
   meta->lock();
+  shm_fd = open_shm(stat, bitmap);
   // The first bit corresponds to the meta block which should always be set
   // to 1. If it is not, then bitmap needs to be initialized.
   if ((bitmap[0].get() & 1) == 0) {
@@ -151,6 +150,82 @@ LogMgr* File::get_local_log_mgr() {
 /*
  * Helper functions
  */
+
+int File::open_shm(const struct stat* stat, Bitmap*& bitmap) {
+  // TODO: enable dynamically grow bitmap
+  char* shm_path = meta->get_shm_path_ref();
+  // fill meta's shm_path in if it is empty
+  if (*shm_path == '\0')
+    sprintf(shm_path, "/dev/shm/ulayfs_%ld%ld%ld", stat->st_ino,
+            stat->st_ctim.tv_sec, stat->st_ctim.tv_nsec);
+  DEBUG("Opening shared memory %s", shm_path);
+  // use posix::open instead of shm_open since shm_open calls open, which is
+  // overloaded by ulayfs
+  int shm_fd =
+      posix::open(shm_path, O_RDWR | O_NOFOLLOW | O_CLOEXEC, S_IRUSR | S_IWUSR);
+
+  // if the file does not exist, create it
+  if (shm_fd < 0) {
+    // We create a temporary file first, and then use `linkat` to put the file
+    // into the directory `/dev/shm`. This ensures the atomicity of the creating
+    // the shared memory file and setting its permission.
+    shm_fd =
+        posix::open("/dev/shm", O_TMPFILE | O_RDWR | O_NOFOLLOW | O_CLOEXEC,
+                    S_IRUSR | S_IWUSR);
+    if (unlikely(shm_fd < 0)) {
+      WARN("Fd \"%d\": create the temporary file failed: %m", fd);
+      return -1;
+    }
+
+    // change permission and ownership of the new shared memory
+    if (fchmod(shm_fd, stat->st_mode) < 0) {
+      WARN("Fd \"%d\": fchmod on shared memory failed: %m", fd);
+      posix::close(shm_fd);
+      return -1;
+    }
+    if (fchown(shm_fd, stat->st_uid, stat->st_gid) < 0) {
+      WARN("Fd \"%d\": fchown on shared memory failed: %m", fd);
+      posix::close(shm_fd);
+      return -1;
+    }
+    if (posix::fallocate(shm_fd, 0, 0, static_cast<off_t>(DRAM_BITMAP_SIZE)) <
+        0) {
+      WARN("Fd \"%d\": fallocate on shared memory failed: %m", fd);
+      posix::close(shm_fd);
+      return -1;
+    }
+
+    // publish the created tmpfile.
+    char tmpfile_path[PATH_MAX];
+    sprintf(tmpfile_path, "/proc/self/fd/%d", shm_fd);
+    int rc =
+        linkat(AT_FDCWD, tmpfile_path, AT_FDCWD, shm_path, AT_SYMLINK_FOLLOW);
+    if (rc < 0) {
+      // Another process may have created a new shared memory before us. Retry
+      // opening.
+      posix::close(shm_fd);
+      shm_fd = posix::open(shm_path, O_RDWR | O_NOFOLLOW | O_CLOEXEC,
+                           S_IRUSR | S_IWUSR);
+      if (shm_fd < 0) {
+        WARN("Fd \"%d\" cannot open or create the shared memory object: %m",
+             fd);
+        return -1;
+      }
+    }
+  }
+
+  // mmap bitmap
+  void* shm = posix::mmap(nullptr, DRAM_BITMAP_SIZE, PROT_READ | PROT_WRITE,
+                          MAP_SHARED, shm_fd, 0);
+  if (shm == MAP_FAILED) {
+    WARN("Fd \"%d\" mmap bitmap failed: %m", fd);
+    posix::close(shm_fd);
+    return -1;
+  }
+
+  bitmap = static_cast<dram::Bitmap*>(shm);
+  return shm_fd;
+}
 
 std::ostream& operator<<(std::ostream& out, const File& f) {
   out << "File: fd = " << f.fd << ", offset = " << f.file_offset << "\n";

@@ -214,6 +214,8 @@ class MetaBlock : public BaseBlock {
 
   [[nodiscard]] size_t get_file_size() const { return file_size; }
 
+  char* get_shm_path_ref() { return shm_path; }
+
   // called by other public functions with lock held
   void set_num_blocks_if_larger(uint32_t new_num_blocks) {
     uint32_t old_num_blocks =

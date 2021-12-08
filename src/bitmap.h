@@ -52,7 +52,7 @@ class Bitmap {
   void free(BitmapLocalIdx begin_idx, uint32_t len) {
   retry:
     uint64_t b = __atomic_load_n(&bitmap, __ATOMIC_ACQUIRE);
-    uint64_t freed = b & ~(((1 << len) - 1) << begin_idx);
+    uint64_t freed = b & ~((((uint64_t)1 << len) - 1) << begin_idx);
     if (!__atomic_compare_exchange_n(&bitmap, &b, freed, false,
                                      __ATOMIC_ACQ_REL, __ATOMIC_ACQUIRE))
       goto retry;
@@ -128,9 +128,10 @@ class Bitmap {
    * @param begin the BitmapLocalIndex starting from which it will be freed
    * @param len the number of bits to be freed
    */
-  static void free(Bitmap bitmaps[], BitmapLocalIdx begin, size_t len) {
-    bitmaps[begin >> BITMAP_CAPACITY_SHIFT].free(
-        begin & (BITMAP_CAPACITY_SHIFT - 1), len);
+  static void free(Bitmap bitmaps[], BitmapLocalIdx begin, uint8_t len) {
+    DEBUG("Freeing [%d, %d)", begin, begin + len);
+    BitmapLocalIdx idx = begin >> BITMAP_CAPACITY_SHIFT;
+    bitmaps[idx].free(begin & (BITMAP_CAPACITY_SHIFT - 1), len);
   }
 
   friend std::ostream& operator<<(std::ostream& out, const Bitmap& b) {

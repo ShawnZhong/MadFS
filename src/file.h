@@ -41,7 +41,7 @@ class File {
   friend class BlkTable;
 
  public:
-  File(int fd, off_t init_file_size, Bitmap* bitmap, int shm_fd);
+  File(int fd, const struct stat* stat);
   ~File();
 
   /*
@@ -110,6 +110,18 @@ class File {
     bitmap[block_idx >> BITMAP_CAPACITY_SHIFT].set_allocated(
         block_idx & (BITMAP_CAPACITY - 1));
   }
+
+  /**
+   * Open the shared memory object corresponding to this file and save the
+   * mmapped address to bitmap. The leading bit of the bitmap (corresponding to
+   * metablock) indicates if the bitmap needs to be initialized.
+   *
+   * @param[in] stat stat of the original file
+   * @param[out] bitmap the bitmap opened or created in the shared memory
+   * @return the file descriptor for the shared memory object on success,
+   * -1 otherwise
+   */
+  int open_shm(const struct stat* stat, Bitmap*& bitmap);
 
   friend std::ostream& operator<<(std::ostream& out, const File& f);
 };

@@ -47,10 +47,8 @@ class Allocator {
   }
 
   ~Allocator() {
-    for (const auto& free : free_list) {
-      DEBUG("Freeing [%d, %d)", free.second, free.second + free.first);
+    for (const auto& free : free_list)
       Bitmap::free(bitmap, free.second, free.first);
-    }
   };
 
   // allocate contiguous blocks (num_blocks must <= 64)
