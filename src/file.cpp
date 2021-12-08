@@ -30,16 +30,6 @@ ssize_t File::pwrite(const void* buf, size_t count, size_t offset) {
 
 ssize_t File::pread(void* buf, size_t count, off_t offset) {
   if (count == 0) return 0;
-
-  // check against current file_size
-  // if offset >= file_size, return zero to indicate EOF
-  // if offset < file_size while offset + count > file_size, cut count to EOF
-  off_t file_size = static_cast<off_t>(meta->get_file_size());
-  if (offset >= file_size)
-    return 0;
-  else if (offset + static_cast<off_t>(count) > file_size)
-    count = file_size - offset;
-
   return tx_mgr.do_read(static_cast<char*>(buf), count, offset);
 }
 
@@ -66,7 +56,8 @@ off_t File::lseek(off_t offset, int whence) {
 
     case SEEK_END: {
       do {
-        new_off = meta->get_file_size() + offset;
+        // FIXME: file offset and file size are not thread-safe to read directly
+        new_off = blk_table.get_file_size() + offset;
         if (new_off < 0) return -1;
       } while (!__atomic_compare_exchange_n(&file_offset, &old_off, new_off,
                                             false, __ATOMIC_ACQ_REL,
@@ -83,38 +74,27 @@ off_t File::lseek(off_t offset, int whence) {
 }
 
 ssize_t File::write(const void* buf, size_t count) {
-  // atomically add then return the old value
-  off_t old_off = __atomic_fetch_add(&file_offset, static_cast<off_t>(count),
-                                     __ATOMIC_ACQ_REL);
-
-  return pwrite(buf, count, old_off);
+  // FIXME: offset upate must is not thread safe (must associated with tx
+  // application on BlkTable)
+  ssize_t ret = pwrite(buf, count, file_offset);
+  if (ret > 0)
+    __atomic_fetch_add(&file_offset, static_cast<off_t>(ret), __ATOMIC_ACQ_REL);
+  return pwrite(buf, count, file_offset);
 }
 
 ssize_t File::read(void* buf, size_t count) {
-  off_t new_off;
-  off_t old_off = file_offset;
-
-  // check against current file_size
-  // if offset >= file_size, return zero to indicate EOF
-  // if offset < file_size while offset + count > file_size, cut count to EOF
-  off_t file_size = static_cast<off_t>(meta->get_file_size());
-  if (old_off >= file_size)
-    return 0;
-  else if (old_off + static_cast<off_t>(count) > file_size)
-    count = file_size - old_off;
-
-  do {
-    new_off = old_off + static_cast<off_t>(count);
-  } while (!__atomic_compare_exchange_n(&file_offset, &old_off, new_off, false,
-                                        __ATOMIC_ACQ_REL, __ATOMIC_RELAXED));
-
-  return pread(buf, count, old_off);
+  // FIXME: offset upate must is not thread safe (must associated with tx
+  // application on BlkTable)
+  ssize_t ret = pread(buf, count, file_offset);
+  if (ret > 0)
+    __atomic_fetch_add(&file_offset, static_cast<off_t>(ret), __ATOMIC_ACQ_REL);
+  return ret;
 }
 
 int File::fsync() {
   TxEntryIdx tail_tx_idx;
   pmem::TxBlock* tail_tx_block;
-  blk_table.update(tail_tx_idx, tail_tx_block, /*do_alloc*/ false);
+  blk_table.update(tail_tx_idx, tail_tx_block, nullptr, /*do_alloc*/ false);
   tx_mgr.flush_tx_entries(meta->get_tx_tail(), tail_tx_idx, tail_tx_block);
   // we keep an invariant that tx_tail must be a valid (non-overflow) idx
   // an overflow index implies that the `next` pointer of the block is not set

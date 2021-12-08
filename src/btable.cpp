@@ -6,7 +6,7 @@
 namespace ulayfs::dram {
 
 void BlkTable::update(TxEntryIdx& tx_idx, pmem::TxBlock*& tx_block,
-                      bool do_alloc) {
+                      uint64_t* new_file_size, bool do_alloc) {
   pthread_spin_lock(&spinlock);
 
   // it's possible that the previous update move idx to overflow state
@@ -32,6 +32,7 @@ void BlkTable::update(TxEntryIdx& tx_idx, pmem::TxBlock*& tx_block,
   // return it out
   tx_idx = tail_tx_idx;
   tx_block = tail_tx_block;
+  if (new_file_size) *new_file_size = file_size;
 
   pthread_spin_unlock(&spinlock);
 }
@@ -74,8 +75,10 @@ void BlkTable::apply_tx(pmem::TxCommitEntry tx_commit_entry, LogMgr* log_mgr) {
   }
 
   // update file size if this write exceeds current file size
-  uint64_t now_file_size = end_virtual_idx * BLOCK_SIZE - leftover_bytes;
-  file->meta->set_file_size_if_larger(now_file_size);
+  // currently we don't support ftruncate, so the file size is always growing
+  uint64_t now_file_size =
+      (static_cast<uint64_t>(end_virtual_idx) << BLOCK_SHIFT) - leftover_bytes;
+  if (now_file_size > file_size) file_size = now_file_size;
 }
 
 void BlkTable::apply_tx(pmem::TxCommitInlineEntry tx_commit_inline_entry) {
@@ -91,8 +94,8 @@ void BlkTable::apply_tx(pmem::TxCommitInlineEntry tx_commit_inline_entry) {
 
   // update file size if this write exceeds current file size
   // inline tx must be aligned to BLOCK_SIZE boundary
-  uint64_t now_file_size = end_vidx * BLOCK_SIZE;
-  file->meta->set_file_size_if_larger(now_file_size);
+  uint64_t now_file_size = static_cast<uint64_t>(end_vidx) << BLOCK_SHIFT;
+  if (now_file_size > file_size) file_size = now_file_size;
 }
 
 std::ostream& operator<<(std::ostream& out, const BlkTable& b) {

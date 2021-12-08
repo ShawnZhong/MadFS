@@ -192,11 +192,6 @@ class MetaBlock : public BaseBlock {
       // this lock is ONLY used for bitmap rebuild
       pthread_mutex_t mutex;
 
-      // file size in bytes (virtual size to users)
-      // modifications to this should be through the getter/setter functions
-      // that use atomic instructions
-      uint64_t file_size;
-
       // total number of blocks actually in this file (including unused ones)
       // modifications to this should be through the getter/setter functions
       // that use atomic instructions
@@ -264,23 +259,6 @@ class MetaBlock : public BaseBlock {
   /*
    * Getters and setters
    */
-
-  [[nodiscard]] uint64_t get_file_size() const {
-    return __atomic_load_n(&this->file_size, __ATOMIC_ACQUIRE);
-  }
-
-  void set_file_size_if_larger(uint64_t new_file_size) {
-    uint64_t old_file_size = get_file_size();
-  retry:
-    if (old_file_size >= new_file_size) return;
-    if (!__atomic_compare_exchange_n(&this->file_size, &old_file_size,
-                                     new_file_size, false, __ATOMIC_ACQ_REL,
-                                     __ATOMIC_ACQUIRE))
-      goto retry;
-    // file_size should be fenced to be up-to-date
-    persist_cl_fenced(&cl2);
-  }
-
   void set_num_blocks_if_larger(uint32_t new_num_blocks) {
     uint32_t old_num_blocks =
         __atomic_load_n(&this->num_blocks, __ATOMIC_ACQUIRE);
@@ -387,7 +365,6 @@ class MetaBlock : public BaseBlock {
   friend std::ostream& operator<<(std::ostream& out, const MetaBlock& block) {
     out << "MetaBlock: \n";
     out << "\tsignature: \"" << block.signature << "\"\n";
-    out << "\tfilesize: " << block.file_size << "\n";
     out << "\tnum_blocks: " << block.num_blocks << "\n";
     out << "\tnext_tx_block: " << block.next_tx_block << "\n";
     out << "\ttx_tail: " << block.tx_tail << "\n";

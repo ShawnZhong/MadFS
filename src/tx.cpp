@@ -322,6 +322,7 @@ bool TxMgr::Tx::handle_conflict(pmem::TxEntry curr_entry,
 
 // TODO: more fancy handle_conflict strategy
 ssize_t TxMgr::ReadTx::do_read() {
+  uint64_t file_size;
   size_t first_block_local_offset = offset & (BLOCK_SIZE - 1);
   size_t first_block_size = BLOCK_SIZE - first_block_local_offset;
   if (first_block_size > count) first_block_size = count;
@@ -334,7 +335,15 @@ ssize_t TxMgr::ReadTx::do_read() {
   LogicalBlockIdx redo_image[num_blocks];
   memset(redo_image, 0, sizeof(LogicalBlockIdx) * num_blocks);
 
-  file->blk_table.update(tail_tx_idx, tail_tx_block, /*do_alloc*/ false);
+  file->blk_table.update(tail_tx_idx, tail_tx_block, &file_size,
+                         /*do_alloc*/ false);
+  // reach EOF
+  if (offset >= file_size) return 0;
+  if (offset + count > file_size) {  // partial read; recalculate end_*
+    count = file_size - offset;
+    end_offset = offset + count;
+    end_vidx = ALIGN_UP(end_offset, BLOCK_SIZE) >> BLOCK_SHIFT;
+  }
 
   // first handle the first block (which might not be full block)
   curr_block = file->vidx_to_addr_ro(begin_vidx);
@@ -447,7 +456,8 @@ void TxMgr::AlignedTx::do_write() {
   persist_fenced(dst_blocks, count);
 
   // make a local copy of the tx tail
-  file->blk_table.update(tail_tx_idx, tail_tx_block, /*do_alloc*/ true);
+  file->blk_table.update(tail_tx_idx, tail_tx_block, nullptr,
+                         /*do_alloc*/ true);
   for (uint32_t i = 0; i < num_blocks; ++i)
     recycle_image[i] = file->vidx_to_lidx(begin_vidx + i);
 
@@ -469,7 +479,8 @@ void TxMgr::SingleBlockTx::do_write() {
   LogicalBlockIdx recycle_image[1];
 
   // must acquire the tx tail before any get
-  file->blk_table.update(tail_tx_idx, tail_tx_block, /*do_alloc*/ true);
+  file->blk_table.update(tail_tx_idx, tail_tx_block, nullptr,
+                         /*do_alloc*/ true);
   recycle_image[0] = file->vidx_to_lidx(begin_vidx);
   assert(recycle_image[0] != dst_lidx);
 
@@ -524,7 +535,8 @@ void TxMgr::MultiBlockTx::do_write() {
   }
 
   // only get a snapshot of the tail when starting critical piece
-  file->blk_table.update(tail_tx_idx, tail_tx_block, /*do_alloc*/ true);
+  file->blk_table.update(tail_tx_idx, tail_tx_block, nullptr,
+                         /*do_alloc*/ true);
   for (uint32_t i = 0; i < num_blocks; ++i)
     recycle_image[i] = file->vidx_to_lidx(begin_vidx + i);
   src_first_lidx = recycle_image[0];
