@@ -6,7 +6,7 @@
 namespace ulayfs::dram {
 
 void BlkTable::update(TxEntryIdx& tx_idx, pmem::TxBlock*& tx_block,
-                      bool do_alloc) {
+                      uint64_t* new_file_size, bool do_alloc) {
   pthread_spin_lock(&spinlock);
 
   // it's possible that the previous update move idx to overflow state
@@ -32,6 +32,7 @@ void BlkTable::update(TxEntryIdx& tx_idx, pmem::TxBlock*& tx_block,
   // return it out
   tx_idx = tail_tx_idx;
   tx_block = tail_tx_block;
+  if (new_file_size) *new_file_size = file_size;
 
   pthread_spin_unlock(&spinlock);
 }
@@ -49,16 +50,18 @@ void BlkTable::apply_tx(pmem::TxCommitEntry tx_commit_entry, LogMgr* log_mgr) {
   auto log_entry_idx = tx_commit_entry.log_entry_idx;
 
   uint32_t num_blocks;
+  uint16_t leftover_bytes;
   VirtualBlockIdx begin_virtual_idx;
   std::vector<LogicalBlockIdx> begin_logical_idxs;
   log_mgr->get_coverage(log_entry_idx, begin_virtual_idx, num_blocks,
-                        &begin_logical_idxs);
+                        &begin_logical_idxs, &leftover_bytes);
 
   size_t now_logical_idx_off = 0;
   VirtualBlockIdx now_virtual_idx = begin_virtual_idx;
   VirtualBlockIdx end_virtual_idx = begin_virtual_idx + num_blocks;
   resize_to_fit(end_virtual_idx);
 
+  // update block table mapping
   while (now_virtual_idx < end_virtual_idx) {
     uint16_t chunk_blocks =
         end_virtual_idx > now_virtual_idx + MAX_BLOCKS_PER_BODY
@@ -70,6 +73,12 @@ void BlkTable::apply_tx(pmem::TxCommitEntry tx_commit_entry, LogMgr* log_mgr) {
     now_virtual_idx += chunk_blocks;
     now_logical_idx_off++;
   }
+
+  // update file size if this write exceeds current file size
+  // currently we don't support ftruncate, so the file size is always growing
+  uint64_t now_file_size =
+      (static_cast<uint64_t>(end_virtual_idx) << BLOCK_SHIFT) - leftover_bytes;
+  if (now_file_size > file_size) file_size = now_file_size;
 }
 
 void BlkTable::apply_tx(pmem::TxCommitInlineEntry tx_commit_inline_entry) {
@@ -78,8 +87,15 @@ void BlkTable::apply_tx(pmem::TxCommitInlineEntry tx_commit_inline_entry) {
   LogicalBlockIdx begin_lidx = tx_commit_inline_entry.begin_logical_idx;
   VirtualBlockIdx end_vidx = begin_vidx + num_blocks;
   resize_to_fit(end_vidx);
+
+  // update block table mapping
   for (uint32_t i = 0; i < num_blocks; ++i)
     table[begin_vidx + i] = begin_lidx + i;
+
+  // update file size if this write exceeds current file size
+  // inline tx must be aligned to BLOCK_SIZE boundary
+  uint64_t now_file_size = static_cast<uint64_t>(end_vidx) << BLOCK_SHIFT;
+  if (now_file_size > file_size) file_size = now_file_size;
 }
 
 std::ostream& operator<<(std::ostream& out, const BlkTable& b) {

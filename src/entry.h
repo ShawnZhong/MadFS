@@ -77,8 +77,9 @@ struct __attribute__((packed)) TxCommitInlineEntry {
   LogicalBlockIdx begin_logical_idx : BEGIN_LOGICAL_IDX_BITS;
 
   static bool can_inline(uint32_t num_blocks, uint32_t begin_virtual_idx,
-                         uint32_t begin_logical_idx) {
-    return num_blocks <= NUM_BLOCKS_MAX &&
+                         uint32_t begin_logical_idx,
+                         uint16_t leftover_bytes = 0) {
+    return leftover_bytes == 0 && num_blocks <= NUM_BLOCKS_MAX &&
            begin_virtual_idx <= BEGIN_VIRTUAL_IDX_MAX &&
            begin_logical_idx <= BEGIN_LOGICAL_IDX_MAX;
   }

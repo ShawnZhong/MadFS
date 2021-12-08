@@ -320,9 +320,9 @@ bool TxMgr::Tx::handle_conflict(pmem::TxEntry curr_entry,
   return has_conflict;
 }
 
-// TODO: handle read reaching EOF
 // TODO: more fancy handle_conflict strategy
 ssize_t TxMgr::ReadTx::do_read() {
+  uint64_t file_size;
   size_t first_block_local_offset = offset & (BLOCK_SIZE - 1);
   size_t first_block_size = BLOCK_SIZE - first_block_local_offset;
   if (first_block_size > count) first_block_size = count;
@@ -335,7 +335,15 @@ ssize_t TxMgr::ReadTx::do_read() {
   LogicalBlockIdx redo_image[num_blocks];
   memset(redo_image, 0, sizeof(LogicalBlockIdx) * num_blocks);
 
-  file->blk_table.update(tail_tx_idx, tail_tx_block, /*do_alloc*/ false);
+  file->blk_table.update(tail_tx_idx, tail_tx_block, &file_size,
+                         /*do_alloc*/ false);
+  // reach EOF
+  if (offset >= file_size) return 0;
+  if (offset + count > file_size) {  // partial read; recalculate end_*
+    count = file_size - offset;
+    end_offset = offset + count;
+    end_vidx = ALIGN_UP(end_offset, BLOCK_SIZE) >> BLOCK_SHIFT;
+  }
 
   // first handle the first block (which might not be full block)
   curr_block = file->vidx_to_addr_ro(begin_vidx);
@@ -419,18 +427,19 @@ TxMgr::WriteTx::WriteTx(File* file, const char* buf, size_t count,
   // for overwrite, "leftover_bytes" is zero; only in append we care
   // append log without fence because we only care flush completion
   // before try_commit
-  if (pmem::TxCommitInlineEntry::can_inline(num_blocks, begin_vidx, dst_lidx)) {
+  uint16_t leftover_bytes = ALIGN_UP(end_offset, BLOCK_SIZE) - end_offset;
+  if (pmem::TxCommitInlineEntry::can_inline(num_blocks, begin_vidx, dst_lidx,
+                                            leftover_bytes)) {
     commit_entry = pmem::TxCommitInlineEntry(num_blocks, begin_vidx, dst_lidx);
   } else {
     // it's fine that we append log first as long we don't publish it by tx
     auto log_entry_idx = log_mgr->append(pmem::LogOp::LOG_OVERWRITE,  // op
-                                         0,           // leftover_bytes
-                                         num_blocks,  // total_blocks
-                                         begin_vidx,  // begin_virtual_idx
-                                         {dst_lidx},  // begin_logical_idxs
-                                         false        // fenced
+                                         leftover_bytes,  // leftover_bytes
+                                         num_blocks,      // total_blocks
+                                         begin_vidx,      // begin_virtual_idx
+                                         {dst_lidx},      // begin_logical_idxs
+                                         false            // fenced
     );
-
     commit_entry = pmem::TxCommitEntry(num_blocks, begin_vidx, log_entry_idx);
   }
 }
@@ -447,7 +456,8 @@ void TxMgr::AlignedTx::do_write() {
   persist_fenced(dst_blocks, count);
 
   // make a local copy of the tx tail
-  file->blk_table.update(tail_tx_idx, tail_tx_block, /*do_alloc*/ true);
+  file->blk_table.update(tail_tx_idx, tail_tx_block, nullptr,
+                         /*do_alloc*/ true);
   for (uint32_t i = 0; i < num_blocks; ++i)
     recycle_image[i] = file->vidx_to_lidx(begin_vidx + i);
 
@@ -469,7 +479,8 @@ void TxMgr::SingleBlockTx::do_write() {
   LogicalBlockIdx recycle_image[1];
 
   // must acquire the tx tail before any get
-  file->blk_table.update(tail_tx_idx, tail_tx_block, /*do_alloc*/ true);
+  file->blk_table.update(tail_tx_idx, tail_tx_block, nullptr,
+                         /*do_alloc*/ true);
   recycle_image[0] = file->vidx_to_lidx(begin_vidx);
   assert(recycle_image[0] != dst_lidx);
 
@@ -524,7 +535,8 @@ void TxMgr::MultiBlockTx::do_write() {
   }
 
   // only get a snapshot of the tail when starting critical piece
-  file->blk_table.update(tail_tx_idx, tail_tx_block, /*do_alloc*/ true);
+  file->blk_table.update(tail_tx_idx, tail_tx_block, nullptr,
+                         /*do_alloc*/ true);
   for (uint32_t i = 0; i < num_blocks; ++i)
     recycle_image[i] = file->vidx_to_lidx(begin_vidx + i);
   src_first_lidx = recycle_image[0];
