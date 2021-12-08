@@ -161,24 +161,25 @@ class TxMgr::Tx {
   TxMgr* tx_mgr;
 
   /*
-   * Input (read-only) properties
+   * Input properties
+   * In the case of partial read/write, count will be changed, so does end_*
    */
-  const size_t count;
+  size_t count;
   const size_t offset;
 
   /*
-   * Derived (read-only) properties
+   * Derived properties
    */
 
   // the byte range to be written is [offset, end_offset), and the byte at
   // end_offset is NOT included
-  const size_t end_offset;
+  size_t end_offset;
 
   // the index of the virtual block that contains the beginning offset
   const VirtualBlockIdx begin_vidx;
   // the block index to be written is [begin_vidx, end_vidx), and the block with
   // index end_vidx is NOT included
-  const VirtualBlockIdx end_vidx;
+  VirtualBlockIdx end_vidx;
 
   // total number of blocks
   const size_t num_blocks;
@@ -261,7 +262,7 @@ class TxMgr::SingleBlockTx : public TxMgr::CoWTx {
  public:
   SingleBlockTx(File* file, const char* buf, size_t count, size_t offset)
       : CoWTx(file, buf, count, offset),
-        local_offset(offset - begin_vidx * BLOCK_SIZE) {
+        local_offset(offset - (begin_vidx << BLOCK_SHIFT)) {
     assert(num_blocks == 1);
   }
 

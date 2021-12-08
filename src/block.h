@@ -145,12 +145,9 @@ class MetaBlock : public BaseBlock {
       // this lock is ONLY used for bitmap rebuild
       pthread_mutex_t mutex;
 
-      // file size in bytes (logical size to users)
-      // modifications to this usually requires meta_lock being held
-      uint64_t file_size;
-
       // total number of blocks actually in this file (including unused ones)
-      // modifications to this usually requires meta_lock being held
+      // modifications to this should be through the getter/setter functions
+      // that use atomic instructions
       uint32_t num_blocks;
     };
 
@@ -212,8 +209,6 @@ class MetaBlock : public BaseBlock {
    * Getters and setters
    */
 
-  [[nodiscard]] size_t get_file_size() const { return file_size; }
-
   char* get_shm_path_ref() { return shm_path; }
 
   // called by other public functions with lock held
@@ -222,9 +217,9 @@ class MetaBlock : public BaseBlock {
         __atomic_load_n(&this->num_blocks, __ATOMIC_ACQUIRE);
   retry:
     if (unlikely(old_num_blocks >= new_num_blocks)) return;
-    if (__atomic_compare_exchange_n(&this->num_blocks, &old_num_blocks,
-                                    new_num_blocks, false, __ATOMIC_ACQ_REL,
-                                    __ATOMIC_ACQUIRE))
+    if (!__atomic_compare_exchange_n(&this->num_blocks, &old_num_blocks,
+                                     new_num_blocks, false, __ATOMIC_ACQ_REL,
+                                     __ATOMIC_ACQUIRE))
       goto retry;
     // if num_blocks is out-of-date, it's fine...
     // in the worst case, we just do unnecessary fallocate...
@@ -309,7 +304,6 @@ class MetaBlock : public BaseBlock {
   friend std::ostream& operator<<(std::ostream& out, const MetaBlock& block) {
     out << "MetaBlock: \n";
     out << "\tsignature: \"" << block.signature << "\"\n";
-    out << "\tfilesize: " << block.file_size << "\n";
     out << "\tnum_blocks: " << block.num_blocks << "\n";
     out << "\tshm_path: " << block.shm_path << "\n";
     out << "\tnext_tx_block: " << block.next_tx_block << "\n";
