@@ -49,8 +49,7 @@ class Allocator {
   ~Allocator() {
     for (const auto& free : free_list) {
       DEBUG("Freeing [%d, %d)", free.second, free.second + free.first);
-      bitmap[free.second >> BITMAP_CAPACITY_SHIFT].free(
-          free.second & (BITMAP_CAPACITY_SHIFT - 1), free.first);
+      Bitmap::free(bitmap, free.second, free.first);
     }
   };
 

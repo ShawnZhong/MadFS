@@ -158,18 +158,11 @@ class MetaBlock : public BaseBlock {
     char cl2[CACHELINE_SIZE];
   };
 
-  // for the rest of 62 cache lines:
-  // 32 cache lines for bitmaps (~16k blocks = 64M)
-  // dram::Bitmap inline_bitmaps[NUM_INLINE_BITMAP];
-
-  // buffer for the path to the shared memory object containing bitmaps. 
+  // buffer for the path to the shared memory object containing bitmaps.
   char shm_path[CACHELINE_SIZE];
 
-  // 30 cache lines for tx log (~120 txs)
+  // 61 cache lines for tx log (~120 txs)
   TxEntry inline_tx_entries[NUM_INLINE_TX_ENTRY];
-
-  // static_assert(sizeof(inline_bitmaps) == 32 * CACHELINE_SIZE,
-  //               "inline_bitmaps must be 32 cache lines");
 
   static_assert(sizeof(inline_tx_entries) == 61 * CACHELINE_SIZE,
                 "inline_tx_entries must be 30 cache lines");
@@ -326,7 +319,6 @@ class MetaBlock : public BaseBlock {
 // TODO: we no longer have bitmap_block in PMEM
 union Block {
   MetaBlock meta_block;
-  // BitmapBlock bitmap_block;
   TxBlock tx_block;
   LogEntryBlock log_entry_block;
   DataBlock data_block;

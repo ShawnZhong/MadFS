@@ -41,10 +41,6 @@ LogicalBlockIdx Allocator::alloc(uint32_t num_blocks) {
   // then we have to allocate from global bitmaps
   recent_bitmap_local_idx =
       Bitmap::alloc_batch(bitmap, TOTAL_DRAM_BITMAP, recent_bitmap_local_idx);
-  if (recent_bitmap_local_idx >= 0)
-    goto add_to_free_list;
-  else
-    return -1;
 
   // keep this part of code as it may be used in the future for dynamically
   // growing bitmap while (true) {
@@ -57,7 +53,6 @@ LogicalBlockIdx Allocator::alloc(uint32_t num_blocks) {
   //   recent_bitmap_local_idx = 0;
   // }
 
-add_to_free_list:
   assert(recent_bitmap_local_idx >= 0);
   // push in decreasing order so pop will in increasing order
   LogicalBlockIdx allocated = recent_bitmap_local_idx;

@@ -122,12 +122,16 @@ class Bitmap {
 
   /**
    * free the blocks within index range [begin, begin + len)
-   * 
+   * here we assume that [begin, begin + len) is within the same bitmap
+   *
    * @param bitmaps a pointer to an array of bitmaps
    * @param begin the BitmapLocalIndex starting from which it will be freed
    * @param len the number of bits to be freed
    */
-  static void free(Bitmap bitmaps[], BitmapLocalIdx begin, size_t len) {}
+  static void free(Bitmap bitmaps[], BitmapLocalIdx begin, size_t len) {
+    bitmaps[begin >> BITMAP_CAPACITY_SHIFT].free(
+        begin & (BITMAP_CAPACITY_SHIFT - 1), len);
+  }
 
   friend std::ostream& operator<<(std::ostream& out, const Bitmap& b) {
     out << std::bitset<64>(b.bitmap);
