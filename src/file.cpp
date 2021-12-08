@@ -78,8 +78,9 @@ ssize_t File::write(const void* buf, size_t count) {
   // application on BlkTable)
   // currently, we always move the offset first so that we could pass the append
   // test
-  __atomic_fetch_add(&file_offset, static_cast<off_t>(count), __ATOMIC_ACQ_REL);
-  ssize_t ret = pwrite(buf, count, file_offset);
+  off_t old_offset = __atomic_fetch_add(&file_offset, static_cast<off_t>(count),
+                                        __ATOMIC_ACQ_REL);
+  ssize_t ret = pwrite(buf, count, old_offset);
   return ret;
 }
 
