@@ -149,7 +149,7 @@ union TxEntry {
   static TxEntry try_append(TxEntry entries[], TxEntry entry, TxLocalIdx idx) {
     uint64_t expected = 0;
     __atomic_compare_exchange_n(&entries[idx].raw_bits, &expected,
-                                entry.raw_bits, false, __ATOMIC_RELEASE,
+                                entry.raw_bits, false, __ATOMIC_ACQ_REL,
                                 __ATOMIC_ACQUIRE);
     // if CAS fails, `expected` will be stored the value in entries[idx]
     // if success, it will return 0
