@@ -79,7 +79,7 @@ ssize_t File::write(const void* buf, size_t count) {
   ssize_t ret = pwrite(buf, count, file_offset);
   if (ret > 0)
     __atomic_fetch_add(&file_offset, static_cast<off_t>(ret), __ATOMIC_ACQ_REL);
-  return pwrite(buf, count, file_offset);
+  return ret;
 }
 
 ssize_t File::read(void* buf, size_t count) {
