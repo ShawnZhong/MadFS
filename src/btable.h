@@ -63,8 +63,8 @@ class BlkTable {
    * @param[in] do_alloc whether we allow allocation when iterating the tx_idx
    * @param[in] init_bitmap whether we need to initialize the bitmap object
    */
-  void update(TxEntryIdx& tx_idx, pmem::TxBlock*& tx_block, bool do_alloc,
-              uint64_t* new_file_size bool init_bitmap = false);
+  void update(TxEntryIdx& tx_idx, pmem::TxBlock*& tx_block,
+              uint64_t* new_file_size, bool do_alloc, bool init_bitmap = false);
 
  private:
   void resize_to_fit(VirtualBlockIdx idx);

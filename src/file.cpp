@@ -21,7 +21,8 @@ File::File(int fd, const struct stat* stat)
   if ((bitmap[0].get() & 1) == 0) {
     TxEntryIdx tail_tx_idx;
     pmem::TxBlock* tail_tx_block;
-    blk_table.update(tail_tx_idx, tail_tx_block, /*do_alloc*/ false, true);
+    blk_table.update(tail_tx_idx, tail_tx_block, nullptr, /*do_alloc*/ false,
+                     true);
     // mark meta block as allocated
     bitmap[0].set_allocated(0);
   }
