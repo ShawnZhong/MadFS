@@ -22,8 +22,9 @@ void BlkTable::update(TxEntryIdx& tx_idx, pmem::TxBlock*& tx_block,
   while (true) {
     auto tx_entry = tx_mgr->get_entry_from_block(tail_tx_idx, tail_tx_block);
     if (!tx_entry.is_valid()) break;
+    if (init_bitmap) file->set_allocated(tail_tx_idx.block_idx);
     if (tx_entry.is_inline())
-      apply_tx(tx_entry.commit_inline_entry, init_bitmap);
+      apply_tx(tx_entry.commit_inline_entry);
     else
       apply_tx(tx_entry.commit_entry, log_mgr, init_bitmap);
     if (!tx_mgr->advance_tx_idx(tail_tx_idx, tail_tx_block, do_alloc)) break;
@@ -77,19 +78,14 @@ void BlkTable::apply_tx(pmem::TxCommitEntry tx_commit_entry, LogMgr* log_mgr,
   }
 }
 
-void BlkTable::apply_tx(pmem::TxCommitInlineEntry tx_commit_inline_entry,
-                        bool init_bitmap) {
+void BlkTable::apply_tx(pmem::TxCommitInlineEntry tx_commit_inline_entry) {
   uint32_t num_blocks = tx_commit_inline_entry.num_blocks;
   VirtualBlockIdx begin_vidx = tx_commit_inline_entry.begin_virtual_idx;
   LogicalBlockIdx begin_lidx = tx_commit_inline_entry.begin_logical_idx;
   VirtualBlockIdx end_vidx = begin_vidx + num_blocks;
   resize_to_fit(end_vidx);
-  for (uint32_t i = 0; i < num_blocks; ++i) {
+  for (uint32_t i = 0; i < num_blocks; ++i)
     table[begin_vidx + i] = begin_lidx + i;
-    if (init_bitmap) {
-      file->set_allocated(begin_lidx + i);
-    }
-  }
 }
 
 std::ostream& operator<<(std::ostream& out, const BlkTable& b) {

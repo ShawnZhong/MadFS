@@ -45,9 +45,8 @@ void check_bitmap() {
   int fd = open(FILEPATH, O_RDWR, S_IRUSR | S_IWUSR);
   assert(fd >= 0);
 
-  char buffer[TEST_STR_LEN];
-  int rc = read(fd, buffer, TEST_STR_LEN);
-  assert(rc == TEST_STR_LEN);
+  int res = fsync(fd);
+  assert(res == 0);
 
   // to ensure that dram and pmem bitmaps match
   print_file(fd);
