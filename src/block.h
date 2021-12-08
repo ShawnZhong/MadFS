@@ -273,9 +273,9 @@ class MetaBlock : public BaseBlock {
     uint64_t old_file_size = get_file_size();
   retry:
     if (old_file_size >= new_file_size) return;
-    if (__atomic_compare_exchange_n(&this->file_size, &old_file_size,
-                                    new_file_size, false, __ATOMIC_ACQ_REL,
-                                    __ATOMIC_ACQUIRE))
+    if (!__atomic_compare_exchange_n(&this->file_size, &old_file_size,
+                                     new_file_size, false, __ATOMIC_ACQ_REL,
+                                     __ATOMIC_ACQUIRE))
       goto retry;
     // file_size should be fenced to be up-to-date
     persist_cl_fenced(&cl2);
@@ -286,9 +286,9 @@ class MetaBlock : public BaseBlock {
         __atomic_load_n(&this->num_blocks, __ATOMIC_ACQUIRE);
   retry:
     if (unlikely(old_num_blocks >= new_num_blocks)) return;
-    if (__atomic_compare_exchange_n(&this->num_blocks, &old_num_blocks,
-                                    new_num_blocks, false, __ATOMIC_ACQ_REL,
-                                    __ATOMIC_ACQUIRE))
+    if (!__atomic_compare_exchange_n(&this->num_blocks, &old_num_blocks,
+                                     new_num_blocks, false, __ATOMIC_ACQ_REL,
+                                     __ATOMIC_ACQUIRE))
       goto retry;
     // if num_blocks is out-of-date, it's fine...
     // in the worst case, we just do unnecessary fallocate...
