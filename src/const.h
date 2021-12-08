@@ -41,7 +41,7 @@ constexpr static uint32_t BITMAP_BLOCK_CAPACITY =
 constexpr static uint16_t NUM_BITMAP = BLOCK_SIZE / sizeof(dram::Bitmap);
 static_assert(NUM_BITMAP - 1 <= std::numeric_limits<BitmapLocalIdx>::max(),
               "NUM_BITMAP - 1 should be representable with BitmapLocalIdx");
-              
+
 constexpr static uint32_t NUM_DRAM_BITMAP_BLKS = 8;
 constexpr static uint32_t DRAM_BITMAP_SIZE = NUM_DRAM_BITMAP_BLKS * BLOCK_SIZE;
 constexpr static uint32_t TOTAL_DRAM_BITMAP = NUM_DRAM_BITMAP_BLKS * NUM_BITMAP;
