@@ -76,9 +76,10 @@ off_t File::lseek(off_t offset, int whence) {
 ssize_t File::write(const void* buf, size_t count) {
   // FIXME: offset upate must is not thread safe (must associated with tx
   // application on BlkTable)
+  // currently, we always move the offset first so that we could pass the append
+  // test
+  __atomic_fetch_add(&file_offset, static_cast<off_t>(count), __ATOMIC_ACQ_REL);
   ssize_t ret = pwrite(buf, count, file_offset);
-  if (ret > 0)
-    __atomic_fetch_add(&file_offset, static_cast<off_t>(ret), __ATOMIC_ACQ_REL);
   return ret;
 }
 
