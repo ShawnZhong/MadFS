@@ -173,26 +173,22 @@ int File::open_shm(const struct stat* stat, Bitmap*& bitmap) {
         posix::open("/dev/shm", O_TMPFILE | O_RDWR | O_NOFOLLOW | O_CLOEXEC,
                     S_IRUSR | S_IWUSR);
     if (unlikely(shm_fd < 0)) {
-      WARN("Fd \"%d\": create the temporary file failed: %m", fd);
-      return -1;
+      PANIC("Fd \"%d\": create the temporary file failed: %m", fd);
     }
 
     // change permission and ownership of the new shared memory
     if (fchmod(shm_fd, stat->st_mode) < 0) {
-      WARN("Fd \"%d\": fchmod on shared memory failed: %m", fd);
       posix::close(shm_fd);
-      return -1;
+      PANIC("Fd \"%d\": fchmod on shared memory failed: %m", fd);
     }
     if (fchown(shm_fd, stat->st_uid, stat->st_gid) < 0) {
-      WARN("Fd \"%d\": fchown on shared memory failed: %m", fd);
       posix::close(shm_fd);
-      return -1;
+      PANIC("Fd \"%d\": fchown on shared memory failed: %m", fd);
     }
     if (posix::fallocate(shm_fd, 0, 0, static_cast<off_t>(DRAM_BITMAP_SIZE)) <
         0) {
-      WARN("Fd \"%d\": fallocate on shared memory failed: %m", fd);
       posix::close(shm_fd);
-      return -1;
+      PANIC("Fd \"%d\": fallocate on shared memory failed: %m", fd);
     }
 
     // publish the created tmpfile.
@@ -207,9 +203,8 @@ int File::open_shm(const struct stat* stat, Bitmap*& bitmap) {
       shm_fd = posix::open(shm_path, O_RDWR | O_NOFOLLOW | O_CLOEXEC,
                            S_IRUSR | S_IWUSR);
       if (shm_fd < 0) {
-        WARN("Fd \"%d\" cannot open or create the shared memory object: %m",
+        PANIC("Fd \"%d\" cannot open or create the shared memory object: %m",
              fd);
-        return -1;
       }
     }
   }
@@ -218,9 +213,8 @@ int File::open_shm(const struct stat* stat, Bitmap*& bitmap) {
   void* shm = posix::mmap(nullptr, DRAM_BITMAP_SIZE, PROT_READ | PROT_WRITE,
                           MAP_SHARED, shm_fd, 0);
   if (shm == MAP_FAILED) {
-    WARN("Fd \"%d\" mmap bitmap failed: %m", fd);
     posix::close(shm_fd);
-    return -1;
+    PANIC("Fd \"%d\" mmap bitmap failed: %m", fd);
   }
 
   bitmap = static_cast<dram::Bitmap*>(shm);
