@@ -471,6 +471,8 @@ void TxMgr::SingleBlockTx::do_write() {
   // must acquire the tx tail before any get
   file->blk_table.update(tail_tx_idx, tail_tx_block, /*do_alloc*/ true);
   recycle_image[0] = file->vidx_to_lidx(begin_vidx);
+  DEBUG("SingleBlockTx::do_write: recycle_image[0] = %u, dst_lidx = %u",
+        recycle_image[0], dst_lidx);
   assert(recycle_image[0] != dst_lidx);
 
 redo:
