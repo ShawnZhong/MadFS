@@ -37,10 +37,11 @@ struct __attribute__((packed)) TxCommitEntry {
   TxCommitEntry(uint32_t num_blocks, uint32_t begin_virtual_idx,
                 LogEntryIdx log_entry_idx)
       : num_blocks(0), begin_virtual_idx(0), log_entry_idx(log_entry_idx) {
-    assert(num_blocks <= NUM_BLOCKS_MAX);
-    assert(begin_virtual_idx <= BEGIN_VIRTUAL_IDX_MAX);
-    this->num_blocks = num_blocks;
-    this->begin_virtual_idx = begin_virtual_idx;
+    if (num_blocks <= NUM_BLOCKS_MAX &&
+        begin_virtual_idx <= BEGIN_VIRTUAL_IDX_MAX) {
+      this->num_blocks = num_blocks;
+      this->begin_virtual_idx = begin_virtual_idx;
+    }
   }
 
   friend std::ostream& operator<<(std::ostream& out,
