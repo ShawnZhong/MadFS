@@ -122,7 +122,7 @@ class Bitmap {
 
   /**
    * free the blocks within index range [begin, begin + len)
-   * 
+   *
    * @param bitmaps a pointer to an array of bitmaps
    * @param begin the BitmapLocalIndex starting from which it will be freed
    * @param len the number of bits to be freed

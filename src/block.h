@@ -162,7 +162,7 @@ class MetaBlock : public BaseBlock {
   // 32 cache lines for bitmaps (~16k blocks = 64M)
   // dram::Bitmap inline_bitmaps[NUM_INLINE_BITMAP];
 
-  // buffer for the path to the shared memory object containing bitmaps. 
+  // buffer for the path to the shared memory object containing bitmaps.
   char shm_path[CACHELINE_SIZE];
 
   // 30 cache lines for tx log (~120 txs)
