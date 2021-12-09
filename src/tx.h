@@ -38,7 +38,7 @@ class TxMgr {
   /**
    * Same arguments as pwrite
    */
-  void do_write(const char* buf, size_t count, size_t offset);
+  ssize_t do_write(const char* buf, size_t count, size_t offset);
 
   bool tx_idx_greater(TxEntryIdx lhs, TxEntryIdx rhs);
 
@@ -232,7 +232,7 @@ class TxMgr::AlignedTx : public TxMgr::WriteTx {
  public:
   AlignedTx(File* file, const char* buf, size_t count, size_t offset)
       : WriteTx(file, buf, count, offset) {}
-  void do_write();
+  ssize_t do_write();
 };
 
 class TxMgr::CoWTx : public TxMgr::WriteTx {
@@ -266,7 +266,7 @@ class TxMgr::SingleBlockTx : public TxMgr::CoWTx {
     assert(num_blocks == 1);
   }
 
-  void do_write();
+  ssize_t do_write();
 
  private:
   // the starting offset within the block
@@ -281,7 +281,7 @@ class TxMgr::MultiBlockTx : public TxMgr::CoWTx {
         last_block_local_offset(end_offset -
                                 ALIGN_DOWN(end_offset, BLOCK_SIZE)) {}
 
-  void do_write();
+  ssize_t do_write();
 
  private:
   // number of bytes to be written in the beginning.
