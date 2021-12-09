@@ -2,6 +2,7 @@
 
 #include <pthread.h>
 
+#include <atomic>
 #include <cassert>
 #include <cstring>
 
@@ -74,9 +75,9 @@ class BitmapBlock : public BaseBlock {
 };
 
 class TxBlock : public BaseBlock {
-  TxEntry tx_entries[NUM_TX_ENTRY];
+  std::atomic<TxEntry> tx_entries[NUM_TX_ENTRY];
   // next is placed after tx_entires so that it could be flushed with tx_entries
-  LogicalBlockIdx next;
+  std::atomic<LogicalBlockIdx> next;
   // seq is used to construct total order between tx entries, so it must
   // increase monotonically
   // when compare two TxEntryIdx
@@ -95,13 +96,16 @@ class TxBlock : public BaseBlock {
 
   [[nodiscard]] TxEntry get(TxLocalIdx idx) const {
     assert(idx >= 0 && idx < NUM_TX_ENTRY);
-    return tx_entries[idx];
+    return tx_entries[idx].load(std::memory_order_acquire);
   }
 
-  [[nodiscard]] LogicalBlockIdx get_next_tx_block() const { return next; }
-
+  // it should be fine not to use any fence since there will be fence for flush
   void set_tx_seq(uint32_t seq) { tx_seq = seq; }
   [[nodiscard]] uint32_t get_tx_seq() const { return tx_seq; }
+
+  [[nodiscard]] LogicalBlockIdx get_next_tx_block() const {
+    return next.load(std::memory_order_acquire);
+  }
 
   /**
    * Set the next block index
@@ -109,9 +113,9 @@ class TxBlock : public BaseBlock {
    */
   bool set_next_tx_block(LogicalBlockIdx block_idx) {
     LogicalBlockIdx expected = 0;
-    bool success = __atomic_compare_exchange_n(
-        &next, &expected, block_idx, false, __ATOMIC_ACQ_REL, __ATOMIC_ACQUIRE);
-    return success;
+    return next.compare_exchange_strong(expected, block_idx,
+                                        std::memory_order_acq_rel,
+                                        std::memory_order_acquire);
   }
 
   /**
@@ -174,12 +178,12 @@ class MetaBlock : public BaseBlock {
       char signature[SIGNATURE_SIZE];
 
       // if inline_tx_entries is used up, this points to the next log block
-      LogicalBlockIdx next_tx_block;
+      std::atomic<LogicalBlockIdx> next_tx_block;
 
       // hint to find tx log tail; not necessarily up-to-date
       // all tx entries before it must be flushed
-      TxEntryIdx tx_tail;
-    };
+      std::atomic<TxEntryIdx64> tx_tail;
+    } cl1_meta;
 
     // padding avoid cache line contention
     char cl1[CACHELINE_SIZE];
@@ -192,14 +196,11 @@ class MetaBlock : public BaseBlock {
       // this lock is ONLY used for bitmap rebuild
       pthread_mutex_t mutex;
 
-      // file size in bytes (logical size to users)
-      // modifications to this usually requires meta_lock being held
-      uint64_t file_size;
-
       // total number of blocks actually in this file (including unused ones)
-      // modifications to this usually requires meta_lock being held
-      uint32_t num_blocks;
-    };
+      // modifications to this should be through the getter/setter functions
+      // that use atomic instructions
+      std::atomic_uint32_t num_blocks;
+    } cl2_meta;
 
     // padding
     char cl2[CACHELINE_SIZE];
@@ -210,7 +211,7 @@ class MetaBlock : public BaseBlock {
   Bitmap inline_bitmaps[NUM_INLINE_BITMAP];
 
   // 30 cache lines for tx log (~120 txs)
-  TxEntry inline_tx_entries[NUM_INLINE_TX_ENTRY];
+  std::atomic<TxEntry> inline_tx_entries[NUM_INLINE_TX_ENTRY];
 
   static_assert(sizeof(inline_bitmaps) == 32 * CACHELINE_SIZE,
                 "inline_bitmaps must be 32 cache lines");
@@ -232,48 +233,44 @@ class MetaBlock : public BaseBlock {
     pthread_mutexattr_t attr;
     pthread_mutexattr_init(&attr);
     pthread_mutexattr_setrobust(&attr, PTHREAD_MUTEX_ROBUST);
-    pthread_mutex_init(&mutex, &attr);
+    pthread_mutex_init(&cl2_meta.mutex, &attr);
 
     // initialize the signature
-    memcpy(signature, FILE_SIGNATURE, SIGNATURE_SIZE);
+    memcpy(cl1_meta.signature, FILE_SIGNATURE, SIGNATURE_SIZE);
     persist_cl_fenced(&cl1);
   }
 
   // check whether the meta block is valid
   bool is_valid() {
-    return std::memcmp(signature, FILE_SIGNATURE, SIGNATURE_SIZE) == 0;
+    return std::memcmp(cl1_meta.signature, FILE_SIGNATURE, SIGNATURE_SIZE) == 0;
   }
 
   // acquire/release meta lock (usually only during allocation)
   // we don't need to call persistence since mutex is robust to crash
   void lock() {
-    int rc = pthread_mutex_lock(&mutex);
+    int rc = pthread_mutex_lock(&cl2_meta.mutex);
     if (rc == EOWNERDEAD) {
       WARN("Mutex owner died");
-      rc = pthread_mutex_consistent(&mutex);
+      rc = pthread_mutex_consistent(&cl2_meta.mutex);
       PANIC_IF(rc != 0, "pthread_mutex_consistent failed");
     }
   }
   void unlock() {
-    int rc = pthread_mutex_unlock(&mutex);
+    int rc = pthread_mutex_unlock(&cl2_meta.mutex);
     PANIC_IF(rc != 0, "Mutex unlock failed");
   }
 
   /*
    * Getters and setters
    */
-
-  [[nodiscard]] size_t get_file_size() const { return file_size; }
-
-  // called by other public functions with lock held
   void set_num_blocks_if_larger(uint32_t new_num_blocks) {
     uint32_t old_num_blocks =
-        __atomic_load_n(&this->num_blocks, __ATOMIC_ACQUIRE);
+        cl2_meta.num_blocks.load(std::memory_order_acquire);
   retry:
     if (unlikely(old_num_blocks >= new_num_blocks)) return;
-    if (__atomic_compare_exchange_n(&this->num_blocks, &old_num_blocks,
-                                    new_num_blocks, false, __ATOMIC_ACQ_REL,
-                                    __ATOMIC_ACQUIRE))
+    if (!cl2_meta.num_blocks.compare_exchange_strong(
+            old_num_blocks, new_num_blocks, std::memory_order_acq_rel,
+            std::memory_order_acquire))
       goto retry;
     // if num_blocks is out-of-date, it's fine...
     // in the worst case, we just do unnecessary fallocate...
@@ -290,10 +287,9 @@ class MetaBlock : public BaseBlock {
    */
   bool set_next_tx_block(LogicalBlockIdx block_idx) {
     LogicalBlockIdx expected = 0;
-    bool success =
-        __atomic_compare_exchange_n(&next_tx_block, &expected, block_idx, false,
-                                    __ATOMIC_ACQ_REL, __ATOMIC_ACQUIRE);
-    return success;
+    return cl1_meta.next_tx_block.compare_exchange_strong(
+        expected, block_idx, std::memory_order_acq_rel,
+        std::memory_order_acquire);
   }
 
   /**
@@ -304,8 +300,8 @@ class MetaBlock : public BaseBlock {
    * @param tx_tail tail value to set
    * @param fenced whether use fence
    */
-  void set_tx_tail(TxEntryIdx tx_tail, bool fenced = false) {
-    this->tx_tail = tx_tail;
+  void set_tx_tail(TxEntryIdx64 tx_tail, bool fenced = false) {
+    cl1_meta.tx_tail.store(tx_tail, std::memory_order_relaxed);
     persist_cl(&cl1, fenced);
   }
 
@@ -332,16 +328,18 @@ class MetaBlock : public BaseBlock {
   }
 
   [[nodiscard]] uint32_t get_num_blocks() const {
-    return __atomic_load_n(&this->num_blocks, __ATOMIC_ACQUIRE);
+    return cl2_meta.num_blocks.load(std::memory_order_acquire);
   }
   [[nodiscard]] LogicalBlockIdx get_next_tx_block() const {
-    return next_tx_block;
+    return cl1_meta.next_tx_block.load(std::memory_order_acquire);
   }
-  [[nodiscard]] TxEntryIdx get_tx_tail() const { return tx_tail; }
+  [[nodiscard]] TxEntryIdx get_tx_tail() const {
+    return cl1_meta.tx_tail.load(std::memory_order_relaxed).tx_entry_idx;
+  }
 
   [[nodiscard]] TxEntry get_tx_entry(TxLocalIdx idx) const {
     assert(idx >= 0 && idx < NUM_INLINE_TX_ENTRY);
-    return __atomic_load_n(&inline_tx_entries[idx].raw_bits, __ATOMIC_ACQUIRE);
+    return inline_tx_entries[idx].load(std::memory_order_acquire);
   }
 
   /*
@@ -371,11 +369,14 @@ class MetaBlock : public BaseBlock {
 
   friend std::ostream& operator<<(std::ostream& out, const MetaBlock& block) {
     out << "MetaBlock: \n";
-    out << "\tsignature: \"" << block.signature << "\"\n";
-    out << "\tfilesize: " << block.file_size << "\n";
-    out << "\tnum_blocks: " << block.num_blocks << "\n";
-    out << "\tnext_tx_block: " << block.next_tx_block << "\n";
-    out << "\ttx_tail: " << block.tx_tail << "\n";
+    out << "\tsignature: \"" << block.cl1_meta.signature << "\"\n";
+    out << "\tnum_blocks: "
+        << block.cl2_meta.num_blocks.load(std::memory_order_acquire) << "\n";
+    out << "\tnext_tx_block: "
+        << block.cl1_meta.next_tx_block.load(std::memory_order_acquire) << "\n";
+    out << "\ttx_tail: "
+        << block.cl1_meta.tx_tail.load(std::memory_order_acquire).tx_entry_idx
+        << "\n";
     return out;
   }
 };
