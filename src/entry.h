@@ -1,5 +1,6 @@
 #pragma once
 
+#include <atomic>
 #include <cassert>
 #include <iostream>
 #include <tuple>
@@ -132,9 +133,10 @@ union TxEntry {
    * @return the local index of next available TxEntry; NUM_ENTRIES if not found
    */
   template <uint16_t NUM_ENTRIES>
-  static TxLocalIdx find_tail(const TxEntry entries[], TxLocalIdx hint = 0) {
+  static TxLocalIdx find_tail(const std::atomic<TxEntry> entries[],
+                              TxLocalIdx hint = 0) {
     for (TxLocalIdx idx = hint; idx < NUM_ENTRIES; ++idx)
-      if (!entries[idx].is_valid()) return idx;
+      if (!entries[idx].load(std::memory_order_acquire).is_valid()) return idx;
     return NUM_ENTRIES;
   }
 
@@ -147,11 +149,11 @@ union TxEntry {
    * @param hint hint to start the search
    * @return if success, return 0; otherwise, return the entry on the slot
    */
-  static TxEntry try_append(TxEntry entries[], TxEntry entry, TxLocalIdx idx) {
-    uint64_t expected = 0;
-    __atomic_compare_exchange_n(&entries[idx].raw_bits, &expected,
-                                entry.raw_bits, false, __ATOMIC_ACQ_REL,
-                                __ATOMIC_ACQUIRE);
+  static TxEntry try_append(std::atomic<TxEntry> entries[], TxEntry entry,
+                            TxLocalIdx idx) {
+    TxEntry expected = 0;
+    entries[idx].compare_exchange_strong(
+        expected, entry, std::memory_order_acq_rel, std::memory_order_acquire);
     // if CAS fails, `expected` will be stored the value in entries[idx]
     // if success, it will return 0
     return expected;

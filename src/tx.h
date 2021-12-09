@@ -59,7 +59,7 @@ class TxMgr {
                                     pmem::TxBlock*& tx_block,
                                     bool do_alloc) const {
     assert(tx_idx.local_idx >= 0);
-    __atomic_fetch_add(&tx_idx.local_idx, 1, __ATOMIC_ACQ_REL);
+    tx_idx.local_idx++;
     return handle_idx_overflow(tx_idx, tx_block, do_alloc);
   }
 
