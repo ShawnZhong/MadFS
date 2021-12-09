@@ -199,7 +199,7 @@ class MetaBlock : public BaseBlock {
       // total number of blocks actually in this file (including unused ones)
       // modifications to this should be through the getter/setter functions
       // that use atomic instructions
-      uint32_t num_blocks;
+      std::atomic_uint32_t num_blocks;
     } cl2_meta;
 
     // padding
@@ -265,12 +265,12 @@ class MetaBlock : public BaseBlock {
    */
   void set_num_blocks_if_larger(uint32_t new_num_blocks) {
     uint32_t old_num_blocks =
-        __atomic_load_n(&cl2_meta.num_blocks, __ATOMIC_ACQUIRE);
+        cl2_meta.num_blocks.load(std::memory_order_acquire);
   retry:
     if (unlikely(old_num_blocks >= new_num_blocks)) return;
-    if (!__atomic_compare_exchange_n(&cl2_meta.num_blocks, &old_num_blocks,
-                                     new_num_blocks, false, __ATOMIC_ACQ_REL,
-                                     __ATOMIC_ACQUIRE))
+    if (!cl2_meta.num_blocks.compare_exchange_strong(
+            old_num_blocks, new_num_blocks, std::memory_order_acq_rel,
+            std::memory_order_acquire))
       goto retry;
     // if num_blocks is out-of-date, it's fine...
     // in the worst case, we just do unnecessary fallocate...
@@ -328,7 +328,7 @@ class MetaBlock : public BaseBlock {
   }
 
   [[nodiscard]] uint32_t get_num_blocks() const {
-    return __atomic_load_n(&cl2_meta.num_blocks, __ATOMIC_ACQUIRE);
+    return cl2_meta.num_blocks.load(std::memory_order_acquire);
   }
   [[nodiscard]] LogicalBlockIdx get_next_tx_block() const {
     return cl1_meta.next_tx_block.load(std::memory_order_acquire);
@@ -368,8 +368,10 @@ class MetaBlock : public BaseBlock {
   friend std::ostream& operator<<(std::ostream& out, const MetaBlock& block) {
     out << "MetaBlock: \n";
     out << "\tsignature: \"" << block.cl1_meta.signature << "\"\n";
-    out << "\tnum_blocks: " << block.cl2_meta.num_blocks << "\n";
-    out << "\tnext_tx_block: " << block.cl1_meta.next_tx_block << "\n";
+    out << "\tnum_blocks: "
+        << block.cl2_meta.num_blocks.load(std::memory_order_acquire) << "\n";
+    out << "\tnext_tx_block: "
+        << block.cl1_meta.next_tx_block.load(std::memory_order_acquire) << "\n";
     out << "\ttx_tail: " << block.cl1_meta.tx_tail << "\n";
     return out;
   }
