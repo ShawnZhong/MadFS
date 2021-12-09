@@ -48,32 +48,18 @@ bool TxMgr::tx_idx_greater(TxEntryIdx lhs, TxEntryIdx rhs) {
 }
 
 pmem::TxEntry TxMgr::try_commit(pmem::TxEntry entry, TxEntryIdx& tx_idx,
-                                pmem::TxBlock*& tx_block,
-                                bool cont_if_fail = false) {
+                                pmem::TxBlock*& tx_block) {
   handle_idx_overflow(tx_idx, tx_block, true);
-  TxEntryIdx curr_idx = tx_idx;
-  pmem::TxBlock* curr_block = tx_block;
 
-  bool is_inline = curr_idx.block_idx == 0;
-  assert(is_inline == (curr_block == nullptr));
+  bool is_inline = tx_idx.block_idx == 0;
+  assert(is_inline == (tx_block == nullptr));
 
-  while (true) {
-    if (pmem::TxEntry::need_flush(curr_idx.local_idx)) {
-      flush_tx_entries(meta->get_tx_tail(), curr_idx, curr_block);
-      meta->set_tx_tail(curr_idx);
-    }
-    pmem::TxEntry conflict_entry =
-        is_inline ? meta->try_append(entry, curr_idx.local_idx)
-                  : curr_block->try_append(entry, curr_idx.local_idx);
-    if (!conflict_entry.is_valid()) {  // success
-      tx_idx = curr_idx;
-      tx_block = curr_block;
-      return conflict_entry;
-    }
-    if (!cont_if_fail) return conflict_entry;
-    bool success = advance_tx_idx(curr_idx, curr_block, /*do_alloc*/ true);
-    assert(success);
+  if (pmem::TxEntry::need_flush(tx_idx.local_idx)) {
+    flush_tx_entries(meta->get_tx_tail(), tx_idx, tx_block);
+    meta->set_tx_tail(tx_idx);
   }
+  return is_inline ? meta->try_append(entry, tx_idx.local_idx)
+                   : tx_block->try_append(entry, tx_idx.local_idx);
 }
 
 bool TxMgr::handle_idx_overflow(TxEntryIdx& tx_idx, pmem::TxBlock*& tx_block,
