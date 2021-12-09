@@ -50,10 +50,9 @@ bool TxMgr::tx_idx_greater(TxEntryIdx lhs, TxEntryIdx rhs) {
 pmem::TxEntry TxMgr::try_commit(pmem::TxEntry entry, TxEntryIdx& tx_idx,
                                 pmem::TxBlock*& tx_block,
                                 bool cont_if_fail = false) {
+  handle_idx_overflow(tx_idx, tx_block, true);
   TxEntryIdx curr_idx = tx_idx;
   pmem::TxBlock* curr_block = tx_block;
-
-  handle_idx_overflow(tx_idx, tx_block, true);
 
   bool is_inline = curr_idx.block_idx == 0;
   assert(is_inline == (curr_block == nullptr));
