@@ -81,11 +81,10 @@ class TxMgr {
    * @param[in,out] tx_idx idx of entry to commit; will be updated to the index
    * of success slot if cont_if_fail is set
    * @param[in,out] tx_block block pointer of the block by tx_idx
-   * @param[in] cont_if_fail whether continue to the next tx entry if fail
    * @return empty entry on success; conflict entry otherwise
    */
   pmem::TxEntry try_commit(pmem::TxEntry entry, TxEntryIdx& tx_idx,
-                           pmem::TxBlock*& tx_block, bool cont_if_fail);
+                           pmem::TxBlock*& tx_block);
 
   /**
    * @tparam B MetaBlock or TxBlock
