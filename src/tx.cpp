@@ -22,21 +22,17 @@ ssize_t TxMgr::do_read(char* buf, size_t count, size_t offset) {
 }
 
 // TODO: maybe reclaim the old blocks right after commit?
-void TxMgr::do_write(const char* buf, size_t count, size_t offset) {
+ssize_t TxMgr::do_write(const char* buf, size_t count, size_t offset) {
   // special case that we have everything aligned, no OCC
-  if (count % BLOCK_SIZE == 0 && offset % BLOCK_SIZE == 0) {
-    AlignedTx(file, buf, count, offset).do_write();
-    return;
-  }
+  if (count % BLOCK_SIZE == 0 && offset % BLOCK_SIZE == 0)
+    return AlignedTx(file, buf, count, offset).do_write();
 
   // another special case where range is within a single block
-  if ((offset >> BLOCK_SHIFT) == ((offset + count - 1) >> BLOCK_SHIFT)) {
-    SingleBlockTx(file, buf, count, offset).do_write();
-    return;
-  }
+  if ((offset >> BLOCK_SHIFT) == ((offset + count - 1) >> BLOCK_SHIFT))
+    return SingleBlockTx(file, buf, count, offset).do_write();
 
   // unaligned multi-block write
-  MultiBlockTx(file, buf, count, offset).do_write();
+  return MultiBlockTx(file, buf, count, offset).do_write();
 }
 
 bool TxMgr::tx_idx_greater(TxEntryIdx lhs, TxEntryIdx rhs) {
@@ -446,7 +442,7 @@ TxMgr::WriteTx::WriteTx(File* file, const char* buf, size_t count,
 /*
  * AlignedTx
  */
-void TxMgr::AlignedTx::do_write() {
+ssize_t TxMgr::AlignedTx::do_write() {
   pmem::TxEntry conflict_entry;
   LogicalBlockIdx recycle_image[num_blocks];
 
@@ -471,9 +467,10 @@ retry:
 done:
   // recycle the data blocks being overwritten
   allocator->free(recycle_image, num_blocks);
+  return static_cast<ssize_t>(count);
 }
 
-void TxMgr::SingleBlockTx::do_write() {
+ssize_t TxMgr::SingleBlockTx::do_write() {
   pmem::TxEntry conflict_entry;
   LogicalBlockIdx recycle_image[1];
 
@@ -506,13 +503,14 @@ retry:
 
 done:
   allocator->free(recycle_image[0]);
+  return static_cast<ssize_t>(count);
 }
 
 /*
  * MultiBlockTx
  */
 
-void TxMgr::MultiBlockTx::do_write() {
+ssize_t TxMgr::MultiBlockTx::do_write() {
   // if need_copy_first/last is false, this means it is handled by the full
   // block copy and never need redo
   const bool need_copy_first = begin_full_vidx != begin_vidx;
@@ -593,6 +591,7 @@ retry:
 done:
   // recycle the data blocks being overwritten
   allocator->free(recycle_image, num_blocks);
+  return static_cast<ssize_t>(count);
 }
 
 }  // namespace ulayfs::dram
