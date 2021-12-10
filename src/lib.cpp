@@ -23,6 +23,8 @@ std::shared_ptr<dram::File> get_file(int fd) {
 
 extern "C" {
 int open(const char* pathname, int flags, ...) {
+  // keep a record of the user's intented flags before we hijack it
+  int user_flags = flags;
   mode_t mode = 0;
 
   if (__OPEN_NEEDS_MODE(flags)) {
@@ -79,8 +81,8 @@ int open(const char* pathname, int flags, ...) {
     return fd;
   }
 
-  files.emplace(
-      fd, std::make_shared<dram::File>(fd, stat_buf.st_size, bitmap, shm_fd));
+  files.emplace(fd, std::make_shared<dram::File>(fd, stat_buf.st_size, bitmap,
+                                                 shm_fd, user_flags));
   INFO("ulayfs::open(%s, %x, %x) = %d", pathname, flags, mode, fd);
   return fd;
 }
