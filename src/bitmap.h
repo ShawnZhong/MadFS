@@ -1,5 +1,6 @@
 #pragma once
 
+#include <atomic>
 #include <bit>
 #include <bitset>
 #include <cstdint>
@@ -20,7 +21,7 @@ namespace dram {
 // TODO: move to namespace dram
 class Bitmap {
  private:
-  uint64_t bitmap;
+  std::atomic_uint64_t bitmap;
 
  public:
   constexpr static uint64_t BITMAP_ALL_USED = 0xffffffffffffffff;
@@ -28,12 +29,13 @@ class Bitmap {
   // return the index of the bit (0-63); -1 if fail
   BitmapLocalIdx alloc_one() {
   retry:
-    uint64_t b = __atomic_load_n(&bitmap, __ATOMIC_ACQUIRE);
+    uint64_t b = bitmap.load(std::memory_order_acquire);
     if (b == BITMAP_ALL_USED) return -1;
     uint64_t allocated = (~b) & (b + 1);  // which bit is allocated
     // if bitmap is exactly the same as we saw previously, set it allocated
-    if (!__atomic_compare_exchange_n(&bitmap, &b, b & allocated, false,
-                                     __ATOMIC_ACQ_REL, __ATOMIC_ACQUIRE))
+    if (!bitmap.compare_exchange_strong(b, b & allocated,
+                                        std::memory_order_acq_rel,
+                                        std::memory_order_acquire))
       goto retry;
     return static_cast<BitmapLocalIdx>(std::countr_zero(b));
   }
@@ -41,9 +43,9 @@ class Bitmap {
   // allocate all blocks in this bit; return 0 if succeeds, -1 otherwise
   BitmapLocalIdx alloc_all() {
     uint64_t expected = 0;
-    if (__atomic_load_n(&bitmap, __ATOMIC_ACQUIRE) != 0) return -1;
-    if (!__atomic_compare_exchange_n(&bitmap, &expected, BITMAP_ALL_USED, false,
-                                     __ATOMIC_ACQ_REL, __ATOMIC_ACQUIRE))
+    if (!bitmap.compare_exchange_strong(expected, BITMAP_ALL_USED,
+                                        std::memory_order_acq_rel,
+                                        std::memory_order_acquire))
       return -1;
     return 0;
   }
@@ -51,21 +53,30 @@ class Bitmap {
   // free blocks in [begin_idx, begin_idx + len)
   void free(BitmapLocalIdx begin_idx, uint32_t len) {
   retry:
-    uint64_t b = __atomic_load_n(&bitmap, __ATOMIC_ACQUIRE);
+    uint64_t b = bitmap.load(std::memory_order_acquire);
     uint64_t freed = b & ~((((uint64_t)1 << len) - 1) << begin_idx);
-    if (!__atomic_compare_exchange_n(&bitmap, &b, freed, false,
-                                     __ATOMIC_ACQ_REL, __ATOMIC_ACQUIRE))
+    if (!bitmap.compare_exchange_strong(b, freed, std::memory_order_acq_rel,
+                                        std::memory_order_acquire))
       goto retry;
   }
 
   // WARN: not thread-safe
-  void set_allocated(uint32_t idx) { bitmap |= (1 << idx); }
+  void set_allocated(uint32_t idx) {
+    bitmap.store(bitmap.load(std::memory_order_relaxed) | (1 << idx),
+                 std::memory_order_relaxed);
+  }
 
   // WARN: not thread-safe
-  void set_unallocated(uint32_t idx) { bitmap &= ~(1 << idx); }
+  void set_unallocated(uint32_t idx) {
+    bitmap.store(bitmap.load(std::memory_order_relaxed) & ~(1 << idx),
+                 std::memory_order_relaxed);
+  }
 
+  // WARN: not thread-safe
   // get a read-only snapshot of bitmap
-  [[nodiscard]] uint64_t get() const { return bitmap; }
+  [[nodiscard]] uint64_t get() const {
+    return bitmap.load(std::memory_order_relaxed);
+  }
 
   /*** Below are static functions for allocation from a bitmap array ***/
 

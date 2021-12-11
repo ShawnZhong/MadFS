@@ -38,7 +38,7 @@ class TxMgr {
   /**
    * Same arguments as pwrite
    */
-  void do_write(const char* buf, size_t count, size_t offset);
+  ssize_t do_write(const char* buf, size_t count, size_t offset);
 
   bool tx_idx_greater(TxEntryIdx lhs, TxEntryIdx rhs);
 
@@ -59,7 +59,7 @@ class TxMgr {
                                     pmem::TxBlock*& tx_block,
                                     bool do_alloc) const {
     assert(tx_idx.local_idx >= 0);
-    __atomic_fetch_add(&tx_idx.local_idx, 1, __ATOMIC_ACQ_REL);
+    tx_idx.local_idx++;
     return handle_idx_overflow(tx_idx, tx_block, do_alloc);
   }
 
@@ -81,11 +81,10 @@ class TxMgr {
    * @param[in,out] tx_idx idx of entry to commit; will be updated to the index
    * of success slot if cont_if_fail is set
    * @param[in,out] tx_block block pointer of the block by tx_idx
-   * @param[in] cont_if_fail whether continue to the next tx entry if fail
    * @return empty entry on success; conflict entry otherwise
    */
   pmem::TxEntry try_commit(pmem::TxEntry entry, TxEntryIdx& tx_idx,
-                           pmem::TxBlock*& tx_block, bool cont_if_fail);
+                           pmem::TxBlock*& tx_block);
 
   /**
    * @tparam B MetaBlock or TxBlock
@@ -232,7 +231,7 @@ class TxMgr::AlignedTx : public TxMgr::WriteTx {
  public:
   AlignedTx(File* file, const char* buf, size_t count, size_t offset)
       : WriteTx(file, buf, count, offset) {}
-  void do_write();
+  ssize_t do_write();
 };
 
 class TxMgr::CoWTx : public TxMgr::WriteTx {
@@ -266,7 +265,7 @@ class TxMgr::SingleBlockTx : public TxMgr::CoWTx {
     assert(num_blocks == 1);
   }
 
-  void do_write();
+  ssize_t do_write();
 
  private:
   // the starting offset within the block
@@ -281,7 +280,7 @@ class TxMgr::MultiBlockTx : public TxMgr::CoWTx {
         last_block_local_offset(end_offset -
                                 ALIGN_DOWN(end_offset, BLOCK_SIZE)) {}
 
-  void do_write();
+  ssize_t do_write();
 
  private:
   // number of bytes to be written in the beginning.

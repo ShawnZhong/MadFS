@@ -28,6 +28,7 @@ class File {
 
   int shm_fd;
   off_t file_offset;
+  int flags;
 
   // each thread maintain a mapping from fd to allocator
   // the allocator is a per-thread per-file data structure
@@ -41,17 +42,17 @@ class File {
   friend class BlkTable;
 
  public:
-  File(int fd, const struct stat* stat);
+  File(int fd, const struct stat* stat, int flags);
   ~File();
 
   /*
    * POSIX I/O operations
    */
   ssize_t pwrite(const void* buf, size_t count, size_t offset);
-  ssize_t pread(void* buf, size_t count, off_t offset);
-  off_t lseek(off_t offset, int whence);
   ssize_t write(const void* buf, size_t count);
+  ssize_t pread(void* buf, size_t count, off_t offset);
   ssize_t read(void* buf, size_t count);
+  off_t lseek(off_t offset, int whence);
   int fsync();
 
   /*
