@@ -42,7 +42,7 @@ class File {
   friend class BlkTable;
 
  public:
-  File(int fd, const struct stat* stat, int flags);
+  File(int fd, const struct stat& stat, int flags);
   ~File();
 
   /*
@@ -117,12 +117,13 @@ class File {
    * mmapped address to bitmap. The leading bit of the bitmap (corresponding to
    * metablock) indicates if the bitmap needs to be initialized.
    *
+   * @param[in] shm_path path to the shared memory object
    * @param[in] stat stat of the original file
    * @param[out] bitmap the bitmap opened or created in the shared memory
    * @return the file descriptor for the shared memory object on success,
    * -1 otherwise
    */
-  int open_shm(const struct stat* stat, Bitmap*& bitmap);
+  int open_shm(const char* shm_path, const struct stat& stat, Bitmap*& bitmap);
 
   friend std::ostream& operator<<(std::ostream& out, const File& f);
 };

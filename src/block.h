@@ -11,6 +11,7 @@
 #include "entry.h"
 #include "idx.h"
 #include "params.h"
+#include "posix.h"
 #include "utils.h"
 
 namespace ulayfs::pmem {
@@ -213,7 +214,11 @@ class MetaBlock : public BaseBlock {
    * Getters and setters
    */
 
-  char* get_shm_path_ref() { return shm_path; }
+  const char* get_shm_path() { return shm_path; }
+  void set_shm_path(const struct stat& stat) {
+    sprintf(shm_path, "/dev/shm/ulayfs_%ld%ld%ld", stat.st_ino,
+            stat.st_ctim.tv_sec, stat.st_ctim.tv_nsec);
+  }
 
   // called by other public functions with lock held
   void set_num_blocks_if_larger(uint32_t new_num_blocks) {

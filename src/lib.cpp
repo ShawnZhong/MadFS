@@ -74,7 +74,7 @@ int open(const char* pathname, int flags, ...) {
     return fd;
   }
 
-  files.emplace(fd, std::make_shared<dram::File>(fd, &stat_buf, user_flags));
+  files.emplace(fd, std::make_shared<dram::File>(fd, stat_buf, user_flags));
   INFO("ulayfs::open(%s, %x, %x) = %d", pathname, flags, mode, fd);
   return fd;
 }

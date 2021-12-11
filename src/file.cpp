@@ -5,29 +5,40 @@ namespace ulayfs::dram {
 thread_local std::unordered_map<int, Allocator> File::allocators;
 thread_local std::unordered_map<int, LogMgr> File::log_mgrs;
 
-File::File(int fd, const struct stat* stat, int flags)
+File::File(int fd, const struct stat& stat, int flags)
     : fd(fd),
-      mem_table(fd, stat->st_size),
+      mem_table(fd, stat.st_size),
       meta(mem_table.get_meta()),
       tx_mgr(this, meta),
       blk_table(this, &tx_mgr),
       file_offset(0),
       flags(flags) {
-  if (stat->st_size == 0) meta->init();
+  if (stat.st_size == 0) meta->init();
 
-  meta->lock();
-  shm_fd = open_shm(stat, bitmap);
+  const char* shm_path = meta->get_shm_path();
+  // fill meta's shm_path in if it is empty
+  if (*shm_path == '\0') {
+    meta->lock();
+    if (*shm_path == '\0') meta->set_shm_path(stat);
+    meta->unlock();
+  }
+
+  shm_fd = open_shm(shm_path, stat, bitmap);
   // The first bit corresponds to the meta block which should always be set
   // to 1. If it is not, then bitmap needs to be initialized.
+  // Bitmap::get is not thread safe but we are only reading one bit here.
   if ((bitmap[0].get() & 1) == 0) {
-    TxEntryIdx tail_tx_idx;
-    pmem::TxBlock* tail_tx_block;
-    blk_table.update(tail_tx_idx, tail_tx_block, nullptr, /*do_alloc*/ false,
-                     true);
-    // mark meta block as allocated
-    bitmap[0].set_allocated(0);
+    meta->lock();
+    if ((bitmap[0].get() & 1) == 0) {
+      TxEntryIdx tail_tx_idx;
+      pmem::TxBlock* tail_tx_block;
+      blk_table.update(tail_tx_idx, tail_tx_block, nullptr, /*do_alloc*/ false,
+                       true);
+      // mark meta block as allocated
+      bitmap[0].set_allocated(0);
+    }
+    meta->unlock();
   }
-  meta->unlock();
 
   // FIXME: the file_offset operation must be thread-safe
   if (flags & O_APPEND) file_offset += blk_table.get_file_size();
@@ -175,13 +186,8 @@ LogMgr* File::get_local_log_mgr() {
  * Helper functions
  */
 
-int File::open_shm(const struct stat* stat, Bitmap*& bitmap) {
-  // TODO: enable dynamically grow bitmap
-  char* shm_path = meta->get_shm_path_ref();
-  // fill meta's shm_path in if it is empty
-  if (*shm_path == '\0')
-    sprintf(shm_path, "/dev/shm/ulayfs_%ld%ld%ld", stat->st_ino,
-            stat->st_ctim.tv_sec, stat->st_ctim.tv_nsec);
+int File::open_shm(const char* shm_path, const struct stat& stat,
+                   Bitmap*& bitmap) {
   DEBUG("Opening shared memory %s", shm_path);
   // use posix::open instead of shm_open since shm_open calls open, which is
   // overloaded by ulayfs
@@ -201,16 +207,16 @@ int File::open_shm(const struct stat* stat, Bitmap*& bitmap) {
     }
 
     // change permission and ownership of the new shared memory
-    if (fchmod(shm_fd, stat->st_mode) < 0) {
+    if (fchmod(shm_fd, stat.st_mode) < 0) {
       posix::close(shm_fd);
       PANIC("Fd \"%d\": fchmod on shared memory failed: %m", fd);
     }
-    if (fchown(shm_fd, stat->st_uid, stat->st_gid) < 0) {
+    if (fchown(shm_fd, stat.st_uid, stat.st_gid) < 0) {
       posix::close(shm_fd);
       PANIC("Fd \"%d\": fchown on shared memory failed: %m", fd);
     }
-    if (posix::fallocate(shm_fd, 0, 0, static_cast<off_t>(DRAM_BITMAP_SIZE)) <
-        0) {
+    // TODO: enable dynamically grow bitmap
+    if (posix::fallocate(shm_fd, 0, 0, static_cast<off_t>(BITMAP_SIZE)) < 0) {
       posix::close(shm_fd);
       PANIC("Fd \"%d\": fallocate on shared memory failed: %m", fd);
     }
@@ -234,7 +240,7 @@ int File::open_shm(const struct stat* stat, Bitmap*& bitmap) {
   }
 
   // mmap bitmap
-  void* shm = posix::mmap(nullptr, DRAM_BITMAP_SIZE, PROT_READ | PROT_WRITE,
+  void* shm = posix::mmap(nullptr, BITMAP_SIZE, PROT_READ | PROT_WRITE,
                           MAP_SHARED, shm_fd, 0);
   if (shm == MAP_FAILED) {
     posix::close(shm_fd);

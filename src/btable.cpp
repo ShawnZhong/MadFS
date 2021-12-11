@@ -19,21 +19,24 @@ void BlkTable::update(TxEntryIdx& tx_idx, pmem::TxBlock*& tx_block,
   }
 
   auto log_mgr = file->get_local_log_mgr();
+  LogicalBlockIdx prev_tx_block_idx = 0;
 
   while (true) {
     auto tx_entry = tx_mgr->get_entry_from_block(tail_tx_idx, tail_tx_block);
     if (!tx_entry.is_valid()) break;
-    if (init_bitmap) file->set_allocated(tail_tx_idx.block_idx);
+    if (init_bitmap && tail_tx_idx.block_idx != prev_tx_block_idx)
+      file->set_allocated(tail_tx_idx.block_idx);
     if (tx_entry.is_inline())
       apply_tx(tx_entry.commit_inline_entry);
     else
       apply_tx(tx_entry.commit_entry, log_mgr, init_bitmap);
+    prev_tx_block_idx = tail_tx_idx.block_idx;
     if (!tx_mgr->advance_tx_idx(tail_tx_idx, tail_tx_block, do_alloc)) break;
   }
 
   // mark all live data blocks in bitmap
   if (init_bitmap)
-    for (const auto& logical_idx : table) file->set_allocated(logical_idx);
+    for (const auto logical_idx : table) file->set_allocated(logical_idx);
 
   // return it out
   tx_idx = tail_tx_idx;
