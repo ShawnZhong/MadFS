@@ -14,7 +14,7 @@ File::File(int fd, const struct stat* stat, int flags)
       file_offset(0),
       flags(flags) {
   if (stat->st_size == 0) meta->init();
-  
+
   meta->lock();
   shm_fd = open_shm(stat, bitmap);
   // The first bit corresponds to the meta block which should always be set
@@ -28,7 +28,7 @@ File::File(int fd, const struct stat* stat, int flags)
     bitmap[0].set_allocated(0);
   }
   meta->unlock();
-  
+
   // FIXME: the file_offset operation must be thread-safe
   if (flags & O_APPEND) file_offset += blk_table.get_file_size();
 }
