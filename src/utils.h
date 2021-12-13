@@ -70,9 +70,9 @@ extern FILE *log_file;
 
 // adopted from `include/linux/align.h`
 #define ALIGN_MASK(x, mask) (((x) + (mask)) & ~(mask))
-#define ALIGN_UP(x, a) ALIGN_MASK((x), ((a)-1))
-#define ALIGN_DOWN(x, a) ((x) & ~((a)-1))
-#define IS_ALIGNED(x, a) (((x) & ((a)-1)) == 0)
+#define ALIGN_UP(x, a) ALIGN_MASK((x), ((typeof(x))(a)-1))
+#define ALIGN_DOWN(x, a) ((x) & ~((typeof(x))(a)-1))
+#define IS_ALIGNED(x, a) (((x) & ((typeof(x))(a)-1)) == 0)
 
 namespace ulayfs::pmem {
 /**

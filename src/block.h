@@ -276,6 +276,7 @@ class MetaBlock : public BaseBlock {
     // in the worst case, we just do unnecessary fallocate...
     // so we don't wait for it to persist
     persist_cl_unfenced(&cl2);
+    INFO("num_blocks updated to %u", new_num_blocks);
   }
 
   [[nodiscard]] uint32_t get_tx_seq() const { return 0; }
