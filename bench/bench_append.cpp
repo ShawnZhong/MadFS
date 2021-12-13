@@ -1,14 +1,11 @@
-#include <benchmark/benchmark.h>
-#include <fcntl.h>
-#include <unistd.h>
+#include "common.h"
 
-constexpr char FILEPATH[] = "test.txt";
-constexpr int MAX_SIZE = 64 * 4096;
 constexpr const char buf[MAX_SIZE]{};
 
 int fd;
 
 static void bench(benchmark::State& state) {
+  pin_node(0);
   if (state.thread_index() == 0) {
     remove(FILEPATH);
     fd = open(FILEPATH, O_CREAT | O_RDWR, S_IRUSR | S_IWUSR);
@@ -22,13 +19,15 @@ static void bench(benchmark::State& state) {
 
   if (state.thread_index() == 0) {
     close(fd);
+    remove(FILEPATH);
   }
 }
 
 BENCHMARK(bench)
     ->RangeMultiplier(2)
     ->Range(8, MAX_SIZE)
-    ->ThreadRange(1, 16)
-    ->Iterations(1000)
+    ->Threads(1)
+    ->DenseThreadRange(2, MAX_NUM_THREAD, 2)
+    ->Iterations(NUM_ITER)
     ->UseRealTime();
 BENCHMARK_MAIN();
