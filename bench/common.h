@@ -1,14 +1,11 @@
 #pragma once
 
-#include <benchmark/benchmark.h>
 #include <fcntl.h>
 #include <sched.h>
 #include <unistd.h>
 
-constexpr char FILEPATH[] = "test.txt";
-constexpr int MAX_SIZE = 64 * 4096;
-constexpr int MAX_NUM_THREAD = 16;
-constexpr int NUM_ITER = 10000;
+#include <cstdio>
+#include <cstdlib>
 
 void pin_node(int node) {
   cpu_set_t cpuset;
