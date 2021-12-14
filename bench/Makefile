@@ -1,12 +1,12 @@
 .PHONY: debug release posix
 debug:
-	export ULAYFS_PATH := $(shell readlink -e ../build-debug/libulayfs.so)
+	export ULAYFS_PATH = $(shell readlink -e ../build-debug/libulayfs.so)
 	$(MAKE) leveldb-test
 release:
-	export ULAYFS_PATH := $(shell readlink -e ../build-release/libulayfs.so)
+	export ULAYFS_PATH = $(shell readlink -e ../build-release/libulayfs.so)
 	$(MAKE) leveldb-test
 posix:
-	export ULAYFS_PATH :=
+	export ULAYFS_PATH =
 	$(MAKE) leveldb-test
 
 .PHONY: ulayfs
@@ -24,7 +24,7 @@ leveldb:
 leveldb-test: ulayfs leveldb
 	cd leveldb/build && \
 	mkdir -p test-temp && \
-	TEST_TMPDIR=test-temp/ LD_PRELOAD=$(ULAYFS_PATH) ./db_test
+	TEST_TMPDIR=test-temp/ LD_PRELOAD=${ULAYFS_PATH} ./db_test
 
 .PHONY: clean
 clean:
