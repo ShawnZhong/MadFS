@@ -7,7 +7,6 @@
 constexpr char FILEPATH[] = "test.txt";
 constexpr int MAX_SIZE = 64 * 4096;
 constexpr int MAX_NUM_THREAD = 16;
-constexpr int NUM_ITER = 10000;
 constexpr const char buf[MAX_SIZE]{};
 
 int fd;
@@ -46,6 +45,9 @@ int main(int argc, char** argv) {
   benchmark::Initialize(&argc, argv);
   if (benchmark::ReportUnrecognizedArguments(argc, argv)) return 1;
 
+  int num_iter = 10000;
+  if (auto str = std::getenv("BENCH_NUM_ITER"); str) num_iter = std::stoi(str);
+
   for (auto& bm : {
            RegisterBenchmark("append", bench<BenchMode::APPEND>),
            RegisterBenchmark("overwrite", bench<BenchMode::OVERWRITE>),
@@ -54,7 +56,7 @@ int main(int argc, char** argv) {
         ->Range(8, MAX_SIZE)
         ->Threads(1)
         ->DenseThreadRange(2, MAX_NUM_THREAD, 2)
-        ->Iterations(NUM_ITER)
+        ->Iterations(num_iter)
         ->UseRealTime();
   }
 

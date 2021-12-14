@@ -13,5 +13,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v2
-      - name: bench_append
-        run: ./run bench_append ${{matrix.build_type}}
+      - name: bench
+        run: ./run bench ${{matrix.build_type}}
+        env:
+          BENCH_NUM_ITER: 100
