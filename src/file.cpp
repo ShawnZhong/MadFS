@@ -18,7 +18,8 @@ File::File(int fd, off_t init_file_size, pmem::Bitmap* bitmap, int shm_fd,
       flags(flags) {
   if (init_file_size == 0) meta->init();
   // FIXME: the file_offset operation must be thread-safe
-  if (flags & O_APPEND) file_offset += blk_table.get_file_size();
+  if ((flags & O_ACCMODE) == O_APPEND)
+    file_offset += blk_table.get_file_size();
 }
 
 /*
@@ -26,7 +27,7 @@ File::File(int fd, off_t init_file_size, pmem::Bitmap* bitmap, int shm_fd,
  */
 
 ssize_t File::pwrite(const void* buf, size_t count, size_t offset) {
-  if (!(flags & (O_WRONLY | O_RDWR))) {
+  if ((flags & O_ACCMODE) != O_WRONLY && (flags & O_ACCMODE) != O_RDWR) {
     errno = EBADF;
     return -1;
   }
@@ -35,7 +36,7 @@ ssize_t File::pwrite(const void* buf, size_t count, size_t offset) {
 }
 
 ssize_t File::write(const void* buf, size_t count) {
-  if (!(flags & (O_WRONLY | O_RDWR))) {
+  if ((flags & O_ACCMODE) != O_WRONLY && (flags & O_ACCMODE) != O_RDWR) {
     errno = EBADF;
     return -1;
   }
@@ -50,7 +51,7 @@ ssize_t File::write(const void* buf, size_t count) {
 }
 
 ssize_t File::pread(void* buf, size_t count, off_t offset) {
-  if (!(flags & (O_RDONLY | O_RDWR))) {
+  if ((flags & O_ACCMODE) != O_RDONLY && (flags & O_ACCMODE) != O_RDWR) {
     errno = EBADF;
     return -1;
   }
@@ -59,7 +60,7 @@ ssize_t File::pread(void* buf, size_t count, off_t offset) {
 }
 
 ssize_t File::read(void* buf, size_t count) {
-  if (!(flags & (O_RDONLY | O_RDWR))) {
+  if ((flags & O_ACCMODE) != O_RDONLY && (flags & O_ACCMODE) != O_RDWR) {
     errno = EBADF;
     return -1;
   }
