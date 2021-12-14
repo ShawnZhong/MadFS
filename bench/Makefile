@@ -1,6 +1,11 @@
 ULAYFS_PATH_DEBUG:=$(shell readlink -e ../build-debug/libulayfs.so)
 ULAYFS_PATH_RELEASE:=$(shell readlink -e ../build-release/libulayfs.so)
 
+.PHONY: all
+all:
+	echo "Please use make [debug|release|posix]"
+	@exit 1
+
 .PHONY: debug release posix
 debug:
 	$(MAKE) ULAYFS_PATH=${ULAYFS_PATH_DEBUG} leveldb-test
