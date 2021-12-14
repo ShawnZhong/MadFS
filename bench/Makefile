@@ -1,13 +1,13 @@
+ULAYFS_PATH_DEBUG:=$(shell readlink -e ../build-debug/libulayfs.so)
+ULAYFS_PATH_RELEASE:=$(shell readlink -e ../build-release/libulayfs.so)
+
 .PHONY: debug release posix
 debug:
-	export ULAYFS_PATH = $(shell readlink -e ../build-debug/libulayfs.so)
-	$(MAKE) leveldb-test
+	$(MAKE) ULAYFS_PATH=${ULAYFS_PATH_DEBUG} leveldb-test
 release:
-	export ULAYFS_PATH = $(shell readlink -e ../build-release/libulayfs.so)
-	$(MAKE) leveldb-test
+	$(MAKE) ULAYFS_PATH=${ULAYFS_PATH_RELEASE} leveldb-test
 posix:
-	export ULAYFS_PATH =
-	$(MAKE) leveldb-test
+	$(MAKE) ULAYFS_PATH= leveldb-test
 
 .PHONY: ulayfs
 ulayfs:
