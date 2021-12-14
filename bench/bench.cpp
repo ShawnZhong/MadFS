@@ -11,13 +11,13 @@ constexpr const char buf[MAX_SIZE]{};
 
 int fd;
 
-enum class BenchMode {
+enum class WriteMode {
   APPEND,
   OVERWRITE,
 };
 
-template <BenchMode mode>
-static void bench(benchmark::State& state) {
+template <WriteMode mode>
+static void bench_write(benchmark::State& state) {
   pin_node(0);
   if (state.thread_index() == 0) {
     remove(FILEPATH);
@@ -26,7 +26,7 @@ static void bench(benchmark::State& state) {
 
   const auto num_bytes = state.range(0);
   for (auto _ : state) {
-    if constexpr (mode == BenchMode::APPEND) {
+    if constexpr (mode == WriteMode::APPEND) {
       ssize_t res = write(fd, buf, num_bytes);
     } else {
       ssize_t res = pwrite(fd, buf, num_bytes, 0);
@@ -49,8 +49,8 @@ int main(int argc, char** argv) {
   if (auto str = std::getenv("BENCH_NUM_ITER"); str) num_iter = std::stoi(str);
 
   for (auto& bm : {
-           RegisterBenchmark("append", bench<BenchMode::APPEND>),
-           RegisterBenchmark("overwrite", bench<BenchMode::OVERWRITE>),
+           RegisterBenchmark("append", bench_write<WriteMode::APPEND>),
+           RegisterBenchmark("overwrite", bench_write<WriteMode::OVERWRITE>),
        }) {
     bm->RangeMultiplier(2)
         ->Range(8, MAX_SIZE)
