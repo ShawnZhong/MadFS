@@ -91,7 +91,7 @@ int close(int fd) {
   if (auto file = get_file(fd)) {
     DEBUG("ulayfs::close(%d)", fd);
     files.unsafe_erase(fd);
-    return 0;
+    return posix::close(fd);
   } else {
     DEBUG("posix::close(%d)", fd);
     return posix::close(fd);
