@@ -57,14 +57,15 @@ class MemTable {
    * a private helper function that calls mmap internally
    * @return the pointer to the first block on the persistent memory
    */
-  pmem::Block* mmap_file(size_t length, off_t offset, int flags = 0) {
+  pmem::Block* mmap_file(size_t length, off_t offset, int flags = 0,
+                         bool read_only = false) {
     if constexpr (BuildOptions::use_map_sync)
       flags |= MAP_SHARED_VALIDATE | MAP_SYNC;
     else
       flags |= MAP_SHARED;
     if constexpr (BuildOptions::force_map_populate) flags |= MAP_POPULATE;
 
-    int prot = PROT_READ | PROT_WRITE;
+    int prot = read_only ? PROT_READ : PROT_READ | PROT_WRITE;
 
     void* addr = posix::mmap(nullptr, length, prot, flags, fd, offset);
 
@@ -86,7 +87,7 @@ class MemTable {
   }
 
  public:
-  MemTable(int fd, off_t file_size) {
+  MemTable(int fd, off_t file_size, bool read_only) {
     this->fd = fd;
 
     // grow to multiple of grow_unit_size if the file is empty or the file
@@ -99,7 +100,7 @@ class MemTable {
       PANIC_IF(ret, "fallocate failed");
     }
 
-    pmem::Block* blocks = mmap_file(file_size, 0);
+    pmem::Block* blocks = mmap_file(file_size, 0, 0, read_only);
     meta = &blocks->meta_block;
 
     // compute number of blocks and update the mata block if necessary

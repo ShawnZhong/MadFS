@@ -35,12 +35,12 @@ int open(const char* pathname, int flags, ...) {
   }
 
   // TODO: support read-only files
-  if ((flags & O_ACCMODE) == O_RDONLY) {
-    WARN("File \"%s\" opened with O_RDONLY. Fallback to syscall.", pathname);
-    int fd = posix::open(pathname, flags, mode);
-    DEBUG("posix::open(%s, %x, %x) = %d", pathname, flags, mode, fd);
-    return fd;
-  }
+  // if ((flags & O_ACCMODE) == O_RDONLY) {
+  //   WARN("File \"%s\" opened with O_RDONLY. Fallback to syscall.", pathname);
+  //   int fd = posix::open(pathname, flags, mode);
+  //   DEBUG("posix::open(%s, %x, %x) = %d", pathname, flags, mode, fd);
+  //   return fd;
+  // }
 
   if ((flags & O_ACCMODE) == O_WRONLY) {
     INFO("File \"%s\" opened with O_WRONLY. Changed to O_RDWR.", pathname);

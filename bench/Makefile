@@ -6,7 +6,8 @@ debug release posix: leveldb-test
 
 .PHONY: ulayfs
 ulayfs:
-	make -C ..
+	make -C .. debug
+	make -C .. release
 
 .PHONY: leveldb leveldb-test
 leveldb:

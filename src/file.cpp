@@ -9,7 +9,7 @@ File::File(int fd, off_t init_file_size, pmem::Bitmap* bitmap, int shm_fd,
            int flags)
     : fd(fd),
       bitmap(bitmap),
-      mem_table(fd, init_file_size),
+      mem_table(fd, init_file_size, (flags & O_ACCMODE) == O_RDONLY),
       meta(mem_table.get_meta()),
       tx_mgr(this, meta),
       blk_table(this, &tx_mgr),
