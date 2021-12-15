@@ -29,19 +29,21 @@ static void bench(benchmark::State& state) {
     fd = open(FILEPATH, O_CREAT | O_RDWR, S_IRUSR | S_IWUSR);
   }
 
-  // run benchmark
   const auto num_bytes = state.range(0);
+  char dst_buf[MAX_SIZE];
+  if constexpr (mode != BenchMode::APPEND) {
+    // allocate some space to the file for pread/pwrite
+    write(fd, src_buf, num_bytes);
+  }
+
+  // run benchmark
   if constexpr (mode == BenchMode::APPEND) {
     for (auto _ : state) write(fd, src_buf, num_bytes);
   } else if constexpr (mode == BenchMode::OVERWRITE) {
     for (auto _ : state) pwrite(fd, src_buf, num_bytes, 0);
   } else if constexpr (mode == BenchMode::READ) {
-    write(fd, src_buf, MAX_SIZE);
-    char dst_buf[MAX_SIZE];
     for (auto _ : state) pread(fd, dst_buf, num_bytes, 0);
   } else if constexpr (mode == BenchMode::READ_WRITE) {
-    write(fd, src_buf, MAX_SIZE);
-    char dst_buf[MAX_SIZE];
     if (state.thread_index() == 0) {
       for (auto _ : state) pread(fd, dst_buf, num_bytes, 0);
     } else {
