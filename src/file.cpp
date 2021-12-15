@@ -45,15 +45,9 @@ File::File(int fd, const struct stat& stat, int flags)
 File::~File() {
   DEBUG("posix::close(%d)", fd);
   posix::close(fd);
-  // TODO: enable the lines below when shm is acutally in use
   posix::close(shm_fd);
   allocators.clear();
   log_mgrs.clear();
-}
-
-File::~File() {
-  DEBUG("~File called for fd=%d", fd);
-  allocators.erase(fd);
 }
 
 /*
