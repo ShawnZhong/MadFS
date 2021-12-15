@@ -10,6 +10,8 @@
 namespace ulayfs::dram {
 
 LogicalBlockIdx Allocator::alloc(uint32_t num_blocks) {
+  assert(num_blocks <= BITMAP_CAPACITY);
+
   // we first try to allocate from the free list
   auto it =
       std::lower_bound(free_list.begin(), free_list.end(),
