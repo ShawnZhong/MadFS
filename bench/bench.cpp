@@ -15,18 +15,21 @@ enum class BenchMode {
   APPEND,
   OVERWRITE,
   READ,
+  READ_WRITE,  // single reader multiple writers
 };
 
 #pragma GCC diagnostic push
 #pragma GCC diagnostic ignored "-Wunused-result"
 template <BenchMode mode>
 static void bench(benchmark::State& state) {
+  // set up
   pin_node(0);
   if (state.thread_index() == 0) {
     remove(FILEPATH);
     fd = open(FILEPATH, O_CREAT | O_RDWR, S_IRUSR | S_IWUSR);
   }
 
+  // run benchmark
   const auto num_bytes = state.range(0);
   if constexpr (mode == BenchMode::APPEND) {
     for (auto _ : state) write(fd, src_buf, num_bytes);
@@ -36,10 +39,31 @@ static void bench(benchmark::State& state) {
     write(fd, src_buf, MAX_SIZE);
     char dst_buf[MAX_SIZE];
     for (auto _ : state) pread(fd, dst_buf, num_bytes, 0);
+  } else if constexpr (mode == BenchMode::READ_WRITE) {
+    write(fd, src_buf, MAX_SIZE);
+    char dst_buf[MAX_SIZE];
+    if (state.thread_index() == 0) {
+      for (auto _ : state) pread(fd, dst_buf, num_bytes, 0);
+    } else {
+      for (auto _ : state) pwrite(fd, src_buf, num_bytes, 0);
+    }
   }
-  state.SetBytesProcessed(static_cast<int64_t>(state.iterations()) * num_bytes);
-  state.SetItemsProcessed(static_cast<int64_t>(state.iterations()));
 
+  // report result
+  auto items_processed = static_cast<int64_t>(state.iterations());
+  auto bytes_processed = items_processed * num_bytes;
+  if constexpr (mode == BenchMode::READ_WRITE) {
+    // for read-write, we only report the result of the reader thread
+    if (state.thread_index() == 0) {
+      state.SetBytesProcessed(bytes_processed);
+      state.SetItemsProcessed(items_processed);
+    }
+  } else {
+    state.SetBytesProcessed(bytes_processed);
+    state.SetItemsProcessed(items_processed);
+  }
+
+  // tear down
   if (state.thread_index() == 0) {
     close(fd);
     remove(FILEPATH);
@@ -58,6 +82,7 @@ int main(int argc, char** argv) {
            RegisterBenchmark("append", bench<BenchMode::APPEND>),
            RegisterBenchmark("overwrite", bench<BenchMode::OVERWRITE>),
            RegisterBenchmark("read", bench<BenchMode::READ>),
+           RegisterBenchmark("read_write", bench<BenchMode::READ_WRITE>),
        }) {
     bm->RangeMultiplier(2)
         ->Range(8, MAX_SIZE)
