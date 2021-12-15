@@ -544,10 +544,12 @@ ssize_t TxMgr::MultiBlockTx::do_write() {
       // calculate num of full block bytes to be copied in this iter
       // takes care of last block in last chunk which might be partial
       size_t num_bytes = rest_full_count;
-      if (i == 0 && need_copy_first)
-        num_bytes = MAX_BYTES_PER_BODY - BLOCK_SIZE;
-      else if (i < dst_blocks.size() - 1)
-        num_bytes = MAX_BYTES_PER_BODY;
+      if (dst_blocks.size() > 1) {
+        if (i == 0 && need_copy_first)
+          num_bytes = MAX_BYTES_PER_BODY - BLOCK_SIZE;
+        else if (i < dst_blocks.size() - 1)
+          num_bytes = MAX_BYTES_PER_BODY;
+      }
       // actual memcpy
       memcpy(full_blocks->data_rw(), rest_buf, num_bytes);
       persist_unfenced(full_blocks, num_bytes);
