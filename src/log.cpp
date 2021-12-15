@@ -134,7 +134,7 @@ pmem::LogEntry* LogMgr::alloc_entry(bool pack_align,
 
   assert(curr_block != nullptr);
   pmem::LogEntry* entry = curr_block->get(free_local_idx);
-  memset(entry, 0, sizeof(pmem::LogEntry));   // zero-out at alloc
+  memset(entry, 0, sizeof(pmem::LogEntry));  // zero-out at alloc
 
   free_local_idx++;
   return entry;

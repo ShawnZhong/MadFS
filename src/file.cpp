@@ -44,8 +44,7 @@ File::File(int fd, const struct stat& stat, int flags)
   }
 
   // FIXME: the file_offset operation must be thread-safe
-  if (flags & O_APPEND)
-    file_offset += file_size;
+  if (flags & O_APPEND) file_offset += file_size;
 }
 
 File::~File() {
@@ -184,8 +183,7 @@ LogMgr* File::get_local_log_mgr() {
     return &it->second;
   }
 
-  auto [it, ok] =
-      log_mgrs.emplace(tid, LogMgr(this, meta));
+  auto [it, ok] = log_mgrs.emplace(tid, LogMgr(this, meta));
   PANIC_IF(!ok, "insert to thread-local log_mgrs failed");
   return &it->second;
 }
