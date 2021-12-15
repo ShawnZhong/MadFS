@@ -52,4 +52,5 @@ constexpr static uint16_t NUM_BITMAP_PER_CL =
 // how many data blocks can be covered per CAS
 // TODO: put this constant somewhere else?
 constexpr static uint8_t MAX_BLOCKS_PER_BODY = 64;
+constexpr static size_t MAX_BYTES_PER_BODY = MAX_BLOCKS_PER_BODY * BLOCK_SIZE;
 }  // namespace ulayfs

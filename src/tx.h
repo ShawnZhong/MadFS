@@ -219,9 +219,9 @@ class TxMgr::WriteTx : public TxMgr::Tx {
   Allocator* allocator;
 
   // the logical index of the destination data block
-  const LogicalBlockIdx dst_lidx;
+  std::vector<LogicalBlockIdx> dst_lidxs;
   // the pointer to the destination data block
-  pmem::Block* const dst_blocks;
+  std::vector<pmem::Block*> dst_blocks;
 
   // the tx entry to be committed (may or may not inline)
   pmem::TxEntry commit_entry;

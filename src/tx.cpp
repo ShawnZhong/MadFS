@@ -242,8 +242,6 @@ bool TxMgr::Tx::handle_conflict(pmem::TxEntry curr_entry,
   auto log_mgr = file->get_local_log_mgr();
 
   do {
-    // TODO: implement the case where num_blocks is over 64 and there
-    //       are multiple begin_logical_idxs
     // TODO: handle writev requests
     if (curr_entry.is_inline()) {  // inline tx entry
       num_blocks = curr_entry.commit_inline_entry.num_blocks;
@@ -400,25 +398,37 @@ TxMgr::WriteTx::WriteTx(File* file, const char* buf, size_t count,
       buf(buf),
       log_mgr(file->get_local_log_mgr()),
       allocator(file->get_local_allocator()),
-      dst_lidx(allocator->alloc(num_blocks)),
-      dst_blocks(file->lidx_to_addr_rw(dst_lidx)) {
-  // TODO: implement the case where num_blocks is over 64 and there
-  //       are multiple begin_logical_idxs
+      dst_lidxs(),
+      dst_blocks() {
   // TODO: handle writev requests
   // for overwrite, "leftover_bytes" is zero; only in append we care
   // append log without fence because we only care flush completion
   // before try_commit
+  size_t rest_num_blocks = num_blocks;
+  while (rest_num_blocks > 0) {
+    size_t chunk_num_blocks = rest_num_blocks > MAX_BLOCKS_PER_BODY
+                              ? MAX_BLOCKS_PER_BODY
+                              : rest_num_blocks;
+    dst_lidxs.push_back(allocator->alloc(chunk_num_blocks));
+    rest_num_blocks -= chunk_num_blocks;
+  }
+  assert(dst_lidxs.size() > 0);
+
+  for (auto lidx : dst_lidxs)
+    dst_blocks.push_back(file->lidx_to_addr_rw(lidx));
+  assert(dst_blocks.size() > 0);
+
   uint16_t leftover_bytes = ALIGN_UP(end_offset, BLOCK_SIZE) - end_offset;
-  if (pmem::TxCommitInlineEntry::can_inline(num_blocks, begin_vidx, dst_lidx,
+  if (pmem::TxCommitInlineEntry::can_inline(num_blocks, begin_vidx, dst_lidxs[0],
                                             leftover_bytes)) {
-    commit_entry = pmem::TxCommitInlineEntry(num_blocks, begin_vidx, dst_lidx);
+    commit_entry = pmem::TxCommitInlineEntry(num_blocks, begin_vidx, dst_lidxs[0]);
   } else {
     // it's fine that we append log first as long we don't publish it by tx
     auto log_entry_idx = log_mgr->append(pmem::LogOp::LOG_OVERWRITE,  // op
                                          leftover_bytes,  // leftover_bytes
                                          num_blocks,      // total_blocks
                                          begin_vidx,      // begin_virtual_idx
-                                         {dst_lidx},      // begin_logical_idxs
+                                         dst_lidxs,       // begin_logical_idxs
                                          false            // fenced
     );
     commit_entry = pmem::TxCommitEntry(num_blocks, begin_vidx, log_entry_idx);
@@ -433,8 +443,17 @@ ssize_t TxMgr::AlignedTx::do_write() {
   LogicalBlockIdx recycle_image[num_blocks];
 
   // since everything is block-aligned, we can copy data directly
-  memcpy(dst_blocks->data_rw(), buf, count);
-  persist_fenced(dst_blocks, count);
+  const char *rest_buf = buf;
+  size_t rest_count = count;
+  for (auto block : dst_blocks) {
+    size_t num_bytes = rest_count > MAX_BYTES_PER_BODY
+                       ? MAX_BYTES_PER_BODY
+                       : rest_count;
+    memcpy(block->data_rw(), rest_buf, num_bytes);
+    persist_fenced(block, num_bytes);
+    rest_buf += num_bytes;
+    rest_count -= num_bytes;
+  }
 
   // make a local copy of the tx tail
   file->blk_table.update(tail_tx_idx, tail_tx_block, nullptr,
@@ -464,17 +483,18 @@ ssize_t TxMgr::SingleBlockTx::do_write() {
   file->blk_table.update(tail_tx_idx, tail_tx_block, nullptr,
                          /*do_alloc*/ true);
   recycle_image[0] = file->vidx_to_lidx(begin_vidx);
-  assert(recycle_image[0] != dst_lidx);
+  assert(recycle_image[0] != dst_lidxs[0]);
 
 redo:
   // copy original data
   const pmem::Block* src_block = file->lidx_to_addr_ro(recycle_image[0]);
-  memcpy(dst_blocks->data_rw(), src_block->data_ro(), BLOCK_SIZE);
+  assert(dst_blocks.size() == 1);
+  memcpy(dst_blocks[0]->data_rw(), src_block->data_ro(), BLOCK_SIZE);
   // copy data from buf
-  memcpy(dst_blocks->data_rw() + local_offset, buf, count);
+  memcpy(dst_blocks[0]->data_rw() + local_offset, buf, count);
 
   // persist the data
-  persist_fenced(dst_blocks, BLOCK_SIZE);
+  persist_fenced(dst_blocks[0], BLOCK_SIZE);
 
 retry:
   // try to commit the tx entry
@@ -511,10 +531,26 @@ ssize_t TxMgr::MultiBlockTx::do_write() {
 
   // copy full blocks first
   if (num_full_blocks > 0) {
-    pmem::Block* full_blocks = dst_blocks + (begin_full_vidx - begin_vidx);
-    const size_t num_bytes = num_full_blocks << BLOCK_SHIFT;
-    memcpy(full_blocks->data_rw(), buf + first_block_local_offset, num_bytes);
-    persist_unfenced(full_blocks, num_bytes);
+    const char *rest_buf = buf;
+    size_t rest_full_count = num_full_blocks << BLOCK_SHIFT;
+    for (size_t i = 0; i < dst_blocks.size(); ++i) {
+      pmem::Block* full_blocks = dst_blocks[i];
+      if (i == 0) {   // first block in first chunk could be partial
+        full_blocks += (begin_full_vidx - begin_vidx);
+        rest_buf += first_block_local_offset;
+      }
+
+      size_t num_bytes = rest_full_count;
+      if (i == 0 && dst_blocks.size() > 1)
+        num_bytes = MAX_BYTES_PER_BODY - BLOCK_SIZE;
+      else if (i > 0 && i < dst_blocks.size() - 1 && dst_blocks.size() > 2)
+        num_bytes = MAX_BYTES_PER_BODY;
+      
+      memcpy(full_blocks->data_rw(), rest_buf, num_bytes);
+      persist_unfenced(full_blocks, num_bytes);
+      rest_buf += num_bytes;
+      rest_full_count -= num_bytes;
+    }
   }
 
   // only get a snapshot of the tail when starting critical piece
@@ -530,18 +566,19 @@ redo:
   if (need_copy_first && do_copy_first) {
     // copy the data from the first source block if exists
     const char* src = file->lidx_to_addr_ro(src_first_lidx)->data_ro();
-    memcpy(dst_blocks->data_rw(), src, BLOCK_SIZE);
+    memcpy(dst_blocks[0]->data_rw(), src, BLOCK_SIZE);
 
     // write data from the buf to the first block
-    char* dst = dst_blocks->data_rw() + BLOCK_SIZE - first_block_local_offset;
+    char* dst = dst_blocks[0]->data_rw() + BLOCK_SIZE - first_block_local_offset;
     memcpy(dst, buf, first_block_local_offset);
 
-    persist_unfenced(dst_blocks, BLOCK_SIZE);
+    persist_unfenced(dst_blocks[0], BLOCK_SIZE);
   }
 
   // copy last block
   if (need_copy_last && do_copy_last) {
-    pmem::Block* last_dst_block = dst_blocks + (end_full_vidx - begin_vidx);
+    pmem::Block* last_dst_block = dst_blocks.back() + end_full_vidx - begin_vidx
+                                  - MAX_BLOCKS_PER_BODY * (dst_blocks.size() - 1);
 
     // copy the data from the last source block if exits
     const char* block_src = file->lidx_to_addr_ro(src_last_lidx)->data_ro();
