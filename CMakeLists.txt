@@ -105,16 +105,16 @@ if (ULAYFS_BUILD_TESTS)
 endif ()
 
 if (ULAYFS_BUILD_BENCH)
-    add_executable(bench_append bench/bench_append.cpp)
+    add_executable(bench bench/bench.cpp bench/common.h)
 
     set(BENCHMARK_ENABLE_TESTING OFF)
     FetchContent_Declare(benchmark URL https://github.com/google/benchmark/archive/refs/tags/v1.6.0.tar.gz)
     FetchContent_MakeAvailable(benchmark)
 
     if (ULAYFS_LINK_LIBRARY)
-        target_link_libraries(bench_append benchmark::benchmark ulayfs)
+        target_link_libraries(bench benchmark::benchmark ulayfs)
     else ()
-        target_link_libraries(bench_append benchmark::benchmark)
+        target_link_libraries(bench benchmark::benchmark)
     endif ()
 endif ()
 

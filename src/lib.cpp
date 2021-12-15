@@ -81,7 +81,7 @@ int open(const char* pathname, int flags, ...) {
 
 int close(int fd) {
   if (auto file = get_file(fd)) {
-    INFO("ulayfs::close(%d)", fd);
+    DEBUG("ulayfs::close(%d)", fd);
     files.unsafe_erase(fd);
     return 0;
   } else {
@@ -92,7 +92,7 @@ int close(int fd) {
 
 ssize_t write(int fd, const void* buf, size_t count) {
   if (auto file = get_file(fd)) {
-    INFO("ulayfs::write(%d, buf, %zu)", fd, count);
+    DEBUG("ulayfs::write(%d, buf, %zu)", fd, count);
     return file->write(buf, count);
   } else {
     DEBUG("posix::write(%d, buf, %zu)", fd, count);
@@ -102,7 +102,7 @@ ssize_t write(int fd, const void* buf, size_t count) {
 
 ssize_t read(int fd, void* buf, size_t count) {
   if (auto file = get_file(fd)) {
-    INFO("ulayfs::read(%d, buf, %zu)", fd, count);
+    DEBUG("ulayfs::read(%d, buf, %zu)", fd, count);
     return file->read(buf, count);
   } else {
     DEBUG("posix::read(%d, buf, %zu)", fd, count);
@@ -112,7 +112,7 @@ ssize_t read(int fd, void* buf, size_t count) {
 
 off_t lseek(int fd, off_t offset, int whence) {
   if (auto file = get_file(fd)) {
-    INFO("ulayfs::lseek(%d, %ld, %d)", fd, offset, whence);
+    DEBUG("ulayfs::lseek(%d, %ld, %d)", fd, offset, whence);
     return file->lseek(offset, whence);
   } else {
     DEBUG("posix::lseek(%d, %ld, %d)", fd, offset, whence);
@@ -122,7 +122,7 @@ off_t lseek(int fd, off_t offset, int whence) {
 
 ssize_t pwrite(int fd, const void* buf, size_t count, off_t offset) {
   if (auto file = get_file(fd)) {
-    INFO("ulayfs::pwrite(%d, buf, %zu, %ld)", fd, count, offset);
+    DEBUG("ulayfs::pwrite(%d, buf, %zu, %ld)", fd, count, offset);
     return file->pwrite(buf, count, offset);
   } else {
     DEBUG("posix::pwrite(%d, buf, %zu, %ld)", fd, count, offset);
@@ -132,7 +132,7 @@ ssize_t pwrite(int fd, const void* buf, size_t count, off_t offset) {
 
 ssize_t pread(int fd, void* buf, size_t count, off_t offset) {
   if (auto file = get_file(fd)) {
-    INFO("ulayfs::pread(%d, buf, %zu, %ld)", fd, count, offset);
+    DEBUG("ulayfs::pread(%d, buf, %zu, %ld)", fd, count, offset);
     return file->pread(buf, count, offset);
   } else {
     DEBUG("posix::pread(%d, buf, %zu, %ld)", fd, count, offset);
@@ -142,7 +142,7 @@ ssize_t pread(int fd, void* buf, size_t count, off_t offset) {
 
 int fsync(int fd) {
   if (auto file = get_file(fd)) {
-    INFO("ulayfs::fsync(%d)", fd);
+    DEBUG("ulayfs::fsync(%d)", fd);
     return file->fsync();
   } else {
     DEBUG("posix::fsync(%d)", fd);
@@ -152,7 +152,7 @@ int fsync(int fd) {
 
 int fstat(int fd, struct stat* buf) {
   if (auto file = get_file(fd)) {
-    INFO("ulayfs::fstat(%d)", fd);
+    DEBUG("ulayfs::fstat(%d)", fd);
     // TODO: implement this
     return posix::fstat(fd, buf);
   } else {

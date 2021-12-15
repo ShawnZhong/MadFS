@@ -18,6 +18,7 @@ configure_cmds = """
 sudo sysctl -w vm.nr_hugepages=512 &&               # enable huge pages
 sudo sysctl -w kernel.kptr_restrict=0 &&            # expose kernel addresses for perf
 sudo sysctl -w kernel.perf_event_paranoid=-1 &&     # allow kernel profiling
+sudo sysctl -w vm.max_map_count=131072 &&           # increase max number of mmap regions
 sudo cpupower frequency-set --governor performance  # for consistent benchmark result
 """
 
