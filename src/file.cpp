@@ -146,9 +146,7 @@ Allocator* File::get_local_allocator() {
 }
 
 void File::erase_local_allocator() {
-  if (auto it = allocators.find(fd); it != allocators.end()) {
-    allocators.erase(it);
-  }
+  allocators.erase(fd);
 }
 
 LogMgr* File::get_local_log_mgr() {
@@ -162,9 +160,7 @@ LogMgr* File::get_local_log_mgr() {
 }
 
 void File::erase_local_log_mgr() {
-  if (auto it = log_mgrs.find(fd); it != log_mgrs.end()) {
-    log_mgrs.erase(it);
-  }
+  log_mgrs.erase(fd);
 }
 
 /*
