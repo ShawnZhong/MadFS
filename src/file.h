@@ -44,6 +44,10 @@ class File {
  public:
   File(int fd, off_t init_file_size, pmem::Bitmap* bitmap, int shm_fd,
        int flags);
+  ~File() {
+    posix::close(fd);
+    posix::close(shm_fd);
+  }
 
   /*
    * POSIX I/O operations
