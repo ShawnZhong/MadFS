@@ -82,6 +82,18 @@ int close(int fd) {
   }
 }
 
+int fclose(FILE* stream) {
+  int fd = fileno(stream);
+  if (auto file = get_file(fd)) {
+    DEBUG("ulayfs::fclose(%d)", fd);
+    files.unsafe_erase(fd);
+    return 0;
+  } else {
+    DEBUG("posix::fclose(%d)", fd);
+    return posix::fclose(stream);
+  }
+}
+
 ssize_t write(int fd, const void* buf, size_t count) {
   if (auto file = get_file(fd)) {
     DEBUG("ulayfs::write(%d, buf, %zu)", fd, count);
