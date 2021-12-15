@@ -1,5 +1,7 @@
 #pragma once
 
+#include <tbb/concurrent_unordered_map.h>
+
 #include <iostream>
 #include <stdexcept>
 
@@ -30,12 +32,13 @@ class File {
   off_t file_offset;
   int flags;
 
-  // each thread maintain a mapping from fd to allocator
+  // each thread tid has its local allocator
   // the allocator is a per-thread per-file data structure
-  thread_local static std::unordered_map<int, Allocator> allocators;
+  tbb::concurrent_unordered_map<pid_t, Allocator> allocators;
 
-  // each thread maintain a mapping from fd to log managers
-  thread_local static std::unordered_map<int, LogMgr> log_mgrs;
+  // each thread tid has its local log_mgr
+  // the log_mgr is a per-thread per-file data structure
+  tbb::concurrent_unordered_map<pid_t, LogMgr> log_mgrs;
 
   friend class TxMgr;
   friend class LogMgr;
@@ -44,6 +47,7 @@ class File {
  public:
   File(int fd, off_t init_file_size, pmem::Bitmap* bitmap, int shm_fd,
        int flags);
+  ~File();
 
   /*
    * POSIX I/O operations
@@ -59,9 +63,7 @@ class File {
    * Getters & removers for thread-local data structures
    */
   [[nodiscard]] Allocator* get_local_allocator();
-  void erase_local_allocator();
   [[nodiscard]] LogMgr* get_local_log_mgr();
-  void erase_local_log_mgr();
 
  private:
   /**

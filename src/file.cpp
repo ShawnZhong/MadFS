@@ -2,9 +2,6 @@
 
 namespace ulayfs::dram {
 
-thread_local std::unordered_map<int, Allocator> File::allocators;
-thread_local std::unordered_map<int, LogMgr> File::log_mgrs;
-
 File::File(int fd, off_t init_file_size, pmem::Bitmap* bitmap, int shm_fd,
            int flags)
     : fd(fd),
@@ -20,6 +17,15 @@ File::File(int fd, off_t init_file_size, pmem::Bitmap* bitmap, int shm_fd,
   // FIXME: the file_offset operation must be thread-safe
   if ((flags & O_ACCMODE) == O_APPEND)
     file_offset += blk_table.get_file_size();
+}
+
+File::~File() {
+  DEBUG("posix::close(%d)", fd);
+  posix::close(fd);
+  // TODO: enable the lines below when shm is acutally in use
+  // posix::close(shm_fd);
+  allocators.clear();
+  log_mgrs.clear();
 }
 
 /*
@@ -135,32 +141,25 @@ int File::fsync() {
  */
 
 Allocator* File::get_local_allocator() {
-  if (auto it = allocators.find(fd); it != allocators.end()) {
+  if (auto it = allocators.find(tid); it != allocators.end()) {
     return &it->second;
   }
 
   auto [it, ok] =
-      allocators.emplace(fd, Allocator(fd, meta, &mem_table, bitmap));
+      allocators.emplace(tid, Allocator(fd, meta, &mem_table, bitmap));
   PANIC_IF(!ok, "insert to thread-local allocators failed");
   return &it->second;
 }
 
-void File::erase_local_allocator() {
-  allocators.erase(fd);
-}
-
 LogMgr* File::get_local_log_mgr() {
-  if (auto it = log_mgrs.find(fd); it != log_mgrs.end()) {
+  if (auto it = log_mgrs.find(tid); it != log_mgrs.end()) {
     return &it->second;
   }
 
-  auto [it, ok] = log_mgrs.emplace(fd, LogMgr(this, meta));
+  auto [it, ok] =
+      log_mgrs.emplace(tid, LogMgr(this, meta));
   PANIC_IF(!ok, "insert to thread-local log_mgrs failed");
   return &it->second;
-}
-
-void File::erase_local_log_mgr() {
-  log_mgrs.erase(fd);
 }
 
 /*

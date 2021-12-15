@@ -92,8 +92,6 @@ int open(const char* pathname, int flags, ...) {
 int close(int fd) {
   if (auto file = get_file(fd)) {
     DEBUG("ulayfs::close(%d)", fd);
-    file->erase_local_allocator();
-    file->erase_local_log_mgr();
     files.unsafe_erase(fd);
     return posix::close(fd);
   } else {
