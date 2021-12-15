@@ -7,7 +7,6 @@
 constexpr char FILEPATH[] = "test.txt";
 constexpr int MAX_SIZE = 64 * 4096;
 constexpr int MAX_NUM_THREAD = 16;
-constexpr const char src_buf[MAX_SIZE]{};
 
 int fd;
 
@@ -29,8 +28,9 @@ static void bench(benchmark::State& state) {
     fd = open(FILEPATH, O_CREAT | O_RDWR, S_IRUSR | S_IWUSR);
   }
 
+  [[maybe_unused]] char src_buf[MAX_SIZE];
+  [[maybe_unused]] char dst_buf[MAX_SIZE];
   const auto num_bytes = state.range(0);
-  char dst_buf[MAX_SIZE];
   if constexpr (mode != BenchMode::APPEND) {
     // allocate some space to the file for pread/pwrite
     write(fd, src_buf, num_bytes);
