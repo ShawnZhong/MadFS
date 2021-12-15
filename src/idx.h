@@ -60,6 +60,13 @@ struct __attribute__((packed)) LogEntryUnpackIdx {
     auto local_idx = LogLocalIdx(idx.local_idx >> 1);
     return LogEntryIdx{idx.block_idx, local_idx};
   }
+
+  friend std::ostream& operator<<(std::ostream& out,
+                                  const LogEntryUnpackIdx& idx) {
+    out << "LogEntryUnpackIdx{" << idx.block_idx << ","
+        << unsigned(idx.local_idx) << "}";
+    return out;
+  }
 };
 
 static_assert(sizeof(LogEntryIdx) == 5, "LogEntryIdx must be 40 bits");
