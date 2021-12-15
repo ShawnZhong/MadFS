@@ -45,8 +45,11 @@ class File {
   File(int fd, off_t init_file_size, pmem::Bitmap* bitmap, int shm_fd,
        int flags);
   ~File() {
+    DEBUG("posix::close(%d)", fd);
     posix::close(fd);
     posix::close(shm_fd);
+    allocators.erase(fd);
+    log_mgrs.erase(fd);
   }
 
   /*
