@@ -92,10 +92,16 @@ void test_lseek() {
   assert(res == 0);
 }
 
+void test_stream() {
+  FILE* file = fopen(FILEPATH, "w+");
+  fclose(file);
+}
+
 int main() {
   remove(FILEPATH);
   test_write();
   test_read();
   test_lseek();
+  test_stream();
   return 0;
 }
