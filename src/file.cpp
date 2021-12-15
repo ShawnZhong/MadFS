@@ -23,7 +23,7 @@ File::~File() {
   DEBUG("posix::close(%d)", fd);
   posix::close(fd);
   // TODO: enable the lines below when shm is acutally in use
-  // posix::close(shm_fd);
+  posix::close(shm_fd);
   allocators.clear();
   log_mgrs.clear();
 }
