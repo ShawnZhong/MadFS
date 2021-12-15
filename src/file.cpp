@@ -131,7 +131,7 @@ int File::fsync() {
 }
 
 /*
- * Getters for thread-local data structures
+ * Getters & removers for thread-local data structures
  */
 
 Allocator* File::get_local_allocator() {
@@ -145,6 +145,12 @@ Allocator* File::get_local_allocator() {
   return &it->second;
 }
 
+void File::erase_local_allocator() {
+  if (auto it = allocators.find(fd); it != allocators.end()) {
+    allocators.erase(it);
+  }
+}
+
 LogMgr* File::get_local_log_mgr() {
   if (auto it = log_mgrs.find(fd); it != log_mgrs.end()) {
     return &it->second;
@@ -153,6 +159,12 @@ LogMgr* File::get_local_log_mgr() {
   auto [it, ok] = log_mgrs.emplace(fd, LogMgr(this, meta));
   PANIC_IF(!ok, "insert to thread-local log_mgrs failed");
   return &it->second;
+}
+
+void File::erase_local_log_mgr() {
+  if (auto it = log_mgrs.find(fd); it != log_mgrs.end()) {
+    log_mgrs.erase(it);
+  }
 }
 
 /*

@@ -56,10 +56,12 @@ class File {
   int fsync();
 
   /*
-   * Getters for thread-local data structures
+   * Getters & removers for thread-local data structures
    */
   [[nodiscard]] Allocator* get_local_allocator();
+  void erase_local_allocator();
   [[nodiscard]] LogMgr* get_local_log_mgr();
+  void erase_local_log_mgr();
 
  private:
   /**
