@@ -35,3 +35,6 @@ jobs:
 
       - name: test_sync
         run: ./run test_sync ${{matrix.build_type}}
+
+      - name: test_bitmap
+        run: ./run test_bitmap ${{matrix.build_type}}

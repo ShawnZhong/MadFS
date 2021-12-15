@@ -18,8 +18,10 @@ void LogMgr::get_coverage(LogEntryIdx first_head_idx,
                           VirtualBlockIdx& begin_virtual_idx,
                           uint32_t& num_blocks,
                           std::vector<LogicalBlockIdx>* begin_logical_idxs,
-                          uint16_t* leftover_bytes) {
+                          uint16_t* leftover_bytes, bool init_bitmap) {
   LogEntryUnpackIdx idx = LogEntryUnpackIdx::from_pack_idx(first_head_idx);
+  // mark the first log entry block in bitmap
+  if (init_bitmap) file->set_allocated(first_head_idx.block_idx);
   const pmem::LogHeadEntry* head_entry = get_head_entry(first_head_idx);
 
   // a head entry at the last slot of a LogBlock could have 0 body entries
@@ -52,6 +54,8 @@ void LogMgr::get_coverage(LogEntryIdx first_head_idx,
 
     if (head_entry->overflow) {
       idx = LogEntryUnpackIdx{head_entry->next.next_block_idx, 0};
+      // mark the next available log block in bitmap
+      if (init_bitmap) file->set_allocated(idx.block_idx);
       head_entry = get_head_entry(idx);
     } else {
       // last segment holds the true leftover_bytes for this group

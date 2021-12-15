@@ -6,7 +6,8 @@
 namespace ulayfs::dram {
 
 void BlkTable::update(TxEntryIdx& tx_idx, pmem::TxBlock*& tx_block,
-                      uint64_t* new_file_size, bool do_alloc) {
+                      uint64_t* new_file_size, bool do_alloc,
+                      bool init_bitmap) {
   pthread_spin_lock(&spinlock);
 
   // it's possible that the previous update move idx to overflow state
@@ -18,16 +19,24 @@ void BlkTable::update(TxEntryIdx& tx_idx, pmem::TxBlock*& tx_block,
   }
 
   auto log_mgr = file->get_local_log_mgr();
+  LogicalBlockIdx prev_tx_block_idx = 0;
 
   while (true) {
     auto tx_entry = tx_mgr->get_entry_from_block(tail_tx_idx, tail_tx_block);
     if (!tx_entry.is_valid()) break;
+    if (init_bitmap && tail_tx_idx.block_idx != prev_tx_block_idx)
+      file->set_allocated(tail_tx_idx.block_idx);
     if (tx_entry.is_inline())
       apply_tx(tx_entry.commit_inline_entry);
     else
-      apply_tx(tx_entry.commit_entry, log_mgr);
+      apply_tx(tx_entry.commit_entry, log_mgr, init_bitmap);
+    prev_tx_block_idx = tail_tx_idx.block_idx;
     if (!tx_mgr->advance_tx_idx(tail_tx_idx, tail_tx_block, do_alloc)) break;
   }
+
+  // mark all live data blocks in bitmap
+  if (init_bitmap)
+    for (const auto logical_idx : table) file->set_allocated(logical_idx);
 
   // return it out
   tx_idx = tail_tx_idx;
@@ -46,7 +55,8 @@ void BlkTable::resize_to_fit(VirtualBlockIdx idx) {
   table.resize(next_pow2);
 }
 
-void BlkTable::apply_tx(pmem::TxCommitEntry tx_commit_entry, LogMgr* log_mgr) {
+void BlkTable::apply_tx(pmem::TxCommitEntry tx_commit_entry, LogMgr* log_mgr,
+                        bool init_bitmap) {
   auto log_entry_idx = tx_commit_entry.log_entry_idx;
 
   uint32_t num_blocks;
@@ -54,7 +64,7 @@ void BlkTable::apply_tx(pmem::TxCommitEntry tx_commit_entry, LogMgr* log_mgr) {
   VirtualBlockIdx begin_virtual_idx;
   std::vector<LogicalBlockIdx> begin_logical_idxs;
   log_mgr->get_coverage(log_entry_idx, begin_virtual_idx, num_blocks,
-                        &begin_logical_idxs, &leftover_bytes);
+                        &begin_logical_idxs, &leftover_bytes, init_bitmap);
 
   size_t now_logical_idx_off = 0;
   VirtualBlockIdx now_virtual_idx = begin_virtual_idx;
@@ -99,7 +109,7 @@ void BlkTable::apply_tx(pmem::TxCommitInlineEntry tx_commit_inline_entry) {
 }
 
 std::ostream& operator<<(std::ostream& out, const BlkTable& b) {
-  out << "BlkTable:\n";
+  out << "BlkTable: (virtual block index -> logical block index)\n";
   for (size_t i = 0; i < b.table.size(); ++i) {
     if (b.table[i] != 0) {
       out << "\t" << i << " -> " << b.table[i] << "\n";

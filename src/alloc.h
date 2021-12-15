@@ -18,7 +18,7 @@ class Allocator {
   MemTable* mem_table;
 
   // dram bitmap
-  pmem::Bitmap* bitmap;
+  Bitmap* bitmap;
 
   // this local free_list maintains blocks allocated from the global free_list
   // and not used yet; pair: <size, idx>
@@ -31,21 +31,25 @@ class Allocator {
 
   // used as a hint for search; recent is defined to be "the next one to search"
   // keep id for idx translation
-  BitmapBlockId recent_bitmap_block_id;
+  // TODO: this may be useful for dynamically growing bitmap
+  // BitmapBlockId recent_bitmap_block_id;
   // NOTE: this is the index within recent_bitmap_block
   BitmapLocalIdx recent_bitmap_local_idx;
 
  public:
-  Allocator(int fd, pmem::MetaBlock* meta, MemTable* mem_table,
-            pmem::Bitmap* bitmap)
+  Allocator(int fd, pmem::MetaBlock* meta, MemTable* mem_table, Bitmap* bitmap)
       : fd(fd),
         meta(meta),
         mem_table(mem_table),
         bitmap(bitmap),
-        recent_bitmap_block_id(),
         recent_bitmap_local_idx() {
     free_list.reserve(64);
   }
+
+  ~Allocator() {
+    for (const auto& free : free_list)
+      Bitmap::free(bitmap, free.second, free.first);
+  };
 
   // allocate contiguous blocks (num_blocks must <= 64)
   // if large number of blocks required, please break it into multiple alloc
@@ -62,15 +66,6 @@ class Allocator {
    * continuous
    */
   void free(const LogicalBlockIdx recycle_image[], uint32_t image_size);
-
-  /**
-   * Mark the logical block as allocated. This is not thread safe and should
-   * only be used on startup if the bitmap is newly created.
-   */
-  void set_allocated(LogicalBlockIdx block_idx) {
-    bitmap[block_idx >> BITMAP_CAPACITY_SHIFT].set_allocated(
-        block_idx & (BITMAP_CAPACITY - 1));
-  }
 };
 
 }  // namespace ulayfs::dram

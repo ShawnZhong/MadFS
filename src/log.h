@@ -78,7 +78,8 @@ class LogMgr {
   void get_coverage(LogEntryIdx first_head_idx,
                     VirtualBlockIdx& begin_virtual_idx, uint32_t& num_blocks,
                     std::vector<LogicalBlockIdx>* begin_logical_idxs = nullptr,
-                    uint16_t* leftover_bytes = nullptr);
+                    uint16_t* leftover_bytes = nullptr,
+                    bool init_bitmap = false);
 
   // TODO: handle writev requests
   /**
