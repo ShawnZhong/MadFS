@@ -44,7 +44,7 @@ File::File(int fd, const struct stat& stat, int flags)
   }
 
   // FIXME: the file_offset operation must be thread-safe
-  if ((flags & O_ACCMODE) == O_APPEND)
+  if (flags & O_APPEND)
     file_offset += file_size;
 }
 
