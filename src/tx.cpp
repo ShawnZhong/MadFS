@@ -534,18 +534,21 @@ ssize_t TxMgr::MultiBlockTx::do_write() {
     const char *rest_buf = buf;
     size_t rest_full_count = num_full_blocks << BLOCK_SHIFT;
     for (size_t i = 0; i < dst_blocks.size(); ++i) {
+      // get logical block pointer for this iter
+      // first block in first chunk could start from partial
       pmem::Block* full_blocks = dst_blocks[i];
-      if (i == 0) {   // first block in first chunk could be partial
+      if (i == 0) {
         full_blocks += (begin_full_vidx - begin_vidx);
         rest_buf += first_block_local_offset;
       }
-
+      // calculate num of full block bytes to be copied in this iter
+      // takes care of last block in last chunk which might be partial
       size_t num_bytes = rest_full_count;
-      if (i == 0 && dst_blocks.size() > 1)
+      if (i == 0 && need_copy_first)
         num_bytes = MAX_BYTES_PER_BODY - BLOCK_SIZE;
       else if (i > 0 && i < dst_blocks.size() - 1 && dst_blocks.size() > 2)
         num_bytes = MAX_BYTES_PER_BODY;
-      
+      // actual memcpy
       memcpy(full_blocks->data_rw(), rest_buf, num_bytes);
       persist_unfenced(full_blocks, num_bytes);
       rest_buf += num_bytes;
