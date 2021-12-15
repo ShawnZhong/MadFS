@@ -546,7 +546,7 @@ ssize_t TxMgr::MultiBlockTx::do_write() {
       size_t num_bytes = rest_full_count;
       if (i == 0 && need_copy_first)
         num_bytes = MAX_BYTES_PER_BODY - BLOCK_SIZE;
-      else if (i > 0 && i < dst_blocks.size() - 1 && dst_blocks.size() > 2)
+      else if (i < dst_blocks.size() - 1)
         num_bytes = MAX_BYTES_PER_BODY;
       // actual memcpy
       memcpy(full_blocks->data_rw(), rest_buf, num_bytes);
