@@ -93,8 +93,9 @@ void test_lseek() {
 }
 
 void test_stream() {
-  FILE* file = fopen(FILEPATH, "w+");
-  fclose(file);
+  int fd = open(FILEPATH, O_CREAT | O_RDWR, S_IRUSR | S_IWUSR);
+  FILE* stream = fdopen(fd, "w");
+  fclose(stream);
 }
 
 int main() {
