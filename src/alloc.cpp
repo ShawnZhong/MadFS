@@ -10,8 +10,6 @@
 namespace ulayfs::dram {
 
 LogicalBlockIdx Allocator::alloc(uint32_t num_blocks) {
-  LogicalBlockIdx bitmap_block_idx;
-  pmem::BitmapBlock* bitmap_block;
   assert(num_blocks <= BITMAP_CAPACITY);
 
   // we first try to allocate from the free list
@@ -40,30 +38,24 @@ LogicalBlockIdx Allocator::alloc(uint32_t num_blocks) {
     }
   }
 
-  // TODO: move bitmap to DRAM here
   // then we have to allocate from global bitmaps
-  if (recent_bitmap_block_id == 0) {
-    recent_bitmap_local_idx = meta->inline_alloc_batch(recent_bitmap_local_idx);
-    if (recent_bitmap_local_idx >= 0) goto add_to_free_list;
-    recent_bitmap_block_id++;
-    recent_bitmap_local_idx = 0;
-  }
+  recent_bitmap_local_idx =
+      Bitmap::alloc_batch(bitmap, TOTAL_DRAM_BITMAP, recent_bitmap_local_idx);
 
-  while (true) {
-    bitmap_block_idx =
-        pmem::BitmapBlock::get_bitmap_block_idx(recent_bitmap_block_id);
-    bitmap_block = &(mem_table->get(bitmap_block_idx)->bitmap_block);
-    recent_bitmap_local_idx = bitmap_block->alloc_batch();
-    if (recent_bitmap_local_idx >= 0) goto add_to_free_list;
-    recent_bitmap_block_id++;
-    recent_bitmap_local_idx = 0;
-  }
+  // keep this part of code as it may be used in the future for dynamically
+  // growing bitmap while (true) {
+  //   bitmap_block_idx =
+  //       pmem::BitmapBlock::get_bitmap_block_idx(recent_bitmap_block_id);
+  //   bitmap_block = &(mem_table->get(bitmap_block_idx)->bitmap_block);
+  //   recent_bitmap_local_idx = bitmap_block->alloc_batch();
+  //   if (recent_bitmap_local_idx >= 0) goto add_to_free_list;
+  //   recent_bitmap_block_id++;
+  //   recent_bitmap_local_idx = 0;
+  // }
 
-add_to_free_list:
   assert(recent_bitmap_local_idx >= 0);
   // push in decreasing order so pop will in increasing order
-  LogicalBlockIdx allocated = pmem::BitmapBlock::get_block_idx(
-      recent_bitmap_block_id, recent_bitmap_local_idx);
+  LogicalBlockIdx allocated = recent_bitmap_local_idx;
   if (num_blocks < BITMAP_CAPACITY) {
     free_list.emplace_back(BITMAP_CAPACITY - num_blocks,
                            allocated + num_blocks);

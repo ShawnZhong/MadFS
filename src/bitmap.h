@@ -2,7 +2,9 @@
 
 #include <atomic>
 #include <bit>
+#include <bitset>
 #include <cstdint>
+#include <ostream>
 
 #include "idx.h"
 #include "utils.h"
@@ -14,7 +16,7 @@ namespace ulayfs {
 constexpr static uint32_t BITMAP_CAPACITY_SHIFT = 6;
 constexpr static uint32_t BITMAP_CAPACITY = 1 << BITMAP_CAPACITY_SHIFT;
 
-namespace pmem {
+namespace dram {
 // All member functions are thread-safe and require no locks
 // TODO: move to namespace dram
 class Bitmap {
@@ -35,7 +37,6 @@ class Bitmap {
                                         std::memory_order_acq_rel,
                                         std::memory_order_acquire))
       goto retry;
-    persist_cl_fenced(&bitmap);
     return static_cast<BitmapLocalIdx>(std::countr_zero(b));
   }
 
@@ -46,22 +47,29 @@ class Bitmap {
                                         std::memory_order_acq_rel,
                                         std::memory_order_acquire))
       return -1;
-    persist_cl_fenced(&bitmap);
     return 0;
+  }
+
+  // free blocks in [begin_idx, begin_idx + len)
+  void free(BitmapLocalIdx begin_idx, uint32_t len) {
+  retry:
+    uint64_t b = bitmap.load(std::memory_order_acquire);
+    uint64_t freed = b & ~((((uint64_t)1 << len) - 1) << begin_idx);
+    if (!bitmap.compare_exchange_strong(b, freed, std::memory_order_acq_rel,
+                                        std::memory_order_acquire))
+      goto retry;
   }
 
   // WARN: not thread-safe
   void set_allocated(uint32_t idx) {
     bitmap.store(bitmap.load(std::memory_order_relaxed) | (1 << idx),
                  std::memory_order_relaxed);
-    persist_cl_fenced(&bitmap);
   }
 
   // WARN: not thread-safe
   void set_unallocated(uint32_t idx) {
     bitmap.store(bitmap.load(std::memory_order_relaxed) & ~(1 << idx),
                  std::memory_order_relaxed);
-    persist_cl_fenced(&bitmap);
   }
 
   // WARN: not thread-safe
@@ -122,9 +130,28 @@ class Bitmap {
     }
     return -1;
   }
+
+  /**
+   * free the blocks within index range [begin, begin + len)
+   * here we assume that [begin, begin + len) is within the same bitmap
+   *
+   * @param bitmaps a pointer to an array of bitmaps
+   * @param begin the BitmapLocalIndex starting from which it will be freed
+   * @param len the number of bits to be freed
+   */
+  static void free(Bitmap bitmaps[], BitmapLocalIdx begin, uint8_t len) {
+    DEBUG("Freeing [%d, %d)", begin, begin + len);
+    bitmaps[begin >> BITMAP_CAPACITY_SHIFT].free(begin & (BITMAP_CAPACITY - 1),
+                                                 len);
+  }
+
+  friend std::ostream& operator<<(std::ostream& out, const Bitmap& b) {
+    out << std::bitset<64>(b.bitmap);
+    return out;
+  }
 };
 
 static_assert(sizeof(Bitmap) == 8, "Bitmap must of 64 bits");
 
-}  // namespace pmem
+}  // namespace dram
 }  // namespace ulayfs

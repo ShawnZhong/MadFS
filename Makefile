@@ -12,4 +12,4 @@ debug release profile pmemcheck asan ubsan msan tsan:
 
 .PHONY: clean
 clean:
-	rm -rf build* test.txt
+	rm -rf build* test.txt /dev/shm/ulayfs_*

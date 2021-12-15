@@ -20,7 +20,7 @@ namespace ulayfs::dram {
 
 class File {
   const int fd;
-  pmem::Bitmap* bitmap;
+  Bitmap* bitmap;
   MemTable mem_table;
   pmem::MetaBlock* meta;
   TxMgr tx_mgr;
@@ -42,8 +42,8 @@ class File {
   friend class BlkTable;
 
  public:
-  File(int fd, off_t init_file_size, pmem::Bitmap* bitmap, int shm_fd,
-       int flags);
+  File(int fd, const struct stat& stat, int flags);
+  ~File();
 
   /*
    * POSIX I/O operations
@@ -102,6 +102,28 @@ class File {
   [[nodiscard]] const pmem::Block* vidx_to_addr_ro(VirtualBlockIdx vidx) {
     return lidx_to_addr_ro(vidx_to_lidx(vidx));
   }
+
+  /**
+   * Mark the logical block as allocated. This is not thread safe and should
+   * only be used on startup if the bitmap is newly created.
+   */
+  void set_allocated(LogicalBlockIdx block_idx) {
+    bitmap[block_idx >> BITMAP_CAPACITY_SHIFT].set_allocated(
+        block_idx & (BITMAP_CAPACITY - 1));
+  }
+
+  /**
+   * Open the shared memory object corresponding to this file and save the
+   * mmapped address to bitmap. The leading bit of the bitmap (corresponding to
+   * metablock) indicates if the bitmap needs to be initialized.
+   *
+   * @param[in] shm_path path to the shared memory object
+   * @param[in] stat stat of the original file
+   * @param[out] bitmap the bitmap opened or created in the shared memory
+   * @return the file descriptor for the shared memory object on success,
+   * -1 otherwise
+   */
+  int open_shm(const char* shm_path, const struct stat& stat, Bitmap*& bitmap);
 
   friend std::ostream& operator<<(std::ostream& out, const File& f);
 };
