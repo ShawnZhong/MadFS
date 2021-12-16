@@ -76,7 +76,7 @@ def bench(ycsbcli: str, dbdir: str, libulayfs: str):
     # print sheet-form tables
     print("\nResult tables--")
     for value_size in results:
-        print(f"\n Throughput (ops/sec) - Value size {value_size}")
+        print(f"\n Throughput (ops/usec) - Value size {value_size}")
         print(f" {'Workload':>8s}  {'uLayFS':>10s}  {'ext4':>10s}")
         for workload in results[value_size]:
             ops_per_usec = results[value_size][workload]
