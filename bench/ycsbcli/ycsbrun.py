@@ -54,7 +54,7 @@ def bench_fs(ycsbcli: str, dbdir: str, libulayfs: str, results: dict):
             kops_per_sec = 0.0
             for exper_iter in range(NUM_ITERS):
                 # drop everything in page cache
-                os.system("echo 3 > sudo tee /proc/sys/vm/drop_caches")
+                os.system("sudo sh -c 'echo 3 > /proc/sys/vm/drop_caches'")
 
                 run_cmd = gen_cmd(ycsbcli, dbdir, workload, value_size, load=False)
                 num_reqs, run_us = exec_cmd(run_cmd, envs)
