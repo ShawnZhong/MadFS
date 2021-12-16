@@ -14,7 +14,6 @@ posix:
 	$(MAKE) ULAYFS_PATH= leveldb-test
 ycsb:
 	$(MAKE) -C .. release
-	$(MAKE) -C ycsbcli
 	$(MAKE) ULAYFS_PATH=$(shell readlink -e ../build-release/libulayfs.so) leveldb-ycsb
 
 .PHONY: leveldb leveldb-test
@@ -29,6 +28,7 @@ leveldb-test: leveldb
 	mkdir -p test-temp && \
 	TEST_TMPDIR=test-temp/ LD_PRELOAD=${ULAYFS_PATH} ./db_test --gtest_filter=-DBTest.Randomized
 leveldb-ycsb: leveldb
+	$(MAKE) -C ycsbcli
 	cd ycsbcli && \
 	rm -rf bench-dbdir && \
 	mkdir bench-dbdir && \
