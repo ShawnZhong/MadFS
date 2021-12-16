@@ -38,16 +38,16 @@ constexpr static uint32_t BITMAP_BLOCK_CAPACITY =
 
 // total number of bitmaps in DRAM
 // TODO: enable dynamic growing of bitmap
-constexpr static uint16_t NUM_BITMAP = BLOCK_SIZE / sizeof(dram::Bitmap);
-static_assert(NUM_BITMAP - 1 <= std::numeric_limits<BitmapLocalIdx>::max(),
-              "NUM_BITMAP - 1 should be representable with BitmapLocalIdx");
+constexpr static uint16_t NUM_BITMAP_PER_BLOCK =
+    BLOCK_SIZE / sizeof(dram::Bitmap);
+static_assert(
+    NUM_BITMAP_PER_BLOCK - 1 <= std::numeric_limits<BitmapLocalIdx>::max(),
+    "NUM_BITMAP_PER_BLOCK - 1 should be representable with BitmapLocalIdx");
 
-constexpr static uint32_t NUM_BITMAP_BLKS = 8;
+constexpr static uint32_t NUM_BITMAP_BLKS = 64;
 constexpr static uint32_t BITMAP_SIZE = NUM_BITMAP_BLKS * BLOCK_SIZE;
-constexpr static uint32_t TOTAL_DRAM_BITMAP = NUM_BITMAP_BLKS * NUM_BITMAP;
-
-constexpr static uint16_t NUM_BITMAP_PER_CL =
-    CACHELINE_SIZE / sizeof(dram::Bitmap);
+constexpr static uint16_t TOTAL_DRAM_BITMAP =
+    NUM_BITMAP_BLKS * NUM_BITMAP_PER_BLOCK;
 
 // how many data blocks can be covered per CAS
 // TODO: put this constant somewhere else?
