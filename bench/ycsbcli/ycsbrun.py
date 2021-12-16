@@ -6,6 +6,11 @@ import glob
 import subprocess
 
 
+WORKLOADS = ("a", "b", "c", "d", "e", "f")
+VALUE_SIZES = (10, 100, 1000, 10000, 100000)
+NUM_ITERS = 5
+
+
 def gen_cmd(ycsbcli: str, dbdir: str, workload: str,
             value_size: int, load: bool = False) -> list:
     return [
@@ -41,21 +46,23 @@ def bench_fs(ycsbcli: str, dbdir: str, libulayfs: str, results: dict):
         envs["LD_PRELOAD"] = libulayfs
         fs_type = "uLayFS"
 
-    for workload in ("a", "b", "c", "d", "e", "f"):
-        for value_size in (10, 100, 1000, 10000):
+    for workload in WORKLOADS:
+        for value_size in VALUE_SIZES:
             load_cmd = gen_cmd(ycsbcli, dbdir, workload, value_size, load=True)
             exec_cmd(load_cmd, envs)
 
-            run_cmd = gen_cmd(ycsbcli, dbdir, workload, value_size, load=False)
-            num_reqs, run_us = exec_cmd(run_cmd, envs)
-            print(f" {workload:1s} {value_size:6d}x{num_reqs:<5d} {run_us:.3f}")
+            kops_per_sec = 0.0
+            for exper_iter in range(NUM_ITERS):
+                run_cmd = gen_cmd(ycsbcli, dbdir, workload, value_size, load=False)
+                num_reqs, run_us = exec_cmd(run_cmd, envs)
+                print(f" {workload:1s} {value_size:6d}x{num_reqs:<5d} {run_us:.3f}")
+                kops_per_sec += (float(num_reqs * 1000) / run_us) / NUM_ITERS
 
             if value_size not in results:
                 results[value_size] = dict()
             if workload not in results[value_size]:
                 results[value_size][workload] = dict()
-            ops_per_usec = float(num_reqs) / run_us
-            results[value_size][workload][fs_type] = ops_per_usec
+            results[value_size][workload][fs_type] = kops_per_sec
 
             # clean up dbdir
             dbfiles = glob.glob(f"{dbdir}/*")
@@ -76,11 +83,11 @@ def bench(ycsbcli: str, dbdir: str, libulayfs: str):
     # print sheet-form tables
     print("\nResult tables--")
     for value_size in results:
-        print(f"\n Throughput (ops/usec) - Value size {value_size}")
+        print(f"\n Throughput (kops/sec) - Value size {value_size}")
         print(f" {'Workload':>8s}  {'uLayFS':>10s}  {'ext4':>10s}")
         for workload in results[value_size]:
-            ops_per_usec = results[value_size][workload]
-            print(f" {workload:>8s}  {ops_per_usec['uLayFS']:10.3f}  {ops_per_usec['ext4']:10.3f}")
+            kops_per_sec = results[value_size][workload]
+            print(f" {workload:>8s}  {kops_per_sec['uLayFS']:10.3f}  {kops_per_sec['ext4']:10.3f}")
     print()
 
 
