@@ -30,8 +30,9 @@ leveldb-test: leveldb
 	TEST_TMPDIR=test-temp/ LD_PRELOAD=${ULAYFS_PATH} ./db_test --gtest_filter=-DBTest.Randomized
 leveldb-ycsb: leveldb
 	cd ycsbcli && \
-	mkdir -p bench-dbdir && \
-	python3 ycsbrun.py bench-dbdir
+	rm -rf bench-dbdir && \
+	mkdir bench-dbdir && \
+	python3 ycsbrun.py bench-dbdir ${ULAYFS_PATH}
 
 .PHONY: clean
 clean:

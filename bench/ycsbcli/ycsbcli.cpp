@@ -1,11 +1,12 @@
 #include <cassert>
 #include <chrono>
-#include <iostream>
 #include <cstring>
-#include <unistd.h>
-#include <fstream>
 #include <cmath>
+#include <unistd.h>
+#include <iostream>
+#include <fstream>
 #include <random>
+#include <chrono>
 
 #include "cxxopts.hpp"
 
@@ -35,12 +36,15 @@ static leveldb::WriteOptions write_options = leveldb::WriteOptions();
 
 /** Run/load YCSB workload on a leveldb instance. */
 static uint
-do_ycsb(std::string db_location, std::vector<ycsb_req_t>& reqs, std::string value)
+do_ycsb(const std::string db_location, const std::vector<ycsb_req_t>& reqs,
+        const std::string value, double& microsecs)
 {
     // Open a leveldb database.
     leveldb::DB *db;
     leveldb::Options options;
     options.create_if_missing = true;
+    // Trigger compaction every time memtable reaches 1MB.
+    options.write_buffer_size = 1024 * 1024;
     leveldb::Status status = leveldb::DB::Open(options, db_location, &db);
     if (!status.ok()) {
         std::cerr << status.ToString() << std::endl;
@@ -50,6 +54,10 @@ do_ycsb(std::string db_location, std::vector<ycsb_req_t>& reqs, std::string valu
     std::string read_buf;
     read_buf.reserve(value.length());
     uint cnt = 0;
+
+    // Prepare for timing.
+    auto time_start = std::chrono::high_resolution_clock::now();
+    microsecs = 0;
 
     for (auto& req : reqs) {
         switch (req.op) {
@@ -88,6 +96,11 @@ do_ycsb(std::string db_location, std::vector<ycsb_req_t>& reqs, std::string valu
         assert(status.ok());
         cnt++;
     }
+
+    // Calculate time elapsed.
+    auto time_end = std::chrono::high_resolution_clock::now();
+    microsecs = std::chrono::duration<double, std::milli>(
+        time_end - time_start).count();
 
     delete db;
     return cnt;
@@ -148,8 +161,11 @@ main(int argc, char *argv[])
     std::string value(value_size, '0');
 
     // Execute the actions of the YCSB trace.
-    uint cnt = do_ycsb(db_location, ycsb_reqs, value);
+    double microsecs;
+    uint cnt = do_ycsb(db_location, ycsb_reqs, value, microsecs);
     std::cout << "Finished " << cnt << " requests." << std::endl;
+    if (microsecs > 0)
+        std::cout << "Time elapsed: " << microsecs << " us" << std::endl;
 
     return 0;
 }
