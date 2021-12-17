@@ -23,8 +23,6 @@ template <BenchMode mode>
 static void bench(benchmark::State& state) {
   // set up
   pin_node(0);
-  // drop pagecache, dentry cache and inode cache
-  system("sudo sh -c 'echo 3 > /proc/sys/vm/drop_caches'");
   if (state.thread_index() == 0) {
     remove(FILEPATH);
     fd = open(FILEPATH, O_CREAT | O_RDWR, S_IRUSR | S_IWUSR);
