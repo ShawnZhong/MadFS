@@ -6,6 +6,8 @@
 #include <sys/stat.h>
 #include <unistd.h>
 
+#include <cstdio>
+
 namespace ulayfs::posix {
 
 /*
@@ -38,6 +40,7 @@ DECL_FN(read);
 DECL_FN(pread);
 DECL_FN(open);
 DECL_FN(close);
+DECL_FN(fclose);
 DECL_FN(mmap);
 DECL_FN(munmap);
 DECL_FN(fallocate);

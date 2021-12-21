@@ -34,14 +34,6 @@ int open(const char* pathname, int flags, ...) {
     va_end(arg);
   }
 
-  // TODO: support read-only files
-  if ((flags & O_ACCMODE) == O_RDONLY) {
-    WARN("File \"%s\" opened with O_RDONLY. Fallback to syscall.", pathname);
-    int fd = posix::open(pathname, flags, mode);
-    DEBUG("posix::open(%s, %x, %x) = %d", pathname, flags, mode, fd);
-    return fd;
-  }
-
   if ((flags & O_ACCMODE) == O_WRONLY) {
     INFO("File \"%s\" opened with O_WRONLY. Changed to O_RDWR.", pathname);
     flags &= ~O_WRONLY;
@@ -87,6 +79,18 @@ int close(int fd) {
   } else {
     DEBUG("posix::close(%d)", fd);
     return posix::close(fd);
+  }
+}
+
+int fclose(FILE* stream) {
+  int fd = fileno(stream);
+  if (auto file = get_file(fd)) {
+    DEBUG("ulayfs::fclose(%d)", fd);
+    files.unsafe_erase(fd);
+    return 0;
+  } else {
+    DEBUG("posix::fclose(%d)", fd);
+    return posix::fclose(stream);
   }
 }
 

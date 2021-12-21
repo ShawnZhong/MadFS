@@ -19,6 +19,7 @@ INIT_FN(read);
 INIT_FN(pread);
 INIT_FN(open);
 INIT_FN(close);
+INIT_FN(fclose);
 INIT_FN(mmap);
 INIT_FN(munmap);
 INIT_FN(fallocate);

@@ -92,10 +92,17 @@ void test_lseek() {
   assert(res == 0);
 }
 
+void test_stream() {
+  int fd = open(FILEPATH, O_CREAT | O_RDWR, S_IRUSR | S_IWUSR);
+  FILE* stream = fdopen(fd, "w");
+  fclose(stream);
+}
+
 int main() {
   remove(FILEPATH);
   test_write();
   test_read();
   test_lseek();
+  test_stream();
   return 0;
 }

@@ -2,12 +2,9 @@
 
 namespace ulayfs::dram {
 
-thread_local std::unordered_map<int, Allocator> File::allocators;
-thread_local std::unordered_map<int, LogMgr> File::log_mgrs;
-
 File::File(int fd, const struct stat& stat, int flags)
     : fd(fd),
-      mem_table(fd, stat.st_size),
+      mem_table(fd, stat.st_size, (flags & O_ACCMODE) == O_RDONLY),
       meta(mem_table.get_meta()),
       tx_mgr(this, meta),
       blk_table(this, &tx_mgr),
@@ -27,26 +24,35 @@ File::File(int fd, const struct stat& stat, int flags)
   // The first bit corresponds to the meta block which should always be set
   // to 1. If it is not, then bitmap needs to be initialized.
   // Bitmap::get is not thread safe but we are only reading one bit here.
+  TxEntryIdx tail_tx_idx;
+  pmem::TxBlock* tail_tx_block;
+  uint64_t file_size;
   if ((bitmap[0].get() & 1) == 0) {
     meta->lock();
     if ((bitmap[0].get() & 1) == 0) {
-      TxEntryIdx tail_tx_idx;
-      pmem::TxBlock* tail_tx_block;
-      blk_table.update(tail_tx_idx, tail_tx_block, nullptr, /*do_alloc*/ false,
-                       true);
+      blk_table.update(tail_tx_idx, tail_tx_block, &file_size,
+                       /*do_alloc*/ false, /*init_bitmap*/ true);
       // mark meta block as allocated
       bitmap[0].set_allocated(0);
     }
     meta->unlock();
+  } else {
+    // if bitmap has been set up, still apply tx to the tail so that
+    // file_size is up-to-date
+    blk_table.update(tail_tx_idx, tail_tx_block, &file_size,
+                     /*do_alloc*/ false, /*init_bitmap*/ false);
   }
 
   // FIXME: the file_offset operation must be thread-safe
-  if (flags & O_APPEND) file_offset += blk_table.get_file_size();
+  if (flags & O_APPEND) file_offset += file_size;
 }
 
 File::~File() {
-  DEBUG("~File called for fd=%d", fd);
-  allocators.erase(fd);
+  DEBUG("posix::close(%d)", fd);
+  posix::close(fd);
+  posix::close(shm_fd);
+  allocators.clear();
+  log_mgrs.clear();
 }
 
 /*
@@ -54,7 +60,7 @@ File::~File() {
  */
 
 ssize_t File::pwrite(const void* buf, size_t count, size_t offset) {
-  if (!(flags & (O_WRONLY | O_RDWR))) {
+  if ((flags & O_ACCMODE) != O_WRONLY && (flags & O_ACCMODE) != O_RDWR) {
     errno = EBADF;
     return -1;
   }
@@ -63,7 +69,7 @@ ssize_t File::pwrite(const void* buf, size_t count, size_t offset) {
 }
 
 ssize_t File::write(const void* buf, size_t count) {
-  if (!(flags & (O_WRONLY | O_RDWR))) {
+  if ((flags & O_ACCMODE) != O_WRONLY && (flags & O_ACCMODE) != O_RDWR) {
     errno = EBADF;
     return -1;
   }
@@ -78,7 +84,7 @@ ssize_t File::write(const void* buf, size_t count) {
 }
 
 ssize_t File::pread(void* buf, size_t count, off_t offset) {
-  if (!(flags & (O_RDONLY | O_RDWR))) {
+  if ((flags & O_ACCMODE) != O_RDONLY && (flags & O_ACCMODE) != O_RDWR) {
     errno = EBADF;
     return -1;
   }
@@ -87,7 +93,7 @@ ssize_t File::pread(void* buf, size_t count, off_t offset) {
 }
 
 ssize_t File::read(void* buf, size_t count) {
-  if (!(flags & (O_RDONLY | O_RDWR))) {
+  if ((flags & O_ACCMODE) != O_RDONLY && (flags & O_ACCMODE) != O_RDWR) {
     errno = EBADF;
     return -1;
   }
@@ -158,26 +164,26 @@ int File::fsync() {
 }
 
 /*
- * Getters for thread-local data structures
+ * Getters & removers for thread-local data structures
  */
 
 Allocator* File::get_local_allocator() {
-  if (auto it = allocators.find(fd); it != allocators.end()) {
+  if (auto it = allocators.find(tid); it != allocators.end()) {
     return &it->second;
   }
 
   auto [it, ok] =
-      allocators.emplace(fd, Allocator(fd, meta, &mem_table, bitmap));
+      allocators.emplace(tid, Allocator(fd, meta, &mem_table, bitmap));
   PANIC_IF(!ok, "insert to thread-local allocators failed");
   return &it->second;
 }
 
 LogMgr* File::get_local_log_mgr() {
-  if (auto it = log_mgrs.find(fd); it != log_mgrs.end()) {
+  if (auto it = log_mgrs.find(tid); it != log_mgrs.end()) {
     return &it->second;
   }
 
-  auto [it, ok] = log_mgrs.emplace(fd, LogMgr(this, meta));
+  auto [it, ok] = log_mgrs.emplace(tid, LogMgr(this, meta));
   PANIC_IF(!ok, "insert to thread-local log_mgrs failed");
   return &it->second;
 }

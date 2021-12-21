@@ -1,12 +1,20 @@
-.PHONY: debug release posix
-debug: export ULAYFS_PATH := $(shell readlink -e ../build-debug/libulayfs.so)
-release: export ULAYFS_PATH := $(shell readlink -e ../build-release/libulayfs.so)
-posix: export ULAYFS_PATH :=
-debug release posix: leveldb-test
+.PHONY: all
+all:
+	echo "Please use make [debug|release|posix|ycsb]"
+	@exit 1
 
-.PHONY: ulayfs
-ulayfs:
-	make -C ..
+.PHONY: debug release posix
+debug:
+	$(MAKE) -C .. debug
+	$(MAKE) ULAYFS_PATH=$(shell readlink -e ../build-debug/libulayfs.so) leveldb-test
+release:
+	$(MAKE) -C .. release
+	$(MAKE) ULAYFS_PATH=$(shell readlink -e ../build-release/libulayfs.so) leveldb-test
+posix:
+	$(MAKE) ULAYFS_PATH= leveldb-test
+ycsb:
+	$(MAKE) -C .. release
+	$(MAKE) ULAYFS_PATH=$(shell readlink -e ../build-release/libulayfs.so) leveldb-ycsb
 
 .PHONY: leveldb leveldb-test
 leveldb:
@@ -15,11 +23,19 @@ leveldb:
 	cd build && \
 	cmake -DCMAKE_BUILD_TYPE=Release .. && \
 	cmake --build . -j
-leveldb-test: ulayfs leveldb
+leveldb-test: leveldb
 	cd leveldb/build && \
 	mkdir -p test-temp && \
-	TEST_TMPDIR=test-temp/ LD_PRELOAD=$(ULAYFS_PATH) ./db_test
+	TEST_TMPDIR=test-temp/ LD_PRELOAD=${ULAYFS_PATH} ./db_test --gtest_filter=-DBTest.Randomized
+leveldb-ycsb: leveldb
+	$(MAKE) -C ycsbcli
+	cd ycsbcli && \
+	rm -rf bench-dbdir && \
+	mkdir bench-dbdir && \
+	python3 ycsbrun.py bench-dbdir ${ULAYFS_PATH}
 
 .PHONY: clean
 clean:
-	rm -rf leveldb/build
+	rm -rf leveldb/build ycsbcli/bench-dbdir
+	$(MAKE) -C ycsbcli clean
+

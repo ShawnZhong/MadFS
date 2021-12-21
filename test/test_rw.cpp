@@ -122,5 +122,9 @@ int main(int argc, char* argv[]) {
   test({.num_bytes_per_iter = BLOCK_SIZE * 16 - 13, .init_offset = 13});
   test({.num_bytes_per_iter = 123, .num_iter = 6, .init_offset = 7890});
 
+  // multi-block huge write w/o alignment
+  test({.num_bytes_per_iter = 356791, .num_iter = 2, .init_offset = 542});
+  test({.num_bytes_per_iter = 1300000, .init_offset = 17});
+
   return 0;
 }
