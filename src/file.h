@@ -13,6 +13,7 @@
 #include "idx.h"
 #include "log.h"
 #include "mtable.h"
+#include "offset.h"
 #include "posix.h"
 #include "tx.h"
 #include "utils.h"
@@ -43,6 +44,7 @@ class File {
   friend class TxMgr;
   friend class LogMgr;
   friend class BlkTable;
+  friend class OffsetMgr;
 
  public:
   File(int fd, const struct stat& stat, int flags);
@@ -127,6 +129,12 @@ class File {
    * -1 otherwise
    */
   int open_shm(const char* shm_path, const struct stat& stat, Bitmap*& bitmap);
+
+  bool tx_idx_greater(const TxEntryIdx lhs_idx, const TxEntryIdx rhs_idx,
+                      const pmem::TxBlock* lhs_block = nullptr,
+                      const pmem::TxBlock* rhs_block = nullptr) {
+    return tx_mgr.tx_idx_greater(lhs_idx, rhs_idx, lhs_block, rhs_block);
+  }
 
   friend std::ostream& operator<<(std::ostream& out, const File& f);
 };

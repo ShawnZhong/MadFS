@@ -35,12 +35,18 @@ ssize_t TxMgr::do_write(const char* buf, size_t count, size_t offset) {
   return MultiBlockTx(file, buf, count, offset).do_write();
 }
 
-bool TxMgr::tx_idx_greater(TxEntryIdx lhs, TxEntryIdx rhs) {
-  if (lhs.block_idx == rhs.block_idx) return lhs.local_idx > rhs.local_idx;
-  if (lhs.block_idx == 0) return false;
-  if (rhs.block_idx == 0) return true;
-  return file->lidx_to_addr_ro(lhs.block_idx)->tx_block.get_tx_seq() >
-         file->lidx_to_addr_ro(rhs.block_idx)->tx_block.get_tx_seq();
+bool TxMgr::tx_idx_greater(const TxEntryIdx lhs_idx, const TxEntryIdx rhs_idx,
+                           const pmem::TxBlock* lhs_block,
+                           const pmem::TxBlock* rhs_block) {
+  if (lhs_idx.block_idx == rhs_idx.block_idx)
+    return lhs_idx.local_idx > rhs_idx.local_idx;
+  if (lhs_idx.block_idx == 0) return false;
+  if (rhs_idx.block_idx == 0) return true;
+  if (!lhs_block)
+    lhs_block = &file->lidx_to_addr_ro(lhs_idx.block_idx)->tx_block;
+  if (!rhs_block)
+    rhs_block = &file->lidx_to_addr_ro(rhs_idx.block_idx)->tx_block;
+  return lhs_block->get_tx_seq() > rhs_block->get_tx_seq();
 }
 
 pmem::TxEntry TxMgr::try_commit(pmem::TxEntry entry, TxEntryIdx& tx_idx,

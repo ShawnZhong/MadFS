@@ -40,7 +40,9 @@ class TxMgr {
    */
   ssize_t do_write(const char* buf, size_t count, size_t offset);
 
-  bool tx_idx_greater(TxEntryIdx lhs, TxEntryIdx rhs);
+  bool tx_idx_greater(const TxEntryIdx lhs_idx, const TxEntryIdx rhs_idx,
+                      const pmem::TxBlock* lhs_block = nullptr,
+                      const pmem::TxBlock* rhs_block = nullptr);
 
   /**
    * Move to the next transaction entry
