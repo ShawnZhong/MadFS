@@ -34,6 +34,14 @@ ssize_t TxMgr::do_read(char* buf, size_t count) {
             file_size);
   ssize_t ret = tx.do_read();
   // TODO: redo if fail ordering check
+
+  // previous tx with offset change, which must be no larger than the current
+  TxEntryIdx prev_tx_idx;
+  const pmem::TxBlock* prev_tx_block;
+  if (!file->validate_offset(ticket, tx.tail_tx_idx, tx.tail_tx_block,
+                             prev_tx_idx, prev_tx_block)) {
+    // TODO: redo
+  }
   file->release_offset(ticket, tx.tail_tx_idx, tx.tail_tx_block);
   return ret;
 }
@@ -54,6 +62,8 @@ ssize_t TxMgr::do_pwrite(const char* buf, size_t count, size_t offset) {
 ssize_t TxMgr::do_write(const char* buf, size_t count) {
   TxEntryIdx tail_tx_idx;
   pmem::TxBlock* tail_tx_block;
+  TxEntryIdx prev_tx_idx;
+  const pmem::TxBlock* prev_tx_block;
   uint64_t ticket;
   uint64_t offset = file->update_with_offset(tail_tx_idx, tail_tx_block, count,
                                              false, ticket, nullptr,
@@ -63,7 +73,11 @@ ssize_t TxMgr::do_write(const char* buf, size_t count) {
   if (count % BLOCK_SIZE == 0 && offset % BLOCK_SIZE == 0) {
     AlignedTx tx(file, this, buf, count, offset, tail_tx_idx, tail_tx_block);
     ssize_t ret = tx.do_write();
-    // TODO: redo if fail ordering check
+
+    if (!file->validate_offset(ticket, tx.tail_tx_idx, tx.tail_tx_block,
+                               prev_tx_idx, prev_tx_block)) {
+      // TODO: redo if fail ordering check
+    }
     file->release_offset(ticket, tx.tail_tx_idx, tx.tail_tx_block);
     return ret;
   }
@@ -73,7 +87,11 @@ ssize_t TxMgr::do_write(const char* buf, size_t count) {
     SingleBlockTx tx(file, this, buf, count, offset, tail_tx_idx,
                      tail_tx_block);
     ssize_t ret = tx.do_write();
-    // TODO: redo if fail ordering check
+
+    if (!file->validate_offset(ticket, tx.tail_tx_idx, tx.tail_tx_block,
+                               prev_tx_idx, prev_tx_block)) {
+      // TODO: redo if fail ordering check
+    }
     file->release_offset(ticket, tx.tail_tx_idx, tx.tail_tx_block);
     return ret;
   }
@@ -81,10 +99,14 @@ ssize_t TxMgr::do_write(const char* buf, size_t count) {
   // unaligned multi-block write
   MultiBlockTx tx(file, this, buf, count, offset, tail_tx_idx, tail_tx_block);
   ssize_t ret = tx.do_write();
-  // TODO: redo if fail ordering check
+
+  if (!file->validate_offset(ticket, tx.tail_tx_idx, tx.tail_tx_block,
+                             prev_tx_idx, prev_tx_block)) {
+    // TODO: redo if fail ordering check
+  }
   file->release_offset(ticket, tx.tail_tx_idx, tx.tail_tx_block);
   return ret;
-}  // namespace ulayfs::dram
+}
 
 bool TxMgr::tx_idx_greater(const TxEntryIdx lhs_idx, const TxEntryIdx rhs_idx,
                            const pmem::TxBlock* lhs_block,
