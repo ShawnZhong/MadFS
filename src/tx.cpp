@@ -8,6 +8,7 @@
 #include "entry.h"
 #include "file.h"
 #include "idx.h"
+#include "offset.h"
 #include "params.h"
 #include "utils.h"
 
@@ -17,23 +18,73 @@ namespace ulayfs::dram {
  * TxMgr
  */
 
-ssize_t TxMgr::do_read(char* buf, size_t count, size_t offset) {
-  return ReadTx(file, buf, count, offset).do_read();
+ssize_t TxMgr::do_pread(char* buf, size_t count, size_t offset) {
+  return ReadTx(file, this, buf, count, offset).do_read();
 }
 
-// TODO: maybe reclaim the old blocks right after commit?
-ssize_t TxMgr::do_write(const char* buf, size_t count, size_t offset) {
+ssize_t TxMgr::do_read(char* buf, size_t count) {
+  TxEntryIdx tail_tx_idx;
+  pmem::TxBlock* tail_tx_block;
+  uint64_t file_size;
+  uint64_t ticket;
+  int64_t offset = file->update_with_offset(tail_tx_idx, tail_tx_block, count,
+                                            true, ticket, &file_size,
+                                            /*do_alloc*/ false);
+  ReadTx tx(file, this, buf, count, offset, tail_tx_idx, tail_tx_block,
+            file_size);
+  ssize_t ret = tx.do_read();
+  // TODO: redo if fail ordering check
+  file->release_offset(ticket, tx.tail_tx_idx, tx.tail_tx_block);
+  return ret;
+}
+
+ssize_t TxMgr::do_pwrite(const char* buf, size_t count, size_t offset) {
   // special case that we have everything aligned, no OCC
   if (count % BLOCK_SIZE == 0 && offset % BLOCK_SIZE == 0)
-    return AlignedTx(file, buf, count, offset).do_write();
+    return AlignedTx(file, this, buf, count, offset).do_write();
 
   // another special case where range is within a single block
   if ((offset >> BLOCK_SHIFT) == ((offset + count - 1) >> BLOCK_SHIFT))
-    return SingleBlockTx(file, buf, count, offset).do_write();
+    return SingleBlockTx(file, this, buf, count, offset).do_write();
 
   // unaligned multi-block write
-  return MultiBlockTx(file, buf, count, offset).do_write();
+  return MultiBlockTx(file, this, buf, count, offset).do_write();
 }
+
+ssize_t TxMgr::do_write(const char* buf, size_t count) {
+  TxEntryIdx tail_tx_idx;
+  pmem::TxBlock* tail_tx_block;
+  uint64_t ticket;
+  uint64_t offset = file->update_with_offset(tail_tx_idx, tail_tx_block, count,
+                                             false, ticket, nullptr,
+                                             /*do_alloc*/ false);
+
+  // special case that we have everything aligned, no OCC
+  if (count % BLOCK_SIZE == 0 && offset % BLOCK_SIZE == 0) {
+    AlignedTx tx(file, this, buf, count, offset, tail_tx_idx, tail_tx_block);
+    ssize_t ret = tx.do_write();
+    // TODO: redo if fail ordering check
+    file->release_offset(ticket, tx.tail_tx_idx, tx.tail_tx_block);
+    return ret;
+  }
+
+  // another special case where range is within a single block
+  if ((offset >> BLOCK_SHIFT) == ((offset + count - 1) >> BLOCK_SHIFT)) {
+    SingleBlockTx tx(file, this, buf, count, offset, tail_tx_idx,
+                     tail_tx_block);
+    ssize_t ret = tx.do_write();
+    // TODO: redo if fail ordering check
+    file->release_offset(ticket, tx.tail_tx_idx, tx.tail_tx_block);
+    return ret;
+  }
+
+  // unaligned multi-block write
+  MultiBlockTx tx(file, this, buf, count, offset, tail_tx_idx, tail_tx_block);
+  ssize_t ret = tx.do_write();
+  // TODO: redo if fail ordering check
+  file->release_offset(ticket, tx.tail_tx_idx, tx.tail_tx_block);
+  return ret;
+}  // namespace ulayfs::dram
 
 bool TxMgr::tx_idx_greater(const TxEntryIdx lhs_idx, const TxEntryIdx rhs_idx,
                            const pmem::TxBlock* lhs_block,
@@ -220,21 +271,6 @@ std::ostream& operator<<(std::ostream& out, const TxMgr& tx_mgr) {
 /*
  * Tx
  */
-
-TxMgr::Tx::Tx(File* file, size_t count, size_t offset)
-    : file(file),
-      tx_mgr(&file->tx_mgr),
-
-      // input properties
-      count(count),
-      offset(offset),
-
-      // derived properties
-      end_offset(offset + count),
-      begin_vidx(offset >> BLOCK_SHIFT),
-      end_vidx(ALIGN_UP(end_offset, BLOCK_SIZE) >> BLOCK_SHIFT),
-      num_blocks(end_vidx - begin_vidx) {}
-
 bool TxMgr::Tx::handle_conflict(pmem::TxEntry curr_entry,
                                 VirtualBlockIdx first_vidx,
                                 VirtualBlockIdx last_vidx,
@@ -307,7 +343,6 @@ bool TxMgr::Tx::handle_conflict(pmem::TxEntry curr_entry,
 
 // TODO: more fancy handle_conflict strategy
 ssize_t TxMgr::ReadTx::do_read() {
-  uint64_t file_size;
   size_t first_block_local_offset = offset & (BLOCK_SIZE - 1);
   size_t first_block_size = BLOCK_SIZE - first_block_local_offset;
   if (first_block_size > count) first_block_size = count;
@@ -320,8 +355,9 @@ ssize_t TxMgr::ReadTx::do_read() {
   LogicalBlockIdx redo_image[num_blocks];
   memset(redo_image, 0, sizeof(LogicalBlockIdx) * num_blocks);
 
-  file->blk_table.update(tail_tx_idx, tail_tx_block, &file_size,
-                         /*do_alloc*/ false);
+  if (!skip_update)
+    file->update(tail_tx_idx, tail_tx_block, &file_size,
+                 /*do_alloc*/ false);
   // reach EOF
   if (offset >= file_size) return 0;
   if (offset + count > file_size) {  // partial read; recalculate end_*
@@ -398,9 +434,9 @@ ssize_t TxMgr::ReadTx::do_read() {
   return static_cast<ssize_t>(count);
 }
 
-TxMgr::WriteTx::WriteTx(File* file, const char* buf, size_t count,
-                        size_t offset)
-    : Tx(file, count, offset),
+TxMgr::WriteTx::WriteTx(File* file, TxMgr* tx_mgr, const char* buf,
+                        size_t count, size_t offset)
+    : Tx(file, tx_mgr, count, offset),
       buf(buf),
       log_mgr(file->get_local_log_mgr()),
       allocator(file->get_local_allocator()),
@@ -461,8 +497,9 @@ ssize_t TxMgr::AlignedTx::do_write() {
   }
 
   // make a local copy of the tx tail
-  file->blk_table.update(tail_tx_idx, tail_tx_block, nullptr,
-                         /*do_alloc*/ true);
+  if (!skip_update)
+    file->update(tail_tx_idx, tail_tx_block, nullptr,
+                 /*do_alloc*/ true);
   for (uint32_t i = 0; i < num_blocks; ++i)
     recycle_image[i] = file->vidx_to_lidx(begin_vidx + i);
 
@@ -485,8 +522,9 @@ ssize_t TxMgr::SingleBlockTx::do_write() {
   LogicalBlockIdx recycle_image[1];
 
   // must acquire the tx tail before any get
-  file->blk_table.update(tail_tx_idx, tail_tx_block, nullptr,
-                         /*do_alloc*/ true);
+  if (!skip_update)
+    file->update(tail_tx_idx, tail_tx_block, nullptr,
+                 /*do_alloc*/ true);
   recycle_image[0] = file->vidx_to_lidx(begin_vidx);
   assert(recycle_image[0] != dst_lidxs[0]);
 
@@ -564,8 +602,9 @@ ssize_t TxMgr::MultiBlockTx::do_write() {
   }
 
   // only get a snapshot of the tail when starting critical piece
-  file->blk_table.update(tail_tx_idx, tail_tx_block, nullptr,
-                         /*do_alloc*/ true);
+  if (!skip_update)
+    file->update(tail_tx_idx, tail_tx_block, nullptr,
+                 /*do_alloc*/ true);
   for (uint32_t i = 0; i < num_blocks; ++i)
     recycle_image[i] = file->vidx_to_lidx(begin_vidx + i);
   src_first_lidx = recycle_image[0];

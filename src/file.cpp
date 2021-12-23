@@ -8,8 +8,9 @@ File::File(int fd, const struct stat& stat, int flags)
       meta(mem_table.get_meta()),
       tx_mgr(this, meta),
       blk_table(this, &tx_mgr),
-      file_offset(0),
+      offset_mgr(this),
       flags(flags) {
+  pthread_spin_init(&spinlock, PTHREAD_PROCESS_PRIVATE);
   if (stat.st_size == 0) meta->init();
 
   const char* shm_path = meta->get_shm_path();
@@ -43,11 +44,11 @@ File::File(int fd, const struct stat& stat, int flags)
                      /*do_alloc*/ false, /*init_bitmap*/ false);
   }
 
-  // FIXME: the file_offset operation must be thread-safe
-  if (flags & O_APPEND) file_offset += file_size;
+  if (flags & O_APPEND) offset_mgr.seek_absolute(file_size - 1, file_size);
 }
 
 File::~File() {
+  pthread_spin_destroy(&spinlock);
   DEBUG("posix::close(%d)", fd);
   posix::close(fd);
   posix::close(shm_fd);
@@ -65,7 +66,7 @@ ssize_t File::pwrite(const void* buf, size_t count, size_t offset) {
     return -1;
   }
   if (count == 0) return 0;
-  return tx_mgr.do_write(static_cast<const char*>(buf), count, offset);
+  return tx_mgr.do_pwrite(static_cast<const char*>(buf), count, offset);
 }
 
 ssize_t File::write(const void* buf, size_t count) {
@@ -74,13 +75,7 @@ ssize_t File::write(const void* buf, size_t count) {
     return -1;
   }
   if (count == 0) return 0;
-  // FIXME: offset upate must is not thread safe (must associated with tx
-  // application on BlkTable)
-  // currently, we always move the offset first so that we could pass the append
-  // test
-  off_t old_offset = __atomic_fetch_add(&file_offset, static_cast<off_t>(count),
-                                        __ATOMIC_ACQ_REL);
-  return tx_mgr.do_write(static_cast<const char*>(buf), count, old_offset);
+  return tx_mgr.do_write(static_cast<const char*>(buf), count);
 }
 
 ssize_t File::pread(void* buf, size_t count, off_t offset) {
@@ -89,7 +84,7 @@ ssize_t File::pread(void* buf, size_t count, off_t offset) {
     return -1;
   }
   if (count == 0) return 0;
-  return tx_mgr.do_read(static_cast<char*>(buf), count, offset);
+  return tx_mgr.do_pread(static_cast<char*>(buf), count, offset);
 }
 
 ssize_t File::read(void* buf, size_t count) {
@@ -97,52 +92,38 @@ ssize_t File::read(void* buf, size_t count) {
     errno = EBADF;
     return -1;
   }
-  // FIXME: offset upate must is not thread safe (must associated with tx
-  // application on BlkTable)
-  ssize_t ret = pread(buf, count, file_offset);
-  if (ret > 0)
-    __atomic_fetch_add(&file_offset, static_cast<off_t>(ret), __ATOMIC_ACQ_REL);
-  return ret;
+  if (count == 0) return 0;
+  return tx_mgr.do_read(static_cast<char*>(buf), count);
 }
 
 off_t File::lseek(off_t offset, int whence) {
-  off_t old_off = file_offset;
-  off_t new_off;
+  int64_t ret;
+  TxEntryIdx tx_idx;
+  pmem::TxBlock* tx_block;
+  uint64_t file_size;
+
+  pthread_spin_lock(&spinlock);
+  blk_table.update(tx_idx, tx_block, &file_size, /*do_alloc*/ false);
 
   switch (whence) {
-    case SEEK_SET: {
-      if (offset < 0) return -1;
-      __atomic_store_n(&file_offset, offset, __ATOMIC_RELEASE);
-      return file_offset;
-    }
-
-    case SEEK_CUR: {
-      do {
-        new_off = old_off + offset;
-        if (new_off < 0) return -1;
-      } while (!__atomic_compare_exchange_n(&file_offset, &old_off, new_off,
-                                            false, __ATOMIC_ACQ_REL,
-                                            __ATOMIC_RELAXED));
-      return file_offset;
-    }
-
-    case SEEK_END: {
-      do {
-        // FIXME: file offset and file size are not thread-safe to read directly
-        new_off = blk_table.get_file_size() + offset;
-        if (new_off < 0) return -1;
-      } while (!__atomic_compare_exchange_n(&file_offset, &old_off, new_off,
-                                            false, __ATOMIC_ACQ_REL,
-                                            __ATOMIC_RELAXED));
-      return file_offset;
-    }
-
+    case SEEK_SET:
+      ret = offset_mgr.seek_absolute(offset, file_size);
+      break;
+    case SEEK_CUR:
+      ret = offset_mgr.seek_relative(offset, file_size);
+      break;
+    case SEEK_END:
+      ret = offset_mgr.seek_absolute(file_size - 1, file_size);
+      break;
     // TODO: add SEEK_DATA and SEEK_HOLE
     case SEEK_DATA:
     case SEEK_HOLE:
     default:
-      return -1;
+      ret = -1;
   }
+
+  pthread_spin_unlock(&spinlock);
+  return ret;
 }
 
 int File::fsync() {
@@ -258,10 +239,11 @@ int File::open_shm(const char* shm_path, const struct stat& stat,
 }
 
 std::ostream& operator<<(std::ostream& out, const File& f) {
-  out << "File: fd = " << f.fd << ", offset = " << f.file_offset << "\n";
+  out << "File: fd = " << f.fd << "\n";
   out << *f.meta;
   out << f.blk_table;
   out << f.mem_table;
+  out << f.offset_mgr;
   out << "Dram_bitmap: \n";
   for (size_t i = 0; i < f.meta->get_num_blocks() / 64; ++i) {
     out << "\t" << i * 64 << "-" << (i + 1) * 64 - 1 << ": " << f.bitmap[i]

@@ -28,10 +28,11 @@ class File {
   pmem::MetaBlock* meta;
   TxMgr tx_mgr;
   BlkTable blk_table;
+  OffsetMgr offset_mgr;
 
   int shm_fd;
-  off_t file_offset;
   int flags;
+  pthread_spinlock_t spinlock;
 
   // each thread tid has its local allocator
   // the allocator is a per-thread per-file data structure
@@ -40,11 +41,6 @@ class File {
   // each thread tid has its local log_mgr
   // the log_mgr is a per-thread per-file data structure
   tbb::concurrent_unordered_map<pid_t, LogMgr> log_mgrs;
-
-  friend class TxMgr;
-  friend class LogMgr;
-  friend class BlkTable;
-  friend class OffsetMgr;
 
  public:
   File(int fd, const struct stat& stat, int flags);
@@ -66,7 +62,42 @@ class File {
   [[nodiscard]] Allocator* get_local_allocator();
   [[nodiscard]] LogMgr* get_local_log_mgr();
 
- private:
+  /*
+   * exported interface for update; init_bitmap is always false
+   */
+  void update(TxEntryIdx& tx_idx, pmem::TxBlock*& tx_block,
+              uint64_t* new_file_size, bool do_alloc) {
+    pthread_spin_lock(&spinlock);
+    blk_table.update(tx_idx, tx_block, new_file_size, do_alloc);
+    pthread_spin_unlock(&spinlock);
+  }
+
+  uint64_t update_with_offset(TxEntryIdx& tx_idx, pmem::TxBlock*& tx_block,
+                              int64_t offset_change, bool stop_at_boundary,
+                              uint64_t& ticket, uint64_t* new_file_size,
+                              bool do_alloc) {
+    uint64_t new_file_size_local;
+    pthread_spin_lock(&spinlock);
+    blk_table.update(tx_idx, tx_block, &new_file_size_local, do_alloc);
+    uint64_t ret = offset_mgr.acquire_offset(offset_change, new_file_size_local,
+                                             stop_at_boundary, ticket);
+    pthread_spin_unlock(&spinlock);
+    if (new_file_size) *new_file_size = new_file_size_local;
+    return ret;
+  }
+
+  bool validate_offset(uint64_t ticket, const TxEntryIdx curr_idx,
+                       const pmem::TxBlock* curr_block, TxEntryIdx& prev_idx,
+                       const pmem::TxBlock*& prev_block) {
+    return offset_mgr.validate_offset(ticket, curr_idx, curr_block, prev_idx,
+                                      prev_block);
+  }
+
+  void release_offset(uint64_t ticket, const TxEntryIdx curr_idx,
+                      const pmem::TxBlock* curr_block) {
+    return offset_mgr.release_offset(ticket, curr_idx, curr_block);
+  }
+
   /**
    * @return the logical block index corresponding to the virtual index
    */

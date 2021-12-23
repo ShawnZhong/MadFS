@@ -14,17 +14,13 @@
 namespace ulayfs::dram {
 
 int64_t OffsetMgr::acquire_offset(int64_t change, int64_t file_size,
-                                  bool check_boundary, bool error_if_out,
-                                  uint64_t& ticket) {
+                                  bool stop_at_boundary, uint64_t& ticket) {
   int64_t new_offset = offset + change;
-  if (check_boundary) {
-    if (new_offset < 0) {
-      if (error_if_out) return -1;
+  if (stop_at_boundary) {
+    if (new_offset < 0)
       new_offset = 0;
-    } else if (new_offset > file_size) {
-      if (error_if_out) return -1;
+    else if (new_offset > file_size)
       new_offset = file_size - 1;
-    }
   }
   ticket = next_ticket++;
   return offset = new_offset;
@@ -35,8 +31,8 @@ bool OffsetMgr::validate_offset(uint64_t ticket, const TxEntryIdx curr_idx,
                                 TxEntryIdx& prev_idx,
                                 const pmem::TxBlock*& prev_block) {
   // nothing to validate
-  if (ticket == 0) return true;
   uint64_t prev_ticket = ticket - 1;
+  if (prev_ticket == 0) return true;
   TicketSlot& slot = queues[prev_ticket % NUM_OFFSET_QUEUE_SLOT];
   while (slot.ticket_slot.ticket.load(std::memory_order_acquire) !=
          prev_ticket) {
@@ -57,6 +53,11 @@ void OffsetMgr::release_offset(uint64_t ticket, const TxEntryIdx curr_idx,
   slot.ticket_slot.tail_tx_idx = curr_idx;
   slot.ticket_slot.tail_tx_block = curr_block;
   slot.ticket_slot.ticket.store(ticket, std::memory_order_release);
+}
+
+std::ostream& operator<<(std::ostream& out, const OffsetMgr& o) {
+  out << "OffsetMgr: offset = " << o.offset << "\n";
+  return out;
 }
 
 };  // namespace ulayfs::dram

@@ -7,14 +7,15 @@ add_library(ulayfs SHARED
     src/bitmap.h
     src/block.h
     src/btable.h src/btable.cpp
+    src/const.h
     src/debug.h src/debug.cpp
     src/entry.h
     src/file.h src/file.cpp
     src/idx.h
-    src/const.h
     src/lib.h src/lib.cpp
     src/log.h src/log.cpp
     src/mtable.h
+    src/offset.h src/offset.cpp
     src/params.h
     src/posix.h src/posix.cpp
     src/tx.h src/tx.cpp
