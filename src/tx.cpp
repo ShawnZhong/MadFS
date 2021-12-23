@@ -62,8 +62,6 @@ ssize_t TxMgr::do_pwrite(const char* buf, size_t count, size_t offset) {
 ssize_t TxMgr::do_write(const char* buf, size_t count) {
   TxEntryIdx tail_tx_idx;
   pmem::TxBlock* tail_tx_block;
-  TxEntryIdx prev_tx_idx;
-  const pmem::TxBlock* prev_tx_block;
   uint64_t ticket;
   uint64_t offset = file->update_with_offset(tail_tx_idx, tail_tx_block, count,
                                              false, ticket, nullptr,
@@ -72,40 +70,19 @@ ssize_t TxMgr::do_write(const char* buf, size_t count) {
   // special case that we have everything aligned, no OCC
   if (count % BLOCK_SIZE == 0 && offset % BLOCK_SIZE == 0) {
     AlignedTx tx(file, this, buf, count, offset, tail_tx_idx, tail_tx_block);
-    ssize_t ret = tx.do_write();
-
-    if (!file->validate_offset(ticket, tx.tail_tx_idx, tx.tail_tx_block,
-                               prev_tx_idx, prev_tx_block)) {
-      // TODO: redo if fail ordering check
-    }
-    file->release_offset(ticket, tx.tail_tx_idx, tx.tail_tx_block);
-    return ret;
+    return WriteTx::do_write_and_validate_offset<AlignedTx>(tx, ticket);
   }
 
   // another special case where range is within a single block
   if ((offset >> BLOCK_SHIFT) == ((offset + count - 1) >> BLOCK_SHIFT)) {
     SingleBlockTx tx(file, this, buf, count, offset, tail_tx_idx,
                      tail_tx_block);
-    ssize_t ret = tx.do_write();
-
-    if (!file->validate_offset(ticket, tx.tail_tx_idx, tx.tail_tx_block,
-                               prev_tx_idx, prev_tx_block)) {
-      // TODO: redo if fail ordering check
-    }
-    file->release_offset(ticket, tx.tail_tx_idx, tx.tail_tx_block);
-    return ret;
+    return WriteTx::do_write_and_validate_offset<SingleBlockTx>(tx, ticket);
   }
 
   // unaligned multi-block write
   MultiBlockTx tx(file, this, buf, count, offset, tail_tx_idx, tail_tx_block);
-  ssize_t ret = tx.do_write();
-
-  if (!file->validate_offset(ticket, tx.tail_tx_idx, tx.tail_tx_block,
-                             prev_tx_idx, prev_tx_block)) {
-    // TODO: redo if fail ordering check
-  }
-  file->release_offset(ticket, tx.tail_tx_idx, tx.tail_tx_block);
-  return ret;
+  return WriteTx::do_write_and_validate_offset<MultiBlockTx>(tx, ticket);
 }
 
 bool TxMgr::tx_idx_greater(const TxEntryIdx lhs_idx, const TxEntryIdx rhs_idx,

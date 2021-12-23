@@ -209,7 +209,7 @@ class TxMgr::Tx {
 };
 
 class TxMgr::ReadTx : public TxMgr::Tx {
- public:
+ protected:
   ReadTx(File* file, TxMgr* tx_mgr, char* buf, size_t count, size_t offset)
       : Tx(file, tx_mgr, count, offset), buf(buf) {}
   ReadTx(File* file, TxMgr* tx_mgr, char* buf, size_t count, size_t offset,
@@ -223,7 +223,8 @@ class TxMgr::ReadTx : public TxMgr::Tx {
   }
   ssize_t do_read();
 
- protected:
+  friend TxMgr;
+
   /*
    * read-specific arguments
    */
@@ -243,6 +244,22 @@ class TxMgr::WriteTx : public TxMgr::Tx {
     this->tail_tx_block = tail_tx_block;
   }
   ssize_t do_write();
+
+  template <typename TX>
+  static ssize_t do_write_and_validate_offset(TX& tx, uint64_t ticket) {
+    TxEntryIdx prev_tx_idx;
+    const pmem::TxBlock* prev_tx_block;
+    ssize_t ret = tx.do_write();
+
+    if (!tx.file->validate_offset(ticket, tx.tail_tx_idx, tx.tail_tx_block,
+                                  prev_tx_idx, prev_tx_block)) {
+      // TODO: redo if fail ordering check
+    }
+    tx.file->release_offset(ticket, tx.tail_tx_idx, tx.tail_tx_block);
+    return ret;
+  }
+
+  friend TxMgr;
 
   /*
    * write-specific arguments
