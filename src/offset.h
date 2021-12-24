@@ -75,11 +75,11 @@ class OffsetMgr {
    * validate whether redo is necessary; the previous operation's serialization
    * point should be no larger than the current one's
    *
-   * @param ticket ticket from acquire_offset
-   * @param curr_idx the tx tail idx seen by the current operation
-   * @param curr_block the tx tail block seen by the current operation
-   * @param prev_idx the tx tail idx seen by the previous operation
-   * @param prev_block the tx block idx seen by the previous operation
+   * @param[in] ticket ticket from acquire_offset
+   * @param[in] curr_idx the tx tail idx seen by the current operation
+   * @param[in] curr_block the tx tail block seen by the current operation
+   * @param[out] prev_idx the tx tail idx seen by the previous operation
+   * @param[out] prev_block the tx block idx seen by the previous operation
    * @return whether the ordering is fine (prev <= curr)
    */
   bool validate_offset(uint64_t ticket, const TxEntryIdx curr_idx,
@@ -89,9 +89,9 @@ class OffsetMgr {
   /**
    * release the offset
    *
-   * @param ticket ticket from acquire_offset
-   * @param curr_idx the tx tail idx seen by the current operation
-   * @param curr_block the tx tail block seen by the current operation
+   * @param[in] ticket ticket from acquire_offset
+   * @param[out] curr_idx the tx tail idx seen by the current operation
+   * @param[out] curr_block the tx tail block seen by the current operation
    */
   void release_offset(uint64_t ticket, const TxEntryIdx curr_idx,
                       const pmem::TxBlock* curr_block);
