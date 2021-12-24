@@ -31,17 +31,9 @@ ssize_t TxMgr::do_read(char* buf, size_t count) {
                                             true, ticket, &file_size,
                                             /*do_alloc*/ false);
   ReadTx tx(file, this, buf, count, offset, tail_tx_idx, tail_tx_block,
-            file_size);
+            file_size, ticket);
   ssize_t ret = tx.do_read();
-  // TODO: redo if fail ordering check
 
-  // previous tx with offset change, which must be no larger than the current
-  TxEntryIdx prev_tx_idx;
-  const pmem::TxBlock* prev_tx_block;
-  if (!file->validate_offset(ticket, tx.tail_tx_idx, tx.tail_tx_block,
-                             prev_tx_idx, prev_tx_block)) {
-    // TODO: redo
-  }
   file->release_offset(ticket, tx.tail_tx_idx, tx.tail_tx_block);
   return ret;
 }
@@ -59,6 +51,18 @@ ssize_t TxMgr::do_pwrite(const char* buf, size_t count, size_t offset) {
   return MultiBlockTx(file, this, buf, count, offset).do_write();
 }
 
+template <typename TX>
+ssize_t TxMgr::WriteTx::do_write_and_validate_offset(
+    File* file, TxMgr* tx_mgr, const char* buf, size_t count, size_t offset,
+    TxEntryIdx tail_tx_idx, pmem::TxBlock* tail_tx_block, uint64_t ticket) {
+  TxEntryIdx prev_tx_idx;
+  const pmem::TxBlock* prev_tx_block;
+  TX tx(file, tx_mgr, buf, count, offset, tail_tx_idx, tail_tx_block, ticket);
+  ssize_t ret = tx.do_write();
+  tx.file->release_offset(ticket, tx.tail_tx_idx, tx.tail_tx_block);
+  return ret;
+}
+
 ssize_t TxMgr::do_write(const char* buf, size_t count) {
   TxEntryIdx tail_tx_idx;
   pmem::TxBlock* tail_tx_block;
@@ -68,21 +72,18 @@ ssize_t TxMgr::do_write(const char* buf, size_t count) {
                                              /*do_alloc*/ false);
 
   // special case that we have everything aligned, no OCC
-  if (count % BLOCK_SIZE == 0 && offset % BLOCK_SIZE == 0) {
-    AlignedTx tx(file, this, buf, count, offset, tail_tx_idx, tail_tx_block);
-    return WriteTx::do_write_and_validate_offset<AlignedTx>(tx, ticket);
-  }
+  if (count % BLOCK_SIZE == 0 && offset % BLOCK_SIZE == 0)
+    return WriteTx::do_write_and_validate_offset<AlignedTx>(
+        file, this, buf, count, offset, tail_tx_idx, tail_tx_block, ticket);
 
   // another special case where range is within a single block
-  if ((offset >> BLOCK_SHIFT) == ((offset + count - 1) >> BLOCK_SHIFT)) {
-    SingleBlockTx tx(file, this, buf, count, offset, tail_tx_idx,
-                     tail_tx_block);
-    return WriteTx::do_write_and_validate_offset<SingleBlockTx>(tx, ticket);
-  }
+  if ((offset >> BLOCK_SHIFT) == ((offset + count - 1) >> BLOCK_SHIFT))
+    return WriteTx::do_write_and_validate_offset<SingleBlockTx>(
+        file, this, buf, count, offset, tail_tx_idx, tail_tx_block, ticket);
 
   // unaligned multi-block write
-  MultiBlockTx tx(file, this, buf, count, offset, tail_tx_idx, tail_tx_block);
-  return WriteTx::do_write_and_validate_offset<MultiBlockTx>(tx, ticket);
+  return WriteTx::do_write_and_validate_offset<MultiBlockTx>(
+      file, this, buf, count, offset, tail_tx_idx, tail_tx_block, ticket);
 }
 
 bool TxMgr::tx_idx_greater(const TxEntryIdx lhs_idx, const TxEntryIdx rhs_idx,
@@ -354,7 +355,7 @@ ssize_t TxMgr::ReadTx::do_read() {
   LogicalBlockIdx redo_image[num_blocks];
   memset(redo_image, 0, sizeof(LogicalBlockIdx) * num_blocks);
 
-  if (!skip_update)
+  if (!is_offset_depend)
     file->update(tail_tx_idx, tail_tx_block, &file_size,
                  /*do_alloc*/ false);
   // reach EOF
@@ -385,6 +386,11 @@ ssize_t TxMgr::ReadTx::do_read() {
     memcpy(buf + buf_offset, curr_block->data_ro(), count - buf_offset);
   }
 
+  // if offset-dependent, must wait for the previous one completed
+  TxEntryIdx prev_tx_idx;
+  const pmem::TxBlock* prev_tx_block;
+
+redo:
   while (true) {
     // check the tail is still tail
     if (!tx_mgr->handle_idx_overflow(tail_tx_idx, tail_tx_block, false)) break;
@@ -429,6 +435,16 @@ ssize_t TxMgr::ReadTx::do_read() {
       }
     }
   }
+
+  // we actually don't care what's the previous tx's tail, because we will need
+  // to validate against the latest tail anyway
+  if (is_offset_depend)
+    if (!file->validate_offset(ticket, tail_tx_idx, tail_tx_block, prev_tx_idx,
+                               prev_tx_block)) {
+      // we don't need to revalidate after redo
+      is_offset_depend = false;
+      goto redo;
+    }
 
   return static_cast<ssize_t>(count);
 }
@@ -496,11 +512,16 @@ ssize_t TxMgr::AlignedTx::do_write() {
   }
 
   // make a local copy of the tx tail
-  if (!skip_update)
+  if (!is_offset_depend)
     file->update(tail_tx_idx, tail_tx_block, nullptr,
                  /*do_alloc*/ true);
   for (uint32_t i = 0; i < num_blocks; ++i)
     recycle_image[i] = file->vidx_to_lidx(begin_vidx + i);
+
+  // if is offset-dependent, must wait for the previous one to complete
+  TxEntryIdx prev_tx_idx;
+  const pmem::TxBlock* prev_tx_block;
+  if (is_offset_depend) file->wait_offset(ticket, prev_tx_idx, prev_tx_block);
 
 retry:
   conflict_entry = tx_mgr->try_commit(commit_entry, tail_tx_idx, tail_tx_block);
@@ -521,7 +542,7 @@ ssize_t TxMgr::SingleBlockTx::do_write() {
   LogicalBlockIdx recycle_image[1];
 
   // must acquire the tx tail before any get
-  if (!skip_update)
+  if (!is_offset_depend)
     file->update(tail_tx_idx, tail_tx_block, nullptr,
                  /*do_alloc*/ true);
   recycle_image[0] = file->vidx_to_lidx(begin_vidx);
@@ -537,6 +558,11 @@ redo:
 
   // persist the data
   persist_fenced(dst_blocks[0], BLOCK_SIZE);
+
+  // if is offset-dependent, must wait for the previous one to complete
+  TxEntryIdx prev_tx_idx;
+  const pmem::TxBlock* prev_tx_block;
+  if (is_offset_depend) file->wait_offset(ticket, prev_tx_idx, prev_tx_block);
 
 retry:
   // try to commit the tx entry
@@ -601,7 +627,7 @@ ssize_t TxMgr::MultiBlockTx::do_write() {
   }
 
   // only get a snapshot of the tail when starting critical piece
-  if (!skip_update)
+  if (!is_offset_depend)
     file->update(tail_tx_idx, tail_tx_block, nullptr,
                  /*do_alloc*/ true);
   for (uint32_t i = 0; i < num_blocks; ++i)
@@ -641,6 +667,11 @@ redo:
     persist_unfenced(last_dst_block, BLOCK_SIZE);
   }
   _mm_sfence();
+
+  // if is offset-dependent, must wait for the previous one to complete
+  TxEntryIdx prev_tx_idx;
+  const pmem::TxBlock* prev_tx_block;
+  if (is_offset_depend) file->wait_offset(ticket, prev_tx_idx, prev_tx_block);
 
 retry:
   // try to commit the transaction

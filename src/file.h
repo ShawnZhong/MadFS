@@ -86,6 +86,11 @@ class File {
     return ret;
   }
 
+  bool wait_offset(uint64_t ticket, TxEntryIdx& prev_idx,
+                   const pmem::TxBlock*& prev_block) {
+    return offset_mgr.wait_offset(ticket, prev_idx, prev_block);
+  }
+
   bool validate_offset(uint64_t ticket, const TxEntryIdx curr_idx,
                        const pmem::TxBlock* curr_block, TxEntryIdx& prev_idx,
                        const pmem::TxBlock*& prev_block) {

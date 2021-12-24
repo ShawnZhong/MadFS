@@ -50,6 +50,10 @@ class OffsetMgr {
                          bool stop_at_boundary, uint64_t& ticket);
 
   // thread-safe
+  bool wait_offset(uint64_t ticket, TxEntryIdx& prev_idx,
+                   const pmem::TxBlock*& prev_block);
+
+  // thread-safe
   bool validate_offset(uint64_t ticket, const TxEntryIdx curr_idx,
                        const pmem::TxBlock* curr_block, TxEntryIdx& prev_idx,
                        const pmem::TxBlock*& prev_block);

@@ -26,24 +26,24 @@ int64_t OffsetMgr::acquire_offset(int64_t change, int64_t file_size,
   return offset = new_offset;
 }
 
+bool OffsetMgr::wait_offset(uint64_t ticket, TxEntryIdx& prev_idx,
+                            const pmem::TxBlock*& prev_block) {
+  uint64_t prev_ticket = ticket - 1;
+  if (prev_ticket == 0) return false;
+  TicketSlot& slot = queues[prev_ticket % NUM_OFFSET_QUEUE_SLOT];
+  while (slot.ticket_slot.ticket.load(std::memory_order_acquire) != prev_ticket)
+    asm volatile("pause");
+  return true;
+}
+
 bool OffsetMgr::validate_offset(uint64_t ticket, const TxEntryIdx curr_idx,
                                 const pmem::TxBlock* curr_block,
                                 TxEntryIdx& prev_idx,
                                 const pmem::TxBlock*& prev_block) {
-  // nothing to validate
-  uint64_t prev_ticket = ticket - 1;
-  if (prev_ticket == 0) return true;
-  TicketSlot& slot = queues[prev_ticket % NUM_OFFSET_QUEUE_SLOT];
-  while (slot.ticket_slot.ticket.load(std::memory_order_acquire) !=
-         prev_ticket) {
-    asm volatile("pause");
-  }
-
-  if (!file->tx_idx_greater(slot.ticket_slot.tail_tx_idx, curr_idx,
-                            slot.ticket_slot.tail_tx_block, curr_block))
+  bool need_validate = wait_offset(ticket, prev_idx, prev_block);
+  if (!need_validate) return true;
+  if (!file->tx_idx_greater(prev_idx, curr_idx, prev_block, curr_block))
     return true;
-  prev_idx = slot.ticket_slot.tail_tx_idx;
-  prev_block = slot.ticket_slot.tail_tx_block;
   return false;
 }
 
