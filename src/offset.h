@@ -5,6 +5,7 @@
 #include <cstring>
 
 #include "block.h"
+#include "config.h"
 #include "const.h"
 #include "entry.h"
 #include "idx.h"

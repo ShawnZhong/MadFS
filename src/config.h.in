@@ -71,12 +71,14 @@ static struct RuntimeOptions {
   bool show_config{true};
   const char* log_file{};
   int log_level{1};
+  bool strict_offset_serial{false};
 
   RuntimeOptions() noexcept {
     if (std::getenv("ULAYFS_NO_SHOW_CONFIG")) show_config = false;
     log_file = std::getenv("ULAYFS_LOG_FILE");
     if (auto str = std::getenv("ULAYFS_LOG_LEVEL"); str)
       log_level = std::atoi(str);
+    if (std::getenv("ULAYFS_STRICT_OFFSET")) show_config = true;
   };
 
   friend std::ostream& operator<<(std::ostream& out,
