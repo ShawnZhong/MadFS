@@ -9,7 +9,11 @@ File::File(int fd, const struct stat& stat, int flags)
       tx_mgr(this, meta),
       blk_table(this, &tx_mgr),
       offset_mgr(this),
-      flags(flags) {
+      flags(flags),
+      can_read((flags & O_ACCMODE) == O_RDONLY ||
+               (flags & O_ACCMODE) == O_RDWR),
+      can_write((flags & O_ACCMODE) == O_RDONLY ||
+                (flags & O_ACCMODE) == O_RDWR) {
   pthread_spin_init(&spinlock, PTHREAD_PROCESS_PRIVATE);
   if (stat.st_size == 0) meta->init();
 
@@ -61,7 +65,7 @@ File::~File() {
  */
 
 ssize_t File::pwrite(const void* buf, size_t count, size_t offset) {
-  if ((flags & O_ACCMODE) != O_WRONLY && (flags & O_ACCMODE) != O_RDWR) {
+  if (!can_write) {
     errno = EBADF;
     return -1;
   }
@@ -70,7 +74,7 @@ ssize_t File::pwrite(const void* buf, size_t count, size_t offset) {
 }
 
 ssize_t File::write(const void* buf, size_t count) {
-  if ((flags & O_ACCMODE) != O_WRONLY && (flags & O_ACCMODE) != O_RDWR) {
+  if (!can_write) {
     errno = EBADF;
     return -1;
   }
@@ -79,7 +83,7 @@ ssize_t File::write(const void* buf, size_t count) {
 }
 
 ssize_t File::pread(void* buf, size_t count, off_t offset) {
-  if ((flags & O_ACCMODE) != O_RDONLY && (flags & O_ACCMODE) != O_RDWR) {
+  if (!can_read) {
     errno = EBADF;
     return -1;
   }
@@ -88,7 +92,7 @@ ssize_t File::pread(void* buf, size_t count, off_t offset) {
 }
 
 ssize_t File::read(void* buf, size_t count) {
-  if ((flags & O_ACCMODE) != O_RDONLY && (flags & O_ACCMODE) != O_RDWR) {
+  if (!can_read) {
     errno = EBADF;
     return -1;
   }

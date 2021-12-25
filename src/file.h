@@ -32,6 +32,8 @@ class File {
 
   int shm_fd;
   int flags;
+  const bool can_read;
+  const bool can_write;
   pthread_spinlock_t spinlock;
 
   // each thread tid has its local allocator
