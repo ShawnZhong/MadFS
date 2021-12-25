@@ -73,17 +73,17 @@ class File {
   }
 
   uint64_t update_with_offset(TxEntryIdx& tx_idx, pmem::TxBlock*& tx_block,
-                              int64_t offset_change, bool stop_at_boundary,
+                              uint64_t& offset_change, bool stop_at_boundary,
                               uint64_t& ticket, uint64_t* new_file_size,
                               bool do_alloc) {
     uint64_t new_file_size_local;
     pthread_spin_lock(&spinlock);
     blk_table.update(tx_idx, tx_block, &new_file_size_local, do_alloc);
-    uint64_t ret = offset_mgr.acquire_offset(offset_change, new_file_size_local,
-                                             stop_at_boundary, ticket);
+    auto old_offset = offset_mgr.acquire_offset(
+        offset_change, new_file_size_local, stop_at_boundary, ticket);
     pthread_spin_unlock(&spinlock);
     if (new_file_size) *new_file_size = new_file_size_local;
-    return ret;
+    return old_offset;
   }
 
   bool wait_offset(uint64_t ticket, TxEntryIdx& prev_idx,

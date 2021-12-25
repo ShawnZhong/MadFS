@@ -28,7 +28,7 @@ class OffsetMgr {
   };
 
   File* file;
-  int64_t offset;
+  uint64_t offset;
   uint64_t next_ticket;
   TicketSlot queues[NUM_OFFSET_QUEUE_SLOT];
 
@@ -50,14 +50,15 @@ class OffsetMgr {
    * move the current offset and get the updated offset; not thread-safe so must
    * be called with spinlock held; must call release_offset after done
    *
-   * @param[in] change movement applied to the offset (can be negative)
+   * @param[in,out] change movement applied to the offset, will be updated if
+   * hit boundary and stop_at_boundary is set
    * @param[in] file_size the current file size for boundary check
    * @param[in] stop_at_boundary whether stop at the boundary
    * @param[out] ticket ticket for this acquire
-   * @return new offset
+   * @return old offset
    */
-  int64_t acquire_offset(int64_t change, int64_t file_size,
-                         bool stop_at_boundary, uint64_t& ticket);
+  uint64_t acquire_offset(uint64_t& change, uint64_t file_size,
+                          bool stop_at_boundary, uint64_t& ticket);
 
   /**
    * wait for the previous one to complete; return previous one's idx and block
