@@ -173,7 +173,7 @@ template LogicalBlockIdx TxMgr::alloc_next_block(pmem::TxBlock* block) const;
 std::ostream& operator<<(std::ostream& out, const TxMgr& tx_mgr) {
   out << "Transactions: \n";
 
-  auto log_mgr = tx_mgr.file->get_local_log_mgr();
+  auto log_mgr = &tx_mgr.file->log_mgr;
 
   TxEntryIdx tx_idx = {0, 0};
   pmem::TxBlock* tx_block = nullptr;
@@ -239,7 +239,6 @@ bool TxMgr::Tx::handle_conflict(pmem::TxEntry curr_entry,
   VirtualBlockIdx overlap_first_vidx, overlap_last_vidx;
   uint32_t num_blocks;
   bool has_conflict = false;
-  auto log_mgr = file->get_local_log_mgr();
 
   do {
     // TODO: handle writev requests
@@ -266,8 +265,8 @@ bool TxMgr::Tx::handle_conflict(pmem::TxEntry curr_entry,
       if (num_blocks) {  // some info in log entries is partially inline
         le_first_vidx = curr_entry.commit_entry.begin_virtual_idx;
       } else {  // dereference log_entry_idx
-        log_mgr->get_coverage(curr_entry.commit_entry.log_entry_idx,
-                              le_first_vidx, num_blocks);
+        file->log_mgr.get_coverage(curr_entry.commit_entry.log_entry_idx,
+                                   le_first_vidx, num_blocks);
       }
       le_last_vidx = le_first_vidx + num_blocks - 1;
       if (last_vidx < le_first_vidx || first_vidx > le_last_vidx) goto next;
@@ -279,8 +278,8 @@ bool TxMgr::Tx::handle_conflict(pmem::TxEntry curr_entry,
 
       if (le_begin_lidx == 0) {  // lazy dereference log idx
         std::vector<LogicalBlockIdx> le_begin_lidxs;
-        log_mgr->get_coverage(curr_entry.commit_entry.log_entry_idx,
-                              le_first_vidx, num_blocks, &le_begin_lidxs);
+        file->log_mgr.get_coverage(curr_entry.commit_entry.log_entry_idx,
+                                   le_first_vidx, num_blocks, &le_begin_lidxs);
         le_begin_lidx = le_begin_lidxs.front();
       }
 
@@ -396,7 +395,7 @@ TxMgr::WriteTx::WriteTx(File* file, const char* buf, size_t count,
                         size_t offset)
     : Tx(file, count, offset),
       buf(buf),
-      log_mgr(file->get_local_log_mgr()),
+      log_mgr(&file->log_mgr),
       allocator(file->get_local_allocator()),
       dst_lidxs(),
       dst_blocks() {
@@ -412,10 +411,10 @@ TxMgr::WriteTx::WriteTx(File* file, const char* buf, size_t count,
     dst_lidxs.push_back(allocator->alloc(chunk_num_blocks));
     rest_num_blocks -= chunk_num_blocks;
   }
-  assert(dst_lidxs.size() > 0);
+  assert(!dst_lidxs.empty());
 
   for (auto lidx : dst_lidxs) dst_blocks.push_back(file->lidx_to_addr_rw(lidx));
-  assert(dst_blocks.size() > 0);
+  assert(!dst_blocks.empty());
 
   uint16_t leftover_bytes = ALIGN_UP(end_offset, BLOCK_SIZE) - end_offset;
   if (pmem::TxCommitInlineEntry::can_inline(num_blocks, begin_vidx,
@@ -424,13 +423,14 @@ TxMgr::WriteTx::WriteTx(File* file, const char* buf, size_t count,
         pmem::TxCommitInlineEntry(num_blocks, begin_vidx, dst_lidxs[0]);
   } else {
     // it's fine that we append log first as long we don't publish it by tx
-    auto log_entry_idx = log_mgr->append(pmem::LogOp::LOG_OVERWRITE,  // op
-                                         leftover_bytes,  // leftover_bytes
-                                         num_blocks,      // total_blocks
-                                         begin_vidx,      // begin_virtual_idx
-                                         dst_lidxs,       // begin_logical_idxs
-                                         false            // fenced
-    );
+    auto log_entry_idx =
+        log_mgr->append(allocator, pmem::LogOp::LOG_OVERWRITE,  // op
+                        leftover_bytes,  // leftover_bytes
+                        num_blocks,      // total_blocks
+                        begin_vidx,      // begin_virtual_idx
+                        dst_lidxs,       // begin_logical_idxs
+                        false            // fenced
+        );
     commit_entry = pmem::TxCommitEntry(num_blocks, begin_vidx, log_entry_idx);
   }
 }

@@ -26,6 +26,7 @@ class File {
   MemTable mem_table;
   pmem::MetaBlock* meta;
   TxMgr tx_mgr;
+  LogMgr log_mgr;
   BlkTable blk_table;
 
   int shm_fd;
@@ -36,13 +37,10 @@ class File {
   // the allocator is a per-thread per-file data structure
   tbb::concurrent_unordered_map<pid_t, Allocator> allocators;
 
-  // each thread tid has its local log_mgr
-  // the log_mgr is a per-thread per-file data structure
-  tbb::concurrent_unordered_map<pid_t, LogMgr> log_mgrs;
-
   friend class TxMgr;
   friend class LogMgr;
   friend class BlkTable;
+  friend class Allocator;
 
  public:
   File(int fd, const struct stat& stat, int flags);
@@ -62,7 +60,6 @@ class File {
    * Getters & removers for thread-local data structures
    */
   [[nodiscard]] Allocator* get_local_allocator();
-  [[nodiscard]] LogMgr* get_local_log_mgr();
 
  private:
   /**
@@ -129,6 +126,7 @@ class File {
   int open_shm(const char* shm_path, const struct stat& stat, Bitmap*& bitmap);
 
   friend std::ostream& operator<<(std::ostream& out, const File& f);
+  friend std::ostream& operator<<(std::ostream& out, const TxMgr& tx_mgr);
 };
 
 }  // namespace ulayfs::dram

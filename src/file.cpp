@@ -7,6 +7,7 @@ File::File(int fd, const struct stat& stat, int flags)
       mem_table(fd, stat.st_size, (flags & O_ACCMODE) == O_RDONLY),
       meta(mem_table.get_meta()),
       tx_mgr(this, meta),
+      log_mgr(this, meta),
       blk_table(this, &tx_mgr),
       file_offset(0),
       flags(flags) {
@@ -52,7 +53,6 @@ File::~File() {
   posix::close(fd);
   posix::close(shm_fd);
   allocators.clear();
-  log_mgrs.clear();
 }
 
 /*
@@ -172,19 +172,8 @@ Allocator* File::get_local_allocator() {
     return &it->second;
   }
 
-  auto [it, ok] =
-      allocators.emplace(tid, Allocator(fd, meta, &mem_table, bitmap));
+  auto [it, ok] = allocators.emplace(tid, Allocator(this, meta, bitmap));
   PANIC_IF(!ok, "insert to thread-local allocators failed");
-  return &it->second;
-}
-
-LogMgr* File::get_local_log_mgr() {
-  if (auto it = log_mgrs.find(tid); it != log_mgrs.end()) {
-    return &it->second;
-  }
-
-  auto [it, ok] = log_mgrs.emplace(tid, LogMgr(this, meta));
-  PANIC_IF(!ok, "insert to thread-local log_mgrs failed");
   return &it->second;
 }
 
