@@ -48,7 +48,7 @@ File::File(int fd, const struct stat& stat, int flags)
                      /*do_alloc*/ false, /*init_bitmap*/ false);
   }
 
-  if (flags & O_APPEND) offset_mgr.seek_absolute(file_size - 1, file_size);
+  if (flags & O_APPEND) offset_mgr.seek_absolute(file_size, file_size);
 }
 
 File::~File() {

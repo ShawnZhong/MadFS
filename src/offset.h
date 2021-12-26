@@ -39,7 +39,7 @@ class OffsetMgr {
   // only call if seeking is the only serialization point
   // always with boundary check
   int64_t seek_absolute(int64_t abs_offset, int file_size) {
-    if (abs_offset < 0 || abs_offset >= file_size) return -1;
+    if (abs_offset < 0 || abs_offset > file_size) return -1;
     return offset = abs_offset;
   }
   int64_t seek_relative(int64_t rel_offset, int file_size) {
