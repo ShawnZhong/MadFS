@@ -166,6 +166,53 @@ LogicalBlockIdx TxMgr::alloc_next_block(B* block) const {
   }
 }
 
+void TxMgr::gc(std::vector<LogicalBlockIdx>& blk_table,
+               LogicalBlockIdx tail_tx_block) {
+  // skip if there is only one tx block
+  LogicalBlockIdx orig_tx_block = meta->get_next_tx_block();
+  if (orig_tx_block == tail_tx_block) return;
+
+  LogicalBlockIdx first_tx_block_idx = file->get_local_allocator()->alloc(1);
+  pmem::TxBlock* new_block =
+      &file->lidx_to_addr_rw(first_tx_block_idx)->tx_block;
+  TxEntryIdx tx_idx = {first_tx_block_idx, 0};
+
+  VirtualBlockIdx begin = 0;
+  for (VirtualBlockIdx i = 1; i < blk_table.size(); i++) {
+    // continuous blocks can be placed in 1 tx
+    if (blk_table[i] - blk_table[i - 1] == 1 &&
+        i - begin < /*pmem::TxCommitEntry::NUM_BLOCKS_MAX*/ 63)
+      continue;
+
+    auto commit_entry =
+        pmem::TxCommitInlineEntry(i - begin, begin, blk_table[begin]);
+    // TODO: since the new transaction history is private to the local thread,
+    // we can fill the entire block in without worrying about multithreading
+    new_block->try_append(commit_entry, tx_idx.local_idx);
+    if (!advance_tx_idx(tx_idx, new_block, true)) return;
+    begin = i;
+  }
+
+  // add the last commit entry
+  auto commit_entry = pmem::TxCommitInlineEntry(blk_table.size() - begin, begin,
+                                                blk_table[begin]);
+  new_block->try_append(commit_entry, tx_idx.local_idx);
+  // last block points to the tail, meta points to the first block
+  new_block->set_next_tx_block(tail_tx_block);
+  meta->set_next_tx_block(first_tx_block_idx);
+
+  // TODO: free log blocks too
+  // free the original tx blocks
+  auto allocator = file->get_local_allocator();
+  while (orig_tx_block != tail_tx_block) {
+    auto orig_block = &file->lidx_to_addr_rw(first_tx_block_idx)->tx_block;
+    LogicalBlockIdx next_tx_block = orig_block->get_next_tx_block();
+    // if we use a dedicated thread, return to bitmap directly
+    allocator->free(orig_tx_block);
+    orig_tx_block = next_tx_block;
+  }
+}
+
 // explicit template instantiations
 template LogicalBlockIdx TxMgr::alloc_next_block(pmem::MetaBlock* block) const;
 template LogicalBlockIdx TxMgr::alloc_next_block(pmem::TxBlock* block) const;

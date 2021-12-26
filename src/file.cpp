@@ -257,6 +257,11 @@ int File::open_shm(const char* shm_path, const struct stat& stat,
   return shm_fd;
 }
 
+void File::tx_gc() {
+  auto snapshot = blk_table.get_snapshot();
+  tx_mgr.gc(snapshot.first, snapshot.second.block_idx);
+}
+
 std::ostream& operator<<(std::ostream& out, const File& f) {
   out << "File: fd = " << f.fd << ", offset = " << f.file_offset << "\n";
   out << *f.meta;

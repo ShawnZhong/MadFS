@@ -128,6 +128,8 @@ class File {
    */
   int open_shm(const char* shm_path, const struct stat& stat, Bitmap*& bitmap);
 
+  void tx_gc();
+
   friend std::ostream& operator<<(std::ostream& out, const File& f);
 };
 

@@ -119,6 +119,9 @@ class TxMgr {
   void flush_tx_entries(TxEntryIdx tx_idx_begin, TxEntryIdx tx_idx_end,
                         pmem::TxBlock* tx_block_end = nullptr);
 
+  void gc(std::vector<LogicalBlockIdx>& blk_table,
+          LogicalBlockIdx tail_tx_block);
+
  private:
   /**
    * Move along the linked list of TxBlock and find the tail. The returned
