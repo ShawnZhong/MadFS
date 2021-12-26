@@ -117,7 +117,7 @@ off_t File::lseek(off_t offset, int whence) {
       ret = offset_mgr.seek_relative(offset);
       break;
     case SEEK_END:
-      ret = offset_mgr.seek_absolute(file_size - 1);
+      ret = offset_mgr.seek_absolute(file_size + offset);
       break;
     // TODO: add SEEK_DATA and SEEK_HOLE
     case SEEK_DATA:
