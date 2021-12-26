@@ -29,8 +29,6 @@ void print_file(int fd) {
 }
 
 constexpr char FILEPATH[] = "test.txt";
-constexpr char TEST_STR[] = "test str\n";
-constexpr int TEST_STR_LEN = sizeof(TEST_STR) - 1;
 
 char const hex_chars[16] = {'0', '1', '2', '3', '4', '5', '6', '7',
                             '8', '9', 'A', 'B', 'C', 'D', 'E', 'F'};

@@ -145,6 +145,38 @@ off_t File::lseek(off_t offset, int whence) {
   }
 }
 
+void* File::mmap(void* addr_hint, size_t length, int prot, int mmap_flags,
+                 off_t offset) {
+  if (offset % BLOCK_SIZE != 0) {
+    errno = EINVAL;
+    return MAP_FAILED;
+  }
+
+  void* addr = posix::mmap(addr_hint, length, prot, mmap_flags, fd, 0);
+  if (addr == MAP_FAILED) {
+    WARN("mmap failed: %m");
+    return MAP_FAILED;
+  }
+
+  for (size_t i = 0; i < length; i += BLOCK_SIZE) {
+    VirtualBlockIdx vidx = (i + offset) >> BLOCK_SHIFT;
+    LogicalBlockIdx lidx = blk_table.get(vidx);
+    if (lidx != 0) {
+      int rc = remap_file_pages(addr, BLOCK_SIZE, 0, lidx, mmap_flags);
+      if (rc != 0) {
+        WARN("remap_file_pages failed: %m");
+        posix::munmap(addr, length);
+        return MAP_FAILED;
+      }
+    } else {
+      // TODO: we may need to fill in the holes by allocating new blocks
+      PANIC("hole vidx=%d in mmap", vidx);
+    }
+  }
+
+  return addr;
+}
+
 int File::fsync() {
   TxEntryIdx tail_tx_idx;
   pmem::TxBlock* tail_tx_block;
@@ -194,7 +226,7 @@ LogMgr* File::get_local_log_mgr() {
 
 int File::open_shm(const char* shm_path, const struct stat& stat,
                    Bitmap*& bitmap) {
-  DEBUG("Opening shared memory %s", shm_path);
+  TRACE("Opening shared memory %s", shm_path);
   // use posix::open instead of shm_open since shm_open calls open, which is
   // overloaded by ulayfs
   int shm_fd =

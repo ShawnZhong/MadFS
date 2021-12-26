@@ -23,8 +23,8 @@ void create_file() {
   // create enough tx so that valid tx span beyond meta block
   int num_tx = ulayfs::NUM_INLINE_TX_ENTRY + ulayfs::NUM_TX_ENTRY + 1;
   for (int i = 0; i < num_tx; i++) {
-    sz = write(fd, TEST_STR, TEST_STR_LEN);
-    assert(sz == TEST_STR_LEN);
+    sz = write(fd, "hello, world!", 14);
+    assert(sz == 14);
   }
 
   res = fsync(fd);
