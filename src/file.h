@@ -88,16 +88,11 @@ class File {
     return old_offset;
   }
 
-  bool wait_offset(uint64_t ticket, TxEntryIdx& prev_idx,
-                   const pmem::TxBlock*& prev_block) {
-    return offset_mgr.wait_offset(ticket, prev_idx, prev_block);
-  }
+  void wait_offset(uint64_t ticket) { offset_mgr.wait_offset(ticket); }
 
   bool validate_offset(uint64_t ticket, const TxEntryIdx curr_idx,
-                       const pmem::TxBlock* curr_block, TxEntryIdx& prev_idx,
-                       const pmem::TxBlock*& prev_block) {
-    return offset_mgr.validate_offset(ticket, curr_idx, curr_block, prev_idx,
-                                      prev_block);
+                       const pmem::TxBlock* curr_block) {
+    return offset_mgr.validate_offset(ticket, curr_idx, curr_block);
   }
 
   void release_offset(uint64_t ticket, const TxEntryIdx curr_idx,

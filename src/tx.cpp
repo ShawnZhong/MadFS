@@ -384,10 +384,6 @@ ssize_t TxMgr::ReadTx::do_read() {
     memcpy(buf + buf_offset, curr_block->data_ro(), count - buf_offset);
   }
 
-  // if offset-dependent, must wait for the previous one completed
-  TxEntryIdx prev_tx_idx;
-  const pmem::TxBlock* prev_tx_block;
-
 redo:
   while (true) {
     // check the tail is still tail
@@ -437,8 +433,7 @@ redo:
   // we actually don't care what's the previous tx's tail, because we will need
   // to validate against the latest tail anyway
   if (is_offset_depend)
-    if (!file->validate_offset(ticket, tail_tx_idx, tail_tx_block, prev_tx_idx,
-                               prev_tx_block)) {
+    if (!file->validate_offset(ticket, tail_tx_idx, tail_tx_block)) {
       // we don't need to revalidate after redo
       is_offset_depend = false;
       goto redo;
@@ -516,10 +511,7 @@ ssize_t TxMgr::AlignedTx::do_write() {
   for (uint32_t i = 0; i < num_blocks; ++i)
     recycle_image[i] = file->vidx_to_lidx(begin_vidx + i);
 
-  // if is offset-dependent, must wait for the previous one to complete
-  TxEntryIdx prev_tx_idx;
-  const pmem::TxBlock* prev_tx_block;
-  if (is_offset_depend) file->wait_offset(ticket, prev_tx_idx, prev_tx_block);
+  if (is_offset_depend) file->wait_offset(ticket);
 
 retry:
   conflict_entry = tx_mgr->try_commit(commit_entry, tail_tx_idx, tail_tx_block);
@@ -557,10 +549,7 @@ redo:
   // persist the data
   persist_fenced(dst_blocks[0], BLOCK_SIZE);
 
-  // if is offset-dependent, must wait for the previous one to complete
-  TxEntryIdx prev_tx_idx;
-  const pmem::TxBlock* prev_tx_block;
-  if (is_offset_depend) file->wait_offset(ticket, prev_tx_idx, prev_tx_block);
+  if (is_offset_depend) file->wait_offset(ticket);
 
 retry:
   // try to commit the tx entry
@@ -666,10 +655,7 @@ redo:
   }
   _mm_sfence();
 
-  // if is offset-dependent, must wait for the previous one to complete
-  TxEntryIdx prev_tx_idx;
-  const pmem::TxBlock* prev_tx_block;
-  if (is_offset_depend) file->wait_offset(ticket, prev_tx_idx, prev_tx_block);
+  if (is_offset_depend) file->wait_offset(ticket);
 
 retry:
   // try to commit the transaction

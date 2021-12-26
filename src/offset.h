@@ -19,8 +19,8 @@ class OffsetMgr {
   union TicketSlot {
     struct {
       std::atomic_uint64_t ticket;
-      TxEntryIdx tail_tx_idx;
-      const pmem::TxBlock* tail_tx_block;
+      TxEntryIdx tx_idx;
+      const pmem::TxBlock* tx_block;
     } ticket_slot;
     char cl[CACHELINE_SIZE];
 
@@ -61,13 +61,9 @@ class OffsetMgr {
    * wait for the previous one to complete; return previous one's idx and block
    *
    * @param[in] ticket ticket from acquire_offset
-   * @param[out] prev_idx the previous operation's tx idx (serialization point)
-   * @param[out] prev_block the previous operation's tx block
-   * @return whether need to validate againest prev (if false, prev_idx and
-   * prev_block are undefined)
+   * @return address of slot; null if no need to validate
    */
-  bool wait_offset(uint64_t ticket, TxEntryIdx& prev_idx,
-                   const pmem::TxBlock*& prev_block);
+  const OffsetMgr::TicketSlot* wait_offset(uint64_t ticket);
 
   /**
    * validate whether redo is necessary; the previous operation's serialization
@@ -76,20 +72,17 @@ class OffsetMgr {
    * @param[in] ticket ticket from acquire_offset
    * @param[in] curr_idx the tx tail idx seen by the current operation
    * @param[in] curr_block the tx tail block seen by the current operation
-   * @param[out] prev_idx the tx tail idx seen by the previous operation
-   * @param[out] prev_block the tx block idx seen by the previous operation
    * @return whether the ordering is fine (prev <= curr)
    */
   bool validate_offset(uint64_t ticket, const TxEntryIdx curr_idx,
-                       const pmem::TxBlock* curr_block, TxEntryIdx& prev_idx,
-                       const pmem::TxBlock*& prev_block);
+                       const pmem::TxBlock* curr_block);
 
   /**
    * release the offset
    *
    * @param[in] ticket ticket from acquire_offset
-   * @param[out] curr_idx the tx tail idx seen by the current operation
-   * @param[out] curr_block the tx tail block seen by the current operation
+   * @param[in] curr_idx the tx tail idx seen by the current operation
+   * @param[in] curr_block the tx tail block seen by the current operation
    */
   void release_offset(uint64_t ticket, const TxEntryIdx curr_idx,
                       const pmem::TxBlock* curr_block);
