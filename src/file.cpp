@@ -48,7 +48,7 @@ File::File(int fd, const struct stat& stat, int flags)
                      /*do_alloc*/ false, /*init_bitmap*/ false);
   }
 
-  if (flags & O_APPEND) offset_mgr.seek_absolute(file_size, file_size);
+  if (flags & O_APPEND) offset_mgr.seek_absolute(file_size);
 }
 
 File::~File() {
@@ -111,13 +111,13 @@ off_t File::lseek(off_t offset, int whence) {
 
   switch (whence) {
     case SEEK_SET:
-      ret = offset_mgr.seek_absolute(offset, file_size);
+      ret = offset_mgr.seek_absolute(offset);
       break;
     case SEEK_CUR:
-      ret = offset_mgr.seek_relative(offset, file_size);
+      ret = offset_mgr.seek_relative(offset);
       break;
     case SEEK_END:
-      ret = offset_mgr.seek_absolute(file_size - 1, file_size);
+      ret = offset_mgr.seek_absolute(file_size - 1);
       break;
     // TODO: add SEEK_DATA and SEEK_HOLE
     case SEEK_DATA:
