@@ -33,7 +33,7 @@ bool OffsetMgr::wait_offset(uint64_t ticket, TxEntryIdx& prev_idx,
   if (prev_ticket == 0) return false;
   TicketSlot& slot = queues[prev_ticket % NUM_OFFSET_QUEUE_SLOT];
   while (slot.ticket_slot.ticket.load(std::memory_order_acquire) != prev_ticket)
-    asm volatile("pause");
+    _mm_pause();
   return true;
 }
 
