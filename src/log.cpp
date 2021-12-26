@@ -72,8 +72,7 @@ LogEntryIdx LogMgr::append(
   // allocate the first head entry, whose LogEntryIdx will be returned back
   // to the transaction
   pmem::LogHeadEntry* head_entry = allocator->alloc_head_entry();
-  LogEntryUnpackIdx first_head_idx{allocator->get_curr_log_block_idx(),
-                                   allocator->last_log_local_idx()};
+  LogEntryIdx first_head_idx = allocator->get_first_head_idx();
   VirtualBlockIdx now_virtual_idx = begin_virtual_idx;
   size_t now_logical_idx_off = 0;
 
@@ -110,14 +109,14 @@ LogEntryIdx LogMgr::append(
     }
 
     allocator->get_curr_log_block()->persist(
-        persist_start_idx, allocator->get_free_log_local_idx(), fenced);
+        persist_start_idx, allocator->last_log_local_idx() + 1, fenced);
     if (head_entry->overflow)
       head_entry = allocator->alloc_head_entry(head_entry);
     else
       head_entry = nullptr;
   }
 
-  return LogEntryUnpackIdx::to_pack_idx(first_head_idx);
+  return first_head_idx;
 }
 
 }  // namespace ulayfs::dram

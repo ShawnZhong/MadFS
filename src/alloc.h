@@ -13,6 +13,34 @@ class File;
 
 // per-thread data structure
 class Allocator {
+  File* file;
+  pmem::MetaBlock* meta;
+  Bitmap* bitmap;
+
+  // this local free_list maintains blocks allocated from the global free_list
+  // and not used yet; pair: <size, idx>
+  // sorted in the increasing order (the smallest size first)
+  //
+  // Note: we choose to use a vector instead of a balanced tree because we limit
+  // the maximum number of blocks per allocation to be 64 blocks (256 KB), so
+  // the fragmentation should be low, resulting in a small free_list
+  std::vector<std::pair<uint32_t, LogicalBlockIdx>> free_list;
+
+  // used as a hint for search; recent is defined to be "the next one to search"
+  // keep id for idx translation
+  // TODO: this may be useful for dynamically growing bitmap
+  // BitmapBlockId recent_bitmap_block_id;
+  // NOTE: this is the index within recent_bitmap_block
+  BitmapLocalIdx recent_bitmap_local_idx;
+
+  // blocks for storing log entries, max 512 entries per block
+  std::vector<LogicalBlockIdx> log_blocks;
+  // pointer to current LogBlock == the one identified by log_blocks.back()
+  pmem::LogEntryBlock* curr_log_block;
+  // local index of the first free entry slot in the last block
+  // might equal NUM_LOCAL_ENTREIS when a new log block is not allocated yet
+  LogLocalUnpackIdx free_log_local_idx;
+
  public:
   Allocator(File* file, pmem::MetaBlock* meta, Bitmap* bitmap)
       : file(file),
@@ -88,48 +116,10 @@ class Allocator {
     return curr_log_block;
   }
 
-  [[nodiscard]] LogicalBlockIdx get_curr_log_block_idx() const {
-    return log_blocks.back();
+  [[nodiscard]] LogEntryIdx get_first_head_idx() {
+    return {log_blocks.back(),
+            static_cast<LogLocalIdx>(last_log_local_idx() >> 1)};
   }
-
-  [[nodiscard]] LogLocalUnpackIdx get_free_log_local_idx() const {
-    return free_log_local_idx;
-  }
-
- private:
-  File* file;
-  pmem::MetaBlock* meta;
-
-  // dram bitmap
-  Bitmap* bitmap;
-
-  // this local free_list maintains blocks allocated from the global free_list
-  // and not used yet; pair: <size, idx>
-  // sorted in the increasing order (the smallest size first)
-  //
-  // Note: we choose to use a vector instead of a balanced tree because we limit
-  // the maximum number of blocks per allocation to be 64 blocks (256 KB), so
-  // the fragmentation should be low, resulting in a small free_list
-  std::vector<std::pair<uint32_t, LogicalBlockIdx>> free_list;
-
-  // used as a hint for search; recent is defined to be "the next one to search"
-  // keep id for idx translation
-  // TODO: this may be useful for dynamically growing bitmap
-  // BitmapBlockId recent_bitmap_block_id;
-  // NOTE: this is the index within recent_bitmap_block
-  BitmapLocalIdx recent_bitmap_local_idx;
-
-  /*
-   * LogEntry allocations
-   */
-
-  // blocks for storing log entries, max 512 entries per block
-  std::vector<LogicalBlockIdx> log_blocks;
-  // pointer to current LogBlock == the one identified by log_blocks.back()
-  pmem::LogEntryBlock* curr_log_block;
-  // local index of the first free entry slot in the last block
-  // might equal NUM_LOCAL_ENTREIS when a new log block is not allocated yet
-  LogLocalUnpackIdx free_log_local_idx;
 };
 
 }  // namespace ulayfs::dram
