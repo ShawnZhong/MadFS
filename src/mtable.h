@@ -1,14 +1,17 @@
 #pragma once
 
 #include <linux/mman.h>
-#include <tbb/concurrent_unordered_map.h>
-#include <tbb/concurrent_vector.h>
+#include <tbb/concurrent_map.h>
 
+#include <atomic>
 #include <cstddef>
+#include <functional>
+#include <mutex>
 #include <stdexcept>
 
 #include "block.h"
 #include "config.h"
+#include "idx.h"
 #include "params.h"
 #include "posix.h"
 #include "utils.h"
@@ -21,6 +24,8 @@ constexpr static uint32_t GROW_UNIT_IN_BLOCK_MASK =
     (1 << GROW_UNIT_IN_BLOCK_SHIFT) - 1;
 constexpr static uint32_t NUM_BLOCKS_PER_GROW = GROW_UNIT_SIZE / BLOCK_SIZE;
 
+constexpr static uint64_t MMAP_REGION_GAP = (1UL << 30);  // 1G
+
 // map LogicalBlockIdx into memory address
 // this is a more low-level data structure than Allocator
 // it should maintain the virtualization of infinite large of file
@@ -31,13 +36,21 @@ constexpr static uint32_t NUM_BLOCKS_PER_GROW = GROW_UNIT_SIZE / BLOCK_SIZE;
 // - if this block is not even allocated from kernel filesystem, grow
 //   it, map it, and return the address
 class MemTable {
+  // coordinate across multiple files to map to different regions
+  static std::atomic<char*> next_hint;
+
   pmem::MetaBlock* meta;
   int fd;
+  int prot;
 
-  tbb::concurrent_unordered_map<LogicalBlockIdx, pmem::Block*> table;
+  using MapType =
+      tbb::concurrent_map<LogicalBlockIdx,
+                          std::pair<pmem::Block*, std::atomic_uint32_t>,
+                          std::greater<LogicalBlockIdx>>;
+  MapType mmap_regions;
 
-  // a vector of <addr, length> pairs
-  tbb::concurrent_vector<std::tuple<void*, size_t>> mmap_regions;
+  // only for mmap
+  std::mutex mmap_lock;
 
  private:
   // called by other public functions with lock held
@@ -55,19 +68,16 @@ class MemTable {
 
   /**
    * a private helper function that calls mmap internally
-   * @return the pointer to the first block on the persistent memory
+   * @return the pointer to the newly mapped region
    */
-  pmem::Block* mmap_file(size_t length, off_t offset, int flags = 0,
-                         bool read_only = false) {
+  void* mmap_file(void* hint_addr, size_t length, off_t offset, int flags = 0) {
     if constexpr (BuildOptions::use_map_sync)
       flags |= MAP_SHARED_VALIDATE | MAP_SYNC;
     else
       flags |= MAP_SHARED;
     if constexpr (BuildOptions::force_map_populate) flags |= MAP_POPULATE;
 
-    int prot = read_only ? PROT_READ : PROT_READ | PROT_WRITE;
-
-    void* addr = posix::mmap(nullptr, length, prot, flags, fd, offset);
+    void* addr = posix::mmap(hint_addr, length, prot, flags, fd, offset);
 
     if (unlikely(addr == MAP_FAILED)) {
       if constexpr (BuildOptions::use_map_sync) {
@@ -82,14 +92,12 @@ class MemTable {
       PANIC_IF(addr == MAP_FAILED, "mmap fd = %d failed", fd);
     }
     VALGRIND_PMC_REGISTER_PMEM_MAPPING(addr, length);
-    mmap_regions.emplace_back(addr, length);
-    return static_cast<pmem::Block*>(addr);
+    return addr;
   }
 
  public:
-  MemTable(int fd, off_t file_size, bool read_only) {
-    this->fd = fd;
-
+  MemTable(int fd, uint64_t file_size, bool read_only)
+      : fd(fd), prot(read_only ? PROT_READ : PROT_READ | PROT_WRITE) {
     // grow to multiple of grow_unit_size if the file is empty or the file
     // size is not grow_unit aligned
     bool should_grow = file_size == 0 || !IS_ALIGNED(file_size, GROW_UNIT_SIZE);
@@ -100,21 +108,30 @@ class MemTable {
       PANIC_IF(ret, "fallocate failed");
     }
 
-    pmem::Block* blocks = mmap_file(file_size, 0, 0, read_only);
-    meta = &blocks->meta_block;
+    char* hint = nullptr;
+    if (next_hint.load(std::memory_order_acquire))
+      hint = next_hint.fetch_add(MMAP_REGION_GAP, std::memory_order_acq_rel);
+    void* addr = mmap_file(hint, file_size, 0, 0);
+    if (!hint)
+      next_hint.compare_exchange_strong(hint, static_cast<char*>(addr),
+                                        std::memory_order_acq_rel,
+                                        std::memory_order_acquire);
+    meta = &static_cast<pmem::Block*>(addr)->meta_block;
 
-    // compute number of blocks and update the mata block if necessary
+    // compute number of blocks and update the meta block if necessary
     auto num_blocks = file_size >> BLOCK_SHIFT;
     if (should_grow) meta->set_num_blocks_if_larger(num_blocks);
 
-    // initialize the mapping
-    for (LogicalBlockIdx idx = 0; idx < num_blocks; idx += NUM_BLOCKS_PER_GROW)
-      table.emplace(idx, blocks + idx);
+    mmap_regions.emplace(
+        std::piecewise_construct, std::forward_as_tuple(/*lidx*/ 0),
+        std::forward_as_tuple(/*addr*/ static_cast<pmem::Block*>(addr),
+                              /*num_block*/ file_size >> BLOCK_SHIFT));
   }
 
   ~MemTable() {
-    for (const auto& [addr, length] : mmap_regions) {
-      munmap(addr, length);
+    for (const auto& [lix, addr_size] : mmap_regions) {
+      const auto& [addr, num_blocks] = addr_size;
+      munmap(addr, num_blocks << BLOCK_SHIFT);
       VALGRIND_PMC_REMOVE_PMEM_MAPPING(addr, length);
     }
   }
@@ -137,33 +154,50 @@ class MemTable {
    * it will then check if it has been mapped into the address space; if not,
    * it does mapping first
    *
-   * @param idx the logical block index
+   * @param lidx the logical block index
    * @return the Block pointer if idx is not 0; nullptr for idx == 0, and the
    * caller should handle this case
    */
-  pmem::Block* get(LogicalBlockIdx idx) {
-    if (idx == 0) return nullptr;
+  pmem::Block* get(LogicalBlockIdx lidx) {
+    if (lidx == 0) return nullptr;
 
-    LogicalBlockIdx hugepage_idx = idx & ~GROW_UNIT_IN_BLOCK_MASK;
-    LogicalBlockIdx hugepage_local_idx = idx & GROW_UNIT_IN_BLOCK_MASK;
-    if (auto it = table.find(hugepage_idx); it != table.end())
-      return it->second + hugepage_local_idx;
+    auto it = mmap_regions.lower_bound(lidx);
+    assert(it != mmap_regions.end());
+
+    const auto& [begin_lidx, addr_size] = *it;
+    const auto& [addr, size] = addr_size;
+    pmem::Block* ideal_addr = addr + (lidx - begin_lidx);
+    auto size_local = size.load(std::memory_order_relaxed);
+    if (lidx < begin_lidx + size_local) return ideal_addr;
 
     // validate if this idx has real blocks allocated; do allocation if not
-    validate(idx);
+    validate(lidx);
 
-    size_t hugepage_size = static_cast<size_t>(hugepage_idx) << BLOCK_SHIFT;
-    pmem::Block* hugepage_blocks = mmap_file(
-        GROW_UNIT_SIZE, static_cast<off_t>(hugepage_size), MAP_POPULATE);
-    table.emplace(hugepage_idx, hugepage_blocks);
-    return hugepage_blocks + hugepage_local_idx;
+    {
+      LogicalBlockIdx hugepage_idx = lidx & ~GROW_UNIT_IN_BLOCK_MASK;
+      void* hint = addr + (hugepage_idx - begin_lidx);
+      std::lock_guard<std::mutex> lock(mmap_lock);
+      // must reload, since another thread may modify it while we wait for lock
+      size_local = size.load(std::memory_order_relaxed);
+      if (lidx < begin_lidx + size_local) return ideal_addr;
+
+      void* mapped_addr =
+          mmap_file(hint, GROW_UNIT_SIZE, hugepage_idx << BLOCK_SHIFT);
+      if (mapped_addr == hint) return ideal_addr;
+      mmap_regions.emplace(
+          std::piecewise_construct, std::forward_as_tuple(hugepage_idx),
+          std::forward_as_tuple(static_cast<pmem::Block*>(mapped_addr),
+                                NUM_BLOCKS_PER_GROW));
+      return static_cast<pmem::Block*>(mapped_addr) + (lidx - hugepage_idx);
+    }
   }
 
   friend std::ostream& operator<<(std::ostream& out, const MemTable& m) {
     out << "MemTable:\n";
-    for (const auto& [blk_idx, mem_addr] : m.table) {
-      out << "\t" << blk_idx << " - " << blk_idx + NUM_BLOCKS_PER_GROW << ": ";
-      out << mem_addr << " - " << mem_addr + NUM_BLOCKS_PER_GROW << "\n";
+    for (const auto& [blk_idx, addr_size] : m.mmap_regions) {
+      const auto& [addr, num_blocks] = addr_size;
+      out << "\t" << blk_idx << " - " << blk_idx + num_blocks << ": ";
+      out << addr << " - " << addr + num_blocks << BLOCK_SIZE << "\n";
     }
     return out;
   }
