@@ -17,4 +17,6 @@ constexpr static uint32_t GROW_UNIT_SIZE = 1 << GROW_UNIT_SHIFT;
 constexpr static uint32_t PREALLOC_SHIFT = 1 * GROW_UNIT_SHIFT;
 constexpr static uint32_t PREALLOC_SIZE = 1 * GROW_UNIT_SIZE;
 
+constexpr static uint32_t NUM_OFFSET_QUEUE_SLOT = 16;
+
 }  // namespace ulayfs
