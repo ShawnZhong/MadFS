@@ -67,8 +67,10 @@ class BlkTable {
               uint64_t* new_file_size, bool do_alloc, bool init_bitmap = false);
 
   std::pair<std::vector<LogicalBlockIdx>, TxEntryIdx> get_snapshot() {
+    pthread_spin_lock(&spinlock);
     std::vector snapshot(table.begin(), table.end());
     return std::make_pair(std::move(snapshot), tail_tx_idx);
+    pthread_spin_unlock(&spinlock);
   }
 
  private:

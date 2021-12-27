@@ -189,6 +189,7 @@ void TxMgr::gc(std::vector<LogicalBlockIdx>& blk_table,
     // TODO: since the new transaction history is private to the local thread,
     // we can fill the entire block in without worrying about multithreading
     new_block->try_append(commit_entry, tx_idx.local_idx);
+    // advance_tx_idx should not return false
     if (!advance_tx_idx(tx_idx, new_block, true)) return;
     begin = i;
   }
@@ -207,7 +208,7 @@ void TxMgr::gc(std::vector<LogicalBlockIdx>& blk_table,
   while (orig_tx_block != tail_tx_block) {
     auto orig_block = &file->lidx_to_addr_rw(first_tx_block_idx)->tx_block;
     LogicalBlockIdx next_tx_block = orig_block->get_next_tx_block();
-    // if we use a dedicated thread, return to bitmap directly
+    // TODO: if we use a dedicated thread, return to bitmap directly
     allocator->free(orig_tx_block);
     orig_tx_block = next_tx_block;
   }
