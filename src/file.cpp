@@ -243,6 +243,10 @@ int File::open_shm(const char* shm_path, const struct stat& stat,
 }
 
 void File::tx_gc() {
+  DEBUG("Garbage Collect for fd %d", fd);
+  TxEntryIdx tail_tx_idx;
+  pmem::TxBlock* tail_tx_block;
+  blk_table.update(tail_tx_idx, tail_tx_block, nullptr, /*do_alloc*/ false);
   pthread_spin_lock(&spinlock);
   auto snapshot = blk_table.get_snapshot();
   pthread_spin_unlock(&spinlock);

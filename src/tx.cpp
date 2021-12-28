@@ -222,52 +222,147 @@ LogicalBlockIdx TxMgr::alloc_next_block(B* block) const {
 }
 
 void TxMgr::gc(std::vector<LogicalBlockIdx>& blk_table,
-               LogicalBlockIdx tail_tx_block) {
+               LogicalBlockIdx tail_tx_block_idx) {
   // skip if there is only one tx block
-  LogicalBlockIdx orig_tx_block = meta->get_next_tx_block();
-  if (orig_tx_block == tail_tx_block) return;
+  LogicalBlockIdx orig_tx_block_idx = meta->get_next_tx_block();
+  if (orig_tx_block_idx == tail_tx_block_idx) return;
 
   LogicalBlockIdx first_tx_block_idx = file->get_local_allocator()->alloc(1);
-  pmem::TxBlock* new_block =
-      &file->lidx_to_addr_rw(first_tx_block_idx)->tx_block;
+  pmem::Block* new_block = file->lidx_to_addr_rw(first_tx_block_idx);
+  memset(&new_block->cache_lines[NUM_CL_PER_BLOCK - 1], 0, CACHELINE_SIZE);
+  new_block->tx_block.set_tx_seq(1);
+  pmem::persist_cl_unfenced(&new_block->cache_lines[NUM_CL_PER_BLOCK - 1]);
+  new_block->zero_init(0, NUM_CL_PER_BLOCK - 1);
+  pmem::TxBlock* new_tx_block = &new_block->tx_block;
   TxEntryIdx tx_idx = {first_tx_block_idx, 0};
 
   VirtualBlockIdx begin = 0;
-  for (VirtualBlockIdx i = 1; i < blk_table.size(); i++) {
+  VirtualBlockIdx i = 1;
+  for (; i < blk_table.size(); i++) {
+    if (blk_table[i] == 0) break;
     // continuous blocks can be placed in 1 tx
     if (blk_table[i] - blk_table[i - 1] == 1 &&
-        i - begin < /*pmem::TxCommitEntry::NUM_BLOCKS_MAX*/ 63)
+        i - begin < /*TODO: pmem::TxCommitEntry::NUM_BLOCKS_MAX*/ 63)
       continue;
 
     auto commit_entry =
         pmem::TxCommitInlineEntry(i - begin, begin, blk_table[begin]);
     // TODO: since the new transaction history is private to the local thread,
-    // we can fill the entire block in without worrying about multithreading
-    new_block->try_append(commit_entry, tx_idx.local_idx);
-    // advance_tx_idx should not return false
-    if (!advance_tx_idx(tx_idx, new_block, true)) return;
+    // we can fill the entire block in without CAS
+    new_tx_block->try_append(commit_entry, tx_idx.local_idx);
+    // advance_tx_idx should never return false
+    if (!advance_tx_idx(tx_idx, new_tx_block, true)) return;
     begin = i;
   }
 
   // add the last commit entry
-  auto commit_entry = pmem::TxCommitInlineEntry(blk_table.size() - begin, begin,
-                                                blk_table[begin]);
-  new_block->try_append(commit_entry, tx_idx.local_idx);
+  auto commit_entry =
+      pmem::TxCommitInlineEntry(i - begin, begin, blk_table[begin]);
+  new_tx_block->try_append(commit_entry, tx_idx.local_idx);
+  // pad the last block with dummy tx entries
+  while (advance_tx_idx(tx_idx, new_tx_block, false))
+    new_tx_block->try_append(pmem::TxCommitInlineEntry(0, 0, 0),
+                             tx_idx.local_idx);
   // last block points to the tail, meta points to the first block
-  new_block->set_next_tx_block(tail_tx_block);
-  meta->set_next_tx_block(first_tx_block_idx);
+  new_tx_block->set_next_tx_block(tail_tx_block_idx);
+  auto tail_block = file->lidx_to_addr_rw(tail_tx_block_idx);
+  tail_block->tx_block.set_tx_seq(std::max(new_tx_block->get_tx_seq() + 1,
+                                           tail_block->tx_block.get_tx_seq()));
+  pmem::persist_cl_unfenced(&tail_block->cache_lines[NUM_CL_PER_BLOCK - 1]);
+  while (
+      !meta->set_next_tx_block(first_tx_block_idx, meta->get_next_tx_block()))
+    ;
 
   auto allocator = file->get_local_allocator();
-  // TODO: free log blocks too
+
   auto log_mgr = file->get_local_log_mgr();
-  // TODO: invalidate tx in meta block
-  // free the original tx blocks
-  while (orig_tx_block != tail_tx_block) {
-    auto orig_block = &file->lidx_to_addr_rw(first_tx_block_idx)->tx_block;
-    LogicalBlockIdx next_tx_block = orig_block->get_next_tx_block();
-    // TODO: if we use a dedicated thread, return to bitmap directly
-    allocator->free(orig_tx_block);
-    orig_tx_block = next_tx_block;
+  std::unordered_set<LogicalBlockIdx> live_log_blks;
+  // TODO: currently we keep the original log entries. Alternatively we
+  // can rewrite the log entries to a new block and reclaim more space
+  for (TxLocalIdx i = 0; i < NUM_TX_ENTRY; i++) {
+    pmem::TxEntry tx_entry = tail_block->tx_block.get(i);
+    if (!tx_entry.is_valid() || tx_entry.is_inline()) continue;
+    live_log_blks.insert(tx_entry.commit_entry.log_entry_idx.block_idx);
+    auto log_head =
+        log_mgr->get_head_entry(tx_entry.commit_entry.log_entry_idx);
+    while (log_head->overflow) {
+      live_log_blks.insert(log_head->next.next_block_idx);
+      LogEntryIdx next_log_idx{log_head->next.next_block_idx, 0};
+      log_head = log_mgr->get_head_entry(next_log_idx);
+    }
+  }
+
+  std::unordered_set<LogicalBlockIdx> free_list;
+
+  // free log blocks pointed to by tx entries in meta
+  for (TxLocalIdx i = 0; i < NUM_INLINE_TX_ENTRY; i++) {
+    pmem::TxEntry tx_entry = meta->get_tx_entry(i);
+    if (!tx_entry.is_valid() || tx_entry.is_inline()) continue;
+    auto log_idx = tx_entry.commit_entry.log_entry_idx;
+    while (true) {
+      auto log_head = log_mgr->get_head_entry(log_idx);
+      if (live_log_blks.find(log_idx.block_idx) == live_log_blks.end())
+        free_list.insert(log_idx.block_idx);
+      if (log_head->overflow)
+        log_idx = {log_head->next.next_block_idx, 0};
+      else if (log_head->saturate)
+        log_idx = {log_idx.block_idx, log_head->next.next_local_idx};
+      else
+        break;
+    }
+  }
+
+  // free tx blocks and log entries they point to
+  while (orig_tx_block_idx != tail_tx_block_idx) {
+    auto orig_block = &file->lidx_to_addr_rw(orig_tx_block_idx)->tx_block;
+    // free log blocks
+    for (TxLocalIdx i = 0; i < NUM_TX_ENTRY; i++) {
+      pmem::TxEntry tx_entry = orig_block->get(i);
+      if (!tx_entry.is_valid() || tx_entry.is_inline()) continue;
+      auto log_idx = tx_entry.commit_entry.log_entry_idx;
+      while (true) {
+        auto log_head = log_mgr->get_head_entry(log_idx);
+        if (live_log_blks.find(log_idx.block_idx) == live_log_blks.end())
+          free_list.insert(log_idx.block_idx);
+        if (log_head->overflow)
+          log_idx = {log_head->next.next_block_idx, 0};
+        else if (log_head->saturate)
+          log_idx = {log_idx.block_idx, log_head->next.next_local_idx};
+        else
+          break;
+      }
+    }
+    // free this tx block and move to the next
+    LogicalBlockIdx next_tx_block_idx = orig_block->get_next_tx_block();
+    free_list.insert(orig_tx_block_idx);
+    orig_tx_block_idx = next_tx_block_idx;
+  }
+
+  // invalidate tx in meta block so we can free the log blocks they point to
+  meta->invalidate_tx_entries();
+
+  // TODO: another thread / process may still be reading the original
+  // transaction history. We may need to delay freeing
+  for (const auto idx : free_list) allocator->free(idx, 1);
+  // Assuming we use a dedicated thread
+  allocator->return_free_list();
+}
+
+void TxMgr::log_entry_gc(pmem::TxEntry tx_entry, LogMgr* log_mgr,
+                         std::unordered_set<LogicalBlockIdx>& live_list,
+                         std::unordered_set<LogicalBlockIdx>& free_list) {
+  if (!tx_entry.is_valid() || tx_entry.is_inline()) return;
+  auto log_idx = tx_entry.commit_entry.log_entry_idx;
+  while (true) {
+    auto log_head = log_mgr->get_head_entry(log_idx);
+    if (live_list.find(log_idx.block_idx) == live_list.end())
+      free_list.insert(log_idx.block_idx);
+    if (log_head->overflow)
+      log_idx = {log_head->next.next_block_idx, 0};
+    else if (log_head->saturate)
+      log_idx = {log_idx.block_idx, log_head->next.next_local_idx};
+    else
+      break;
   }
 }
 
@@ -286,6 +381,8 @@ std::ostream& operator<<(std::ostream& out, const TxMgr& tx_mgr) {
   while (true) {
     auto tx_entry = tx_mgr.get_entry_from_block(tx_idx, tx_block);
     if (!tx_entry.is_valid()) break;
+    if (tx_entry.is_inline() && tx_entry.commit_inline_entry.num_blocks == 0)
+      goto next;
 
     // print tx entry
     out << "\t" << tx_idx << " -> " << tx_entry << "\n";
@@ -309,7 +406,7 @@ std::ostream& operator<<(std::ostream& out, const TxMgr& tx_mgr) {
       for (const auto& idx : begin_logical_idxs) out << idx << ", ";
       out << "]}\n";
     }
-
+  next:
     if (!tx_mgr.advance_tx_idx(tx_idx, tx_block, /*do_alloc*/ false)) break;
   }
 

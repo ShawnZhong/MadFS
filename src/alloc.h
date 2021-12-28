@@ -46,9 +46,7 @@ class Allocator {
     free_list.reserve(64);
   }
 
-  ~Allocator() {
-    for (const auto& [len, begin] : free_list) Bitmap::free(bitmap, begin, len);
-  };
+  ~Allocator() { return_free_list(); }
 
   // allocate contiguous blocks (num_blocks must <= 64)
   // if large number of blocks required, please break it into multiple alloc
@@ -65,6 +63,10 @@ class Allocator {
    * continuous
    */
   void free(const LogicalBlockIdx recycle_image[], uint32_t image_size);
+
+  void return_free_list() {
+    for (const auto& [len, begin] : free_list) Bitmap::free(bitmap, begin, len);
+  }
 };
 
 }  // namespace ulayfs::dram

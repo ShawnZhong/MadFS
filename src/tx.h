@@ -3,6 +3,7 @@
 #include <cstddef>
 #include <cstdint>
 #include <ostream>
+#include <unordered_set>
 #include <vector>
 
 #include "alloc.h"
@@ -17,6 +18,9 @@ namespace ulayfs::dram {
 
 class TxMgr {
  private:
+  // static const pmem::TxCommitInlineEntry DUMMY_TX =
+  //     pmem::TxCommitInlineEntry(0, 0, 0);
+
   File* file;
   pmem::MetaBlock* meta;
 
@@ -129,6 +133,15 @@ class TxMgr {
    * the TxLocalIdx.
    */
   void find_tail(TxEntryIdx& curr_idx, pmem::TxBlock*& curr_block) const;
+
+  /**
+   * Helper method for gc(). It checks all log blocks pointed to from the given
+   * transaction entry. If the block is not in the live_list, add it to the
+   * free_list
+   */
+  void log_entry_gc(pmem::TxEntry tx_entry, LogMgr* log_mgr,
+                    std::unordered_set<LogicalBlockIdx>& live_list,
+                    std::unordered_set<LogicalBlockIdx>& free_list);
 
  public:
   friend std::ostream& operator<<(std::ostream& out, const TxMgr& tx_mgr);
