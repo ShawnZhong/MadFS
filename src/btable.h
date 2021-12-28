@@ -25,7 +25,6 @@ class BlkTable {
   TxEntryIdx tail_tx_idx;
   pmem::TxBlock* tail_tx_block;
   uint64_t file_size;
-  pthread_spinlock_t spinlock;
 
  public:
   explicit BlkTable(File* file, TxMgr* tx_mgr)
@@ -35,15 +34,9 @@ class BlkTable {
         tail_tx_block(nullptr),
         file_size(0) {
     table.resize(16);
-    pthread_spin_init(&spinlock, PTHREAD_PROCESS_PRIVATE);
   }
 
-  ~BlkTable() { pthread_spin_destroy(&spinlock); }
-
-  // FIXME: WARNING: this function will be removed in the future
-  // getting the file size should be associated with the tx application states
-  // currently only introduced for lseek's unfixed bug on file offset
-  uint64_t get_file_size() { return file_size; }
+  ~BlkTable() = default;
 
   /**
    * @return the logical block index corresponding the the virtual block index
@@ -55,7 +48,7 @@ class BlkTable {
   }
 
   /**
-   * Update the block table by applying the transactions
+   * Update the block table by applying the transactions; not thread-safe
    *
    * @param[out] tx_idx the index of the current transaction tail
    * @param[out] tx_block the log block corresponding to the transaction
@@ -67,10 +60,8 @@ class BlkTable {
               uint64_t* new_file_size, bool do_alloc, bool init_bitmap = false);
 
   std::pair<std::vector<LogicalBlockIdx>, TxEntryIdx> get_snapshot() {
-    pthread_spin_lock(&spinlock);
     std::vector snapshot(table.begin(), table.end());
     return std::make_pair(std::move(snapshot), tail_tx_idx);
-    pthread_spin_unlock(&spinlock);
   }
 
  private:
