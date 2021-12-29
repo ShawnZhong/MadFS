@@ -247,10 +247,7 @@ void File::tx_gc() {
   TxEntryIdx tail_tx_idx;
   pmem::TxBlock* tail_tx_block;
   blk_table.update(tail_tx_idx, tail_tx_block, nullptr, /*do_alloc*/ false);
-  pthread_spin_lock(&spinlock);
-  auto snapshot = blk_table.get_snapshot();
-  pthread_spin_unlock(&spinlock);
-  tx_mgr.gc(snapshot.first, snapshot.second.block_idx);
+  tx_mgr.gc(blk_table.get_table(), tail_tx_idx.block_idx);
 }
 
 std::ostream& operator<<(std::ostream& out, const File& f) {

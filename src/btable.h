@@ -59,10 +59,7 @@ class BlkTable {
   void update(TxEntryIdx& tx_idx, pmem::TxBlock*& tx_block,
               uint64_t* new_file_size, bool do_alloc, bool init_bitmap = false);
 
-  std::pair<std::vector<LogicalBlockIdx>, TxEntryIdx> get_snapshot() {
-    std::vector snapshot(table.begin(), table.end());
-    return std::make_pair(std::move(snapshot), tail_tx_idx);
-  }
+  const tbb::concurrent_vector<LogicalBlockIdx>& get_table() { return table; }
 
  private:
   void resize_to_fit(VirtualBlockIdx idx);

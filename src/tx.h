@@ -119,8 +119,19 @@ class TxMgr {
   void flush_tx_entries(TxEntryIdx tx_idx_begin, TxEntryIdx tx_idx_end,
                         pmem::TxBlock* tx_block_end = nullptr);
 
-  void gc(std::vector<LogicalBlockIdx>& blk_table,
-          LogicalBlockIdx tail_tx_block);
+  /**
+   * Garbage collecting transaction blocks and log blocks. This function builds
+   * a new transaction history from blk_table and uses it to replace the old
+   * transaction history. We assume that a dedicated single-threaded process
+   * will run this function so it is safe to directly access blk_table.
+   *
+   * @param blk_table the block table
+   * @param tail_tx_block the tail transaction block index: this and following
+   * transaction blocks will be appended to the new transaction history and will
+   * not be touched
+   */
+  void gc(const tbb::concurrent_vector<LogicalBlockIdx>& blk_table,
+          const LogicalBlockIdx tail_tx_block);
 
  private:
   /**
