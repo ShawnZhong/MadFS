@@ -175,15 +175,12 @@ class MetaBlock : public BaseBlock {
    * We can assume that all other fields are zero-initialized upon fallocate
    */
   void init() {
-    // the first block is always used (by MetaBlock itself)
-
-    VALGRIND_PMC_REMOVE_PMEM_MAPPING(&mutex, sizeof(mutex));
-
     // initialize the mutex
     pthread_mutexattr_t attr;
     pthread_mutexattr_init(&attr);
     pthread_mutexattr_setrobust(&attr, PTHREAD_MUTEX_ROBUST);
     pthread_mutex_init(&cl2_meta.mutex, &attr);
+    VALGRIND_PMC_REMOVE_PMEM_MAPPING(&cl2_meta.mutex, sizeof(cl2_meta.mutex));
 
     // initialize the signature
     memcpy(cl1_meta.signature, FILE_SIGNATURE, SIGNATURE_SIZE);
@@ -218,6 +215,7 @@ class MetaBlock : public BaseBlock {
   void set_shm_path(const struct stat& stat) {
     sprintf(shm_path, "/dev/shm/ulayfs_%ld%ld%ld", stat.st_ino,
             stat.st_ctim.tv_sec, stat.st_ctim.tv_nsec);
+    persist_cl_fenced(&shm_path);
   }
 
   // called by other public functions with lock held
