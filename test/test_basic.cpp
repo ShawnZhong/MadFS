@@ -8,13 +8,16 @@
 
 #include "common.h"
 
-constexpr std::string_view test_str = "test str\n";
-char buff[test_str.length() + 1]{};
+constexpr int STR_LEN = ulayfs::BLOCK_SIZE * 16 + 1;
+const std::string test_str(STR_LEN, 'a');
+char buff[STR_LEN + 1]{};
 
 size_t sz = 0;
 int rc = 0;
 
 void test_write() {
+  fprintf(stderr, "test_write\n");
+
   int fd = open(FILEPATH, O_CREAT | O_RDWR, S_IRUSR | S_IWUSR);
   assert(fd >= 0);
 
@@ -29,6 +32,8 @@ void test_write() {
 }
 
 void test_read() {
+  fprintf(stderr, "test_read\n");
+
   int fd = open(FILEPATH, O_RDONLY);
   assert(fd >= 0);
 
@@ -51,6 +56,8 @@ void test_read() {
 }
 
 void test_mmap() {
+  fprintf(stderr, "test_mmap\n");
+
   int fd = open(FILEPATH, O_RDWR);
   assert(fd >= 0);
 
@@ -69,6 +76,8 @@ void test_mmap() {
 }
 
 void test_lseek() {
+  fprintf(stderr, "test_lseek\n");
+
   int fd = open(FILEPATH, O_RDWR);
   assert(fd >= 0);
 
@@ -81,7 +90,7 @@ void test_lseek() {
 
     sz = read(fd, buff, test_str.length());
     assert(sz == test_str.length());
-    assert(test_str.compare(buff) == 0);
+    assert(test_str == buff);
   }
 
   {
@@ -90,7 +99,7 @@ void test_lseek() {
 
     sz = read(fd, buff, test_str.length());
     assert(sz == 1);
-    assert(test_str.compare(test_str.length() - 1, 1, buff) == 0);
+    assert(test_str[test_str.length() - 1] == buff[0]);
   }
 
   {
@@ -99,7 +108,7 @@ void test_lseek() {
 
     sz = read(fd, buff, test_str.length());
     assert(sz == test_str.length());
-    assert(test_str.compare(buff) == 0);
+    assert(test_str == buff);
   }
 
   rc = fsync(fd);
@@ -110,6 +119,8 @@ void test_lseek() {
 }
 
 void test_stream() {
+  fprintf(stderr, "test_stream\n");
+
   int fd = open(FILEPATH, O_CREAT | O_RDWR, S_IRUSR | S_IWUSR);
   FILE* stream = fdopen(fd, "w");
   fclose(stream);
@@ -119,10 +130,10 @@ int main() {
   remove(FILEPATH);
   test_write();
   test_read();
-#ifndef ULAYFS_USE_PMEMCHECK
+  test_lseek();
+#if ULAYFS_USE_PMEMCHECK == 0
   test_mmap();
 #endif
-  test_lseek();
   test_stream();
   return 0;
 }
