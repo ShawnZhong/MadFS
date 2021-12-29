@@ -295,43 +295,15 @@ void TxMgr::gc(std::vector<LogicalBlockIdx>& blk_table,
   std::unordered_set<LogicalBlockIdx> free_list;
 
   // free log blocks pointed to by tx entries in meta
-  for (TxLocalIdx i = 0; i < NUM_INLINE_TX_ENTRY; i++) {
-    pmem::TxEntry tx_entry = meta->get_tx_entry(i);
-    if (!tx_entry.is_valid() || tx_entry.is_inline()) continue;
-    auto log_idx = tx_entry.commit_entry.log_entry_idx;
-    while (true) {
-      auto log_head = log_mgr->get_head_entry(log_idx);
-      if (live_log_blks.find(log_idx.block_idx) == live_log_blks.end())
-        free_list.insert(log_idx.block_idx);
-      if (log_head->overflow)
-        log_idx = {log_head->next.next_block_idx, 0};
-      else if (log_head->saturate)
-        log_idx = {log_idx.block_idx, log_head->next.next_local_idx};
-      else
-        break;
-    }
-  }
+  for (TxLocalIdx i = 0; i < NUM_INLINE_TX_ENTRY; i++)
+    gc_log_entry(meta->get_tx_entry(i), log_mgr, live_log_blks, free_list);
 
   // free tx blocks and log entries they point to
   while (orig_tx_block_idx != tail_tx_block_idx) {
     auto orig_block = &file->lidx_to_addr_rw(orig_tx_block_idx)->tx_block;
     // free log blocks
-    for (TxLocalIdx i = 0; i < NUM_TX_ENTRY; i++) {
-      pmem::TxEntry tx_entry = orig_block->get(i);
-      if (!tx_entry.is_valid() || tx_entry.is_inline()) continue;
-      auto log_idx = tx_entry.commit_entry.log_entry_idx;
-      while (true) {
-        auto log_head = log_mgr->get_head_entry(log_idx);
-        if (live_log_blks.find(log_idx.block_idx) == live_log_blks.end())
-          free_list.insert(log_idx.block_idx);
-        if (log_head->overflow)
-          log_idx = {log_head->next.next_block_idx, 0};
-        else if (log_head->saturate)
-          log_idx = {log_idx.block_idx, log_head->next.next_local_idx};
-        else
-          break;
-      }
-    }
+    for (TxLocalIdx i = 0; i < NUM_TX_ENTRY; i++)
+      gc_log_entry(orig_block->get(i), log_mgr, live_log_blks, free_list);
     // free this tx block and move to the next
     LogicalBlockIdx next_tx_block_idx = orig_block->get_next_tx_block();
     free_list.insert(orig_tx_block_idx);
@@ -348,7 +320,7 @@ void TxMgr::gc(std::vector<LogicalBlockIdx>& blk_table,
   allocator->return_free_list();
 }
 
-void TxMgr::log_entry_gc(pmem::TxEntry tx_entry, LogMgr* log_mgr,
+void TxMgr::gc_log_entry(pmem::TxEntry tx_entry, LogMgr* log_mgr,
                          std::unordered_set<LogicalBlockIdx>& live_list,
                          std::unordered_set<LogicalBlockIdx>& free_list) {
   if (!tx_entry.is_valid() || tx_entry.is_inline()) return;

@@ -136,7 +136,7 @@ class TxMgr {
    * transaction entry. If the block is not in the live_list, add it to the
    * free_list
    */
-  void log_entry_gc(pmem::TxEntry tx_entry, LogMgr* log_mgr,
+  void gc_log_entry(pmem::TxEntry tx_entry, LogMgr* log_mgr,
                     std::unordered_set<LogicalBlockIdx>& live_list,
                     std::unordered_set<LogicalBlockIdx>& free_list);
 
