@@ -261,7 +261,7 @@ void TxMgr::gc(std::vector<LogicalBlockIdx>& blk_table,
   new_tx_block->try_append(commit_entry, tx_idx.local_idx);
   // pad the last block with dummy tx entries
   while (advance_tx_idx(tx_idx, new_tx_block, false))
-    new_tx_block->try_append(pmem::TxCommitInlineEntry(0, 0, 0),
+    new_tx_block->try_append(pmem::TxEntry::TxCommitDummyEntry,
                              tx_idx.local_idx);
   // last block points to the tail, meta points to the first block
   new_tx_block->set_next_tx_block(tail_tx_block_idx);

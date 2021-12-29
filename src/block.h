@@ -315,7 +315,7 @@ class MetaBlock : public BaseBlock {
   // for garbage collection
   void invalidate_tx_entries() {
     for (size_t i = 0; i < NUM_INLINE_TX_ENTRY; i++)
-      inline_tx_entries[i].store(TxCommitInlineEntry(0, 0, 0));
+      inline_tx_entries[i].store(TxEntry::TxCommitDummyEntry);
   }
 
   friend std::ostream& operator<<(std::ostream& out, const MetaBlock& block) {
