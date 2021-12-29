@@ -8,8 +8,8 @@
 
 #include "common.h"
 
-constexpr int STR_LEN = ulayfs::BLOCK_SIZE * 16 + 1;
-const std::string test_str(STR_LEN, 'a');
+constexpr int STR_LEN = ulayfs::BLOCK_SIZE * 16 + 123;
+std::string test_str;
 char buff[STR_LEN + 1]{};
 
 size_t sz = 0;
@@ -21,8 +21,17 @@ void test_write() {
   int fd = open(FILEPATH, O_CREAT | O_RDWR, S_IRUSR | S_IWUSR);
   assert(fd >= 0);
 
-  sz = write(fd, test_str.data(), test_str.length());
-  assert(sz == test_str.length());
+  size_t len = test_str.length();
+  size_t len_third = len / 3;
+
+  sz = write(fd, test_str.data(), len_third);
+  assert(sz == len_third);
+
+  sz = write(fd, test_str.data() + len_third, len_third);
+  assert(sz == len_third);
+
+  sz = write(fd, test_str.data() + len_third * 2, len - len_third * 2);
+  assert(sz == len - len_third * 2);
 
   rc = fsync(fd);
   assert(rc == 0);
@@ -127,6 +136,7 @@ void test_stream() {
 }
 
 int main() {
+  test_str = random_string(STR_LEN);
   remove(FILEPATH);
   test_write();
   test_read();
