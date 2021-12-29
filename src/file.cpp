@@ -1,5 +1,7 @@
 #include "file.h"
 
+#include <iomanip>
+
 namespace ulayfs::dram {
 
 File::File(int fd, const struct stat& stat, int flags)
@@ -248,10 +250,11 @@ std::ostream& operator<<(std::ostream& out, const File& f) {
   out << f.blk_table;
   out << f.mem_table;
   out << f.offset_mgr;
-  out << "Dram_bitmap: \n";
-  for (size_t i = 0; i < f.meta->get_num_blocks() / 64; ++i) {
-    out << "\t" << i * 64 << "-" << (i + 1) * 64 - 1 << ": " << f.bitmap[i]
-        << "\n";
+  out << "Bitmap: \n";
+  for (size_t i = 0; i < f.meta->get_num_blocks() / BITMAP_CAPACITY; ++i) {
+    out << "\t" << std::setw(6) << std::right << i * BITMAP_CAPACITY << " - "
+        << std::setw(6) << std::left << (i + 1) * BITMAP_CAPACITY - 1 << ": "
+        << f.bitmap[i] << "\n";
   }
   out << f.tx_mgr;
   out << "\n";
