@@ -61,7 +61,7 @@ class File {
   [[nodiscard]] Allocator* get_local_allocator();
   [[nodiscard]] LogMgr* get_log_mgr() { return &log_mgr; };
 
-  /**
+  /*
    * exported interface for update; init_bitmap is always false
    */
   void update(TxEntryIdx& tx_idx, pmem::TxBlock*& tx_block,
@@ -167,7 +167,6 @@ class File {
   }
 
   friend std::ostream& operator<<(std::ostream& out, const File& f);
-  friend std::ostream& operator<<(std::ostream& out, const TxMgr& tx_mgr);
 };
 
 }  // namespace ulayfs::dram

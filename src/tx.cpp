@@ -228,7 +228,7 @@ template LogicalBlockIdx TxMgr::alloc_next_block(pmem::TxBlock* block) const;
 std::ostream& operator<<(std::ostream& out, const TxMgr& tx_mgr) {
   out << "Transactions: \n";
 
-  auto log_mgr = &tx_mgr.file->log_mgr;
+  auto log_mgr = tx_mgr.file->get_log_mgr();
 
   TxEntryIdx tx_idx = {0, 0};
   pmem::TxBlock* tx_block = nullptr;
