@@ -18,9 +18,6 @@ namespace ulayfs::dram {
 
 class TxMgr {
  private:
-  // static const pmem::TxCommitInlineEntry DUMMY_TX =
-  //     pmem::TxCommitInlineEntry(0, 0, 0);
-
   File* file;
   pmem::MetaBlock* meta;
 
