@@ -94,18 +94,9 @@ class MemTable {
 
   [[nodiscard]] pmem::MetaBlock* get_meta() const { return meta; }
 
-  // ask more blocks for the kernel filesystem, so that idx is valid
-  void validate(LogicalBlockIdx idx) {
-    // fast path: if smaller than the number of block; return
-    if (idx < meta->get_num_blocks()) return;
-
-    // slow path: acquire lock to verify and grow if necessary
-    grow(idx);
-  }
-
   /**
-   * the idx might pass Allocator's grow() to ensure there is a backing kernel
-   * filesystem block
+   * the idx might pass Allocator's grow_size() to ensure there is a backing
+   * kernel filesystem block
    *
    * it will then check if it has been mapped into the address space; if not,
    * it does mapping first
@@ -127,7 +118,7 @@ class MemTable {
     if (lidx < begin_lidx + size_local) return ideal_addr;
 
     // validate if this idx has real blocks allocated; do allocation if not
-    validate(lidx);
+    validate_size(lidx);
 
     {
       LogicalBlockIdx hugepage_idx = lidx & ~GROW_UNIT_IN_BLOCK_MASK;
@@ -149,8 +140,17 @@ class MemTable {
   }
 
  private:
+  // ask more blocks for the kernel filesystem, so that idx is valid
+  void validate_size(LogicalBlockIdx idx) {
+    // fast path: if smaller than the number of block; return
+    if (idx < meta->get_num_blocks()) return;
+
+    // slow path: acquire lock to verify and grow if necessary
+    grow_size(idx);
+  }
+
   // called by other public functions with lock held
-  void grow(LogicalBlockIdx idx) {
+  void grow_size(LogicalBlockIdx idx) {
     // the new file size should be a multiple of grow unit
     // we have `idx + 1` since we want to grow the file when idx is a multiple
     // of the number of blocks in a grow unit (e.g., 512 for 2 MB grow)
