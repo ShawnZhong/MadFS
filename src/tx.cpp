@@ -223,9 +223,13 @@ LogicalBlockIdx TxMgr::alloc_next_block(B* block) const {
 
 void TxMgr::gc(std::vector<LogicalBlockIdx>& blk_table,
                LogicalBlockIdx tail_tx_block_idx) {
-  // skip if there is only one tx block
+  // skip if tail_tx_block directly follows meta or there is only one tx block
+  // between meta and tail_tx_block
   LogicalBlockIdx orig_tx_block_idx = meta->get_next_tx_block();
-  if (orig_tx_block_idx == tail_tx_block_idx) return;
+  if (orig_tx_block_idx == tail_tx_block_idx ||
+      file->lidx_to_addr_ro(orig_tx_block_idx)->tx_block.get_next_tx_block() ==
+          tail_tx_block_idx)
+    return;
 
   LogicalBlockIdx first_tx_block_idx = file->get_local_allocator()->alloc(1);
   pmem::Block* new_block = file->lidx_to_addr_rw(first_tx_block_idx);
