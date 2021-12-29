@@ -269,6 +269,23 @@ std::ostream& operator<<(std::ostream& out, const TxMgr& tx_mgr) {
 /*
  * Tx
  */
+
+TxMgr::Tx::Tx(File* file, TxMgr* tx_mgr, size_t count, size_t offset)
+    : file(file),
+      tx_mgr(tx_mgr),
+      log_mgr(file->get_log_mgr()),
+
+      // input properties
+      count(count),
+      offset(offset),
+
+      // derived properties
+      end_offset(offset + count),
+      begin_vidx(offset >> BLOCK_SHIFT),
+      end_vidx(ALIGN_UP(end_offset, BLOCK_SIZE) >> BLOCK_SHIFT),
+      num_blocks(end_vidx - begin_vidx),
+      is_offset_depend(false) {}
+
 bool TxMgr::Tx::handle_conflict(pmem::TxEntry curr_entry,
                                 VirtualBlockIdx first_vidx,
                                 VirtualBlockIdx last_vidx,
@@ -305,8 +322,8 @@ bool TxMgr::Tx::handle_conflict(pmem::TxEntry curr_entry,
       if (num_blocks) {  // some info in log entries is partially inline
         le_first_vidx = curr_entry.commit_entry.begin_virtual_idx;
       } else {  // dereference log_entry_idx
-        file->log_mgr.get_coverage(curr_entry.commit_entry.log_entry_idx,
-                                   le_first_vidx, num_blocks);
+        log_mgr->get_coverage(curr_entry.commit_entry.log_entry_idx,
+                              le_first_vidx, num_blocks);
       }
       le_last_vidx = le_first_vidx + num_blocks - 1;
       if (last_vidx < le_first_vidx || first_vidx > le_last_vidx) goto next;
@@ -318,8 +335,8 @@ bool TxMgr::Tx::handle_conflict(pmem::TxEntry curr_entry,
 
       if (le_begin_lidx == 0) {  // lazy dereference log idx
         std::vector<LogicalBlockIdx> le_begin_lidxs;
-        file->log_mgr.get_coverage(curr_entry.commit_entry.log_entry_idx,
-                                   le_first_vidx, num_blocks, &le_begin_lidxs);
+        log_mgr->get_coverage(curr_entry.commit_entry.log_entry_idx,
+                              le_first_vidx, num_blocks, &le_begin_lidxs);
         le_begin_lidx = le_begin_lidxs.front();
       }
 
@@ -445,7 +462,6 @@ TxMgr::WriteTx::WriteTx(File* file, TxMgr* tx_mgr, const char* buf,
                         size_t count, size_t offset)
     : Tx(file, tx_mgr, count, offset),
       buf(buf),
-      log_mgr(&file->log_mgr),
       allocator(file->get_local_allocator()),
       dst_lidxs(),
       dst_blocks() {

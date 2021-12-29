@@ -56,11 +56,12 @@ class File {
   int fsync();
 
   /*
-   * Getters & removers for thread-local data structures
+   * Getters
    */
   [[nodiscard]] Allocator* get_local_allocator();
+  [[nodiscard]] LogMgr* get_log_mgr() { return &log_mgr; };
 
-  /*
+  /**
    * exported interface for update; init_bitmap is always false
    */
   void update(TxEntryIdx& tx_idx, pmem::TxBlock*& tx_block,
