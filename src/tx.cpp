@@ -297,17 +297,34 @@ void TxMgr::gc(const tbb::concurrent_vector<LogicalBlockIdx>& blk_table,
   }
 
   std::unordered_set<LogicalBlockIdx> free_list;
+  // helper function to recycle log blocks referenced by the given tx_entry
+  auto gc_log_entry = [log_mgr, &live_log_blks,
+                       &free_list](pmem::TxEntry tx_entry) {
+    if (!tx_entry.is_valid() || tx_entry.is_inline()) return;
+    auto log_idx = tx_entry.commit_entry.log_entry_idx;
+    while (true) {
+      auto log_head = log_mgr->get_head_entry(log_idx);
+      if (live_log_blks.find(log_idx.block_idx) == live_log_blks.end())
+        free_list.insert(log_idx.block_idx);
+      if (log_head->overflow)
+        log_idx = {log_head->next.next_block_idx, 0};
+      else if (log_head->saturate)
+        log_idx = {log_idx.block_idx, log_head->next.next_local_idx};
+      else
+        break;
+    }
+  };
 
   // free log blocks pointed to by tx entries in meta
   for (TxLocalIdx i = 0; i < NUM_INLINE_TX_ENTRY; i++)
-    gc_log_entry(meta->get_tx_entry(i), log_mgr, live_log_blks, free_list);
+    gc_log_entry(meta->get_tx_entry(i));
 
   // free tx blocks and log entries they point to
   while (orig_tx_block_idx != tail_tx_block_idx) {
     auto orig_block = &file->lidx_to_addr_rw(orig_tx_block_idx)->tx_block;
     // free log blocks
     for (TxLocalIdx i = 0; i < NUM_TX_ENTRY; i++)
-      gc_log_entry(orig_block->get(i), log_mgr, live_log_blks, free_list);
+      gc_log_entry(orig_block->get(i));
     // free this tx block and move to the next
     LogicalBlockIdx next_tx_block_idx = orig_block->get_next_tx_block();
     free_list.insert(orig_tx_block_idx);
@@ -322,24 +339,6 @@ void TxMgr::gc(const tbb::concurrent_vector<LogicalBlockIdx>& blk_table,
   for (const auto idx : free_list) allocator->free(idx, 1);
   // Assuming we use a dedicated thread
   allocator->return_free_list();
-}
-
-void TxMgr::gc_log_entry(pmem::TxEntry tx_entry, LogMgr* log_mgr,
-                         std::unordered_set<LogicalBlockIdx>& live_list,
-                         std::unordered_set<LogicalBlockIdx>& free_list) {
-  if (!tx_entry.is_valid() || tx_entry.is_inline()) return;
-  auto log_idx = tx_entry.commit_entry.log_entry_idx;
-  while (true) {
-    auto log_head = log_mgr->get_head_entry(log_idx);
-    if (live_list.find(log_idx.block_idx) == live_list.end())
-      free_list.insert(log_idx.block_idx);
-    if (log_head->overflow)
-      log_idx = {log_head->next.next_block_idx, 0};
-    else if (log_head->saturate)
-      log_idx = {log_idx.block_idx, log_head->next.next_local_idx};
-    else
-      break;
-  }
 }
 
 // explicit template instantiations
