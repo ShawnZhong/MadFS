@@ -89,6 +89,8 @@ void BlkTable::apply_tx(pmem::TxCommitEntry tx_commit_entry, LogMgr* log_mgr,
 
 void BlkTable::apply_tx(pmem::TxCommitInlineEntry tx_commit_inline_entry) {
   uint32_t num_blocks = tx_commit_inline_entry.num_blocks;
+  // for dummy entry, do nothing
+  if (num_blocks == 0) return;
   VirtualBlockIdx begin_vidx = tx_commit_inline_entry.begin_virtual_idx;
   LogicalBlockIdx begin_lidx = tx_commit_inline_entry.begin_logical_idx;
   VirtualBlockIdx end_vidx = begin_vidx + num_blocks;
