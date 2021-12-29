@@ -381,8 +381,7 @@ std::ostream& operator<<(std::ostream& out, const TxMgr& tx_mgr) {
   while (true) {
     auto tx_entry = tx_mgr.get_entry_from_block(tx_idx, tx_block);
     if (!tx_entry.is_valid()) break;
-    if (tx_entry.is_inline() && tx_entry.commit_inline_entry.num_blocks == 0)
-      goto next;
+    if (tx_entry.is_dummy()) goto next;
 
     // print tx entry
     out << "\t" << tx_idx << " -> " << tx_entry << "\n";

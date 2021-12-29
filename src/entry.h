@@ -133,6 +133,10 @@ union TxEntry {
 
   [[nodiscard]] bool is_valid() const { return raw_bits != 0; }
 
+  [[nodiscard]] bool is_dummy() const {
+    return is_inline() && commit_inline_entry.num_blocks == 0;
+  };
+
   /**
    * find the tail (next unused slot) in an array of TxEntry
    *
