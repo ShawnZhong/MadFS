@@ -68,12 +68,12 @@ class MemTable {
 
     pmem::Block* hint = nullptr;
     if (next_hint.load(std::memory_order_acquire))
-      hint = next_hint.fetch_add(ALIGN_UP(num_blocks, MMAP_REGION_GAP_IN_BLOCK),
+      hint = next_hint.fetch_sub(ALIGN_UP(num_blocks, MMAP_REGION_GAP_IN_BLOCK),
                                  std::memory_order_acq_rel);
     pmem::Block* mapped_addr = mmap_file(hint, file_size, 0, 0);
     if (!hint)
       next_hint.compare_exchange_strong(
-          hint, mapped_addr + ALIGN_UP(num_blocks, MMAP_REGION_GAP_IN_BLOCK),
+          hint, mapped_addr - MMAP_REGION_GAP_IN_BLOCK,
           std::memory_order_acq_rel, std::memory_order_acquire);
     meta = &mapped_addr[0].meta_block;
 
@@ -112,36 +112,16 @@ class MemTable {
     auto it = mmap_regions.lower_bound(lidx);
     assert(it != mmap_regions.end());
 
-    const auto& [begin_lidx, addr_num_blocks] = *it;
-    const auto& [addr, num_blocks] = addr_num_blocks;
+    auto& [begin_lidx, addr_num_blocks] = *it;
+    auto& [addr, num_blocks] = addr_num_blocks;
     pmem::Block* ideal_addr = addr + (lidx - begin_lidx);
-    auto num_blocks_old = num_blocks.load(std::memory_order_relaxed);
+    uint32_t num_blocks_old = num_blocks.load(std::memory_order_relaxed);
     if (lidx < begin_lidx + num_blocks_old) return ideal_addr;
 
     // validate if this idx has real blocks allocated; do allocation if not
     validate_size(lidx);
 
-    {
-      std::lock_guard<std::mutex> lock(mmap_lock);
-      // must reload, since another thread may modify it while we wait for lock
-      num_blocks_old = num_blocks.load(std::memory_order_relaxed);
-      if (lidx < begin_lidx + num_blocks_old) return ideal_addr;
-      uint32_t num_blocks_new = ALIGN_UP(lidx - begin_lidx, GROW_UNIT_IN_BLOCK);
-      uint32_t num_blocks_extended = num_blocks_new - num_blocks_old;
-      assert(num_blocks != 0);
-
-      pmem::Block* hint = addr + num_blocks_old;
-      pmem::Block* mapped_addr =
-          mmap_file(hint, num_blocks_extended << BLOCK_SHIFT,
-                    num_blocks_old << BLOCK_SHIFT);
-      if (mapped_addr == hint) return ideal_addr;
-      uint32_t new_region_begin_lidx = begin_lidx + num_blocks_old;
-      mmap_regions.emplace(
-          std::piecewise_construct,
-          std::forward_as_tuple(new_region_begin_lidx),
-          std::forward_as_tuple(mapped_addr, num_blocks_extended));
-      return mapped_addr + (lidx - new_region_begin_lidx);
-    }
+    return mmap_region(lidx);
   }
 
  private:
@@ -172,7 +152,7 @@ class MemTable {
    * @return the pointer to the newly mapped region
    */
   pmem::Block* mmap_file(void* hint_addr, size_t length, off_t offset,
-                         int flags = 0) {
+                         int flags = 0, bool allow_fail = false) {
     if constexpr (BuildOptions::use_map_sync)
       flags |= MAP_SHARED_VALIDATE | MAP_SYNC;
     else
@@ -191,10 +171,68 @@ class MemTable {
         }
       }
 
-      PANIC_IF(addr == MAP_FAILED, "mmap fd = %d failed", fd);
+      PANIC_IF(!allow_fail && addr == MAP_FAILED, "mmap fd = %d failed", fd);
     }
-    VALGRIND_PMC_REGISTER_PMEM_MAPPING(addr, length);
+    if (addr != MAP_FAILED) VALGRIND_PMC_REGISTER_PMEM_MAPPING(addr, length);
     return static_cast<pmem::Block*>(addr);
+  }
+
+  pmem::Block* mmap_region(LogicalBlockIdx lidx) {
+    // acquire mutex here!
+    std::lock_guard<std::mutex> lock(mmap_lock);
+
+    // must reload, since another thread may modify it while we wait for lock
+    auto it = mmap_regions.lower_bound(lidx);
+    auto& [begin_lidx, addr_num_blocks] = *it;
+    auto& [addr, num_blocks] = addr_num_blocks;
+    uint32_t num_blocks_old = num_blocks.load(std::memory_order_relaxed);
+    pmem::Block* ideal_addr = addr + (lidx - begin_lidx);
+    if (lidx < begin_lidx + num_blocks_old) return ideal_addr;
+
+    uint32_t num_blocks_new =
+        ALIGN_UP(lidx - begin_lidx + 1, GROW_UNIT_IN_BLOCK);
+    // std::cout << "lidx: " << lidx << ", begin_lidx: " << begin_lidx
+    //           << ", num_blocks_old: " << num_blocks_old
+    //           << ", num_blocks_new: " << num_blocks_new << std::endl;
+    uint32_t num_blocks_extended = num_blocks_new - num_blocks_old;
+    assert(num_blocks_extended != 0);
+
+    uint32_t new_region_begin_lidx = begin_lidx + num_blocks_old;
+    pmem::Block* hint = addr + num_blocks_old;
+    pmem::Block* mapped_addr =
+        mmap_file(hint, num_blocks_extended << BLOCK_SHIFT,
+                  new_region_begin_lidx << BLOCK_SHIFT, MAP_FIXED_NOREPLACE,
+                  /*allow_fail*/ true);
+    if (mapped_addr == hint) {
+      num_blocks.store(num_blocks_new, std::memory_order_relaxed);
+      return ideal_addr;
+    }
+    if (mapped_addr == MAP_FAILED) {
+      // make three attempts
+      for (uint i = 0; i < 3; ++i) {
+        WARN("mmap with MAP_FIXED_NOREPLACE fails; will retry...");
+        hint = next_hint.fetch_sub(
+            (i + 1) * ALIGN_UP(num_blocks_extended, MMAP_REGION_GAP_IN_BLOCK),
+            std::memory_order_acq_rel);
+        mapped_addr =
+            mmap_file(hint, num_blocks_extended << BLOCK_SHIFT,
+                      new_region_begin_lidx << BLOCK_SHIFT, MAP_FIXED_NOREPLACE,
+                      /*allow_fail*/ true);
+        std::cout << "hint: " << hint << "\n";
+        if (mapped_addr == hint) break;
+      }
+      WARN(
+          "mmap with MAP_FIXED_NOREPLACE continuously fails after three "
+          "attempts; will try without MAP_FIXED_NOREPLACE...");
+      mapped_addr = mmap_file(hint, num_blocks_extended << BLOCK_SHIFT,
+                              new_region_begin_lidx << BLOCK_SHIFT);
+    }
+
+    auto [new_iter, is_emplaced] = mmap_regions.emplace(
+        std::piecewise_construct, std::forward_as_tuple(new_region_begin_lidx),
+        std::forward_as_tuple(mapped_addr, num_blocks_extended));
+    assert(is_emplaced);
+    return mapped_addr + (lidx - new_region_begin_lidx);
   }
 
  public:
