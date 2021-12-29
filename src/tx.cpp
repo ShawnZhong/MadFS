@@ -272,7 +272,7 @@ void TxMgr::gc(const tbb::concurrent_vector<LogicalBlockIdx>& blk_table,
   auto tail_block = file->lidx_to_addr_rw(tail_tx_block_idx);
   tail_block->tx_block.set_tx_seq(std::max(new_tx_block->get_tx_seq() + 1,
                                            tail_block->tx_block.get_tx_seq()));
-  pmem::persist_cl_unfenced(&tail_block->cache_lines[NUM_CL_PER_BLOCK - 1]);
+  pmem::persist_cl_fenced(&tail_block->cache_lines[NUM_CL_PER_BLOCK - 1]);
   while (
       !meta->set_next_tx_block(first_tx_block_idx, meta->get_next_tx_block()))
     ;
@@ -326,9 +326,8 @@ void TxMgr::gc(const tbb::concurrent_vector<LogicalBlockIdx>& blk_table,
     for (TxLocalIdx i = 0; i < NUM_TX_ENTRY; i++)
       gc_log_entry(orig_block->get(i));
     // free this tx block and move to the next
-    LogicalBlockIdx next_tx_block_idx = orig_block->get_next_tx_block();
     free_list.insert(orig_tx_block_idx);
-    orig_tx_block_idx = next_tx_block_idx;
+    orig_tx_block_idx = orig_block->get_next_tx_block();
   }
 
   // invalidate tx in meta block so we can free the log blocks they point to
