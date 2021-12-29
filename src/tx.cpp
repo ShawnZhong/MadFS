@@ -223,10 +223,10 @@ LogicalBlockIdx TxMgr::alloc_next_block(B* block) const {
 
 void TxMgr::gc(const tbb::concurrent_vector<LogicalBlockIdx>& blk_table,
                const LogicalBlockIdx tail_tx_block_idx) {
-  // skip if tail_tx_block directly follows meta or there is only one tx block
-  // between meta and tail_tx_block
+  // skip if tail_tx_block is meta block, it directly follows meta or there is
+  // only one tx block between meta and tail_tx_block
   LogicalBlockIdx orig_tx_block_idx = meta->get_next_tx_block();
-  if (orig_tx_block_idx == tail_tx_block_idx ||
+  if (0 == tail_tx_block_idx || orig_tx_block_idx == tail_tx_block_idx ||
       file->lidx_to_addr_ro(orig_tx_block_idx)->tx_block.get_next_tx_block() ==
           tail_tx_block_idx)
     return;
