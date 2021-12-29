@@ -121,7 +121,7 @@ union TxEntry {
     uint64_t payload : 63;
   } fields;
 
-  constexpr static const pmem::TxCommitInlineEntry TxCommitDummyEntry();
+  constexpr static const pmem::TxCommitInlineEntry TxCommitDummyEntry{};
 
   TxEntry(){};
   TxEntry(uint64_t raw_bits) : raw_bits(raw_bits) {}
