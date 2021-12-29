@@ -5,6 +5,7 @@
 #include <utility>
 
 #include "block.h"
+#include "file.h"
 #include "idx.h"
 
 namespace ulayfs::dram {
@@ -108,6 +109,30 @@ void Allocator::free(const LogicalBlockIdx recycle_image[],
     free_list.emplace_back(image_size - group_begin, group_begin_lidx);
   }
   std::sort(free_list.begin(), free_list.end());
+}
+
+pmem::LogEntry* Allocator::alloc_log_entry(
+    bool pack_align, pmem::LogHeadEntry* prev_head_entry) {
+  // if need 16-byte alignment, maybe skip one 8-byte slot
+  if (pack_align) free_log_local_idx = ALIGN_UP(free_log_local_idx, 2);
+
+  if (free_log_local_idx == NUM_LOG_ENTRY) {
+    LogicalBlockIdx idx = alloc(1);
+    log_blocks.push_back(idx);
+    curr_log_block = &file->lidx_to_addr_rw(idx)->log_entry_block;
+    free_log_local_idx = 0;
+    if (prev_head_entry) prev_head_entry->next.next_block_idx = idx;
+  } else {
+    if (prev_head_entry)
+      prev_head_entry->next.next_local_idx = free_log_local_idx;
+  }
+
+  assert(curr_log_block != nullptr);
+  pmem::LogEntry* entry = curr_log_block->get(free_log_local_idx);
+  memset(entry, 0, sizeof(pmem::LogEntry));  // zero-out at alloc
+
+  free_log_local_idx++;
+  return entry;
 }
 
 }  // namespace ulayfs::dram

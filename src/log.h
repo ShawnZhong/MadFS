@@ -19,21 +19,8 @@ class LogMgr {
   File* file;
   pmem::MetaBlock* meta;
 
-  // blocks for storing log entries, max 512 entries per block
-  std::vector<LogicalBlockIdx> log_blocks;
-  // pointer to current LogBlock == the one identified by log_blocks.back()
-  pmem::LogEntryBlock* curr_block;
-  // local index of the first free entry slot in the last block
-  // might equal NUM_LOCAL_ENTREIS when a new log block is not allocated yet
-  LogLocalUnpackIdx free_local_idx;
-
  public:
-  LogMgr(File* file, pmem::MetaBlock* meta)
-      : file(file),
-        meta(meta),
-        log_blocks(),
-        curr_block(nullptr),
-        free_local_idx(NUM_LOG_ENTRY) {}
+  LogMgr(File* file, pmem::MetaBlock* meta) : file(file), meta(meta) {}
 
  private:
   /**
@@ -85,6 +72,7 @@ class LogMgr {
   /**
    * populate log entries required by a single transaction
    *
+   * @param allocator allocator to use for allocating log entries
    * @param op operation code, e.g., LOG_OVERWRITE
    * @param leftover_bytes remaining empty bytes in the last block
    * @param total_blocks total number blocks touched
@@ -95,38 +83,10 @@ class LogMgr {
    * @return index of the first LogHeadEntry for later retrival of the whole
    *         group of entries
    */
-  LogEntryIdx append(pmem::LogOp op, uint16_t leftover_bytes,
-                     uint32_t total_blocks, VirtualBlockIdx begin_virtual_idx,
+  LogEntryIdx append(Allocator* allocator, pmem::LogOp op,
+                     uint16_t leftover_bytes, uint32_t total_blocks,
+                     VirtualBlockIdx begin_virtual_idx,
                      const std::vector<LogicalBlockIdx>& begin_logical_idxs,
                      bool fenced = true);
-
- private:
-  /**
-   * allocate a log entry, possibly triggering allocating a new LogBlock
-   */
-  pmem::LogEntry* alloc_entry(bool pack_align = false,
-                              pmem::LogHeadEntry* prev_head_entry = nullptr);
-
-  // syntax sugar for union dispatching
-  pmem::LogHeadEntry* alloc_head_entry(
-      pmem::LogHeadEntry* prev_head_entry = nullptr) {
-    return &alloc_entry(/*pack_align*/ true, prev_head_entry)->head_entry;
-  }
-
-  pmem::LogBodyEntry* alloc_body_entry() { return &alloc_entry()->body_entry; }
-
-  /**
-   * get the number of free entries in the current LogBlock
-   */
-  [[nodiscard]] uint16_t num_free_entries() const {
-    return NUM_LOG_ENTRY - free_local_idx;
-  }
-
-  /**
-   * get the last allocated entry's local index
-   */
-  [[nodiscard]] LogLocalUnpackIdx last_local_idx() const {
-    return free_local_idx - 1;
-  }
 };
 }  // namespace ulayfs::dram

@@ -66,22 +66,23 @@ void LogMgr::get_coverage(LogEntryIdx first_head_idx,
 }
 
 LogEntryIdx LogMgr::append(
-    pmem::LogOp op, uint16_t leftover_bytes, uint32_t total_blocks,
-    VirtualBlockIdx begin_virtual_idx,
+    Allocator* allocator, pmem::LogOp op, uint16_t leftover_bytes,
+    uint32_t total_blocks, VirtualBlockIdx begin_virtual_idx,
     const std::vector<LogicalBlockIdx>& begin_logical_idxs, bool fenced) {
   // allocate the first head entry, whose LogEntryIdx will be returned back
   // to the transaction
-  pmem::LogHeadEntry* head_entry = alloc_head_entry();
-  LogEntryUnpackIdx first_head_idx{log_blocks.back(), last_local_idx()};
+  pmem::LogHeadEntry* head_entry = allocator->alloc_head_entry();
+  LogEntryIdx first_head_idx = allocator->get_first_head_idx();
   VirtualBlockIdx now_virtual_idx = begin_virtual_idx;
   size_t now_logical_idx_off = 0;
 
   while (head_entry != nullptr) {
-    LogLocalUnpackIdx persist_start_idx = last_local_idx();
+    LogLocalUnpackIdx persist_start_idx = allocator->last_log_local_idx();
     head_entry->op = op;
 
     uint32_t num_blocks = total_blocks;
-    uint32_t max_blocks = num_free_entries() * MAX_BLOCKS_PER_BODY;
+    uint32_t max_blocks =
+        allocator->num_free_log_entries() * MAX_BLOCKS_PER_BODY;
     if (num_blocks > max_blocks) {
       num_blocks = max_blocks;
       head_entry->overflow = true;
@@ -97,7 +98,7 @@ LogEntryIdx LogMgr::append(
 
     // populate body entries until done or until current LogBlock filled up
     while (num_blocks > 0) {
-      pmem::LogBodyEntry* body_entry = alloc_body_entry();
+      pmem::LogBodyEntry* body_entry = allocator->alloc_body_entry();
       assert(now_logical_idx_off < begin_logical_idxs.size());
       body_entry->begin_virtual_idx = now_virtual_idx;
       body_entry->begin_logical_idx = begin_logical_idxs[now_logical_idx_off++];
@@ -107,37 +108,15 @@ LogEntryIdx LogMgr::append(
                        : num_blocks - MAX_BLOCKS_PER_BODY;
     }
 
-    curr_block->persist(persist_start_idx, free_local_idx, fenced);
+    allocator->get_curr_log_block()->persist(
+        persist_start_idx, allocator->last_log_local_idx() + 1, fenced);
     if (head_entry->overflow)
-      head_entry = alloc_head_entry(head_entry);
+      head_entry = allocator->alloc_head_entry(head_entry);
     else
       head_entry = nullptr;
   }
 
-  return LogEntryUnpackIdx::to_pack_idx(first_head_idx);
-}
-
-pmem::LogEntry* LogMgr::alloc_entry(bool pack_align,
-                                    pmem::LogHeadEntry* prev_head_entry) {
-  // if need 16-byte alignment, maybe skip one 8-byte slot
-  if (pack_align) free_local_idx = ALIGN_UP(free_local_idx, 2);
-
-  if (free_local_idx == NUM_LOG_ENTRY) {
-    LogicalBlockIdx idx = file->get_local_allocator()->alloc(1);
-    log_blocks.push_back(idx);
-    curr_block = &file->lidx_to_addr_rw(idx)->log_entry_block;
-    free_local_idx = 0;
-    if (prev_head_entry) prev_head_entry->next.next_block_idx = idx;
-  } else {
-    if (prev_head_entry) prev_head_entry->next.next_local_idx = free_local_idx;
-  }
-
-  assert(curr_block != nullptr);
-  pmem::LogEntry* entry = curr_block->get(free_local_idx);
-  memset(entry, 0, sizeof(pmem::LogEntry));  // zero-out at alloc
-
-  free_local_idx++;
-  return entry;
+  return first_head_idx;
 }
 
 }  // namespace ulayfs::dram

@@ -136,21 +136,7 @@ class TxMgr {
  */
 class TxMgr::Tx {
  protected:
-  Tx(File* file, TxMgr* tx_mgr, size_t count, size_t offset)
-      : file(file),
-        tx_mgr(tx_mgr),
-
-        // input properties
-        count(count),
-        offset(offset),
-
-        // derived properties
-        end_offset(offset + count),
-        begin_vidx(offset >> BLOCK_SHIFT),
-        end_vidx(ALIGN_UP(end_offset, BLOCK_SIZE) >> BLOCK_SHIFT),
-        num_blocks(end_vidx - begin_vidx),
-        is_offset_depend(false) {}
-
+  Tx(File* file, TxMgr* tx_mgr, size_t count, size_t offset);
   friend TxMgr;
 
   /**
@@ -172,6 +158,7 @@ class TxMgr::Tx {
   // pointer to the outer class
   File* file;
   TxMgr* tx_mgr;
+  LogMgr* log_mgr;
 
   /*
    * Input properties
@@ -262,7 +249,6 @@ class TxMgr::WriteTx : public TxMgr::Tx {
    */
   const char* const buf;
 
-  LogMgr* log_mgr;
   Allocator* allocator;
 
   // the logical index of the destination data block
