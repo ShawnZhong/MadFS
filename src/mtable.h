@@ -43,57 +43,13 @@ class MemTable {
   int fd;
   int prot;
 
-  using MapType =
-      tbb::concurrent_map<LogicalBlockIdx,
-                          std::pair<pmem::Block*, std::atomic_uint32_t>,
-                          std::greater<LogicalBlockIdx>>;
-  MapType mmap_regions;
+  tbb::concurrent_map<LogicalBlockIdx,
+                      std::pair<pmem::Block*, std::atomic_uint32_t>,
+                      std::greater<LogicalBlockIdx>>
+      mmap_regions;
 
   // only for mmap
   std::mutex mmap_lock;
-
- private:
-  // called by other public functions with lock held
-  void grow(LogicalBlockIdx idx) {
-    // the new file size should be a multiple of grow unit
-    // we have `idx + 1` since we want to grow the file when idx is a multiple
-    // of the number of blocks in a grow unit (e.g., 512 for 2 MB grow)
-    size_t file_size =
-        ALIGN_UP(static_cast<size_t>(idx + 1) << BLOCK_SHIFT, GROW_UNIT_SIZE);
-
-    int ret = posix::fallocate(fd, 0, 0, static_cast<off_t>(file_size));
-    PANIC_IF(ret, "fallocate failed");
-    meta->set_num_blocks_if_larger(file_size >> BLOCK_SHIFT);
-  }
-
-  /**
-   * a private helper function that calls mmap internally
-   * @return the pointer to the newly mapped region
-   */
-  void* mmap_file(void* hint_addr, size_t length, off_t offset, int flags = 0) {
-    if constexpr (BuildOptions::use_map_sync)
-      flags |= MAP_SHARED_VALIDATE | MAP_SYNC;
-    else
-      flags |= MAP_SHARED;
-    if constexpr (BuildOptions::force_map_populate) flags |= MAP_POPULATE;
-
-    void* addr = posix::mmap(hint_addr, length, prot, flags, fd, offset);
-
-    if (unlikely(addr == MAP_FAILED)) {
-      if constexpr (BuildOptions::use_map_sync) {
-        if (errno == EOPNOTSUPP) {
-          WARN("MAP_SYNC not supported for fd = %d. Retry w/o MAP_SYNC", fd);
-          flags &= ~(MAP_SHARED_VALIDATE | MAP_SYNC);
-          flags |= MAP_SHARED;
-          addr = posix::mmap(nullptr, length, prot, flags, fd, offset);
-        }
-      }
-
-      PANIC_IF(addr == MAP_FAILED, "mmap fd = %d failed", fd);
-    }
-    VALGRIND_PMC_REGISTER_PMEM_MAPPING(addr, length);
-    return addr;
-  }
 
  public:
   MemTable(int fd, uint64_t file_size, bool read_only)
@@ -192,6 +148,50 @@ class MemTable {
     }
   }
 
+ private:
+  // called by other public functions with lock held
+  void grow(LogicalBlockIdx idx) {
+    // the new file size should be a multiple of grow unit
+    // we have `idx + 1` since we want to grow the file when idx is a multiple
+    // of the number of blocks in a grow unit (e.g., 512 for 2 MB grow)
+    size_t file_size =
+        ALIGN_UP(static_cast<size_t>(idx + 1) << BLOCK_SHIFT, GROW_UNIT_SIZE);
+
+    int ret = posix::fallocate(fd, 0, 0, static_cast<off_t>(file_size));
+    PANIC_IF(ret, "fallocate failed");
+    meta->set_num_blocks_if_larger(file_size >> BLOCK_SHIFT);
+  }
+
+  /**
+   * a private helper function that calls mmap internally
+   * @return the pointer to the newly mapped region
+   */
+  void* mmap_file(void* hint_addr, size_t length, off_t offset, int flags = 0) {
+    if constexpr (BuildOptions::use_map_sync)
+      flags |= MAP_SHARED_VALIDATE | MAP_SYNC;
+    else
+      flags |= MAP_SHARED;
+    if constexpr (BuildOptions::force_map_populate) flags |= MAP_POPULATE;
+
+    void* addr = posix::mmap(hint_addr, length, prot, flags, fd, offset);
+
+    if (unlikely(addr == MAP_FAILED)) {
+      if constexpr (BuildOptions::use_map_sync) {
+        if (errno == EOPNOTSUPP) {
+          WARN("MAP_SYNC not supported for fd = %d. Retry w/o MAP_SYNC", fd);
+          flags &= ~(MAP_SHARED_VALIDATE | MAP_SYNC);
+          flags |= MAP_SHARED;
+          addr = posix::mmap(nullptr, length, prot, flags, fd, offset);
+        }
+      }
+
+      PANIC_IF(addr == MAP_FAILED, "mmap fd = %d failed", fd);
+    }
+    VALGRIND_PMC_REGISTER_PMEM_MAPPING(addr, length);
+    return addr;
+  }
+
+ public:
   friend std::ostream& operator<<(std::ostream& out, const MemTable& m) {
     out << "MemTable:\n";
     for (const auto& [blk_idx, addr_size] : m.mmap_regions) {
