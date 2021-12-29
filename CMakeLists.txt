@@ -80,7 +80,7 @@ configure_file("src/config.h.in" "config.h")
 include_directories(${CMAKE_CURRENT_BINARY_DIR})
 
 #[[
-tests and benchmarks
+tests, benchmarks, and tools
 ]]
 
 option(ULAYFS_LINK_LIBRARY "Link uLayFS for tests and benchmarks" ON)
@@ -121,8 +121,8 @@ if (ULAYFS_BUILD_BENCH)
 endif ()
 
 if (ULAYFS_BUILD_TOOLS)
-    add_executable(dump tools/dump.cpp)
-    target_link_libraries(dump ulayfs)
+    add_executable(info tools/info.cpp)
+    target_link_libraries(info ulayfs)
 endif ()
 
 #[[
