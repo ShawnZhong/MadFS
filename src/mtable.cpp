@@ -1,3 +1,5 @@
 #include "mtable.h"
 
-std::atomic<char*> ulayfs::dram::MemTable::next_hint = nullptr;
+namespace ulayfs::dram {
+std::atomic<pmem::Block*> MemTable::next_hint = nullptr;
+}  // namespace ulayfs::dram

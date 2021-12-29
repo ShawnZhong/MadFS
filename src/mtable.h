@@ -22,9 +22,9 @@ constexpr static uint32_t GROW_UNIT_IN_BLOCK_SHIFT =
     GROW_UNIT_SHIFT - BLOCK_SHIFT;
 constexpr static uint32_t GROW_UNIT_IN_BLOCK_MASK =
     (1 << GROW_UNIT_IN_BLOCK_SHIFT) - 1;
-constexpr static uint32_t NUM_BLOCKS_PER_GROW = GROW_UNIT_SIZE / BLOCK_SIZE;
+constexpr static uint32_t GROW_UNIT_IN_BLOCK = GROW_UNIT_SIZE / BLOCK_SIZE;
 
-constexpr static uint64_t MMAP_REGION_GAP = (1UL << 30);  // 1G
+constexpr static uint64_t MMAP_REGION_GAP_IN_BLOCK = (1UL << 18);  // 1G
 
 // map LogicalBlockIdx into memory address
 // this is a more low-level data structure than Allocator
@@ -37,7 +37,7 @@ constexpr static uint64_t MMAP_REGION_GAP = (1UL << 30);  // 1G
 //   it, map it, and return the address
 class MemTable {
   // coordinate across multiple files to map to different regions
-  static std::atomic<char*> next_hint;
+  static std::atomic<pmem::Block*> next_hint;
 
   pmem::MetaBlock* meta;
   int fd;
@@ -64,31 +64,32 @@ class MemTable {
       PANIC_IF(ret, "fallocate failed");
     }
 
-    char* hint = nullptr;
+    uint32_t num_blocks = file_size >> BLOCK_SHIFT;
+
+    pmem::Block* hint = nullptr;
     if (next_hint.load(std::memory_order_acquire))
-      hint = next_hint.fetch_add(MMAP_REGION_GAP, std::memory_order_acq_rel);
-    void* addr = mmap_file(hint, file_size, 0, 0);
+      hint = next_hint.fetch_add(ALIGN_UP(num_blocks, MMAP_REGION_GAP_IN_BLOCK),
+                                 std::memory_order_acq_rel);
+    pmem::Block* mapped_addr = mmap_file(hint, file_size, 0, 0);
     if (!hint)
-      next_hint.compare_exchange_strong(hint, static_cast<char*>(addr),
-                                        std::memory_order_acq_rel,
-                                        std::memory_order_acquire);
-    meta = &static_cast<pmem::Block*>(addr)->meta_block;
+      next_hint.compare_exchange_strong(
+          hint, mapped_addr + ALIGN_UP(num_blocks, MMAP_REGION_GAP_IN_BLOCK),
+          std::memory_order_acq_rel, std::memory_order_acquire);
+    meta = &mapped_addr[0].meta_block;
 
     // compute number of blocks and update the meta block if necessary
-    auto num_blocks = file_size >> BLOCK_SHIFT;
     if (should_grow) meta->set_num_blocks_if_larger(num_blocks);
 
-    mmap_regions.emplace(
-        std::piecewise_construct, std::forward_as_tuple(/*lidx*/ 0),
-        std::forward_as_tuple(/*addr*/ static_cast<pmem::Block*>(addr),
-                              /*num_block*/ file_size >> BLOCK_SHIFT));
+    mmap_regions.emplace(std::piecewise_construct,
+                         std::forward_as_tuple(/*lidx*/ 0),
+                         std::forward_as_tuple(mapped_addr, num_blocks));
   }
 
   ~MemTable() {
-    for (const auto& [lix, addr_size] : mmap_regions) {
-      const auto& [addr, num_blocks] = addr_size;
+    for (const auto& [lix, addr_num_blocks] : mmap_regions) {
+      const auto& [addr, num_blocks] = addr_num_blocks;
       munmap(addr, num_blocks << BLOCK_SHIFT);
-      VALGRIND_PMC_REMOVE_PMEM_MAPPING(addr, length);
+      VALGRIND_PMC_REMOVE_PMEM_MAPPING(addr, num_blocks << BLOCK_SHIFT);
     }
   }
 
@@ -111,31 +112,35 @@ class MemTable {
     auto it = mmap_regions.lower_bound(lidx);
     assert(it != mmap_regions.end());
 
-    const auto& [begin_lidx, addr_size] = *it;
-    const auto& [addr, size] = addr_size;
+    const auto& [begin_lidx, addr_num_blocks] = *it;
+    const auto& [addr, num_blocks] = addr_num_blocks;
     pmem::Block* ideal_addr = addr + (lidx - begin_lidx);
-    auto size_local = size.load(std::memory_order_relaxed);
-    if (lidx < begin_lidx + size_local) return ideal_addr;
+    auto num_blocks_old = num_blocks.load(std::memory_order_relaxed);
+    if (lidx < begin_lidx + num_blocks_old) return ideal_addr;
 
     // validate if this idx has real blocks allocated; do allocation if not
     validate_size(lidx);
 
     {
-      LogicalBlockIdx hugepage_idx = lidx & ~GROW_UNIT_IN_BLOCK_MASK;
-      void* hint = addr + (hugepage_idx - begin_lidx);
       std::lock_guard<std::mutex> lock(mmap_lock);
       // must reload, since another thread may modify it while we wait for lock
-      size_local = size.load(std::memory_order_relaxed);
-      if (lidx < begin_lidx + size_local) return ideal_addr;
+      num_blocks_old = num_blocks.load(std::memory_order_relaxed);
+      if (lidx < begin_lidx + num_blocks_old) return ideal_addr;
+      uint32_t num_blocks_new = ALIGN_UP(lidx - begin_lidx, GROW_UNIT_IN_BLOCK);
+      uint32_t num_blocks_extended = num_blocks_new - num_blocks_old;
+      assert(num_blocks != 0);
 
-      void* mapped_addr =
-          mmap_file(hint, GROW_UNIT_SIZE, hugepage_idx << BLOCK_SHIFT);
+      pmem::Block* hint = addr + num_blocks_old;
+      pmem::Block* mapped_addr =
+          mmap_file(hint, num_blocks_extended << BLOCK_SHIFT,
+                    num_blocks_old << BLOCK_SHIFT);
       if (mapped_addr == hint) return ideal_addr;
+      uint32_t new_region_begin_lidx = begin_lidx + num_blocks_old;
       mmap_regions.emplace(
-          std::piecewise_construct, std::forward_as_tuple(hugepage_idx),
-          std::forward_as_tuple(static_cast<pmem::Block*>(mapped_addr),
-                                NUM_BLOCKS_PER_GROW));
-      return static_cast<pmem::Block*>(mapped_addr) + (lidx - hugepage_idx);
+          std::piecewise_construct,
+          std::forward_as_tuple(new_region_begin_lidx),
+          std::forward_as_tuple(mapped_addr, num_blocks_extended));
+      return mapped_addr + (lidx - new_region_begin_lidx);
     }
   }
 
@@ -166,7 +171,8 @@ class MemTable {
    * a private helper function that calls mmap internally
    * @return the pointer to the newly mapped region
    */
-  void* mmap_file(void* hint_addr, size_t length, off_t offset, int flags = 0) {
+  pmem::Block* mmap_file(void* hint_addr, size_t length, off_t offset,
+                         int flags = 0) {
     if constexpr (BuildOptions::use_map_sync)
       flags |= MAP_SHARED_VALIDATE | MAP_SYNC;
     else
@@ -188,7 +194,7 @@ class MemTable {
       PANIC_IF(addr == MAP_FAILED, "mmap fd = %d failed", fd);
     }
     VALGRIND_PMC_REGISTER_PMEM_MAPPING(addr, length);
-    return addr;
+    return static_cast<pmem::Block*>(addr);
   }
 
  public:
