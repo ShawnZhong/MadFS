@@ -67,8 +67,14 @@ int open(const char* pathname, int flags, ...) {
     return fd;
   }
 
-  files.emplace(fd, std::make_shared<dram::File>(fd, stat_buf, user_flags));
-  INFO("ulayfs::open(%s, %x, %x) = %d", pathname, flags, mode, fd);
+  try {
+    files.emplace(fd, std::make_shared<dram::File>(fd, stat_buf, user_flags));
+    INFO("ulayfs::open(%s, %x, %x) = %d", pathname, flags, mode, fd);
+  } catch (const dram::File::InitException& e) {
+    WARN("File \"%s\": ulayfs::open failed: %s. Fallback to syscall", pathname,
+         e.what());
+  }
+
   return fd;
 }
 

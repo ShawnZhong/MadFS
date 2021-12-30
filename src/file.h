@@ -156,11 +156,8 @@ class File {
    *
    * @param[in] shm_path path to the shared memory object
    * @param[in] stat stat of the original file
-   * @param[out] bitmap the bitmap opened or created in the shared memory
-   * @return the file descriptor for the shared memory object on success,
-   * -1 otherwise
    */
-  int open_shm(const char* shm_path, const struct stat& stat, Bitmap*& bitmap);
+  void init_shm(const char* shm_path, const struct stat& stat);
 
   void tx_gc();
 
@@ -169,6 +166,12 @@ class File {
                       const pmem::TxBlock* rhs_block = nullptr) {
     return tx_mgr.tx_idx_greater(lhs_idx, rhs_idx, lhs_block, rhs_block);
   }
+
+  struct InitException : public std::exception {
+    explicit InitException(const char* msg) : msg(msg) {}
+    const char* msg;
+    [[nodiscard]] const char* what() const noexcept override { return msg; }
+  };
 
   friend std::ostream& operator<<(std::ostream& out, const File& f);
 };
