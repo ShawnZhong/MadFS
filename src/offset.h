@@ -28,7 +28,7 @@ class OffsetMgr {
   };
 
   File* file;
-  uint64_t offset;
+  off_t offset;
   uint64_t next_ticket;
   TicketSlot queues[NUM_OFFSET_QUEUE_SLOT];
 
@@ -39,10 +39,8 @@ class OffsetMgr {
   // must have spinlock acquired
   // only call if seeking is the only serialization point
   // no boundary check
-  int64_t seek_absolute(uint64_t abs_offset) {
-    return static_cast<int64_t>(offset = abs_offset);
-  }
-  int64_t seek_relative(int64_t rel_offset) {
+  off_t seek_absolute(off_t abs_offset) { return offset = abs_offset; }
+  off_t seek_relative(off_t rel_offset) {
     return seek_absolute(offset + rel_offset);
   }
 
@@ -57,8 +55,8 @@ class OffsetMgr {
    * @param[out] ticket ticket for this acquire
    * @return old offset
    */
-  uint64_t acquire_offset(uint64_t& change, uint64_t file_size,
-                          bool stop_at_boundary, uint64_t& ticket);
+  off_t acquire_offset(uint64_t& change, off_t file_size, bool stop_at_boundary,
+                       uint64_t& ticket);
 
   /**
    * wait for the previous one to complete; return previous one's idx and block
@@ -77,7 +75,7 @@ class OffsetMgr {
    * @param[in] curr_block the tx tail block seen by the current operation
    * @return whether the ordering is fine (prev <= curr)
    */
-  bool validate_offset(uint64_t ticket, const TxEntryIdx curr_idx,
+  bool validate_offset(uint64_t ticket, TxEntryIdx curr_idx,
                        const pmem::TxBlock* curr_block);
 
   /**
@@ -87,7 +85,7 @@ class OffsetMgr {
    * @param[in] curr_idx the tx tail idx seen by the current operation
    * @param[in] curr_block the tx tail block seen by the current operation
    */
-  void release_offset(uint64_t ticket, const TxEntryIdx curr_idx,
+  void release_offset(uint64_t ticket, TxEntryIdx curr_idx,
                       const pmem::TxBlock* curr_block);
 
   friend std::ostream& operator<<(std::ostream& out, const OffsetMgr& o);

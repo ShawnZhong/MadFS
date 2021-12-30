@@ -18,14 +18,14 @@ namespace ulayfs::dram {
  * TxMgr
  */
 
-ssize_t TxMgr::do_pread(char* buf, size_t count, size_t offset) {
+ssize_t TxMgr::do_pread(char* buf, size_t count, off_t offset) {
   return ReadTx(file, this, buf, count, offset).do_read();
 }
 
 ssize_t TxMgr::do_read(char* buf, size_t count) {
   TxEntryIdx tail_tx_idx;
   pmem::TxBlock* tail_tx_block;
-  uint64_t file_size;
+  off_t file_size;
   uint64_t ticket;
   int64_t offset = file->update_with_offset(tail_tx_idx, tail_tx_block, count,
                                             true, ticket, &file_size,
@@ -38,7 +38,7 @@ ssize_t TxMgr::do_read(char* buf, size_t count) {
   return ret;
 }
 
-ssize_t TxMgr::do_pwrite(const char* buf, size_t count, size_t offset) {
+ssize_t TxMgr::do_pwrite(const char* buf, size_t count, off_t offset) {
   // special case that we have everything aligned, no OCC
   if (count % BLOCK_SIZE == 0 && offset % BLOCK_SIZE == 0)
     return AlignedTx(file, this, buf, count, offset).do_write();
@@ -53,7 +53,7 @@ ssize_t TxMgr::do_pwrite(const char* buf, size_t count, size_t offset) {
 
 template <typename TX>
 ssize_t TxMgr::WriteTx::do_write_and_validate_offset(
-    File* file, TxMgr* tx_mgr, const char* buf, size_t count, size_t offset,
+    File* file, TxMgr* tx_mgr, const char* buf, size_t count, off_t offset,
     TxEntryIdx tail_tx_idx, pmem::TxBlock* tail_tx_block, uint64_t ticket) {
   TX tx(file, tx_mgr, buf, count, offset, tail_tx_idx, tail_tx_block, ticket);
   ssize_t ret = tx.do_write();
@@ -65,9 +65,9 @@ ssize_t TxMgr::do_write(const char* buf, size_t count) {
   TxEntryIdx tail_tx_idx;
   pmem::TxBlock* tail_tx_block;
   uint64_t ticket;
-  uint64_t offset = file->update_with_offset(tail_tx_idx, tail_tx_block, count,
-                                             false, ticket, nullptr,
-                                             /*do_alloc*/ false);
+  off_t offset = file->update_with_offset(tail_tx_idx, tail_tx_block, count,
+                                          false, ticket, nullptr,
+                                          /*do_alloc*/ false);
 
   // special case that we have everything aligned, no OCC
   if (count % BLOCK_SIZE == 0 && offset % BLOCK_SIZE == 0)
@@ -221,7 +221,7 @@ LogicalBlockIdx TxMgr::alloc_next_block(B* block) const {
   }
 }
 
-void TxMgr::gc(const LogicalBlockIdx tail_tx_block_idx, uint64_t file_size) {
+void TxMgr::gc(const LogicalBlockIdx tail_tx_block_idx, off_t file_size) {
   // skip if tail_tx_block is meta block, it directly follows meta or there is
   // only one tx block between meta and tail_tx_block
   LogicalBlockIdx orig_tx_block_idx = meta->get_next_tx_block();
@@ -368,7 +368,7 @@ std::ostream& operator<<(std::ostream& out, const TxMgr& tx_mgr) {
  * Tx
  */
 
-TxMgr::Tx::Tx(File* file, TxMgr* tx_mgr, size_t count, size_t offset)
+TxMgr::Tx::Tx(File* file, TxMgr* tx_mgr, size_t count, off_t offset)
     : file(file),
       tx_mgr(tx_mgr),
       log_mgr(file->get_log_mgr()),
@@ -472,7 +472,8 @@ ssize_t TxMgr::ReadTx::do_read() {
                  /*do_alloc*/ false);
   // reach EOF
   if (offset >= file_size) return 0;
-  if (offset + count > file_size) {  // partial read; recalculate end_*
+  if (static_cast<off_t>(offset + count) >
+      file_size) {  // partial read; recalculate end_*
     count = file_size - offset;
     end_offset = offset + count;
     end_vidx = BLOCK_SIZE_TO_IDX(ALIGN_UP(end_offset, BLOCK_SIZE));
@@ -557,7 +558,7 @@ redo:
 }
 
 TxMgr::WriteTx::WriteTx(File* file, TxMgr* tx_mgr, const char* buf,
-                        size_t count, size_t offset)
+                        size_t count, off_t offset)
     : Tx(file, tx_mgr, count, offset),
       buf(buf),
       allocator(file->get_local_allocator()),

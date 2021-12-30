@@ -13,8 +13,8 @@
 
 namespace ulayfs::dram {
 
-uint64_t OffsetMgr::acquire_offset(uint64_t& change, uint64_t file_size,
-                                   bool stop_at_boundary, uint64_t& ticket) {
+off_t OffsetMgr::acquire_offset(uint64_t& change, off_t file_size,
+                                bool stop_at_boundary, uint64_t& ticket) {
   auto old_offset = offset;
   offset += change;
   if (stop_at_boundary && offset > file_size) {

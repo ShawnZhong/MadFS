@@ -6,8 +6,7 @@
 namespace ulayfs::dram {
 
 void BlkTable::update(TxEntryIdx* tx_idx, pmem::TxBlock** tx_block,
-                      uint64_t* new_file_size, bool do_alloc,
-                      bool init_bitmap) {
+                      off_t* new_file_size, bool do_alloc, bool init_bitmap) {
   // it's possible that the previous update move idx to overflow state
   if (!tx_mgr->handle_idx_overflow(tail_tx_idx, tail_tx_block, do_alloc)) {
     // if still overflow, do_alloc must be unset
@@ -81,7 +80,7 @@ void BlkTable::apply_tx(pmem::TxEntryIndirect tx_commit_entry, LogMgr* log_mgr,
 
   // update file size if this write exceeds current file size
   // currently we don't support ftruncate, so the file size is always growing
-  uint64_t now_file_size = BLOCK_IDX_TO_SIZE(end_virtual_idx) - leftover_bytes;
+  off_t now_file_size = BLOCK_IDX_TO_SIZE(end_virtual_idx) - leftover_bytes;
   if (now_file_size > file_size) file_size = now_file_size;
 }
 
@@ -100,8 +99,8 @@ void BlkTable::apply_tx(pmem::TxEntryInline tx_commit_inline_entry) {
 
   // update file size if this write exceeds current file size
   // inline tx must be aligned to BLOCK_SIZE boundary
-  uint64_t now_file_size = BLOCK_IDX_TO_SIZE(end_vidx);
-  if (now_file_size > file_size) file_size = now_file_size;
+  off_t curr_file_size = BLOCK_IDX_TO_SIZE(end_vidx);
+  if (curr_file_size > file_size) file_size = curr_file_size;
 }
 
 std::ostream& operator<<(std::ostream& out, const BlkTable& b) {

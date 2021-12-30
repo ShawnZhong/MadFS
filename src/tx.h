@@ -32,10 +32,10 @@ class TxMgr {
  public:
   TxMgr(File* file, pmem::MetaBlock* meta) : file(file), meta(meta) {}
 
-  ssize_t do_pread(char* buf, size_t count, size_t offset);
+  ssize_t do_pread(char* buf, size_t count, off_t offset);
   ssize_t do_read(char* buf, size_t count);
 
-  ssize_t do_pwrite(const char* buf, size_t count, size_t offset);
+  ssize_t do_pwrite(const char* buf, size_t count, off_t offset);
   ssize_t do_write(const char* buf, size_t count);
 
   bool tx_idx_greater(const TxEntryIdx lhs_idx, const TxEntryIdx rhs_idx,
@@ -132,7 +132,7 @@ class TxMgr {
    * not be touched
    * @param file_size size of this file
    */
-  void gc(const LogicalBlockIdx tail_tx_block, uint64_t file_size);
+  void gc(LogicalBlockIdx tail_tx_block, off_t file_size);
 
  private:
   /**
@@ -152,7 +152,7 @@ class TxMgr {
  */
 class TxMgr::Tx {
  protected:
-  Tx(File* file, TxMgr* tx_mgr, size_t count, size_t offset);
+  Tx(File* file, TxMgr* tx_mgr, size_t count, off_t offset);
   friend TxMgr;
 
   /**
@@ -181,7 +181,7 @@ class TxMgr::Tx {
    * In the case of partial read/write, count will be changed, so does end_*
    */
   size_t count;
-  const size_t offset;
+  const off_t offset;
 
   /*
    * Derived properties
@@ -215,11 +215,11 @@ class TxMgr::Tx {
 
 class TxMgr::ReadTx : public TxMgr::Tx {
  protected:
-  ReadTx(File* file, TxMgr* tx_mgr, char* buf, size_t count, size_t offset)
+  ReadTx(File* file, TxMgr* tx_mgr, char* buf, size_t count, off_t offset)
       : Tx(file, tx_mgr, count, offset), buf(buf) {}
-  ReadTx(File* file, TxMgr* tx_mgr, char* buf, size_t count, size_t offset,
-         TxEntryIdx tail_tx_idx, pmem::TxBlock* tail_tx_block,
-         uint64_t file_size, uint64_t ticket)
+  ReadTx(File* file, TxMgr* tx_mgr, char* buf, size_t count, off_t offset,
+         TxEntryIdx tail_tx_idx, pmem::TxBlock* tail_tx_block, off_t file_size,
+         uint64_t ticket)
       : ReadTx(file, tx_mgr, buf, count, offset) {
     is_offset_depend = true;
     this->tail_tx_idx = tail_tx_idx;
@@ -235,15 +235,15 @@ class TxMgr::ReadTx : public TxMgr::Tx {
    * read-specific arguments
    */
   char* const buf;
-  uint64_t file_size;
+  off_t file_size;
 };
 
 class TxMgr::WriteTx : public TxMgr::Tx {
  protected:
   WriteTx(File* file, TxMgr* tx_mgr, const char* buf, size_t count,
-          size_t offset);
+          off_t offset);
   WriteTx(File* file, TxMgr* tx_mgr, const char* buf, size_t count,
-          size_t offset, TxEntryIdx tail_tx_idx, pmem::TxBlock* tail_tx_block,
+          off_t offset, TxEntryIdx tail_tx_idx, pmem::TxBlock* tail_tx_block,
           uint64_t ticket)
       : WriteTx(file, tx_mgr, buf, count, offset) {
     is_offset_depend = true;
@@ -255,7 +255,7 @@ class TxMgr::WriteTx : public TxMgr::Tx {
 
   template <typename TX>
   static ssize_t do_write_and_validate_offset(
-      File* file, TxMgr* tx_mgr, const char* buf, size_t count, size_t offset,
+      File* file, TxMgr* tx_mgr, const char* buf, size_t count, off_t offset,
       TxEntryIdx tail_tx_idx, pmem::TxBlock* tail_tx_block, uint64_t ticket);
 
   friend TxMgr;
@@ -279,10 +279,10 @@ class TxMgr::WriteTx : public TxMgr::Tx {
 class TxMgr::AlignedTx : public TxMgr::WriteTx {
  public:
   AlignedTx(File* file, TxMgr* tx_mgr, const char* buf, size_t count,
-            size_t offset)
+            off_t offset)
       : WriteTx(file, tx_mgr, buf, count, offset) {}
   AlignedTx(File* file, TxMgr* tx_mgr, const char* buf, size_t count,
-            size_t offset, TxEntryIdx tail_tx_idx, pmem::TxBlock* tail_tx_block,
+            off_t offset, TxEntryIdx tail_tx_idx, pmem::TxBlock* tail_tx_block,
             uint64_t ticket)
       : WriteTx(file, tx_mgr, buf, count, offset, tail_tx_idx, tail_tx_block,
                 ticket) {}
@@ -291,12 +291,12 @@ class TxMgr::AlignedTx : public TxMgr::WriteTx {
 
 class TxMgr::CoWTx : public TxMgr::WriteTx {
  protected:
-  CoWTx(File* file, TxMgr* tx_mgr, const char* buf, size_t count, size_t offset)
+  CoWTx(File* file, TxMgr* tx_mgr, const char* buf, size_t count, off_t offset)
       : WriteTx(file, tx_mgr, buf, count, offset),
         begin_full_vidx(BLOCK_SIZE_TO_IDX(ALIGN_UP(offset, BLOCK_SIZE))),
         end_full_vidx(BLOCK_SIZE_TO_IDX(end_offset)),
         num_full_blocks(end_full_vidx - begin_full_vidx) {}
-  CoWTx(File* file, TxMgr* tx_mgr, const char* buf, size_t count, size_t offset,
+  CoWTx(File* file, TxMgr* tx_mgr, const char* buf, size_t count, off_t offset,
         TxEntryIdx tail_tx_idx, pmem::TxBlock* tail_tx_block, uint64_t ticket)
       : WriteTx(file, tx_mgr, buf, count, offset, tail_tx_idx, tail_tx_block,
                 ticket),
@@ -322,13 +322,13 @@ class TxMgr::CoWTx : public TxMgr::WriteTx {
 class TxMgr::SingleBlockTx : public TxMgr::CoWTx {
  public:
   SingleBlockTx(File* file, TxMgr* tx_mgr, const char* buf, size_t count,
-                size_t offset)
+                off_t offset)
       : CoWTx(file, tx_mgr, buf, count, offset),
         local_offset(offset - BLOCK_IDX_TO_SIZE(begin_vidx)) {
     assert(num_blocks == 1);
   }
   SingleBlockTx(File* file, TxMgr* tx_mgr, const char* buf, size_t count,
-                size_t offset, TxEntryIdx tail_tx_idx,
+                off_t offset, TxEntryIdx tail_tx_idx,
                 pmem::TxBlock* tail_tx_block, uint64_t ticket)
       : CoWTx(file, tx_mgr, buf, count, offset, tail_tx_idx, tail_tx_block,
               ticket),
@@ -345,13 +345,13 @@ class TxMgr::SingleBlockTx : public TxMgr::CoWTx {
 class TxMgr::MultiBlockTx : public TxMgr::CoWTx {
  public:
   MultiBlockTx(File* file, TxMgr* tx_mgr, const char* buf, size_t count,
-               size_t offset)
+               off_t offset)
       : CoWTx(file, tx_mgr, buf, count, offset),
         first_block_local_offset(ALIGN_UP(offset, BLOCK_SIZE) - offset),
         last_block_local_offset(end_offset -
                                 ALIGN_DOWN(end_offset, BLOCK_SIZE)) {}
   MultiBlockTx(File* file, TxMgr* tx_mgr, const char* buf, size_t count,
-               size_t offset, TxEntryIdx tail_tx_idx,
+               off_t offset, TxEntryIdx tail_tx_idx,
                pmem::TxBlock* tail_tx_block, uint64_t ticket)
       : CoWTx(file, tx_mgr, buf, count, offset, tail_tx_idx, tail_tx_block,
               ticket),

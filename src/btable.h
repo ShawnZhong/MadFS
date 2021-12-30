@@ -24,7 +24,7 @@ class BlkTable {
   // keep track of the next TxEntry to apply
   TxEntryIdx tail_tx_idx;
   pmem::TxBlock* tail_tx_block;
-  uint64_t file_size;
+  off_t file_size;
 
  public:
   explicit BlkTable(File* file, TxMgr* tx_mgr)
@@ -57,7 +57,7 @@ class BlkTable {
    * @param[in] init_bitmap whether we need to initialize the bitmap
    */
   void update(TxEntryIdx* tx_idx, pmem::TxBlock** tx_block,
-              uint64_t* new_file_size = nullptr, bool do_alloc = false,
+              off_t* new_file_size = nullptr, bool do_alloc = false,
               bool init_bitmap = false);
 
   /**
@@ -65,7 +65,7 @@ class BlkTable {
    * @param init_bitmap whether we need to initialize the bitmap
    * @return the latest file size
    */
-  [[nodiscard]] uint64_t get_file_size(bool init_bitmap = false) {
+  [[nodiscard]] off_t get_file_size(bool init_bitmap = false) {
     update(nullptr, nullptr, nullptr, false, init_bitmap);
     return file_size;
   }

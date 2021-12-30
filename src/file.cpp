@@ -34,7 +34,7 @@ File::File(int fd, const struct stat& stat, int flags)
   // The first bit corresponds to the meta block which should always be set
   // to 1. If it is not, then bitmap needs to be initialized.
   // Bitmap::get is not thread safe but we are only reading one bit here.
-  uint64_t file_size;
+  off_t file_size;
   bool file_size_updated = false;
   if (!bitmap[0].is_allocated(0)) {
     meta->lock();
@@ -63,7 +63,7 @@ File::~File() {
  * POSIX I/O operations
  */
 
-ssize_t File::pwrite(const void* buf, size_t count, size_t offset) {
+ssize_t File::pwrite(const void* buf, size_t count, off_t offset) {
   if (!can_write) {
     errno = EBADF;
     return -1;
@@ -103,7 +103,7 @@ off_t File::lseek(off_t offset, int whence) {
   int64_t ret;
 
   pthread_spin_lock(&spinlock);
-  uint64_t file_size = blk_table.get_file_size();
+  off_t file_size = blk_table.get_file_size();
 
   switch (whence) {
     case SEEK_SET:
@@ -193,9 +193,7 @@ int File::fsync() {
   return 0;
 }
 
-void File::stat(struct stat* buf) {
-  buf->st_size = static_cast<off_t>(blk_table.get_file_size());
-}
+void File::stat(struct stat* buf) { buf->st_size = blk_table.get_file_size(); }
 
 /*
  * Getters & removers for thread-local data structures
@@ -285,7 +283,7 @@ int File::open_shm(const char* shm_name, const struct stat& stat,
 void File::tx_gc() {
   DEBUG("Garbage Collect for fd %d", fd);
   TxEntryIdx tail_tx_idx;
-  uint64_t file_size;
+  off_t file_size;
   blk_table.update(&tail_tx_idx, /*tx_block*/ nullptr, &file_size);
   tx_mgr.gc(tail_tx_idx.block_idx, file_size);
 }

@@ -48,7 +48,7 @@ class File {
   /*
    * POSIX I/O operations
    */
-  ssize_t pwrite(const void* buf, size_t count, size_t offset);
+  ssize_t pwrite(const void* buf, size_t count, off_t offset);
   ssize_t write(const void* buf, size_t count);
   ssize_t pread(void* buf, size_t count, off_t offset);
   ssize_t read(void* buf, size_t count);
@@ -67,20 +67,20 @@ class File {
    * exported interface for update; init_bitmap is always false
    */
   void update(TxEntryIdx& tx_idx, pmem::TxBlock*& tx_block,
-              uint64_t* new_file_size, bool do_alloc) {
+              off_t* new_file_size, bool do_alloc) {
     pthread_spin_lock(&spinlock);
     blk_table.update(&tx_idx, &tx_block, new_file_size, do_alloc);
     pthread_spin_unlock(&spinlock);
   }
 
-  uint64_t update_with_offset(TxEntryIdx& tx_idx, pmem::TxBlock*& tx_block,
-                              uint64_t& offset_change, bool stop_at_boundary,
-                              uint64_t& ticket, uint64_t* new_file_size,
-                              bool do_alloc) {
-    uint64_t new_file_size_local;
+  off_t update_with_offset(TxEntryIdx& tx_idx, pmem::TxBlock*& tx_block,
+                           uint64_t& offset_change, bool stop_at_boundary,
+                           uint64_t& ticket, off_t* new_file_size,
+                           bool do_alloc) {
+    off_t new_file_size_local;
     pthread_spin_lock(&spinlock);
     blk_table.update(&tx_idx, &tx_block, &new_file_size_local, do_alloc);
-    auto old_offset = offset_mgr.acquire_offset(
+    off_t old_offset = offset_mgr.acquire_offset(
         offset_change, new_file_size_local, stop_at_boundary, ticket);
     pthread_spin_unlock(&spinlock);
     if (new_file_size) *new_file_size = new_file_size_local;

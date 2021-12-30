@@ -45,9 +45,9 @@ class MemTable {
     // the new file size should be a multiple of grow unit
     // we have `idx + 1` since we want to grow the file when idx is a multiple
     // of the number of blocks in a grow unit (e.g., 512 for 2 MB grow)
-    uint64_t file_size = ALIGN_UP(BLOCK_IDX_TO_SIZE(idx + 1), GROW_UNIT_SIZE);
+    off_t file_size = ALIGN_UP(BLOCK_IDX_TO_SIZE(idx + 1), GROW_UNIT_SIZE);
 
-    int ret = posix::fallocate(fd, 0, 0, static_cast<off_t>(file_size));
+    int ret = posix::fallocate(fd, 0, 0, file_size);
     PANIC_IF(ret, "fallocate failed");
     meta->set_num_blocks_if_larger(BLOCK_SIZE_TO_IDX(file_size));
   }
@@ -151,9 +151,9 @@ class MemTable {
     // validate if this idx has real blocks allocated; do allocation if not
     validate(idx);
 
-    uint64_t hugepage_size = BLOCK_IDX_TO_SIZE(hugepage_idx);
-    pmem::Block* hugepage_blocks = mmap_file(
-        GROW_UNIT_SIZE, static_cast<off_t>(hugepage_size), MAP_POPULATE);
+    off_t hugepage_size = BLOCK_IDX_TO_SIZE(hugepage_idx);
+    pmem::Block* hugepage_blocks =
+        mmap_file(GROW_UNIT_SIZE, hugepage_size, MAP_POPULATE);
     table.emplace(hugepage_idx, hugepage_blocks);
     return hugepage_blocks + hugepage_local_idx;
   }
