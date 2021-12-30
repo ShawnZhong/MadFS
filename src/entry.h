@@ -89,6 +89,9 @@ struct __attribute__((packed)) TxCommitInlineEntry {
            begin_logical_idx <= BEGIN_LOGICAL_IDX_MAX;
   }
 
+  constexpr TxCommitInlineEntry()
+      : num_blocks(0), begin_virtual_idx(0), begin_logical_idx(0) {}
+
   TxCommitInlineEntry(uint32_t num_blocks, uint32_t begin_virtual_idx,
                       uint32_t begin_logical_idx)
       : num_blocks(num_blocks),
@@ -118,6 +121,8 @@ union TxEntry {
     uint64_t payload : 63;
   } fields;
 
+  constexpr static const pmem::TxCommitInlineEntry TxCommitDummyEntry{};
+
   TxEntry(){};
   TxEntry(uint64_t raw_bits) : raw_bits(raw_bits) {}
   TxEntry(TxCommitEntry commit_entry) : commit_entry(commit_entry) {}
@@ -127,6 +132,10 @@ union TxEntry {
   [[nodiscard]] bool is_inline() const { return fields.is_inline; }
 
   [[nodiscard]] bool is_valid() const { return raw_bits != 0; }
+
+  [[nodiscard]] bool is_dummy() const {
+    return is_inline() && commit_inline_entry.num_blocks == 0;
+  };
 
   /**
    * find the tail (next unused slot) in an array of TxEntry

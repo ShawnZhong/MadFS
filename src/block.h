@@ -48,6 +48,11 @@ class TxBlock : public BaseBlock {
     return TxEntry::try_append(tx_entries, entry, idx);
   }
 
+  // THIS FUNCTION IS NOT THREAD SAFE
+  void store(TxEntry entry, TxLocalIdx idx) {
+    tx_entries[idx].store(entry, std::memory_order_relaxed);
+  }
+
   [[nodiscard]] TxEntry get(TxLocalIdx idx) const {
     assert(idx >= 0 && idx < NUM_TX_ENTRY);
     return tx_entries[idx].load(std::memory_order_acquire);
@@ -244,8 +249,8 @@ class MetaBlock : public BaseBlock {
    * No flush+fence but leave it to flush_tx_block
    * @return true on success, false if there is a race condition
    */
-  bool set_next_tx_block(LogicalBlockIdx block_idx) {
-    LogicalBlockIdx expected = 0;
+  bool set_next_tx_block(LogicalBlockIdx block_idx,
+                         LogicalBlockIdx expected = 0) {
     return cl1_meta.next_tx_block.compare_exchange_strong(
         expected, block_idx, std::memory_order_acq_rel,
         std::memory_order_acquire);
@@ -310,6 +315,14 @@ class MetaBlock : public BaseBlock {
 
   TxEntry try_append(TxEntry entry, TxLocalIdx idx) {
     return TxEntry::try_append(inline_tx_entries, entry, idx);
+  }
+
+  // for garbage collection
+  void invalidate_tx_entries() {
+    for (size_t i = 0; i < NUM_INLINE_TX_ENTRY; i++)
+      inline_tx_entries[i].store(TxEntry::TxCommitDummyEntry,
+                                 std::memory_order_relaxed);
+    persist_fenced(inline_tx_entries, sizeof(TxEntry) * NUM_INLINE_TX_ENTRY);
   }
 
   friend std::ostream& operator<<(std::ostream& out, const MetaBlock& block) {

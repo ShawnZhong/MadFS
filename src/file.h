@@ -160,6 +160,8 @@ class File {
    */
   int open_shm(const char* shm_path, const struct stat& stat, Bitmap*& bitmap);
 
+  void tx_gc();
+
   bool tx_idx_greater(const TxEntryIdx lhs_idx, const TxEntryIdx rhs_idx,
                       const pmem::TxBlock* lhs_block = nullptr,
                       const pmem::TxBlock* rhs_block = nullptr) {

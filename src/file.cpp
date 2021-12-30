@@ -233,6 +233,15 @@ int File::open_shm(const char* shm_path, const struct stat& stat,
   return shm_fd;
 }
 
+void File::tx_gc() {
+  DEBUG("Garbage Collect for fd %d", fd);
+  TxEntryIdx tail_tx_idx;
+  pmem::TxBlock* tail_tx_block;
+  uint64_t file_size;
+  blk_table.update(tail_tx_idx, tail_tx_block, &file_size, /*do_alloc*/ false);
+  tx_mgr.gc(tail_tx_idx.block_idx, file_size);
+}
+
 std::ostream& operator<<(std::ostream& out, const File& f) {
   out << "File: fd = " << f.fd << "\n";
   out << *f.meta;
