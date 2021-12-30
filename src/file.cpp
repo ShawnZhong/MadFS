@@ -35,17 +35,18 @@ File::File(int fd, const struct stat& stat, int flags)
   // to 1. If it is not, then bitmap needs to be initialized.
   // Bitmap::get is not thread safe but we are only reading one bit here.
   uint64_t file_size;
+  bool file_size_updated = false;
   if (!bitmap[0].is_allocated(0)) {
     meta->lock();
     if (!bitmap[0].is_allocated(0)) {
       file_size = blk_table.get_file_size(/*init_bitmap*/ true);
-      // mark meta block as allocated
-      bitmap[0].set_allocated(0);
+      file_size_updated = true;
+      bitmap[0].set_allocated(0);  // mark meta block as allocated
     }
     meta->unlock();
-  } else {
-    file_size = blk_table.get_file_size(/*init_bitmap*/ false);
   }
+  if (!file_size_updated)
+    file_size = blk_table.get_file_size(/*init_bitmap*/ false);
 
   if (flags & O_APPEND) offset_mgr.seek_absolute(file_size);
 }
