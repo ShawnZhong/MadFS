@@ -5,8 +5,9 @@
 
 namespace ulayfs {
 // signature
-constexpr static int SIGNATURE_SIZE = 16;
+constexpr static int SIGNATURE_SIZE = 8;
 constexpr static char FILE_SIGNATURE[SIGNATURE_SIZE] = "ULAYFS";
+constexpr static uint16_t SHM_NAME_LEN = 40;
 
 constexpr static uint16_t NUM_CL_PER_BLOCK = BLOCK_SIZE / CACHELINE_SIZE;
 
@@ -26,7 +27,7 @@ constexpr static uint16_t NUM_TX_ENTRY_PER_CL =
 
 // inline data structure count in meta block
 constexpr static uint16_t NUM_CL_TX_ENTRY_IN_META =
-    ((BLOCK_SIZE / CACHELINE_SIZE) - 3);
+    ((BLOCK_SIZE / CACHELINE_SIZE) - 2);
 constexpr static uint16_t NUM_INLINE_TX_ENTRY =
     NUM_CL_TX_ENTRY_IN_META * NUM_TX_ENTRY_PER_CL;
 

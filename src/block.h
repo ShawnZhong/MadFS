@@ -136,17 +136,25 @@ class MetaBlock : public BaseBlock {
       // file signature
       char signature[SIGNATURE_SIZE];
 
-      // if inline_tx_entries is used up, this points to the next log block
-      std::atomic<LogicalBlockIdx> next_tx_block;
-
       // hint to find tx log tail; not necessarily up-to-date
       // all tx entries before it must be flushed
       std::atomic<TxEntryIdx64> tx_tail;
+
+      // if inline_tx_entries is used up, this points to the next log block
+      std::atomic<LogicalBlockIdx> next_tx_block;
+
+      std::atomic_bool shm_name_is_ready;
+
+      // buffer for the path to the shared memory object containing bitmaps.
+      char shm_name[SHM_NAME_LEN];
     } cl1_meta;
 
     // padding avoid cache line contention
     char cl1[CACHELINE_SIZE];
   };
+
+  static_assert(sizeof(cl1_meta) <= CACHELINE_SIZE,
+                "cl1_meta must be no larger than a cache line");
 
   // move mutex to another cache line to avoid contention on reading the
   // metadata above
@@ -165,13 +173,13 @@ class MetaBlock : public BaseBlock {
     char cl2[CACHELINE_SIZE];
   };
 
-  // buffer for the path to the shared memory object containing bitmaps.
-  char shm_path[CACHELINE_SIZE];
+  static_assert(sizeof(cl2_meta) <= CACHELINE_SIZE,
+                "cl1_meta must be no larger than a cache line");
 
-  // 61 cache lines for tx log (~120 txs)
+  // 62 cache lines for tx log (~120 txs)
   std::atomic<TxEntry> inline_tx_entries[NUM_INLINE_TX_ENTRY];
 
-  static_assert(sizeof(inline_tx_entries) == 61 * CACHELINE_SIZE,
+  static_assert(sizeof(inline_tx_entries) == 62 * CACHELINE_SIZE,
                 "inline_tx_entries must be 30 cache lines");
 
  public:
@@ -197,7 +205,8 @@ class MetaBlock : public BaseBlock {
 
   // check whether the meta block is valid
   bool is_valid() {
-    return std::memcmp(cl1_meta.signature, FILE_SIGNATURE, SIGNATURE_SIZE) == 0;
+    return std::strncmp(cl1_meta.signature, FILE_SIGNATURE, SIGNATURE_SIZE) ==
+           0;
   }
 
   // acquire/release meta lock (usually only during allocation)
@@ -219,10 +228,18 @@ class MetaBlock : public BaseBlock {
    * Getters and setters
    */
 
-  const char* get_shm_path() { return shm_path; }
-  void set_shm_path(const struct stat& stat) {
-    sprintf(shm_path, "/dev/shm/ulayfs_%ld%ld%ld", stat.st_ino,
-            stat.st_ctim.tv_sec, stat.st_ctim.tv_nsec);
+  const char* get_shm_name() {
+    if (cl1_meta.shm_name_is_ready.load(std::memory_order_acquire))
+      return cl1_meta.shm_name;
+    return nullptr;
+  }
+  const char* set_shm_name(const struct stat& stat) {
+    sprintf(cl1_meta.shm_name, "ulayfs_%016lx_%013lx", stat.st_ino,
+            (stat.st_ctim.tv_sec * 1000000000 + stat.st_ctim.tv_nsec) >> 3);
+    // MUST set this bool to indicate shm_name is completed
+    // this ensure cl1_meta.shm_name is failure-atomic
+    cl1_meta.shm_name_is_ready.store(true, std::memory_order_release);
+    return cl1_meta.shm_name;
   }
 
   // called by other public functions with lock held
@@ -330,7 +347,7 @@ class MetaBlock : public BaseBlock {
     out << "\tsignature: \"" << block.cl1_meta.signature << "\"\n";
     out << "\tnum_blocks: "
         << block.cl2_meta.num_blocks.load(std::memory_order_acquire) << "\n";
-    out << "\tshm_path: " << block.shm_path << "\n";
+    out << "\tshm_name: " << block.cl1_meta.shm_name << "\n";
     out << "\tnext_tx_block: "
         << block.cl1_meta.next_tx_block.load(std::memory_order_acquire) << "\n";
     out << "\ttx_tail: "
