@@ -1,0 +1,19 @@
+name: Microbenchmark
+
+on:
+  workflow_dispatch:
+    inputs:
+      build_type:
+        description: "build type to use for the benchmark"
+        required: true
+        default: "release"
+
+jobs:
+  benchmark:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v2
+      - name: bench
+        run: ./run bench ${{matrix.build_type}}
+        env:
+          BENCH_NUM_ITER: 10

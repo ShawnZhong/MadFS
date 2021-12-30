@@ -40,14 +40,14 @@ build flags
 
 set(CMAKE_CXX_FLAGS "\
     ${CMAKE_CXX_FLAGS} \
-    -march=native \
-    -Werror -Wall -Wextra \
+    -Wall -Wextra \
     -Wno-unused-parameter \
     -Wno-unused-function \
     -Wno-unused-variable \
     -Wno-unused-private-field \
 ")
 
+target_compile_options(ulayfs PRIVATE -march=native -Werror)
 set_property(TARGET ulayfs PROPERTY INTERPROCEDURAL_OPTIMIZATION TRUE) # LTO
 
 #[[
@@ -104,11 +104,12 @@ endif ()
 if (ULAYFS_BUILD_BENCH)
     add_executable(bench bench/bench.cpp bench/common.h)
 
-    set(BENCHMARK_ENABLE_TESTING OFF)
-    FetchContent_Declare(benchmark URL https://github.com/google/benchmark/archive/refs/tags/v1.6.0.tar.gz)
-    FetchContent_MakeAvailable(benchmark)
+    unset(CMAKE_CXX_STANDARD)
+    FetchContent_Declare(leveldb GIT_REPOSITORY https://github.com/google/leveldb.git)
+    FetchContent_MakeAvailable(leveldb)
 
     if (ULAYFS_LINK_LIBRARY)
+        target_link_libraries(db_test ulayfs)
         target_link_libraries(bench benchmark::benchmark ulayfs)
     else ()
         target_link_libraries(bench benchmark::benchmark)
