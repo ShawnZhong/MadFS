@@ -55,6 +55,7 @@ class File {
   off_t lseek(off_t offset, int whence);
   void* mmap(void* addr, size_t length, int prot, int flags, off_t offset);
   int fsync();
+  void stat(struct stat* buf);
 
   /*
    * Getters
@@ -68,7 +69,7 @@ class File {
   void update(TxEntryIdx& tx_idx, pmem::TxBlock*& tx_block,
               uint64_t* new_file_size, bool do_alloc) {
     pthread_spin_lock(&spinlock);
-    blk_table.update(tx_idx, tx_block, new_file_size, do_alloc);
+    blk_table.update(&tx_idx, &tx_block, new_file_size, do_alloc);
     pthread_spin_unlock(&spinlock);
   }
 
@@ -78,7 +79,7 @@ class File {
                               bool do_alloc) {
     uint64_t new_file_size_local;
     pthread_spin_lock(&spinlock);
-    blk_table.update(tx_idx, tx_block, &new_file_size_local, do_alloc);
+    blk_table.update(&tx_idx, &tx_block, &new_file_size_local, do_alloc);
     auto old_offset = offset_mgr.acquire_offset(
         offset_change, new_file_size_local, stop_at_boundary, ticket);
     pthread_spin_unlock(&spinlock);

@@ -174,14 +174,43 @@ int munmap(void* addr, size_t length) {
 }
 
 int fstat(int fd, struct stat* buf) {
+  int rc = posix::fstat(fd, buf);
+  if (unlikely(rc < 0)) {
+    WARN("fstat failed for fd = %d: %m", fd);
+    return rc;
+  }
+
   if (auto file = get_file(fd)) {
+    file->stat(buf);
     DEBUG("ulayfs::fstat(%d)", fd);
-    // TODO: implement this
-    return posix::fstat(fd, buf);
   } else {
     DEBUG("posix::fstat(%d)", fd);
-    return posix::fstat(fd, buf);
   }
+
+  return 0;
+}
+
+int stat(const char* pathname, struct stat* buf) {
+  int fd = open(pathname, O_RDONLY);
+  if (unlikely(fd < 0)) {
+    WARN("Could not open file \"%s\" for stat: %m", pathname);
+    return -1;
+  }
+
+  int rc = posix::fstat(fd, buf);
+  if (unlikely(rc < 0)) {
+    WARN("stat failed for pathname = %s: %m", pathname);
+    return rc;
+  }
+
+  if (auto file = get_file(fd)) {
+    file->stat(buf);
+    DEBUG("ulayfs::stat(%s)", pathname);
+  } else {
+    DEBUG("posix::stat(%s)", pathname);
+  }
+
+  return 0;
 }
 
 /**

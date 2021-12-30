@@ -5,7 +5,7 @@
 
 namespace ulayfs::dram {
 
-void BlkTable::update(TxEntryIdx& tx_idx, pmem::TxBlock*& tx_block,
+void BlkTable::update(TxEntryIdx* tx_idx, pmem::TxBlock** tx_block,
                       uint64_t* new_file_size, bool do_alloc,
                       bool init_bitmap) {
   // it's possible that the previous update move idx to overflow state
@@ -36,8 +36,8 @@ void BlkTable::update(TxEntryIdx& tx_idx, pmem::TxBlock*& tx_block,
     for (const auto logical_idx : table) file->set_allocated(logical_idx);
 
   // return it out
-  tx_idx = tail_tx_idx;
-  tx_block = tail_tx_block;
+  if (tx_idx) *tx_idx = tail_tx_idx;
+  if (tx_block) *tx_block = tail_tx_block;
   if (new_file_size) *new_file_size = file_size;
 }
 

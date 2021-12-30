@@ -135,15 +135,43 @@ void test_stream() {
   fclose(stream);
 }
 
+void test_stat() {
+  fprintf(stderr, "test_stat\n");
+  remove(FILEPATH);
+
+  int fd = open(FILEPATH, O_CREAT | O_RDWR, S_IRUSR | S_IWUSR);
+  assert(fd >= 0);
+
+  struct stat stat_buf;  // NOLINT(cppcoreguidelines-pro-type-member-init)
+  rc = fstat(fd, &stat_buf);
+  assert(rc == 0);
+  assert(stat_buf.st_size == 0);
+
+  sz = write(fd, test_str.data(), test_str.length());
+  assert(sz == test_str.length());
+  rc = fstat(fd, &stat_buf);
+  assert(rc == 0);
+  assert(stat_buf.st_size == static_cast<off_t>(test_str.length()));
+
+  rc = close(fd);
+  assert(rc == 0);
+
+  rc = stat(FILEPATH, &stat_buf);
+  assert(rc == 0);
+  assert(stat_buf.st_size == static_cast<off_t>(test_str.length()));
+}
+
 int main() {
   test_str = random_string(STR_LEN);
   remove(FILEPATH);
+
   test_write();
   test_read();
   test_lseek();
 #if ULAYFS_USE_PMEMCHECK == 0
   test_mmap();
 #endif
+  test_stat();
   test_stream();
   return 0;
 }

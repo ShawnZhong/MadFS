@@ -34,14 +34,13 @@ File::File(int fd, const struct stat& stat, int flags)
   // The first bit corresponds to the meta block which should always be set
   // to 1. If it is not, then bitmap needs to be initialized.
   // Bitmap::get is not thread safe but we are only reading one bit here.
-  TxEntryIdx tail_tx_idx;
-  pmem::TxBlock* tail_tx_block;
   uint64_t file_size;
+  bool file_size_updated = false;
   if (!bitmap[0].is_allocated(0)) {
     meta->lock();
     if (!bitmap[0].is_allocated(0)) {
-      blk_table.update(tail_tx_idx, tail_tx_block, &file_size,
-                       /*do_alloc*/ false, /*init_bitmap*/ true);
+      file_size = blk_table.get_file_size(/*init_bitmap*/ true);
+      file_size_updated = true;
       // We need to mark meta block as allocated
       // but this will make other alloc_all on this block fail
       // for better space utilization, the thread marks the first bit could just
@@ -52,12 +51,9 @@ File::File(int fd, const struct stat& stat, int flags)
         bitmap[0].set_allocated(0);
     }
     meta->unlock();
-  } else {
-    // if bitmap has been set up, still apply tx to the tail so that
-    // file_size is up-to-date
-    blk_table.update(tail_tx_idx, tail_tx_block, &file_size,
-                     /*do_alloc*/ false, /*init_bitmap*/ false);
   }
+  if (!file_size_updated)
+    file_size = blk_table.get_file_size(/*init_bitmap*/ false);
 
   if (flags & O_APPEND) offset_mgr.seek_absolute(file_size);
 }
@@ -112,12 +108,9 @@ ssize_t File::read(void* buf, size_t count) {
 
 off_t File::lseek(off_t offset, int whence) {
   int64_t ret;
-  TxEntryIdx tx_idx;
-  pmem::TxBlock* tx_block;
-  uint64_t file_size;
 
   pthread_spin_lock(&spinlock);
-  blk_table.update(tx_idx, tx_block, &file_size, /*do_alloc*/ false);
+  uint64_t file_size = blk_table.get_file_size();
 
   switch (whence) {
     case SEEK_SET:
@@ -192,7 +185,7 @@ error:
 int File::fsync() {
   TxEntryIdx tail_tx_idx;
   pmem::TxBlock* tail_tx_block;
-  blk_table.update(tail_tx_idx, tail_tx_block, nullptr, /*do_alloc*/ false);
+  blk_table.update(&tail_tx_idx, &tail_tx_block);
   tx_mgr.flush_tx_entries(meta->get_tx_tail(), tail_tx_idx, tail_tx_block);
   // we keep an invariant that tx_tail must be a valid (non-overflow) idx
   // an overflow index implies that the `next` pointer of the block is not set
@@ -205,6 +198,10 @@ int File::fsync() {
     tail_tx_idx.local_idx = capacity - 1;
   meta->set_tx_tail(tail_tx_idx);
   return 0;
+}
+
+void File::stat(struct stat* buf) {
+  buf->st_size = static_cast<off_t>(blk_table.get_file_size());
 }
 
 /*
@@ -295,9 +292,8 @@ int File::open_shm(const char* shm_name, const struct stat& stat,
 void File::tx_gc() {
   DEBUG("Garbage Collect for fd %d", fd);
   TxEntryIdx tail_tx_idx;
-  pmem::TxBlock* tail_tx_block;
   uint64_t file_size;
-  blk_table.update(tail_tx_idx, tail_tx_block, &file_size, /*do_alloc*/ false);
+  blk_table.update(&tail_tx_idx, /*tx_block*/ nullptr, &file_size);
   tx_mgr.gc(tail_tx_idx.block_idx, file_size);
 }
 

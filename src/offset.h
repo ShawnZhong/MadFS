@@ -33,7 +33,8 @@ class OffsetMgr {
   TicketSlot queues[NUM_OFFSET_QUEUE_SLOT];
 
  public:
-  OffsetMgr(File* file) : file(file), offset(0), next_ticket(1), queues() {}
+  explicit OffsetMgr(File* file)
+      : file(file), offset(0), next_ticket(1), queues() {}
 
   // must have spinlock acquired
   // only call if seeking is the only serialization point
