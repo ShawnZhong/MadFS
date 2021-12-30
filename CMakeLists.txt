@@ -101,12 +101,18 @@ if (ULAYFS_BUILD_TESTS)
     endif ()
 endif ()
 
+if (ULAYFS_BUILD_TOOLS)
+    add_executable(info tools/info.cpp)
+    target_link_libraries(info ulayfs)
+endif ()
+
 if (ULAYFS_BUILD_BENCH)
     add_executable(bench bench/bench.cpp bench/common.h)
 
     unset(CMAKE_CXX_STANDARD)
     FetchContent_Declare(leveldb GIT_REPOSITORY https://github.com/google/leveldb.git)
     FetchContent_MakeAvailable(leveldb)
+    set(CMAKE_CXX_STANDARD 20)
 
     if (ULAYFS_LINK_LIBRARY)
         target_link_libraries(db_test ulayfs)
@@ -114,11 +120,6 @@ if (ULAYFS_BUILD_BENCH)
     else ()
         target_link_libraries(bench benchmark::benchmark)
     endif ()
-endif ()
-
-if (ULAYFS_BUILD_TOOLS)
-    add_executable(info tools/info.cpp)
-    target_link_libraries(info ulayfs)
 endif ()
 
 #[[
