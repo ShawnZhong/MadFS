@@ -42,8 +42,14 @@ File::File(int fd, const struct stat& stat, int flags)
     if (!bitmap[0].is_allocated(0)) {
       blk_table.update(tail_tx_idx, tail_tx_block, &file_size,
                        /*do_alloc*/ false, /*init_bitmap*/ true);
-      // mark meta block as allocated
-      bitmap[0].set_allocated(0);
+      // We need to mark meta block as allocated
+      // but this will make other alloc_all on this block fail
+      // for better space utilization, the thread marks the first bit could just
+      // take these bits and put them into the local free list for future usage
+      if (bitmap[0].alloc_all() == 0)
+        get_local_allocator()->free(1, BITMAP_CAPACITY - 1);
+      else
+        bitmap[0].set_allocated(0);
     }
     meta->unlock();
   } else {
