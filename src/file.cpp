@@ -1,5 +1,6 @@
 #include "file.h"
 
+#include <cstdio>
 #include <iomanip>
 
 namespace ulayfs::dram {
@@ -20,24 +21,23 @@ File::File(int fd, const struct stat& stat, int flags)
   pthread_spin_init(&spinlock, PTHREAD_PROCESS_PRIVATE);
   if (stat.st_size == 0) meta->init();
 
-  const char* shm_path = meta->get_shm_path();
-  // fill meta's shm_path in if it is empty
-  if (*shm_path == '\0') {
+  const char* shm_name = meta->get_shm_name();
+  if (!shm_name) {
     meta->lock();
-    if (*shm_path == '\0') meta->set_shm_path(stat);
+    if (!(shm_name = meta->get_shm_name())) shm_name = meta->set_shm_name(stat);
     meta->unlock();
   }
 
-  shm_fd = open_shm(shm_path, stat, bitmap);
+  shm_fd = open_shm(shm_name, stat, bitmap);
   // The first bit corresponds to the meta block which should always be set
   // to 1. If it is not, then bitmap needs to be initialized.
   // Bitmap::get is not thread safe but we are only reading one bit here.
   TxEntryIdx tail_tx_idx;
   pmem::TxBlock* tail_tx_block;
   uint64_t file_size;
-  if ((bitmap[0].get() & 1) == 0) {
+  if (!bitmap[0].is_allocated(0)) {
     meta->lock();
-    if ((bitmap[0].get() & 1) == 0) {
+    if (!bitmap[0].is_allocated(0)) {
       blk_table.update(tail_tx_idx, tail_tx_block, &file_size,
                        /*do_alloc*/ false, /*init_bitmap*/ true);
       // mark meta block as allocated
@@ -168,8 +168,10 @@ Allocator* File::get_local_allocator() {
  * Helper functions
  */
 
-int File::open_shm(const char* shm_path, const struct stat& stat,
+int File::open_shm(const char* shm_name, const struct stat& stat,
                    Bitmap*& bitmap) {
+  char shm_path[64];
+  sprintf(shm_path, "/dev/shm/%s", shm_name);
   DEBUG("Opening shared memory %s", shm_path);
   // use posix::open instead of shm_open since shm_open calls open, which is
   // overloaded by ulayfs

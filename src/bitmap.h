@@ -61,20 +61,20 @@ class Bitmap {
 
   // WARN: not thread-safe
   void set_allocated(uint32_t idx) {
-    bitmap.store(bitmap.load(std::memory_order_relaxed) | (1 << idx),
+    bitmap.store(bitmap.load(std::memory_order_relaxed) | (1UL << idx),
                  std::memory_order_relaxed);
   }
 
   // WARN: not thread-safe
   void set_unallocated(uint32_t idx) {
-    bitmap.store(bitmap.load(std::memory_order_relaxed) & ~(1 << idx),
+    bitmap.store(bitmap.load(std::memory_order_relaxed) & ~(1UL << idx),
                  std::memory_order_relaxed);
   }
 
   // WARN: not thread-safe
   // get a read-only snapshot of bitmap
-  [[nodiscard]] uint64_t get() const {
-    return bitmap.load(std::memory_order_relaxed);
+  [[nodiscard]] bool is_allocated(uint32_t idx) const {
+    return bitmap.load(std::memory_order_relaxed) & (1UL << idx);
   }
 
   /*** Below are static functions for allocation from a bitmap array ***/
