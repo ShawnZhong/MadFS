@@ -94,7 +94,6 @@ if (ULAYFS_BUILD_TESTS)
     add_executable(test_basic test/test_basic.cpp test/common.h)
     add_executable(test_rw test/test_rw.cpp test/common.h)
     add_executable(test_sync test/test_sync.cpp test/common.h)
-    add_executable(test_bitmap test/test_bitmap.cpp test/common.h)
 
     if (ULAYFS_LINK_LIBRARY)
         target_link_libraries(test_basic ulayfs)
