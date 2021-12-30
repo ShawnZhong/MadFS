@@ -254,8 +254,8 @@ void TxMgr::gc(const LogicalBlockIdx tail_tx_block_idx, uint64_t file_size) {
   };
 
   auto tail_block = file->lidx_to_addr_rw(tail_tx_block_idx);
-  auto num_blocks = ALIGN_UP(file_size, BLOCK_SIZE) / BLOCK_SIZE;
-  auto leftover_bytes = (BLOCK_SIZE - file_size) % BLOCK_SIZE;
+  auto num_blocks = ALIGN_UP(file_size, BLOCK_SIZE) >> BLOCK_SHIFT;
+  auto leftover_bytes = ALIGN_UP(file_size, BLOCK_SIZE) - file_size;
 
   uint32_t tx_seq = 1;
   auto first_tx_block_idx = allocator->alloc(1);
