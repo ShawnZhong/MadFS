@@ -146,9 +146,9 @@ void* File::mmap(void* addr_hint, size_t length, int prot, int mmap_flags,
   }
 
   // remap the blocks in the file
-  VirtualBlockIdx vidx_begin = offset >> BLOCK_SHIFT;
+  VirtualBlockIdx vidx_begin = BLOCK_SIZE_TO_IDX(offset);
   VirtualBlockIdx vidx_end =
-      ALIGN_UP(offset + length, BLOCK_SIZE) >> BLOCK_SHIFT;
+      BLOCK_SIZE_TO_IDX(ALIGN_UP(offset + length, BLOCK_SIZE));
 
   LogicalBlockIdx lidx_curr_group_start = blk_table.get(vidx_begin);
   int num_contig_blocks = 0;

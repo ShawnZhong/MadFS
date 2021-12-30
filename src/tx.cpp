@@ -44,7 +44,7 @@ ssize_t TxMgr::do_pwrite(const char* buf, size_t count, size_t offset) {
     return AlignedTx(file, this, buf, count, offset).do_write();
 
   // another special case where range is within a single block
-  if ((offset >> BLOCK_SHIFT) == ((offset + count - 1) >> BLOCK_SHIFT))
+  if ((BLOCK_SIZE_TO_IDX(offset)) == BLOCK_SIZE_TO_IDX(offset + count - 1))
     return SingleBlockTx(file, this, buf, count, offset).do_write();
 
   // unaligned multi-block write
@@ -75,7 +75,7 @@ ssize_t TxMgr::do_write(const char* buf, size_t count) {
         file, this, buf, count, offset, tail_tx_idx, tail_tx_block, ticket);
 
   // another special case where range is within a single block
-  if ((offset >> BLOCK_SHIFT) == ((offset + count - 1) >> BLOCK_SHIFT))
+  if (BLOCK_SIZE_TO_IDX(offset) == BLOCK_SIZE_TO_IDX(offset + count - 1))
     return WriteTx::do_write_and_validate_offset<SingleBlockTx>(
         file, this, buf, count, offset, tail_tx_idx, tail_tx_block, ticket);
 
@@ -233,7 +233,7 @@ void TxMgr::gc(const LogicalBlockIdx tail_tx_block_idx, uint64_t file_size) {
   auto allocator = file->get_local_allocator();
 
   auto tail_block = file->lidx_to_addr_rw(tail_tx_block_idx);
-  auto num_blocks = ALIGN_UP(file_size, BLOCK_SIZE) >> BLOCK_SHIFT;
+  auto num_blocks = BLOCK_SIZE_TO_IDX(ALIGN_UP(file_size, BLOCK_SIZE));
   auto leftover_bytes = ALIGN_UP(file_size, BLOCK_SIZE) - file_size;
 
   uint32_t tx_seq = 1;
@@ -379,8 +379,8 @@ TxMgr::Tx::Tx(File* file, TxMgr* tx_mgr, size_t count, size_t offset)
 
       // derived properties
       end_offset(offset + count),
-      begin_vidx(offset >> BLOCK_SHIFT),
-      end_vidx(ALIGN_UP(end_offset, BLOCK_SIZE) >> BLOCK_SHIFT),
+      begin_vidx(BLOCK_SIZE_TO_IDX(offset)),
+      end_vidx(BLOCK_SIZE_TO_IDX(ALIGN_UP(end_offset, BLOCK_SIZE))),
       num_blocks(end_vidx - begin_vidx),
       is_offset_depend(false) {}
 
@@ -475,7 +475,7 @@ ssize_t TxMgr::ReadTx::do_read() {
   if (offset + count > file_size) {  // partial read; recalculate end_*
     count = file_size - offset;
     end_offset = offset + count;
-    end_vidx = ALIGN_UP(end_offset, BLOCK_SIZE) >> BLOCK_SHIFT;
+    end_vidx = BLOCK_SIZE_TO_IDX(ALIGN_UP(end_offset, BLOCK_SIZE));
   }
 
   // first handle the first block (which might not be full block)
@@ -701,7 +701,7 @@ ssize_t TxMgr::MultiBlockTx::do_write() {
   // copy full blocks first
   if (num_full_blocks > 0) {
     const char* rest_buf = buf;
-    size_t rest_full_count = num_full_blocks << BLOCK_SHIFT;
+    size_t rest_full_count = BLOCK_IDX_TO_SIZE(num_full_blocks);
     for (size_t i = 0; i < dst_blocks.size(); ++i) {
       // get logical block pointer for this iter
       // first block in first chunk could start from partial

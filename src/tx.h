@@ -293,15 +293,15 @@ class TxMgr::CoWTx : public TxMgr::WriteTx {
  protected:
   CoWTx(File* file, TxMgr* tx_mgr, const char* buf, size_t count, size_t offset)
       : WriteTx(file, tx_mgr, buf, count, offset),
-        begin_full_vidx(ALIGN_UP(offset, BLOCK_SIZE) >> BLOCK_SHIFT),
-        end_full_vidx(end_offset >> BLOCK_SHIFT),
+        begin_full_vidx(BLOCK_SIZE_TO_IDX(ALIGN_UP(offset, BLOCK_SIZE))),
+        end_full_vidx(BLOCK_SIZE_TO_IDX(end_offset)),
         num_full_blocks(end_full_vidx - begin_full_vidx) {}
   CoWTx(File* file, TxMgr* tx_mgr, const char* buf, size_t count, size_t offset,
         TxEntryIdx tail_tx_idx, pmem::TxBlock* tail_tx_block, uint64_t ticket)
       : WriteTx(file, tx_mgr, buf, count, offset, tail_tx_idx, tail_tx_block,
                 ticket),
-        begin_full_vidx(ALIGN_UP(offset, BLOCK_SIZE) >> BLOCK_SHIFT),
-        end_full_vidx(end_offset >> BLOCK_SHIFT),
+        begin_full_vidx(BLOCK_SIZE_TO_IDX(ALIGN_UP(offset, BLOCK_SIZE))),
+        end_full_vidx(BLOCK_SIZE_TO_IDX(end_offset)),
         num_full_blocks(end_full_vidx - begin_full_vidx) {}
 
   /*
@@ -324,7 +324,7 @@ class TxMgr::SingleBlockTx : public TxMgr::CoWTx {
   SingleBlockTx(File* file, TxMgr* tx_mgr, const char* buf, size_t count,
                 size_t offset)
       : CoWTx(file, tx_mgr, buf, count, offset),
-        local_offset(offset - (begin_vidx << BLOCK_SHIFT)) {
+        local_offset(offset - BLOCK_IDX_TO_SIZE(begin_vidx)) {
     assert(num_blocks == 1);
   }
   SingleBlockTx(File* file, TxMgr* tx_mgr, const char* buf, size_t count,
@@ -332,7 +332,7 @@ class TxMgr::SingleBlockTx : public TxMgr::CoWTx {
                 pmem::TxBlock* tail_tx_block, uint64_t ticket)
       : CoWTx(file, tx_mgr, buf, count, offset, tail_tx_idx, tail_tx_block,
               ticket),
-        local_offset(offset - (begin_vidx << BLOCK_SHIFT)) {
+        local_offset(offset - BLOCK_IDX_TO_SIZE(begin_vidx)) {
     assert(num_blocks == 1);
   }
   ssize_t do_write();
