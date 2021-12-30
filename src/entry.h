@@ -10,7 +10,7 @@
 
 namespace ulayfs::pmem {
 
-struct __attribute__((packed)) TxCommitEntry {
+struct __attribute__((packed)) TxEntryIndirect {
  private:
   constexpr static const int NUM_BLOCKS_BITS = 6;
   constexpr static const int BEGIN_VIRTUAL_IDX_BITS = 17;
@@ -34,9 +34,9 @@ struct __attribute__((packed)) TxCommitEntry {
   LogEntryIdx log_entry_idx;
 
   // It's an optimization that num_blocks and virtual_block_idx could inline
-  // with TxCommitEntry, but only if they could fit in.
-  TxCommitEntry(uint32_t num_blocks, uint32_t begin_virtual_idx,
-                LogEntryIdx log_entry_idx)
+  // with TxEntryIndirect, but only if they could fit in.
+  TxEntryIndirect(uint32_t num_blocks, uint32_t begin_virtual_idx,
+                  LogEntryIdx log_entry_idx)
       : num_blocks(0), begin_virtual_idx(0), log_entry_idx(log_entry_idx) {
     if (num_blocks <= NUM_BLOCKS_MAX &&
         begin_virtual_idx <= BEGIN_VIRTUAL_IDX_MAX) {
@@ -49,8 +49,8 @@ struct __attribute__((packed)) TxCommitEntry {
   }
 
   friend std::ostream& operator<<(std::ostream& out,
-                                  const TxCommitEntry& entry) {
-    out << "TxCommitEntry{";
+                                  const TxEntryIndirect& entry) {
+    out << "TxEntryIndirect{";
     out << "n_blk=" << entry.num_blocks << ", ";
     out << "vidx=" << entry.begin_virtual_idx << ", ";
     out << "log_head=" << entry.log_entry_idx;
@@ -59,7 +59,7 @@ struct __attribute__((packed)) TxCommitEntry {
   }
 };
 
-struct __attribute__((packed)) TxCommitInlineEntry {
+struct __attribute__((packed)) TxEntryInline {
  private:
   constexpr static const int NUM_BLOCKS_BITS = 6;
   constexpr static const int BEGIN_VIRTUAL_IDX_BITS = 29;
@@ -89,11 +89,11 @@ struct __attribute__((packed)) TxCommitInlineEntry {
            begin_logical_idx <= BEGIN_LOGICAL_IDX_MAX;
   }
 
-  constexpr TxCommitInlineEntry()
+  constexpr TxEntryInline()
       : num_blocks(0), begin_virtual_idx(0), begin_logical_idx(0) {}
 
-  TxCommitInlineEntry(uint32_t num_blocks, uint32_t begin_virtual_idx,
-                      uint32_t begin_logical_idx)
+  TxEntryInline(uint32_t num_blocks, uint32_t begin_virtual_idx,
+                uint32_t begin_logical_idx)
       : num_blocks(num_blocks),
         begin_virtual_idx(begin_virtual_idx),
         begin_logical_idx(begin_logical_idx) {
@@ -101,8 +101,8 @@ struct __attribute__((packed)) TxCommitInlineEntry {
   }
 
   friend std::ostream& operator<<(std::ostream& out,
-                                  const TxCommitInlineEntry& entry) {
-    out << "TxCommitInlineEntry{";
+                                  const TxEntryInline& entry) {
+    out << "TxEntryInline{";
     out << "n_blk=" << entry.num_blocks << ", ";
     out << "vidx=" << entry.begin_virtual_idx << ", ";
     out << "lidx=" << entry.begin_logical_idx;
@@ -114,19 +114,19 @@ struct __attribute__((packed)) TxCommitInlineEntry {
 union TxEntry {
  public:
   uint64_t raw_bits;
-  TxCommitEntry commit_entry;
-  TxCommitInlineEntry commit_inline_entry;
+  TxEntryIndirect commit_entry;
+  TxEntryInline commit_inline_entry;
   struct {
     bool is_inline : 1;
     uint64_t payload : 63;
   } fields;
 
-  constexpr static const pmem::TxCommitInlineEntry TxCommitDummyEntry{};
+  constexpr static const pmem::TxEntryInline TxEntryDummy{};
 
   TxEntry(){};
   TxEntry(uint64_t raw_bits) : raw_bits(raw_bits) {}
-  TxEntry(TxCommitEntry commit_entry) : commit_entry(commit_entry) {}
-  TxEntry(TxCommitInlineEntry commit_inline_entry)
+  TxEntry(TxEntryIndirect commit_entry) : commit_entry(commit_entry) {}
+  TxEntry(TxEntryInline commit_inline_entry)
       : commit_inline_entry(commit_inline_entry) {}
 
   [[nodiscard]] bool is_inline() const { return fields.is_inline; }
@@ -189,9 +189,8 @@ union TxEntry {
 };
 
 static_assert(sizeof(TxEntry) == 8, "TxEntry must be 64 bits");
-static_assert(sizeof(TxCommitEntry) == 8, "TxCommitEntry must be 64 bits");
-static_assert(sizeof(TxCommitInlineEntry) == 8,
-              "TxCommitInlineEntry must be 64 bits");
+static_assert(sizeof(TxEntryIndirect) == 8, "TxEntryIndirect must be 64 bits");
+static_assert(sizeof(TxEntryInline) == 8, "TxEntryInline must be 64 bits");
 
 enum class LogOp {
   LOG_INVALID = 0,
