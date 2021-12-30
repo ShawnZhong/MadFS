@@ -231,7 +231,6 @@ void TxMgr::gc(const LogicalBlockIdx tail_tx_block_idx, uint64_t file_size) {
     return;
 
   auto allocator = file->get_local_allocator();
-  auto log_mgr = file->get_log_mgr();
 
   auto tail_block = file->lidx_to_addr_rw(tail_tx_block_idx);
   auto num_blocks = ALIGN_UP(file_size, BLOCK_SIZE) >> BLOCK_SHIFT;
@@ -282,9 +281,9 @@ void TxMgr::gc(const LogicalBlockIdx tail_tx_block_idx, uint64_t file_size) {
     } else {
       // since i - begin <= 63, this can fit into one log entry
       auto begin_lidx = std::vector{file->vidx_to_lidx(begin)};
-      auto log_head_idx =
-          log_mgr->append(allocator, pmem::LogOp::LOG_OVERWRITE, leftover_bytes,
-                          i - begin, begin, begin_lidx);
+      auto log_head_idx = file->get_log_mgr()->append(
+          allocator, pmem::LogOp::LOG_OVERWRITE, leftover_bytes, i - begin,
+          begin, begin_lidx);
       auto commit_entry = pmem::TxCommitEntry(i - begin, begin, log_head_idx);
       new_tx_block->store(commit_entry, tx_idx.local_idx);
     }
@@ -301,7 +300,7 @@ void TxMgr::gc(const LogicalBlockIdx tail_tx_block_idx, uint64_t file_size) {
   while (!meta->set_next_tx_block(first_tx_block_idx, orig_tx_block_idx))
     ;
   pmem::persist_fenced(meta, CACHELINE_SIZE);
-  
+
   // invalidate tx in meta block so we can free the log blocks they point to
   meta->invalidate_tx_entries();
 
