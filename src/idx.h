@@ -7,7 +7,7 @@
 namespace ulayfs {
 
 // block index within a file; the meta block has a LogicalBlockIdx of 0
-      using LogicalBlockIdx = uint32_t;
+using LogicalBlockIdx = uint32_t;
 // block index seen by applications
 using VirtualBlockIdx = uint32_t;
 // each bit in the bitmap corresponds to a logical block
