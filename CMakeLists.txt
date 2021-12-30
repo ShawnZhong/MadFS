@@ -7,14 +7,15 @@ add_library(ulayfs SHARED
     src/bitmap.h
     src/block.h
     src/btable.h src/btable.cpp
+    src/const.h
     src/debug.h src/debug.cpp
     src/entry.h
     src/file.h src/file.cpp
     src/idx.h
-    src/const.h
     src/lib.h src/lib.cpp
     src/log.h src/log.cpp
     src/mtable.h
+    src/offset.h src/offset.cpp
     src/params.h
     src/posix.h src/posix.cpp
     src/tx.h src/tx.cpp
@@ -26,7 +27,7 @@ dependencies
 ]]
 
 include(FetchContent)
-FetchContent_Declare(tbb URL https://github.com/oneapi-src/oneTBB/releases/download/v2021.4.0/oneapi-tbb-2021.4.0-lin.tgz)
+FetchContent_Declare(tbb URL https://github.com/oneapi-src/oneTBB/releases/download/v2021.5.0/oneapi-tbb-2021.5.0-lin.tgz)
 FetchContent_MakeAvailable(tbb)
 
 find_package(TBB REQUIRED HINTS ${tbb_SOURCE_DIR}/lib/cmake/tbb)
@@ -76,12 +77,13 @@ if (NOT GIT_COMMIT_HASH)
 endif ()
 
 #[[
-tests and benchmarks
+tests, benchmarks, and tools
 ]]
 
 option(ULAYFS_LINK_LIBRARY "Link uLayFS for tests and benchmarks" ON)
 option(ULAYFS_BUILD_TESTS "Build tests" ON)
 option(ULAYFS_BUILD_BENCH "Build benchmarks" OFF)
+option(ULAYFS_BUILD_TOOLS "Build tools" ON)
 
 if (ULAYFS_BUILD_TESTS)
     include_directories(src)
@@ -89,13 +91,11 @@ if (ULAYFS_BUILD_TESTS)
     add_executable(test_basic test/test_basic.cpp test/common.h)
     add_executable(test_rw test/test_rw.cpp test/common.h)
     add_executable(test_sync test/test_sync.cpp test/common.h)
-    add_executable(test_bitmap test/test_bitmap.cpp test/common.h)
 
     if (ULAYFS_LINK_LIBRARY)
         target_link_libraries(test_basic ulayfs)
         target_link_libraries(test_rw ulayfs)
         target_link_libraries(test_sync ulayfs pthread)
-        target_link_libraries(test_bitmap ulayfs)
     else ()
         target_link_libraries(test_sync pthread)
     endif ()
@@ -113,6 +113,11 @@ if (ULAYFS_BUILD_BENCH)
     else ()
         target_link_libraries(bench benchmark::benchmark)
     endif ()
+endif ()
+
+if (ULAYFS_BUILD_TOOLS)
+    add_executable(info tools/info.cpp)
+    target_link_libraries(info ulayfs)
 endif ()
 
 #[[

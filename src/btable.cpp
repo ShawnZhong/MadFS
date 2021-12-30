@@ -8,8 +8,6 @@ namespace ulayfs::dram {
 void BlkTable::update(TxEntryIdx& tx_idx, pmem::TxBlock*& tx_block,
                       uint64_t* new_file_size, bool do_alloc,
                       bool init_bitmap) {
-  pthread_spin_lock(&spinlock);
-
   // it's possible that the previous update move idx to overflow state
   if (!tx_mgr->handle_idx_overflow(tail_tx_idx, tail_tx_block, do_alloc)) {
     // if still overflow, do_alloc must be unset
@@ -18,7 +16,6 @@ void BlkTable::update(TxEntryIdx& tx_idx, pmem::TxBlock*& tx_block,
     return;
   }
 
-  auto log_mgr = file->get_local_log_mgr();
   LogicalBlockIdx prev_tx_block_idx = 0;
 
   while (true) {
@@ -29,7 +26,7 @@ void BlkTable::update(TxEntryIdx& tx_idx, pmem::TxBlock*& tx_block,
     if (tx_entry.is_inline())
       apply_tx(tx_entry.commit_inline_entry);
     else
-      apply_tx(tx_entry.commit_entry, log_mgr, init_bitmap);
+      apply_tx(tx_entry.commit_entry, file->get_log_mgr(), init_bitmap);
     prev_tx_block_idx = tail_tx_idx.block_idx;
     if (!tx_mgr->advance_tx_idx(tail_tx_idx, tail_tx_block, do_alloc)) break;
   }
@@ -42,8 +39,6 @@ void BlkTable::update(TxEntryIdx& tx_idx, pmem::TxBlock*& tx_block,
   tx_idx = tail_tx_idx;
   tx_block = tail_tx_block;
   if (new_file_size) *new_file_size = file_size;
-
-  pthread_spin_unlock(&spinlock);
 }
 
 void BlkTable::resize_to_fit(VirtualBlockIdx idx) {
@@ -93,6 +88,8 @@ void BlkTable::apply_tx(pmem::TxCommitEntry tx_commit_entry, LogMgr* log_mgr,
 
 void BlkTable::apply_tx(pmem::TxCommitInlineEntry tx_commit_inline_entry) {
   uint32_t num_blocks = tx_commit_inline_entry.num_blocks;
+  // for dummy entry, do nothing
+  if (num_blocks == 0) return;
   VirtualBlockIdx begin_vidx = tx_commit_inline_entry.begin_virtual_idx;
   LogicalBlockIdx begin_lidx = tx_commit_inline_entry.begin_logical_idx;
   VirtualBlockIdx end_vidx = begin_vidx + num_blocks;

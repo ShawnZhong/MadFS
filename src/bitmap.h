@@ -18,7 +18,6 @@ constexpr static uint32_t BITMAP_CAPACITY = 1 << BITMAP_CAPACITY_SHIFT;
 
 namespace dram {
 // All member functions are thread-safe and require no locks
-// TODO: move to namespace dram
 class Bitmap {
  private:
   std::atomic_uint64_t bitmap;
@@ -62,20 +61,20 @@ class Bitmap {
 
   // WARN: not thread-safe
   void set_allocated(uint32_t idx) {
-    bitmap.store(bitmap.load(std::memory_order_relaxed) | (1 << idx),
+    bitmap.store(bitmap.load(std::memory_order_relaxed) | (1UL << idx),
                  std::memory_order_relaxed);
   }
 
   // WARN: not thread-safe
   void set_unallocated(uint32_t idx) {
-    bitmap.store(bitmap.load(std::memory_order_relaxed) & ~(1 << idx),
+    bitmap.store(bitmap.load(std::memory_order_relaxed) & ~(1UL << idx),
                  std::memory_order_relaxed);
   }
 
   // WARN: not thread-safe
   // get a read-only snapshot of bitmap
-  [[nodiscard]] uint64_t get() const {
-    return bitmap.load(std::memory_order_relaxed);
+  [[nodiscard]] bool is_allocated(uint32_t idx) const {
+    return bitmap.load(std::memory_order_relaxed) & (1UL << idx);
   }
 
   /*** Below are static functions for allocation from a bitmap array ***/
@@ -146,7 +145,9 @@ class Bitmap {
   }
 
   friend std::ostream& operator<<(std::ostream& out, const Bitmap& b) {
-    out << std::bitset<64>(b.bitmap);
+    for (size_t i = 0; i < BITMAP_CAPACITY; ++i) {
+      out << (b.bitmap.load(std::memory_order_relaxed) & (1l << i) ? "1" : "0");
+    }
     return out;
   }
 };
