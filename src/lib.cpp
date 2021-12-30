@@ -174,14 +174,20 @@ int munmap(void* addr, size_t length) {
 }
 
 int fstat(int fd, struct stat* buf) {
+  int rc = posix::fstat(fd, buf);
+  if (unlikely(rc < 0)) {
+    WARN("fstat failed for fd = %d: %m", fd);
+    return rc;
+  }
+
   if (auto file = get_file(fd)) {
+    file->stat(buf);
     DEBUG("ulayfs::fstat(%d)", fd);
-    // TODO: implement this
-    return posix::fstat(fd, buf);
   } else {
     DEBUG("posix::fstat(%d)", fd);
-    return posix::fstat(fd, buf);
   }
+
+  return 0;
 }
 
 /**

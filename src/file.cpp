@@ -201,6 +201,14 @@ int File::fsync() {
   return 0;
 }
 
+void File::stat(struct stat* buf) {
+  TxEntryIdx tail_tx_idx;
+  pmem::TxBlock* tail_tx_block;
+  uint64_t file_size;
+  blk_table.update(tail_tx_idx, tail_tx_block, &file_size, /*do_alloc*/ false);
+  buf->st_size = static_cast<off_t>(file_size);
+}
+
 /*
  * Getters & removers for thread-local data structures
  */

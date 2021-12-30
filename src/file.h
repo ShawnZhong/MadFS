@@ -55,6 +55,7 @@ class File {
   off_t lseek(off_t offset, int whence);
   void* mmap(void* addr, size_t length, int prot, int flags, off_t offset);
   int fsync();
+  void stat(struct stat* buf);
 
   /*
    * Getters
