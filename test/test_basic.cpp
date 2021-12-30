@@ -155,6 +155,10 @@ void test_stat() {
 
   rc = close(fd);
   assert(rc == 0);
+
+  rc = stat(FILEPATH, &stat_buf);
+  assert(rc == 0);
+  assert(stat_buf.st_size == static_cast<off_t>(test_str.length()));
 }
 
 int main() {

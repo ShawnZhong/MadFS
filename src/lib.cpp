@@ -190,6 +190,29 @@ int fstat(int fd, struct stat* buf) {
   return 0;
 }
 
+int stat(const char* pathname, struct stat* buf) {
+  int fd = open(pathname, O_RDONLY);
+  if (unlikely(fd < 0)) {
+    WARN("Could not open file \"%s\" for stat: %m", pathname);
+    return -1;
+  }
+
+  int rc = posix::fstat(fd, buf);
+  if (unlikely(rc < 0)) {
+    WARN("stat failed for pathname = %s: %m", pathname);
+    return rc;
+  }
+
+  if (auto file = get_file(fd)) {
+    file->stat(buf);
+    DEBUG("ulayfs::stat(%s)", pathname);
+  } else {
+    DEBUG("posix::stat(%s)", pathname);
+  }
+
+  return 0;
+}
+
 /**
  * Called when the shared library is first loaded
  *
