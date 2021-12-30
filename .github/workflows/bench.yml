@@ -7,7 +7,7 @@ on:
         description: "build type"
         required: true
         default: "release"
-  pull_request:
+#  pull_request:
 
 jobs:
   microbench:
