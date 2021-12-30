@@ -91,14 +91,6 @@ class Bitmap {
                                   BitmapLocalIdx hint) {
     BitmapLocalIdx ret;
     BitmapLocalIdx idx = hint >> BITMAP_CAPACITY_SHIFT;
-    // the first block's first bit is reserved (used by bitmap block itself)
-    // if anyone allocates it, it must retry
-    if (idx == 0) {
-      ret = bitmaps[0].alloc_one();
-      if (ret == 0) ret = bitmaps[0].alloc_one();
-      if (ret > 0) return ret;
-      ++idx;
-    }
     for (; idx < num_bitmaps; ++idx) {
       ret = bitmaps[idx].alloc_one();
       if (ret < 0) continue;
@@ -116,12 +108,10 @@ class Bitmap {
    * @param hint hint to the empty bit
    * @return the BitmapLocalIdx
    */
-  static BitmapLocalIdx alloc_batch(Bitmap bitmaps[], uint16_t num_bitmaps,
+  static BitmapLocalIdx alloc_batch(Bitmap bitmaps[], int32_t num_bitmaps,
                                     BitmapLocalIdx hint) {
     BitmapLocalIdx ret;
     BitmapLocalIdx idx = hint >> BITMAP_CAPACITY_SHIFT;
-    // we cannot allocate a whole batch from the first bitmap
-    if (idx == 0) ++idx;
     for (; idx < num_bitmaps; ++idx) {
       ret = bitmaps[idx].alloc_all();
       if (ret < 0) continue;

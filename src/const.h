@@ -46,10 +46,11 @@ static_assert(
     NUM_BITMAP_PER_BLOCK - 1 <= std::numeric_limits<BitmapLocalIdx>::max(),
     "NUM_BITMAP_PER_BLOCK - 1 should be representable with BitmapLocalIdx");
 
-constexpr static uint32_t NUM_BITMAP_BLKS = 64;
-constexpr static uint32_t BITMAP_SIZE = NUM_BITMAP_BLKS << BLOCK_SHIFT;
-constexpr static uint16_t TOTAL_DRAM_BITMAP =
-    NUM_BITMAP_BLKS * NUM_BITMAP_PER_BLOCK;
+// we use one hugepage of bitmap, which is sufficient for a 64GB file
+// TODO: extend bitmap dynamically
+constexpr static uint32_t NUM_BITMAP_BLOCKS = 512;
+constexpr static uint32_t BITMAP_SIZE = NUM_BITMAP_BLOCKS << BLOCK_SHIFT;
+constexpr static uint32_t NUM_BITMAP = NUM_BITMAP_BLOCKS * NUM_BITMAP_PER_BLOCK;
 
 // how many data blocks can be covered per CAS
 // TODO: put this constant somewhere else?

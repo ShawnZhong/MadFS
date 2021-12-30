@@ -41,7 +41,7 @@ LogicalBlockIdx Allocator::alloc(uint32_t num_blocks) {
 
   // then we have to allocate from global bitmaps
   recent_bitmap_local_idx =
-      Bitmap::alloc_batch(bitmap, TOTAL_DRAM_BITMAP, recent_bitmap_local_idx);
+      Bitmap::alloc_batch(bitmap, NUM_BITMAP, recent_bitmap_local_idx);
 
   // keep this part of code as it may be used in the future for dynamically
   // growing bitmap while (true) {
