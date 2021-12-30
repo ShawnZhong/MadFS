@@ -70,10 +70,10 @@ class BlkTable {
    * @param log_mgr a thread-local log_mgr to be used
    * @param init_bitmap whether we need to initialize the bitmap object
    */
-  void apply_tx(pmem::TxCommitEntry tx_commit_entry, LogMgr* log_mgr,
+  void apply_tx(pmem::TxEntryIndirect tx_commit_entry, LogMgr* log_mgr,
                 bool init_bitmap);
 
-  void apply_tx(pmem::TxCommitInlineEntry tx_commit_inline_entry);
+  void apply_tx(pmem::TxEntryInline tx_commit_inline_entry);
 
   friend std::ostream& operator<<(std::ostream& out, const BlkTable& b);
 };

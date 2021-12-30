@@ -50,7 +50,7 @@ void BlkTable::resize_to_fit(VirtualBlockIdx idx) {
   table.resize(next_pow2);
 }
 
-void BlkTable::apply_tx(pmem::TxCommitEntry tx_commit_entry, LogMgr* log_mgr,
+void BlkTable::apply_tx(pmem::TxEntryIndirect tx_commit_entry, LogMgr* log_mgr,
                         bool init_bitmap) {
   auto log_entry_idx = tx_commit_entry.log_entry_idx;
 
@@ -86,7 +86,7 @@ void BlkTable::apply_tx(pmem::TxCommitEntry tx_commit_entry, LogMgr* log_mgr,
   if (now_file_size > file_size) file_size = now_file_size;
 }
 
-void BlkTable::apply_tx(pmem::TxCommitInlineEntry tx_commit_inline_entry) {
+void BlkTable::apply_tx(pmem::TxEntryInline tx_commit_inline_entry) {
   uint32_t num_blocks = tx_commit_inline_entry.num_blocks;
   // for dummy entry, do nothing
   if (num_blocks == 0) return;

@@ -252,11 +252,11 @@ void TxMgr::gc(const LogicalBlockIdx tail_tx_block_idx, uint64_t file_size) {
     if (curr_blk_idx == 0) break;
     // continuous blocks can be placed in 1 tx
     if (curr_blk_idx - prev_blk_idx == 1 &&
-        i - begin <= /*TODO: pmem::TxCommitEntry::NUM_BLOCKS_MAX*/ 63)
+        i - begin <= /*TODO: pmem::TxEntryIndirect::NUM_BLOCKS_MAX*/ 63)
       continue;
 
     auto commit_entry =
-        pmem::TxCommitInlineEntry(i - begin, begin, file->vidx_to_lidx(begin));
+        pmem::TxEntryInline(i - begin, begin, file->vidx_to_lidx(begin));
     new_tx_block->store(commit_entry, tx_idx.local_idx);
     if (!advance_tx_idx(tx_idx, new_tx_block, false)) {
       // current block is full, flush it and allocate a new block
@@ -275,8 +275,8 @@ void TxMgr::gc(const LogicalBlockIdx tail_tx_block_idx, uint64_t file_size) {
   // add the last commit entry
   {
     if (leftover_bytes == 0) {
-      auto commit_entry = pmem::TxCommitInlineEntry(i - begin, begin,
-                                                    file->vidx_to_lidx(begin));
+      auto commit_entry =
+          pmem::TxEntryInline(i - begin, begin, file->vidx_to_lidx(begin));
       new_tx_block->store(commit_entry, tx_idx.local_idx);
     } else {
       // since i - begin <= 63, this can fit into one log entry
@@ -284,13 +284,13 @@ void TxMgr::gc(const LogicalBlockIdx tail_tx_block_idx, uint64_t file_size) {
       auto log_head_idx = file->get_log_mgr()->append(
           allocator, pmem::LogOp::LOG_OVERWRITE, leftover_bytes, i - begin,
           begin, begin_lidx);
-      auto commit_entry = pmem::TxCommitEntry(i - begin, begin, log_head_idx);
+      auto commit_entry = pmem::TxEntryIndirect(i - begin, begin, log_head_idx);
       new_tx_block->store(commit_entry, tx_idx.local_idx);
     }
   }
   // pad the last block with dummy tx entries
   while (advance_tx_idx(tx_idx, new_tx_block, false))
-    new_tx_block->store(pmem::TxEntry::TxCommitDummyEntry, tx_idx.local_idx);
+    new_tx_block->store(pmem::TxEntry::TxEntryDummy, tx_idx.local_idx);
   // last block points to the tail, meta points to the first block
   new_tx_block->set_next_tx_block(tail_tx_block_idx);
   // abort if new transaction history is longer than the old one
@@ -581,10 +581,9 @@ TxMgr::WriteTx::WriteTx(File* file, TxMgr* tx_mgr, const char* buf,
   assert(!dst_blocks.empty());
 
   uint16_t leftover_bytes = ALIGN_UP(end_offset, BLOCK_SIZE) - end_offset;
-  if (pmem::TxCommitInlineEntry::can_inline(num_blocks, begin_vidx,
-                                            dst_lidxs[0], leftover_bytes)) {
-    commit_entry =
-        pmem::TxCommitInlineEntry(num_blocks, begin_vidx, dst_lidxs[0]);
+  if (pmem::TxEntryInline::can_inline(num_blocks, begin_vidx, dst_lidxs[0],
+                                      leftover_bytes)) {
+    commit_entry = pmem::TxEntryInline(num_blocks, begin_vidx, dst_lidxs[0]);
   } else {
     // it's fine that we append log first as long we don't publish it by tx
     auto log_entry_idx =
@@ -595,7 +594,7 @@ TxMgr::WriteTx::WriteTx(File* file, TxMgr* tx_mgr, const char* buf,
                         dst_lidxs,       // begin_logical_idxs
                         false            // fenced
         );
-    commit_entry = pmem::TxCommitEntry(num_blocks, begin_vidx, log_entry_idx);
+    commit_entry = pmem::TxEntryIndirect(num_blocks, begin_vidx, log_entry_idx);
   }
 }
 
