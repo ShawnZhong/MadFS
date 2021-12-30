@@ -6,14 +6,17 @@ on:
   pull_request:
 
 jobs:
-  lint:
+  format:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v2
-      - uses: DoozyX/clang-format-lint-action@v0.13
         with:
-          extensions: "h,h.in,cpp"
-          clangFormatVersion: 10
+          ref: ${{github.head_ref}}
+
+      - name: run clang-format
+        run: clang-format -i -style=file **/*.cpp **/*.h **/*.h.in
+
+      - uses: stefanzweifel/git-auto-commit-action@v4.12.0
 
   test:
     runs-on: ubuntu-latest
