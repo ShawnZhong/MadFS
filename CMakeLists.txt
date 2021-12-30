@@ -27,7 +27,7 @@ dependencies
 ]]
 
 include(FetchContent)
-FetchContent_Declare(tbb URL https://github.com/oneapi-src/oneTBB/releases/download/v2021.4.0/oneapi-tbb-2021.4.0-lin.tgz)
+FetchContent_Declare(tbb URL https://github.com/oneapi-src/oneTBB/releases/download/v2021.5.0/oneapi-tbb-2021.5.0-lin.tgz)
 FetchContent_MakeAvailable(tbb)
 
 find_package(TBB REQUIRED HINTS ${tbb_SOURCE_DIR}/lib/cmake/tbb)
@@ -80,12 +80,13 @@ configure_file("src/config.h.in" "config.h")
 include_directories(${CMAKE_CURRENT_BINARY_DIR})
 
 #[[
-tests and benchmarks
+tests, benchmarks, and tools
 ]]
 
 option(ULAYFS_LINK_LIBRARY "Link uLayFS for tests and benchmarks" ON)
 option(ULAYFS_BUILD_TESTS "Build tests" ON)
 option(ULAYFS_BUILD_BENCH "Build benchmarks" OFF)
+option(ULAYFS_BUILD_TOOLS "Build tools" ON)
 
 if (ULAYFS_BUILD_TESTS)
     include_directories(src)
@@ -117,6 +118,11 @@ if (ULAYFS_BUILD_BENCH)
     else ()
         target_link_libraries(bench benchmark::benchmark)
     endif ()
+endif ()
+
+if (ULAYFS_BUILD_TOOLS)
+    add_executable(info tools/info.cpp)
+    target_link_libraries(info ulayfs)
 endif ()
 
 #[[

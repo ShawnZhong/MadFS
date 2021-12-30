@@ -16,7 +16,6 @@ void BlkTable::update(TxEntryIdx& tx_idx, pmem::TxBlock*& tx_block,
     return;
   }
 
-  auto log_mgr = file->get_local_log_mgr();
   LogicalBlockIdx prev_tx_block_idx = 0;
 
   while (true) {
@@ -27,7 +26,7 @@ void BlkTable::update(TxEntryIdx& tx_idx, pmem::TxBlock*& tx_block,
     if (tx_entry.is_inline())
       apply_tx(tx_entry.commit_inline_entry);
     else
-      apply_tx(tx_entry.commit_entry, log_mgr, init_bitmap);
+      apply_tx(tx_entry.commit_entry, file->get_log_mgr(), init_bitmap);
     prev_tx_block_idx = tail_tx_idx.block_idx;
     if (!tx_mgr->advance_tx_idx(tail_tx_idx, tail_tx_block, do_alloc)) break;
   }

@@ -27,6 +27,7 @@ class File {
   MemTable mem_table;
   pmem::MetaBlock* meta;
   TxMgr tx_mgr;
+  LogMgr log_mgr;
   BlkTable blk_table;
   OffsetMgr offset_mgr;
 
@@ -39,10 +40,6 @@ class File {
   // each thread tid has its local allocator
   // the allocator is a per-thread per-file data structure
   tbb::concurrent_unordered_map<pid_t, Allocator> allocators;
-
-  // each thread tid has its local log_mgr
-  // the log_mgr is a per-thread per-file data structure
-  tbb::concurrent_unordered_map<pid_t, LogMgr> log_mgrs;
 
  public:
   File(int fd, const struct stat& stat, int flags);
@@ -59,10 +56,10 @@ class File {
   int fsync();
 
   /*
-   * Getters & removers for thread-local data structures
+   * Getters
    */
   [[nodiscard]] Allocator* get_local_allocator();
-  [[nodiscard]] LogMgr* get_local_log_mgr();
+  [[nodiscard]] LogMgr* get_log_mgr() { return &log_mgr; };
 
   /*
    * exported interface for update; init_bitmap is always false

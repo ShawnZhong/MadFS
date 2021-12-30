@@ -1,5 +1,7 @@
 #include "file.h"
 
+#include <iomanip>
+
 namespace ulayfs::dram {
 
 File::File(int fd, const struct stat& stat, int flags)
@@ -7,6 +9,7 @@ File::File(int fd, const struct stat& stat, int flags)
       mem_table(fd, stat.st_size, (flags & O_ACCMODE) == O_RDONLY),
       meta(mem_table.get_meta()),
       tx_mgr(this, meta),
+      log_mgr(this, meta),
       blk_table(this, &tx_mgr),
       offset_mgr(this),
       flags(flags),
@@ -57,7 +60,6 @@ File::~File() {
   posix::close(fd);
   posix::close(shm_fd);
   allocators.clear();
-  log_mgrs.clear();
 }
 
 /*
@@ -157,19 +159,8 @@ Allocator* File::get_local_allocator() {
     return &it->second;
   }
 
-  auto [it, ok] =
-      allocators.emplace(tid, Allocator(fd, meta, &mem_table, bitmap));
+  auto [it, ok] = allocators.emplace(tid, Allocator(this, meta, bitmap));
   PANIC_IF(!ok, "insert to thread-local allocators failed");
-  return &it->second;
-}
-
-LogMgr* File::get_local_log_mgr() {
-  if (auto it = log_mgrs.find(tid); it != log_mgrs.end()) {
-    return &it->second;
-  }
-
-  auto [it, ok] = log_mgrs.emplace(tid, LogMgr(this, meta));
-  PANIC_IF(!ok, "insert to thread-local log_mgrs failed");
   return &it->second;
 }
 
@@ -256,10 +247,11 @@ std::ostream& operator<<(std::ostream& out, const File& f) {
   out << f.blk_table;
   out << f.mem_table;
   out << f.offset_mgr;
-  out << "Dram_bitmap: \n";
-  for (size_t i = 0; i < f.meta->get_num_blocks() / 64; ++i) {
-    out << "\t" << i * 64 << "-" << (i + 1) * 64 - 1 << ": " << f.bitmap[i]
-        << "\n";
+  out << "Bitmap: \n";
+  for (size_t i = 0; i < f.meta->get_num_blocks() / BITMAP_CAPACITY; ++i) {
+    out << "\t" << std::setw(6) << std::right << i * BITMAP_CAPACITY << " - "
+        << std::setw(6) << std::left << (i + 1) * BITMAP_CAPACITY - 1 << ": "
+        << f.bitmap[i] << "\n";
   }
   out << f.tx_mgr;
   out << "\n";
