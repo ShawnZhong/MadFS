@@ -19,7 +19,7 @@ constexpr static uint32_t GROW_UNIT_IN_BLOCK_SHIFT =
     GROW_UNIT_SHIFT - BLOCK_SHIFT;
 constexpr static uint32_t GROW_UNIT_IN_BLOCK_MASK =
     (1 << GROW_UNIT_IN_BLOCK_SHIFT) - 1;
-constexpr static uint32_t NUM_BLOCKS_PER_GROW = GROW_UNIT_SIZE / BLOCK_SIZE;
+constexpr static uint32_t NUM_BLOCKS_PER_GROW = GROW_UNIT_SIZE >> BLOCK_SHIFT;
 
 // map LogicalBlockIdx into memory address
 // this is a more low-level data structure than Allocator

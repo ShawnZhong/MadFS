@@ -2,6 +2,7 @@
 
 #include "bitmap.h"
 #include "entry.h"
+#include "params.h"
 
 namespace ulayfs {
 // signature
@@ -46,12 +47,12 @@ static_assert(
     "NUM_BITMAP_PER_BLOCK - 1 should be representable with BitmapLocalIdx");
 
 constexpr static uint32_t NUM_BITMAP_BLKS = 64;
-constexpr static uint32_t BITMAP_SIZE = NUM_BITMAP_BLKS * BLOCK_SIZE;
+constexpr static uint32_t BITMAP_SIZE = NUM_BITMAP_BLKS << BLOCK_SHIFT;
 constexpr static uint16_t TOTAL_DRAM_BITMAP =
     NUM_BITMAP_BLKS * NUM_BITMAP_PER_BLOCK;
 
 // how many data blocks can be covered per CAS
 // TODO: put this constant somewhere else?
 constexpr static uint8_t MAX_BLOCKS_PER_BODY = 64;
-constexpr static size_t MAX_BYTES_PER_BODY = MAX_BLOCKS_PER_BODY * BLOCK_SIZE;
+constexpr static size_t MAX_BYTES_PER_BODY = MAX_BLOCKS_PER_BODY << BLOCK_SHIFT;
 }  // namespace ulayfs

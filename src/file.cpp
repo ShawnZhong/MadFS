@@ -3,6 +3,8 @@
 #include <cstdio>
 #include <iomanip>
 
+#include "idx.h"
+
 namespace ulayfs::dram {
 
 File::File(int fd, const struct stat& stat, int flags)
@@ -161,7 +163,7 @@ void* File::mmap(void* addr_hint, size_t length, int prot, int mmap_flags,
       continue;
     }
 
-    if (remap_file_pages(addr, num_contig_blocks * BLOCK_SIZE, 0,
+    if (remap_file_pages(addr, BLOCK_IDX_TO_SIZE(num_contig_blocks), 0,
                          lidx_curr_group_start, mmap_flags) != 0)
       goto error;
 
@@ -169,7 +171,7 @@ void* File::mmap(void* addr_hint, size_t length, int prot, int mmap_flags,
     num_contig_blocks = 1;
   }
 
-  if (remap_file_pages(addr, num_contig_blocks * BLOCK_SIZE, 0,
+  if (remap_file_pages(addr, BLOCK_IDX_TO_SIZE(num_contig_blocks), 0,
                        lidx_curr_group_start, mmap_flags) != 0)
     goto error;
 
