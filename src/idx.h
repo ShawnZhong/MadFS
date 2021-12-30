@@ -11,9 +11,8 @@ using LogicalBlockIdx = uint32_t;
 // block index seen by applications
 using VirtualBlockIdx = uint32_t;
 // each bit in the bitmap corresponds to a logical block
-using BitmapLocalIdx = int32_t;
+using BitmapIdx = int32_t;
 // TODO: this may be helpful for dynamically growing DRAM bitmap
-// using BitmapBlockId = uint32_t;
 
 // local index within a block; this can be -1 to indicate an error
 using TxLocalIdx = int16_t;
