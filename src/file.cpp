@@ -3,6 +3,8 @@
 #include <cstdio>
 #include <iomanip>
 
+#include "idx.h"
+
 namespace ulayfs::dram {
 
 File::File(int fd, const struct stat& stat, int flags)
@@ -146,9 +148,9 @@ void* File::mmap(void* addr_hint, size_t length, int prot, int mmap_flags,
   }
 
   // remap the blocks in the file
-  VirtualBlockIdx vidx_begin = offset >> BLOCK_SHIFT;
+  VirtualBlockIdx vidx_begin = BLOCK_SIZE_TO_IDX(offset);
   VirtualBlockIdx vidx_end =
-      ALIGN_UP(offset + length, BLOCK_SIZE) >> BLOCK_SHIFT;
+      BLOCK_SIZE_TO_IDX(ALIGN_UP(offset + length, BLOCK_SIZE));
 
   LogicalBlockIdx lidx_curr_group_start = blk_table.get(vidx_begin);
   int num_contig_blocks = 0;
@@ -161,7 +163,7 @@ void* File::mmap(void* addr_hint, size_t length, int prot, int mmap_flags,
       continue;
     }
 
-    if (remap_file_pages(addr, num_contig_blocks * BLOCK_SIZE, 0,
+    if (remap_file_pages(addr, BLOCK_IDX_TO_SIZE(num_contig_blocks), 0,
                          lidx_curr_group_start, mmap_flags) != 0)
       goto error;
 
@@ -169,7 +171,7 @@ void* File::mmap(void* addr_hint, size_t length, int prot, int mmap_flags,
     num_contig_blocks = 1;
   }
 
-  if (remap_file_pages(addr, num_contig_blocks * BLOCK_SIZE, 0,
+  if (remap_file_pages(addr, BLOCK_IDX_TO_SIZE(num_contig_blocks), 0,
                        lidx_curr_group_start, mmap_flags) != 0)
     goto error;
 

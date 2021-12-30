@@ -81,8 +81,7 @@ void BlkTable::apply_tx(pmem::TxEntryIndirect tx_commit_entry, LogMgr* log_mgr,
 
   // update file size if this write exceeds current file size
   // currently we don't support ftruncate, so the file size is always growing
-  uint64_t now_file_size =
-      (static_cast<uint64_t>(end_virtual_idx) << BLOCK_SHIFT) - leftover_bytes;
+  uint64_t now_file_size = BLOCK_IDX_TO_SIZE(end_virtual_idx) - leftover_bytes;
   if (now_file_size > file_size) file_size = now_file_size;
 }
 
@@ -101,7 +100,7 @@ void BlkTable::apply_tx(pmem::TxEntryInline tx_commit_inline_entry) {
 
   // update file size if this write exceeds current file size
   // inline tx must be aligned to BLOCK_SIZE boundary
-  uint64_t now_file_size = static_cast<uint64_t>(end_vidx) << BLOCK_SHIFT;
+  uint64_t now_file_size = BLOCK_IDX_TO_SIZE(end_vidx);
   if (now_file_size > file_size) file_size = now_file_size;
 }
 

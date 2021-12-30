@@ -23,6 +23,12 @@ using LogLocalIdx = uint16_t;
 // for 8-byte aligned positions, the valid range is [0, 511]
 using LogLocalUnpackIdx = uint16_t;
 
+// this ensure 32-bit idx won't overflow
+#define BLOCK_IDX_TO_SIZE(idx) (static_cast<uint64_t>(idx) << BLOCK_SHIFT)
+// this is applied for some signed type
+#define BLOCK_SIZE_TO_IDX(size) \
+  (static_cast<uint32_t>((static_cast<uint64_t>(size) >> BLOCK_SHIFT)))
+
 /**
  * A log entry is identified by the index of the LogEntryBlock and the local
  * index within the block. Use this to locate log head entries only, since

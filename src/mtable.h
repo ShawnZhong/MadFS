@@ -19,7 +19,7 @@ constexpr static uint32_t GROW_UNIT_IN_BLOCK_SHIFT =
     GROW_UNIT_SHIFT - BLOCK_SHIFT;
 constexpr static uint32_t GROW_UNIT_IN_BLOCK_MASK =
     (1 << GROW_UNIT_IN_BLOCK_SHIFT) - 1;
-constexpr static uint32_t NUM_BLOCKS_PER_GROW = GROW_UNIT_SIZE / BLOCK_SIZE;
+constexpr static uint32_t NUM_BLOCKS_PER_GROW = GROW_UNIT_SIZE >> BLOCK_SHIFT;
 
 // map LogicalBlockIdx into memory address
 // this is a more low-level data structure than Allocator
@@ -45,12 +45,11 @@ class MemTable {
     // the new file size should be a multiple of grow unit
     // we have `idx + 1` since we want to grow the file when idx is a multiple
     // of the number of blocks in a grow unit (e.g., 512 for 2 MB grow)
-    size_t file_size =
-        ALIGN_UP(static_cast<size_t>(idx + 1) << BLOCK_SHIFT, GROW_UNIT_SIZE);
+    uint64_t file_size = ALIGN_UP(BLOCK_IDX_TO_SIZE(idx + 1), GROW_UNIT_SIZE);
 
     int ret = posix::fallocate(fd, 0, 0, static_cast<off_t>(file_size));
     PANIC_IF(ret, "fallocate failed");
-    meta->set_num_blocks_if_larger(file_size >> BLOCK_SHIFT);
+    meta->set_num_blocks_if_larger(BLOCK_SIZE_TO_IDX(file_size));
   }
 
   /**
@@ -104,7 +103,7 @@ class MemTable {
     meta = &blocks->meta_block;
 
     // compute number of blocks and update the mata block if necessary
-    auto num_blocks = file_size >> BLOCK_SHIFT;
+    auto num_blocks = BLOCK_SIZE_TO_IDX(file_size);
     if (should_grow) meta->set_num_blocks_if_larger(num_blocks);
 
     // initialize the mapping
@@ -152,7 +151,7 @@ class MemTable {
     // validate if this idx has real blocks allocated; do allocation if not
     validate(idx);
 
-    size_t hugepage_size = static_cast<size_t>(hugepage_idx) << BLOCK_SHIFT;
+    uint64_t hugepage_size = BLOCK_IDX_TO_SIZE(hugepage_idx);
     pmem::Block* hugepage_blocks = mmap_file(
         GROW_UNIT_SIZE, static_cast<off_t>(hugepage_size), MAP_POPULATE);
     table.emplace(hugepage_idx, hugepage_blocks);
