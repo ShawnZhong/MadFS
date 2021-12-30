@@ -76,9 +76,6 @@ if (NOT GIT_COMMIT_HASH)
     set(GIT_COMMIT_HASH Unknown)
 endif ()
 
-configure_file("src/config.h.in" "config.h")
-include_directories(${CMAKE_CURRENT_BINARY_DIR})
-
 #[[
 tests, benchmarks, and tools
 ]]
@@ -166,3 +163,6 @@ if (${CMAKE_BUILD_TYPE} STREQUAL "profile")
     FetchContent_Declare(flamegraph GIT_REPOSITORY https://github.com/brendangregg/FlameGraph)
     FetchContent_MakeAvailable(flamegraph)
 endif ()
+
+configure_file("src/config.h.in" "config.h")
+include_directories(${CMAKE_CURRENT_BINARY_DIR})

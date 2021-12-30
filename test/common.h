@@ -29,13 +29,18 @@ void print_file(int fd) {
 }
 
 constexpr char FILEPATH[] = "test.txt";
-constexpr char TEST_STR[] = "test str\n";
-constexpr int TEST_STR_LEN = sizeof(TEST_STR) - 1;
-
-char const hex_chars[16] = {'0', '1', '2', '3', '4', '5', '6', '7',
-                            '8', '9', 'A', 'B', 'C', 'D', 'E', 'F'};
+constexpr std::string_view chars =
+    "0123456789abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ";
 
 void fill_buff(char* buff, int num_elem, int init = 0) {
   std::generate(buff, buff + num_elem,
-                [i = init]() mutable { return hex_chars[i++ % 16]; });
+                [i = init]() mutable { return chars[i++ % chars.length()]; });
+}
+
+std::string random_string(int length) {
+  std::string str;
+  str.reserve(length);
+  for (int i = 0; i < length; ++i)
+    str.push_back(chars[rand() % chars.length()]);
+  return str;
 }

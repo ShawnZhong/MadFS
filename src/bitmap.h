@@ -139,7 +139,7 @@ class Bitmap {
    * @param len the number of bits to be freed
    */
   static void free(Bitmap bitmaps[], BitmapLocalIdx begin, uint8_t len) {
-    DEBUG("Freeing [%d, %d)", begin, begin + len);
+    TRACE("Freeing [%d, %d)", begin, begin + len);
     bitmaps[begin >> BITMAP_CAPACITY_SHIFT].free(begin & (BITMAP_CAPACITY - 1),
                                                  len);
   }

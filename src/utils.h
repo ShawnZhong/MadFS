@@ -1,13 +1,5 @@
 #pragma once
 
-#ifdef ULAYFS_USE_PMEMCHECK
-#include <valgrind/pmemcheck.h>
-#else
-// see https://pmem.io/valgrind/generated/pmc-manual.html for reference
-#define VALGRIND_PMC_REMOVE_PMEM_MAPPING(...) ({})
-#define VALGRIND_PMC_REGISTER_PMEM_MAPPING(...) ({})
-#endif
-
 #include <immintrin.h>
 #include <sys/syscall.h>
 #include <unistd.h>
@@ -16,6 +8,14 @@
 
 #include "config.h"
 #include "params.h"
+
+#if ULAYFS_USE_PMEMCHECK == 1
+#include <valgrind/pmemcheck.h>
+#else
+// see https://pmem.io/valgrind/generated/pmc-manual.html for reference
+#define VALGRIND_PMC_REMOVE_PMEM_MAPPING(...) ({})
+#define VALGRIND_PMC_REGISTER_PMEM_MAPPING(...) ({})
+#endif
 
 #define likely(x) __builtin_expect(!!(x), 1)
 #define unlikely(x) __builtin_expect(!!(x), 0)

@@ -8,101 +8,142 @@
 
 #include "common.h"
 
+constexpr int STR_LEN = ulayfs::BLOCK_SIZE * 16 + 123;
+std::string test_str;
+char buff[STR_LEN + 1]{};
+
+size_t sz = 0;
+int rc = 0;
+
 void test_write() {
-  [[maybe_unused]] off_t res;
+  fprintf(stderr, "test_write\n");
 
   int fd = open(FILEPATH, O_CREAT | O_RDWR, S_IRUSR | S_IWUSR);
   assert(fd >= 0);
 
-  ssize_t sz = write(fd, TEST_STR, TEST_STR_LEN);
-  assert(sz == TEST_STR_LEN);
+  size_t len = test_str.length();
+  size_t len_third = len / 3;
 
-  res = fsync(fd);
-  assert(res == 0);
+  sz = write(fd, test_str.data(), len_third);
+  assert(sz == len_third);
 
-  res = close(fd);
-  assert(res == 0);
+  sz = write(fd, test_str.data() + len_third, len_third);
+  assert(sz == len_third);
+
+  sz = write(fd, test_str.data() + len_third * 2, len - len_third * 2);
+  assert(sz == len - len_third * 2);
+
+  rc = fsync(fd);
+  assert(rc == 0);
+
+  rc = close(fd);
+  assert(rc == 0);
 }
 
 void test_read() {
-  [[maybe_unused]] off_t res;
+  fprintf(stderr, "test_read\n");
 
-  assert(TEST_STR_LEN > 3);
-  std::string test_str = TEST_STR;
+  int fd = open(FILEPATH, O_RDONLY);
+  assert(fd >= 0);
+
+  size_t first_half = test_str.length() / 2;
+  size_t second_half = test_str.length() - first_half;
+
+  sz = read(fd, buff, first_half);
+  assert(sz == first_half);
+  assert(test_str.compare(0, first_half, buff) == 0);
+
+  sz = read(fd, buff, test_str.length());
+  assert(sz == second_half);
+  assert(test_str.compare(first_half, second_half, buff) == 0);
+
+  sz = read(fd, buff, test_str.length());
+  assert(sz == 0);
+
+  rc = close(fd);
+  assert(rc == 0);
+}
+
+void test_mmap() {
+  fprintf(stderr, "test_mmap\n");
 
   int fd = open(FILEPATH, O_RDWR);
   assert(fd >= 0);
 
-  char buff[TEST_STR_LEN + 1]{};
-  ssize_t sz = read(fd, buff, TEST_STR_LEN - 3);
-  assert(sz == TEST_STR_LEN - 3);
-  buff[sz] = '\0';
-  assert(test_str.compare(0, TEST_STR_LEN - 3, buff) == 0);
+  void* ptr = mmap(nullptr, test_str.length(), PROT_READ, MAP_SHARED, fd, 0);
+  assert(ptr != MAP_FAILED);
 
-  sz = read(fd, buff, 5);
-  assert(sz == 3);
-  buff[sz] = '\0';
-  assert(test_str.compare(TEST_STR_LEN - 3, 3, buff) == 0);
+  std::string_view result(static_cast<char*>(ptr), test_str.length());
 
-  sz = read(fd, buff, 7);
-  assert(sz == 0);
+  assert(result.compare(test_str) == 0);
 
-  res = fsync(fd);
-  assert(res == 0);
+  rc = munmap(ptr, test_str.length());
+  assert(rc == 0);
 
-  res = close(fd);
-  assert(res == 0);
+  rc = close(fd);
+  assert(rc == 0);
 }
 
 void test_lseek() {
+  fprintf(stderr, "test_lseek\n");
+
   int fd = open(FILEPATH, O_RDWR);
   assert(fd >= 0);
 
-  [[maybe_unused]] off_t res;
-  char buff[sizeof(TEST_STR)]{};
+  sz = write(fd, test_str.data(), test_str.length());
+  assert(sz == test_str.length());
 
-  res = write(fd, TEST_STR, TEST_STR_LEN);
-  assert(res == TEST_STR_LEN);
+  {
+    sz = lseek(fd, 0, SEEK_SET);
+    assert(sz == 0);
 
-  res = lseek(fd, 0, SEEK_SET);
-  assert(res == 0);
+    sz = read(fd, buff, test_str.length());
+    assert(sz == test_str.length());
+    assert(test_str == buff);
+  }
 
-  res = read(fd, buff, TEST_STR_LEN);
-  assert(res == TEST_STR_LEN);
-  assert(strcmp(buff, TEST_STR) == 0);
+  {
+    sz = lseek(fd, -1, SEEK_CUR);
+    assert(sz == test_str.length() - 1);
 
-  res = lseek(fd, -TEST_STR_LEN, SEEK_CUR);
-  assert(res == 0);
+    sz = read(fd, buff, test_str.length());
+    assert(sz == 1);
+    assert(test_str[test_str.length() - 1] == buff[0]);
+  }
 
-  res = read(fd, buff, TEST_STR_LEN);
-  assert(res == TEST_STR_LEN);
-  assert(strcmp(buff, TEST_STR) == 0);
+  {
+    sz = lseek(fd, -static_cast<off_t>(test_str.length()), SEEK_END);
+    assert(sz == 0);
 
-  res = lseek(fd, -TEST_STR_LEN, SEEK_END);
-  assert(res == 0);
+    sz = read(fd, buff, test_str.length());
+    assert(sz == test_str.length());
+    assert(test_str == buff);
+  }
 
-  res = read(fd, buff, TEST_STR_LEN);
-  assert(res == TEST_STR_LEN);
-  assert(strcmp(buff, TEST_STR) == 0);
+  rc = fsync(fd);
+  assert(rc == 0);
 
-  res = fsync(fd);
-  assert(res == 0);
-
-  res = close(fd);
-  assert(res == 0);
+  rc = close(fd);
+  assert(rc == 0);
 }
 
 void test_stream() {
+  fprintf(stderr, "test_stream\n");
+
   int fd = open(FILEPATH, O_CREAT | O_RDWR, S_IRUSR | S_IWUSR);
   FILE* stream = fdopen(fd, "w");
   fclose(stream);
 }
 
 int main() {
+  test_str = random_string(STR_LEN);
   remove(FILEPATH);
   test_write();
   test_read();
   test_lseek();
+#if ULAYFS_USE_PMEMCHECK == 0
+  test_mmap();
+#endif
   test_stream();
   return 0;
 }

@@ -188,15 +188,12 @@ class MetaBlock : public BaseBlock {
    * We can assume that all other fields are zero-initialized upon fallocate
    */
   void init() {
-    // the first block is always used (by MetaBlock itself)
-
-    VALGRIND_PMC_REMOVE_PMEM_MAPPING(&mutex, sizeof(mutex));
-
     // initialize the mutex
     pthread_mutexattr_t attr;
     pthread_mutexattr_init(&attr);
     pthread_mutexattr_setrobust(&attr, PTHREAD_MUTEX_ROBUST);
     pthread_mutex_init(&cl2_meta.mutex, &attr);
+    VALGRIND_PMC_REMOVE_PMEM_MAPPING(&cl2_meta.mutex, sizeof(cl2_meta.mutex));
 
     // initialize the signature
     memcpy(cl1_meta.signature, FILE_SIGNATURE, SIGNATURE_SIZE);
@@ -233,12 +230,14 @@ class MetaBlock : public BaseBlock {
       return cl1_meta.shm_name;
     return nullptr;
   }
+
   const char* set_shm_name(const struct stat& stat) {
     sprintf(cl1_meta.shm_name, "ulayfs_%016lx_%013lx", stat.st_ino,
             (stat.st_ctim.tv_sec * 1000000000 + stat.st_ctim.tv_nsec) >> 3);
     // MUST set this bool to indicate shm_name is completed
     // this ensure cl1_meta.shm_name is failure-atomic
     cl1_meta.shm_name_is_ready.store(true, std::memory_order_release);
+    persist_cl_fenced(&cl1_meta);
     return cl1_meta.shm_name;
   }
 

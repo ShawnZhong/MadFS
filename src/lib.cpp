@@ -16,6 +16,7 @@ namespace ulayfs {
 tbb::concurrent_unordered_map<int, std::shared_ptr<dram::File>> files;
 
 std::shared_ptr<dram::File> get_file(int fd) {
+  if (fd < 0) return {};
   auto it = files.find(fd);
   if (it != files.end()) return it->second;
   return {};
@@ -152,6 +153,24 @@ int fsync(int fd) {
     DEBUG("posix::fsync(%d)", fd);
     return posix::fsync(fd);
   }
+}
+
+void* mmap(void* addr, size_t length, int prot, int flags, int fd,
+           off_t offset) {
+  if (auto file = get_file(fd)) {
+    DEBUG("ulayfs::mmap(%p, %zu, %x, %x, %d, %ld)", addr, length, prot, flags,
+          fd, offset);
+    return file->mmap(addr, length, prot, flags, offset);
+  } else {
+    DEBUG("posix::mmap(%p, %zu, %x, %x, %d, %ld)", addr, length, prot, flags,
+          fd, offset);
+    return posix::mmap(addr, length, prot, flags, fd, offset);
+  }
+}
+
+int munmap(void* addr, size_t length) {
+  DEBUG("posix::munmap(%p, %zu)", addr, length);
+  return posix::munmap(addr, length);
 }
 
 int fstat(int fd, struct stat* buf) {

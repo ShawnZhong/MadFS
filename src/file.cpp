@@ -131,6 +131,55 @@ off_t File::lseek(off_t offset, int whence) {
   pthread_spin_unlock(&spinlock);
   return ret;
 }
+void* File::mmap(void* addr_hint, size_t length, int prot, int mmap_flags,
+                 off_t offset) {
+  if (offset % BLOCK_SIZE != 0) {
+    errno = EINVAL;
+    return MAP_FAILED;
+  }
+
+  // temporarily map the first `length` bytes of the file
+  void* addr = posix::mmap(addr_hint, length, prot, mmap_flags, fd, 0);
+  if (addr == MAP_FAILED) {
+    WARN("mmap failed: %m");
+    return MAP_FAILED;
+  }
+
+  // remap the blocks in the file
+  VirtualBlockIdx vidx_begin = offset >> BLOCK_SHIFT;
+  VirtualBlockIdx vidx_end =
+      ALIGN_UP(offset + length, BLOCK_SIZE) >> BLOCK_SHIFT;
+
+  LogicalBlockIdx lidx_curr_group_start = blk_table.get(vidx_begin);
+  int num_contig_blocks = 0;
+  for (size_t vidx = vidx_begin; vidx < vidx_end; vidx++) {
+    LogicalBlockIdx lidx = blk_table.get(vidx);
+    if (lidx == 0) PANIC("hole vidx=%ld in mmap", vidx);
+
+    if (lidx == lidx_curr_group_start + num_contig_blocks) {
+      num_contig_blocks++;
+      continue;
+    }
+
+    if (remap_file_pages(addr, num_contig_blocks * BLOCK_SIZE, 0,
+                         lidx_curr_group_start, mmap_flags) != 0)
+      goto error;
+
+    lidx_curr_group_start = lidx;
+    num_contig_blocks = 1;
+  }
+
+  if (remap_file_pages(addr, num_contig_blocks * BLOCK_SIZE, 0,
+                       lidx_curr_group_start, mmap_flags) != 0)
+    goto error;
+
+  return addr;
+
+error:
+  WARN("remap_file_pages failed: %m");
+  posix::munmap(addr, length);
+  return MAP_FAILED;
+}
 
 int File::fsync() {
   TxEntryIdx tail_tx_idx;
@@ -172,7 +221,7 @@ int File::open_shm(const char* shm_name, const struct stat& stat,
                    Bitmap*& bitmap) {
   char shm_path[64];
   sprintf(shm_path, "/dev/shm/%s", shm_name);
-  DEBUG("Opening shared memory %s", shm_path);
+  TRACE("Opening shared memory %s", shm_path);
   // use posix::open instead of shm_open since shm_open calls open, which is
   // overloaded by ulayfs
   int shm_fd =
