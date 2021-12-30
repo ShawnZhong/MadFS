@@ -31,7 +31,7 @@ class Allocator {
   // TODO: this may be useful for dynamically growing bitmap
   // BitmapBlockId recent_bitmap_block_id;
   // NOTE: this is the index within recent_bitmap_block
-  BitmapLocalIdx recent_bitmap_local_idx;
+  BitmapIdx recent_bitmap_idx;
 
   // blocks for storing log entries, max 512 entries per block
   std::vector<LogicalBlockIdx> log_blocks;
@@ -46,7 +46,7 @@ class Allocator {
       : file(file),
         meta(meta),
         bitmap(bitmap),
-        recent_bitmap_local_idx(),
+        recent_bitmap_idx(),
         log_blocks(),
         curr_log_block(nullptr),
         free_log_local_idx(NUM_LOG_ENTRY) {

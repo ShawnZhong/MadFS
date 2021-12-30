@@ -43,8 +43,8 @@ constexpr static uint32_t BITMAP_BLOCK_CAPACITY =
 constexpr static uint16_t NUM_BITMAP_PER_BLOCK =
     BLOCK_SIZE / sizeof(dram::Bitmap);
 static_assert(
-    NUM_BITMAP_PER_BLOCK - 1 <= std::numeric_limits<BitmapLocalIdx>::max(),
-    "NUM_BITMAP_PER_BLOCK - 1 should be representable with BitmapLocalIdx");
+    NUM_BITMAP_PER_BLOCK - 1 <= std::numeric_limits<BitmapIdx>::max(),
+    "NUM_BITMAP_PER_BLOCK - 1 should be representable with BitmapIdx");
 
 // we use one hugepage of bitmap, which is sufficient for a 64GB file
 // TODO: extend bitmap dynamically

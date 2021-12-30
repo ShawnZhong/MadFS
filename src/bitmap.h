@@ -26,7 +26,7 @@ class Bitmap {
   constexpr static uint64_t BITMAP_ALL_USED = 0xffffffffffffffff;
 
   // return the index of the bit (0-63); -1 if fail
-  BitmapLocalIdx alloc_one() {
+  BitmapIdx alloc_one() {
   retry:
     uint64_t b = bitmap.load(std::memory_order_acquire);
     if (b == BITMAP_ALL_USED) return -1;
@@ -36,11 +36,11 @@ class Bitmap {
                                         std::memory_order_acq_rel,
                                         std::memory_order_acquire))
       goto retry;
-    return static_cast<BitmapLocalIdx>(std::countr_zero(b));
+    return static_cast<BitmapIdx>(std::countr_zero(b));
   }
 
   // allocate all blocks in this bit; return 0 if succeeds, -1 otherwise
-  BitmapLocalIdx alloc_all() {
+  BitmapIdx alloc_all() {
     uint64_t expected = 0;
     if (!bitmap.compare_exchange_strong(expected, BITMAP_ALL_USED,
                                         std::memory_order_acq_rel,
@@ -50,7 +50,7 @@ class Bitmap {
   }
 
   // free blocks in [begin_idx, begin_idx + len)
-  void free(BitmapLocalIdx begin_idx, uint32_t len) {
+  void free(BitmapIdx begin_idx, uint32_t len) {
   retry:
     uint64_t b = bitmap.load(std::memory_order_acquire);
     uint64_t freed = b & ~((((uint64_t)1 << len) - 1) << begin_idx);
@@ -87,10 +87,10 @@ class Bitmap {
    * @param num_bitmaps the total number of bitmaps in the array
    * @param hint hint to the empty bit
    */
-  static BitmapLocalIdx alloc_one(Bitmap bitmaps[], uint16_t num_bitmaps,
-                                  BitmapLocalIdx hint) {
-    BitmapLocalIdx ret;
-    BitmapLocalIdx idx = hint >> BITMAP_CAPACITY_SHIFT;
+  static BitmapIdx alloc_one(Bitmap bitmaps[], uint16_t num_bitmaps,
+                             BitmapIdx hint) {
+    BitmapIdx ret;
+    BitmapIdx idx = hint >> BITMAP_CAPACITY_SHIFT;
     for (; idx < num_bitmaps; ++idx) {
       ret = bitmaps[idx].alloc_one();
       if (ret < 0) continue;
@@ -106,12 +106,12 @@ class Bitmap {
    * @param bitmaps a pointer to an array of bitmaps
    * @param num_bitmaps the total number of bitmaps in the array
    * @param hint hint to the empty bit
-   * @return the BitmapLocalIdx
+   * @return the BitmapIdx
    */
-  static BitmapLocalIdx alloc_batch(Bitmap bitmaps[], int32_t num_bitmaps,
-                                    BitmapLocalIdx hint) {
-    BitmapLocalIdx ret;
-    BitmapLocalIdx idx = hint >> BITMAP_CAPACITY_SHIFT;
+  static BitmapIdx alloc_batch(Bitmap bitmaps[], int32_t num_bitmaps,
+                               BitmapIdx hint) {
+    BitmapIdx ret;
+    BitmapIdx idx = hint >> BITMAP_CAPACITY_SHIFT;
     for (; idx < num_bitmaps; ++idx) {
       ret = bitmaps[idx].alloc_all();
       if (ret < 0) continue;
@@ -128,7 +128,7 @@ class Bitmap {
    * @param begin the BitmapLocalIndex starting from which it will be freed
    * @param len the number of bits to be freed
    */
-  static void free(Bitmap bitmaps[], BitmapLocalIdx begin, uint8_t len) {
+  static void free(Bitmap bitmaps[], BitmapIdx begin, uint8_t len) {
     TRACE("Freeing [%d, %d)", begin, begin + len);
     bitmaps[begin >> BITMAP_CAPACITY_SHIFT].free(begin & (BITMAP_CAPACITY - 1),
                                                  len);
