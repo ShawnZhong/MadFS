@@ -230,28 +230,8 @@ void TxMgr::gc(const LogicalBlockIdx tail_tx_block_idx, uint64_t file_size) {
           tail_tx_block_idx)
     return;
 
-  std::unordered_set<LogicalBlockIdx> free_list;
-  std::unordered_set<LogicalBlockIdx> live_log_blks;
   auto allocator = file->get_local_allocator();
   auto log_mgr = file->get_log_mgr();
-
-  // helper function to recycle log blocks referenced by the given tx_entry
-  auto gc_log_entry = [log_mgr, &live_log_blks,
-                       &free_list](pmem::TxEntry tx_entry) {
-    if (!tx_entry.is_valid() || tx_entry.is_inline()) return;
-    auto log_idx = tx_entry.commit_entry.log_entry_idx;
-    while (true) {
-      auto log_head = log_mgr->get_head_entry(log_idx);
-      if (live_log_blks.find(log_idx.block_idx) == live_log_blks.end())
-        free_list.insert(log_idx.block_idx);
-      if (log_head->overflow)
-        log_idx = {log_head->next.next_block_idx, 0};
-      else if (log_head->saturate)
-        log_idx = {log_idx.block_idx, log_head->next.next_local_idx};
-      else
-        break;
-    }
-  };
 
   auto tail_block = file->lidx_to_addr_rw(tail_tx_block_idx);
   auto num_blocks = ALIGN_UP(file_size, BLOCK_SIZE) >> BLOCK_SHIFT;
@@ -321,45 +301,10 @@ void TxMgr::gc(const LogicalBlockIdx tail_tx_block_idx, uint64_t file_size) {
   while (!meta->set_next_tx_block(first_tx_block_idx, orig_tx_block_idx))
     ;
   pmem::persist_fenced(meta, CACHELINE_SIZE);
-
-  // TODO: currently we keep the original log entries. Alternatively we
-  // can rewrite the log entries to a new block and reclaim more space
-  for (TxLocalIdx i = 0; i < NUM_TX_ENTRY; i++) {
-    pmem::TxEntry tx_entry = tail_block->tx_block.get(i);
-    if (!tx_entry.is_valid() || tx_entry.is_inline()) continue;
-    live_log_blks.insert(tx_entry.commit_entry.log_entry_idx.block_idx);
-    auto log_head =
-        log_mgr->get_head_entry(tx_entry.commit_entry.log_entry_idx);
-    while (log_head->overflow) {
-      live_log_blks.insert(log_head->next.next_block_idx);
-      LogEntryIdx next_log_idx{log_head->next.next_block_idx, 0};
-      log_head = log_mgr->get_head_entry(next_log_idx);
-    }
-  }
-
-  // free log blocks pointed to by tx entries in meta
-  for (TxLocalIdx i = 0; i < NUM_INLINE_TX_ENTRY; i++)
-    gc_log_entry(meta->get_tx_entry(i));
-
-  // free tx blocks and log entries they point to
-  while (orig_tx_block_idx != tail_tx_block_idx) {
-    auto orig_block = &file->lidx_to_addr_rw(orig_tx_block_idx)->tx_block;
-    // free log blocks
-    for (TxLocalIdx i = 0; i < NUM_TX_ENTRY; i++)
-      gc_log_entry(orig_block->get(i));
-    // free this tx block and move to the next
-    free_list.insert(orig_tx_block_idx);
-    orig_tx_block_idx = orig_block->get_next_tx_block();
-  }
-
+  
   // invalidate tx in meta block so we can free the log blocks they point to
   meta->invalidate_tx_entries();
 
-  // TODO: another thread / process may still be reading the original
-  // transaction history. We may need to delay freeing
-  for (const auto idx : free_list) allocator->free(idx, 1);
-  // Assuming we use a dedicated process
-  allocator->return_free_list();
   return;
 
 abort:

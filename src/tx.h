@@ -123,7 +123,9 @@ class TxMgr {
    * Garbage collecting transaction blocks and log blocks. This function builds
    * a new transaction history from block table and uses it to replace the old
    * transaction history. We assume that a dedicated single-threaded process
-   * will run this function so it is safe to directly access blk_table.
+   * will run this function so it is safe to directly access blk_table. Note
+   * that old tx blocks and log blocks are not immediately recycled but when
+   * rebuilding the bitmap
    *
    * @param tail_tx_block the tail transaction block index: this and following
    * transaction blocks will be appended to the new transaction history and will
