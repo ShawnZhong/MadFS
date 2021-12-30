@@ -221,8 +221,7 @@ LogicalBlockIdx TxMgr::alloc_next_block(B* block) const {
   }
 }
 
-void TxMgr::gc(const tbb::concurrent_vector<LogicalBlockIdx>& blk_table,
-               const LogicalBlockIdx tail_tx_block_idx) {
+void TxMgr::gc(const LogicalBlockIdx tail_tx_block_idx, uint64_t file_size) {
   // skip if tail_tx_block is meta block, it directly follows meta or there is
   // only one tx block between meta and tail_tx_block
   LogicalBlockIdx orig_tx_block_idx = meta->get_next_tx_block();
@@ -255,6 +254,9 @@ void TxMgr::gc(const tbb::concurrent_vector<LogicalBlockIdx>& blk_table,
   };
 
   auto tail_block = file->lidx_to_addr_rw(tail_tx_block_idx);
+  auto num_blocks = ALIGN_UP(file_size, BLOCK_SIZE) / BLOCK_SIZE;
+  auto leftover_bytes = (BLOCK_SIZE - file_size) % BLOCK_SIZE;
+
   auto first_tx_block_idx = file->get_local_allocator()->alloc(1);
   auto new_block = file->lidx_to_addr_rw(first_tx_block_idx);
   memset(&new_block->cache_lines[NUM_CL_PER_BLOCK - 1], 0, CACHELINE_SIZE);
@@ -266,15 +268,18 @@ void TxMgr::gc(const tbb::concurrent_vector<LogicalBlockIdx>& blk_table,
 
   VirtualBlockIdx begin = 0;
   VirtualBlockIdx i = 1;
-  for (; i < blk_table.size(); i++) {
-    if (blk_table[i] == 0) break;
+  for (; i < num_blocks; i++) {
+    auto curr_blk_idx = file->vidx_to_lidx(i);
+    auto prev_blk_idx = file->vidx_to_lidx(i - 1);
+    if (curr_blk_idx == 0) break;
     // continuous blocks can be placed in 1 tx
-    if (blk_table[i] - blk_table[i - 1] == 1 &&
-        i - begin < /*TODO: pmem::TxCommitEntry::NUM_BLOCKS_MAX*/ 63)
+    if (curr_blk_idx - prev_blk_idx == 1 &&
+        i - begin <= /*TODO: pmem::TxCommitEntry::NUM_BLOCKS_MAX*/ 63) {
       continue;
+    }
 
     auto commit_entry =
-        pmem::TxCommitInlineEntry(i - begin, begin, blk_table[begin]);
+        pmem::TxCommitInlineEntry(i - begin, begin, file->vidx_to_lidx(begin));
     // TODO: since the new transaction history is private to the local thread,
     // we can fill the entire block in without CAS
     new_tx_block->try_append(commit_entry, tx_idx.local_idx);
@@ -285,9 +290,19 @@ void TxMgr::gc(const tbb::concurrent_vector<LogicalBlockIdx>& blk_table,
 
   // add the last commit entry
   {
-    auto commit_entry =
-        pmem::TxCommitInlineEntry(i - begin, begin, blk_table[begin]);
-    new_tx_block->try_append(commit_entry, tx_idx.local_idx);
+    if (leftover_bytes == 0) {
+      auto commit_entry = pmem::TxCommitInlineEntry(i - begin, begin,
+                                                    file->vidx_to_lidx(begin));
+      new_tx_block->try_append(commit_entry, tx_idx.local_idx);
+    } else {
+      // since i - begin <= 63, this can fit into one log entry
+      auto begin_lidx = std::vector{file->vidx_to_lidx(begin)};
+      auto log_head_idx =
+          log_mgr->append(allocator, pmem::LogOp::LOG_OVERWRITE, leftover_bytes,
+                          i - begin, begin, begin_lidx);
+      auto commit_entry = pmem::TxCommitEntry(i - begin, begin, log_head_idx);
+      new_tx_block->try_append(commit_entry, tx_idx.local_idx);
+    }
   }
   // pad the last block with dummy tx entries
   while (advance_tx_idx(tx_idx, new_tx_block, false))
@@ -338,7 +353,7 @@ void TxMgr::gc(const tbb::concurrent_vector<LogicalBlockIdx>& blk_table,
   // TODO: another thread / process may still be reading the original
   // transaction history. We may need to delay freeing
   for (const auto idx : free_list) allocator->free(idx, 1);
-  // Assuming we use a dedicated thread
+  // Assuming we use a dedicated process
   allocator->return_free_list();
   return;
 
@@ -350,7 +365,8 @@ abort:
     auto next_tx_blk_idx = new_tx_block->get_next_tx_block();
     allocator->free(new_tx_blk_idx, 1);
     new_tx_blk_idx = next_tx_blk_idx;
-  } while (new_tx_blk_idx != tail_tx_block_idx && new_tx_blk_idx != NULL);
+  } while (new_tx_blk_idx != tail_tx_block_idx && new_tx_blk_idx != 0);
+  allocator->return_free_list();
 }
 
 // explicit template instantiations

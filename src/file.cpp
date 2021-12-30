@@ -237,8 +237,9 @@ void File::tx_gc() {
   DEBUG("Garbage Collect for fd %d", fd);
   TxEntryIdx tail_tx_idx;
   pmem::TxBlock* tail_tx_block;
-  blk_table.update(tail_tx_idx, tail_tx_block, nullptr, /*do_alloc*/ false);
-  tx_mgr.gc(blk_table.get_table(), tail_tx_idx.block_idx);
+  uint64_t file_size;
+  blk_table.update(tail_tx_idx, tail_tx_block, &file_size, /*do_alloc*/ false);
+  tx_mgr.gc(tail_tx_idx.block_idx, file_size);
 }
 
 std::ostream& operator<<(std::ostream& out, const File& f) {

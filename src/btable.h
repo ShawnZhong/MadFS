@@ -59,8 +59,6 @@ class BlkTable {
   void update(TxEntryIdx& tx_idx, pmem::TxBlock*& tx_block,
               uint64_t* new_file_size, bool do_alloc, bool init_bitmap = false);
 
-  const tbb::concurrent_vector<LogicalBlockIdx>& get_table() { return table; }
-
  private:
   void resize_to_fit(VirtualBlockIdx idx);
 
