@@ -22,6 +22,7 @@ INIT_FN(close);
 INIT_FN(fclose);
 INIT_FN(mmap);
 INIT_FN(munmap);
+INIT_FN(remap_file_pages);
 INIT_FN(fallocate);
 INIT_FN(fsync);
 
