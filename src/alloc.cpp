@@ -40,33 +40,22 @@ LogicalBlockIdx Allocator::alloc(uint32_t num_blocks) {
   }
 
   // then we have to allocate from global bitmaps
-  recent_bitmap_local_idx =
-      Bitmap::alloc_batch(bitmap, NUM_BITMAP, recent_bitmap_local_idx);
+  recent_bitmap_idx =
+      Bitmap::alloc_batch(bitmap, NUM_BITMAP, recent_bitmap_idx);
 
-  // keep this part of code as it may be used in the future for dynamically
-  // growing bitmap while (true) {
-  //   bitmap_block_idx =
-  //       pmem::BitmapBlock::get_bitmap_block_idx(recent_bitmap_block_id);
-  //   bitmap_block = &(mem_table->get(bitmap_block_idx)->bitmap_block);
-  //   recent_bitmap_local_idx = bitmap_block->alloc_batch();
-  //   if (recent_bitmap_local_idx >= 0) goto add_to_free_list;
-  //   recent_bitmap_block_id++;
-  //   recent_bitmap_local_idx = 0;
-  // }
-
-  assert(recent_bitmap_local_idx >= 0);
+  assert(recent_bitmap_idx >= 0);
   // push in decreasing order so pop will in increasing order
-  LogicalBlockIdx allocated = recent_bitmap_local_idx;
+  LogicalBlockIdx allocated_idx = recent_bitmap_idx;
   if (num_blocks < BITMAP_CAPACITY) {
     free_list.emplace_back(BITMAP_CAPACITY - num_blocks,
-                           allocated + num_blocks);
+                           allocated_idx + num_blocks);
     std::sort(free_list.begin(), free_list.end());
   }
   // this recent is not useful because we have taken all bits; move on
-  recent_bitmap_local_idx++;
-  TRACE("Allocator::alloc: allocating from bitmap: [%u, %u)", allocated,
-        num_blocks + allocated);
-  return allocated;
+  recent_bitmap_idx++;
+  TRACE("Allocator::alloc: allocating from bitmap: [%u, %u)", allocated_idx,
+        allocated_idx + num_blocks);
+  return allocated_idx;
 }
 
 void Allocator::free(LogicalBlockIdx block_idx, uint32_t num_blocks) {
