@@ -1,5 +1,6 @@
 #include "file.h"
 
+#include <cerrno>
 #include <cstdio>
 #include <iomanip>
 
@@ -118,6 +119,7 @@ off_t File::lseek(off_t offset, int whence) {
       break;
     case SEEK_CUR:
       ret = offset_mgr.seek_relative(offset);
+      if (ret == -1) errno = EINVAL;
       break;
     case SEEK_END:
       ret = offset_mgr.seek_absolute(file_size + offset);
@@ -127,6 +129,7 @@ off_t File::lseek(off_t offset, int whence) {
     case SEEK_HOLE:
     default:
       ret = -1;
+      errno = EINVAL;
   }
 
   pthread_spin_unlock(&spinlock);
