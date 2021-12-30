@@ -17,6 +17,8 @@ enum class BenchMode {
   READ_WRITE,  // single reader multiple writers
 };
 
+#pragma GCC diagnostic push
+#pragma GCC diagnostic ignored "-Wunused-result"
 template <BenchMode mode>
 static void bench(benchmark::State& state) {
   // set up
@@ -69,6 +71,7 @@ static void bench(benchmark::State& state) {
     remove(FILEPATH);
   }
 }
+#pragma GCC diagnostic pop
 
 int main(int argc, char** argv) {
   benchmark::Initialize(&argc, argv);
