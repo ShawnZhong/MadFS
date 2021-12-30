@@ -257,12 +257,11 @@ void TxMgr::gc(const LogicalBlockIdx tail_tx_block_idx, uint64_t file_size) {
   auto num_blocks = ALIGN_UP(file_size, BLOCK_SIZE) / BLOCK_SIZE;
   auto leftover_bytes = (BLOCK_SIZE - file_size) % BLOCK_SIZE;
 
-  auto first_tx_block_idx = file->get_local_allocator()->alloc(1);
+  uint32_t tx_seq = 1;
+  auto first_tx_block_idx = allocator->alloc(1);
   auto new_block = file->lidx_to_addr_rw(first_tx_block_idx);
   memset(&new_block->cache_lines[NUM_CL_PER_BLOCK - 1], 0, CACHELINE_SIZE);
-  new_block->tx_block.set_tx_seq(1);
-  pmem::persist_cl_unfenced(&new_block->cache_lines[NUM_CL_PER_BLOCK - 1]);
-  new_block->zero_init(0, NUM_CL_PER_BLOCK - 1);
+  new_block->tx_block.set_tx_seq(tx_seq++);
   auto new_tx_block = &new_block->tx_block;
   TxEntryIdx tx_idx = {first_tx_block_idx, 0};
 
@@ -274,17 +273,23 @@ void TxMgr::gc(const LogicalBlockIdx tail_tx_block_idx, uint64_t file_size) {
     if (curr_blk_idx == 0) break;
     // continuous blocks can be placed in 1 tx
     if (curr_blk_idx - prev_blk_idx == 1 &&
-        i - begin <= /*TODO: pmem::TxCommitEntry::NUM_BLOCKS_MAX*/ 63) {
+        i - begin <= /*TODO: pmem::TxCommitEntry::NUM_BLOCKS_MAX*/ 63)
       continue;
-    }
 
     auto commit_entry =
         pmem::TxCommitInlineEntry(i - begin, begin, file->vidx_to_lidx(begin));
-    // TODO: since the new transaction history is private to the local thread,
-    // we can fill the entire block in without CAS
-    new_tx_block->try_append(commit_entry, tx_idx.local_idx);
-    // advance_tx_idx should never return false
-    if (!advance_tx_idx(tx_idx, new_tx_block, true)) goto abort;
+    new_tx_block->store(commit_entry, tx_idx.local_idx);
+    if (!advance_tx_idx(tx_idx, new_tx_block, false)) {
+      // current block is full, flush it and allocate a new block
+      auto new_tx_block_idx = allocator->alloc(1);
+      new_tx_block->set_next_tx_block(new_tx_block_idx);
+      pmem::persist_unfenced(new_tx_block, BLOCK_SIZE);
+      new_block = file->lidx_to_addr_rw(new_tx_block_idx);
+      memset(&new_block->cache_lines[NUM_CL_PER_BLOCK - 1], 0, CACHELINE_SIZE);
+      new_block->tx_block.set_tx_seq(tx_seq++);
+      new_tx_block = &new_block->tx_block;
+      tx_idx = {new_tx_block_idx, 0};
+    }
     begin = i;
   }
 
@@ -293,7 +298,7 @@ void TxMgr::gc(const LogicalBlockIdx tail_tx_block_idx, uint64_t file_size) {
     if (leftover_bytes == 0) {
       auto commit_entry = pmem::TxCommitInlineEntry(i - begin, begin,
                                                     file->vidx_to_lidx(begin));
-      new_tx_block->try_append(commit_entry, tx_idx.local_idx);
+      new_tx_block->store(commit_entry, tx_idx.local_idx);
     } else {
       // since i - begin <= 63, this can fit into one log entry
       auto begin_lidx = std::vector{file->vidx_to_lidx(begin)};
@@ -301,21 +306,21 @@ void TxMgr::gc(const LogicalBlockIdx tail_tx_block_idx, uint64_t file_size) {
           log_mgr->append(allocator, pmem::LogOp::LOG_OVERWRITE, leftover_bytes,
                           i - begin, begin, begin_lidx);
       auto commit_entry = pmem::TxCommitEntry(i - begin, begin, log_head_idx);
-      new_tx_block->try_append(commit_entry, tx_idx.local_idx);
+      new_tx_block->store(commit_entry, tx_idx.local_idx);
     }
   }
   // pad the last block with dummy tx entries
   while (advance_tx_idx(tx_idx, new_tx_block, false))
-    new_tx_block->try_append(pmem::TxEntry::TxCommitDummyEntry,
-                             tx_idx.local_idx);
+    new_tx_block->store(pmem::TxEntry::TxCommitDummyEntry, tx_idx.local_idx);
   // last block points to the tail, meta points to the first block
   new_tx_block->set_next_tx_block(tail_tx_block_idx);
   // abort if new transaction history is longer than the old one
   if (tail_block->tx_block.get_tx_seq() <= new_tx_block->get_tx_seq())
     goto abort;
-  while (
-      !meta->set_next_tx_block(first_tx_block_idx, meta->get_next_tx_block()))
+  pmem::persist_fenced(new_tx_block, BLOCK_SIZE);
+  while (!meta->set_next_tx_block(first_tx_block_idx, orig_tx_block_idx))
     ;
+  pmem::persist_fenced(meta, CACHELINE_SIZE);
 
   // TODO: currently we keep the original log entries. Alternatively we
   // can rewrite the log entries to a new block and reclaim more space

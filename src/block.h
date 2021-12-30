@@ -48,6 +48,11 @@ class TxBlock : public BaseBlock {
     return TxEntry::try_append(tx_entries, entry, idx);
   }
 
+  // THIS FUNCTION IS NOT THREAD SAFE
+  void store(TxEntry entry, TxLocalIdx idx) {
+    tx_entries[idx].store(entry, std::memory_order_relaxed);
+  }
+
   [[nodiscard]] TxEntry get(TxLocalIdx idx) const {
     assert(idx >= 0 && idx < NUM_TX_ENTRY);
     return tx_entries[idx].load(std::memory_order_acquire);

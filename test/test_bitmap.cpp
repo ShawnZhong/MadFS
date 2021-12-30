@@ -9,6 +9,7 @@
 
 #include "common.h"
 #include "const.h"
+#include "lib.h"
 #include "posix.h"
 
 char shm_path[ulayfs::CACHELINE_SIZE];
@@ -21,7 +22,7 @@ void create_file() {
   assert(fd >= 0);
 
   // create enough tx so that valid tx span beyond meta block
-  int num_tx = ulayfs::NUM_INLINE_TX_ENTRY + ulayfs::NUM_TX_ENTRY + 1;
+  int num_tx = ulayfs::NUM_INLINE_TX_ENTRY + 2 * ulayfs::NUM_TX_ENTRY + 1;
   for (int i = 0; i < num_tx; i++) {
     sz = write(fd, TEST_STR, TEST_STR_LEN);
     assert(sz == TEST_STR_LEN);
@@ -34,7 +35,9 @@ void create_file() {
                                 2 * ulayfs::CACHELINE_SIZE);
   assert(rc >= 0);
 
-  //  print_file(fd);
+  print_file(fd);
+  ulayfs::get_file(fd)->tx_gc();
+  print_file(fd);
 
   res = close(fd);
   assert(res == 0);
