@@ -17,13 +17,11 @@ enum class BenchMode {
   READ_WRITE,  // single reader multiple writers
 };
 
-#pragma GCC diagnostic push
-#pragma GCC diagnostic ignored "-Wunused-result"
 template <BenchMode mode>
 static void bench(benchmark::State& state) {
   // set up
   pin_node(0);
-  if (state.thread_index() == 0) {
+  if (state.thread_index == 0) {
     remove(FILEPATH);
     fd = open(FILEPATH, O_CREAT | O_RDWR, S_IRUSR | S_IWUSR);
   }
@@ -44,7 +42,7 @@ static void bench(benchmark::State& state) {
   } else if constexpr (mode == BenchMode::READ) {
     for (auto _ : state) pread(fd, dst_buf, num_bytes, 0);
   } else if constexpr (mode == BenchMode::READ_WRITE) {
-    if (state.thread_index() == 0) {
+    if (state.thread_index == 0) {
       for (auto _ : state) pread(fd, dst_buf, num_bytes, 0);
     } else {
       for (auto _ : state) pwrite(fd, src_buf, num_bytes, 0);
@@ -56,7 +54,7 @@ static void bench(benchmark::State& state) {
   auto bytes_processed = items_processed * num_bytes;
   if constexpr (mode == BenchMode::READ_WRITE) {
     // for read-write, we only report the result of the reader thread
-    if (state.thread_index() == 0) {
+    if (state.thread_index == 0) {
       state.SetBytesProcessed(bytes_processed);
       state.SetItemsProcessed(items_processed);
     }
@@ -66,12 +64,11 @@ static void bench(benchmark::State& state) {
   }
 
   // tear down
-  if (state.thread_index() == 0) {
+  if (state.thread_index == 0) {
     close(fd);
     remove(FILEPATH);
   }
 }
-#pragma GCC diagnostic pop
 
 int main(int argc, char** argv) {
   benchmark::Initialize(&argc, argv);
@@ -95,6 +92,5 @@ int main(int argc, char** argv) {
   }
 
   benchmark::RunSpecifiedBenchmarks();
-  benchmark::Shutdown();
   return 0;
 }
