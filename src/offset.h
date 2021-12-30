@@ -38,8 +38,8 @@ class OffsetMgr {
   // must have spinlock acquired
   // only call if seeking is the only serialization point
   // no boundary check
-  int64_t seek_absolute(uint64_t abs_offset) { return offset = abs_offset; }
-  int64_t seek_relative(int64_t rel_offset) {
+  uint64_t seek_absolute(uint64_t abs_offset) { return offset = abs_offset; }
+  uint64_t seek_relative(uint64_t rel_offset) {
     return seek_absolute(offset + rel_offset);
   }
 
