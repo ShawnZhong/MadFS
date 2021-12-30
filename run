@@ -12,12 +12,14 @@ logger = logging.getLogger("run")
 
 
 def run(cmake_target, build_type, cmake_args, prog_args, disable_ulayfs, output_dir):
+    is_leveldb = cmake_target.startswith("db")
     is_bench = cmake_target.startswith("bench")
-    if is_bench:
+    if is_bench or is_leveldb:
         cmake_args += " -DULAYFS_BUILD_BENCH=ON "
+    if is_bench:
         prog_args += " --benchmark_counters_tabular=true "
     if build_type is None:
-        build_type = "release" if is_bench else "debug"
+        build_type = "release" if is_bench or is_leveldb else "debug"
 
     # set up paths
     output_path = output_dir / cmake_target / build_type / get_timestamp()
@@ -27,7 +29,10 @@ def run(cmake_target, build_type, cmake_args, prog_args, disable_ulayfs, output_
     config_log_path = output_path / "config.log"
     build_path = Path(f"build-{build_type}")
     ulayfs_path = build_path / "libulayfs.so"
-    exe_path = build_path / cmake_target
+    if is_leveldb:
+        exe_path = build_path / "_deps" / "leveldb-build" / cmake_target
+    else:
+        exe_path = build_path / cmake_target
 
     cmd = f"{exe_path} {prog_args}"
     build_targets = cmake_target if disable_ulayfs else f"{cmake_target} ulayfs"

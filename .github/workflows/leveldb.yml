@@ -1,10 +1,10 @@
-name: Benchmark
+name: LevelDB
 
 on:
   workflow_dispatch:
     inputs:
       build_type:
-        description: "build type to use for the benchmark"
+        description: "uLayFS build type"
         required: true
         default: "release"
 
@@ -13,7 +13,5 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v2
-      - name: bench
-        run: ./run bench ${{matrix.build_type}}
-        env:
-          BENCH_NUM_ITER: 100
+      - name: db_test
+        run: ./run db_test ${{matrix.build_type}}
