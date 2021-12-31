@@ -207,15 +207,17 @@ int unlink(const char* name) {
     return -1;
   }
 
-  auto meta = reinterpret_cast<const pmem::MetaBlock*>(buf);
-  if (meta->is_valid()) {
-    char shm_path[64];
-    sprintf(shm_path, "/dev/shm/%s", meta->get_shm_name());
-    int ret = posix::unlink(shm_path);
-    DEBUG("posix::unlink(%s) = %d", shm_path, ret);
-    if (unlikely(ret < 0)) {
-      WARN("Could not unlink shm file \"%s\" for unlink: %m", shm_path);
-      return -1;
+  if (sz == BLOCK_SIZE) {
+    auto meta = reinterpret_cast<const pmem::MetaBlock*>(buf);
+    if (meta->is_valid()) {
+      char shm_path[64];
+      sprintf(shm_path, "/dev/shm/%s", meta->get_shm_name());
+      int ret = posix::unlink(shm_path);
+      DEBUG("posix::unlink(%s) = %d", shm_path, ret);
+      if (unlikely(ret < 0)) {
+        WARN("Could not unlink shm file \"%s\" for unlink: %m", shm_path);
+        return -1;
+      }
     }
   }
 
