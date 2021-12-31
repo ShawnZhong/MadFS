@@ -193,6 +193,37 @@ int stat(const char* pathname, struct stat* buf) {
   return 0;
 }
 
+int unlink(const char* name) {
+  int fd = posix::open(name, O_RDONLY);
+  if (unlikely(fd < 0)) {
+    WARN("Could not open file \"%s\" for unlink: %m", name);
+    return -1;
+  }
+
+  char buf[BLOCK_SIZE];
+  ssize_t sz = posix::read(fd, buf, BLOCK_SIZE);
+  if (unlikely(sz < 0)) {
+    WARN("Could not read file \"%s\" for unlink: %m", name);
+    return -1;
+  }
+
+  auto meta = reinterpret_cast<const pmem::MetaBlock*>(buf);
+  if (meta->is_valid()) {
+    char shm_path[64];
+    sprintf(shm_path, "/dev/shm/%s", meta->get_shm_name());
+    int ret = posix::unlink(shm_path);
+    DEBUG("posix::unlink(%s) = %d", shm_path, ret);
+    if (unlikely(ret < 0)) {
+      WARN("Could not unlink shm file \"%s\" for unlink: %m", shm_path);
+      return -1;
+    }
+  }
+
+  int rc = posix::unlink(name);
+  DEBUG("posix::unlink(%s) = %d", name, rc);
+  return rc;
+}
+
 /**
  * Called when the shared library is first loaded
  *
