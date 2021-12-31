@@ -4,16 +4,24 @@ on:
   workflow_dispatch:
     inputs:
       build_type:
-        description: "build type to use for the benchmark"
+        description: "build type"
         required: true
         default: "release"
+#  pull_request:
 
 jobs:
-  benchmark:
+  microbench:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v2
       - name: bench
         run: ./run bench ${{matrix.build_type}}
         env:
-          BENCH_NUM_ITER: 100
+          BENCH_NUM_ITER: 10
+
+  leveldb-test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v2
+      - name: db_test
+        run: ./run db_test ${{matrix.build_type}}

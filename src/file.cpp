@@ -1,5 +1,6 @@
 #include "file.h"
 
+#include <cerrno>
 #include <cstdio>
 #include <iomanip>
 
@@ -18,7 +19,7 @@ File::File(int fd, const struct stat& stat, int flags)
       flags(flags),
       can_read((flags & O_ACCMODE) == O_RDONLY ||
                (flags & O_ACCMODE) == O_RDWR),
-      can_write((flags & O_ACCMODE) == O_RDONLY ||
+      can_write((flags & O_ACCMODE) == O_WRONLY ||
                 (flags & O_ACCMODE) == O_RDWR) {
   pthread_spin_init(&spinlock, PTHREAD_PROCESS_PRIVATE);
   if (stat.st_size == 0) meta->init();
@@ -118,6 +119,7 @@ off_t File::lseek(off_t offset, int whence) {
       break;
     case SEEK_CUR:
       ret = offset_mgr.seek_relative(offset);
+      if (ret == -1) errno = EINVAL;
       break;
     case SEEK_END:
       ret = offset_mgr.seek_absolute(file_size + offset);
@@ -127,6 +129,7 @@ off_t File::lseek(off_t offset, int whence) {
     case SEEK_HOLE:
     default:
       ret = -1;
+      errno = EINVAL;
   }
 
   pthread_spin_unlock(&spinlock);
@@ -162,16 +165,16 @@ void* File::mmap(void* addr_hint, size_t length, int prot, int mmap_flags,
       continue;
     }
 
-    if (remap_file_pages(addr, BLOCK_IDX_TO_SIZE(num_contig_blocks), 0,
-                         lidx_curr_group_start, mmap_flags) != 0)
+    if (posix::remap_file_pages(addr, BLOCK_IDX_TO_SIZE(num_contig_blocks), 0,
+                                lidx_curr_group_start, mmap_flags) != 0)
       goto error;
 
     lidx_curr_group_start = lidx;
     num_contig_blocks = 1;
   }
 
-  if (remap_file_pages(addr, BLOCK_IDX_TO_SIZE(num_contig_blocks), 0,
-                       lidx_curr_group_start, mmap_flags) != 0)
+  if (posix::remap_file_pages(addr, BLOCK_IDX_TO_SIZE(num_contig_blocks), 0,
+                              lidx_curr_group_start, mmap_flags) != 0)
     goto error;
 
   return addr;
