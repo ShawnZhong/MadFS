@@ -171,26 +171,26 @@ void* File::mmap(void* addr_hint, size_t length, int prot, int mmap_flags,
   // remap the blocks in the file
   VirtualBlockIdx vidx_end =
       BLOCK_SIZE_TO_IDX(ALIGN_UP(offset + length, BLOCK_SIZE));
-  VirtualBlockIdx vidx_group_start = BLOCK_SIZE_TO_IDX(offset);
-  LogicalBlockIdx lidx_group_start = blk_table.get(vidx_group_start);
+  VirtualBlockIdx vidx_group_begin = BLOCK_SIZE_TO_IDX(offset);
+  LogicalBlockIdx lidx_group_begin = blk_table.get(vidx_group_begin);
   int num_blocks = 0;
-  for (size_t vidx = vidx_group_start; vidx < vidx_end; vidx++) {
+  for (size_t vidx = vidx_group_begin; vidx < vidx_end; vidx++) {
     LogicalBlockIdx lidx = blk_table.get(vidx);
     if (lidx == 0) PANIC("hole vidx=%ld in mmap", vidx);
 
-    if (lidx == lidx_group_start + num_blocks) {
+    if (lidx == lidx_group_begin + num_blocks) {
       num_blocks++;
       continue;
     }
 
-    if (!remap(lidx_group_start, vidx_group_start, num_blocks)) goto error;
+    if (!remap(lidx_group_begin, vidx_group_begin, num_blocks)) goto error;
 
-    lidx_group_start = lidx;
-    vidx_group_start = vidx;
+    lidx_group_begin = lidx;
+    vidx_group_begin = vidx;
     num_blocks = 1;
   }
 
-  if (!remap(lidx_group_start, vidx_group_start, num_blocks)) goto error;
+  if (!remap(lidx_group_begin, vidx_group_begin, num_blocks)) goto error;
 
   return new_addr;
 
