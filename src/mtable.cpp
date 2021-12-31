@@ -16,7 +16,7 @@ MemTable::MemTable(int fd, off_t init_file_size, bool read_only) {
     file_size =
         is_empty ? PREALLOC_SIZE : ALIGN_UP(init_file_size, GROW_UNIT_SIZE);
     int ret = posix::fallocate(fd, 0, 0, file_size);
-    if (ret < 0) throw FileInitException("fallocate failed");
+    PANIC_IF(ret < 0, "fallocate failed");
   }
 
   pmem::Block* blocks = mmap_file(file_size, 0, 0, read_only);
