@@ -1,11 +1,12 @@
 #pragma once
 
-#include <errno.h>
 #include <fcntl.h>
+#include <sys/file.h>
 #include <sys/mman.h>
 #include <sys/stat.h>
 #include <unistd.h>
 
+#include <cerrno>
 #include <cstdio>
 
 namespace ulayfs::posix {
@@ -45,6 +46,8 @@ DECL_FN(mmap);
 DECL_FN(munmap);
 DECL_FN(fallocate);
 DECL_FN(fsync);
+DECL_FN(flock);
+DECL_FN(unlink);
 
 #undef DECL_FN
 

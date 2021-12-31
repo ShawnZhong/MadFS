@@ -42,7 +42,7 @@ class File {
   tbb::concurrent_unordered_map<pid_t, Allocator> allocators;
 
  public:
-  File(int fd, const struct stat& stat, int flags);
+  File(int fd, const struct stat& stat, int flags, bool guard = true);
   ~File();
 
   /*
@@ -154,13 +154,18 @@ class File {
    * mmapped address to bitmap. The leading bit of the bitmap (corresponding to
    * metablock) indicates if the bitmap needs to be initialized.
    *
-   * @param[in] shm_path path to the shared memory object
    * @param[in] stat stat of the original file
-   * @param[out] bitmap the bitmap opened or created in the shared memory
    * @return the file descriptor for the shared memory object on success,
    * -1 otherwise
    */
-  int open_shm(const char* shm_path, const struct stat& stat, Bitmap*& bitmap);
+  int open_shm(const struct stat& stat);
+
+  /**
+   * Remove the shared memory object associated with the current file.
+   * Try best effort and report no error if unlink fails, since the shared
+   * memory object might be removed by kernel.
+   */
+  void unlink_shm();
 
   void tx_gc();
 
@@ -168,6 +173,42 @@ class File {
                       const pmem::TxBlock* lhs_block = nullptr,
                       const pmem::TxBlock* rhs_block = nullptr) {
     return tx_mgr.tx_idx_greater(lhs_idx, rhs_idx, lhs_block, rhs_block);
+  }
+
+  // try to open a file with checking whether the given file is in uLayFS format
+  static bool try_open(int& fd, struct stat& stat_buf, const char* pathname,
+                       int flags, mode_t mode) {
+    if ((flags & O_ACCMODE) == O_WRONLY) {
+      INFO("File \"%s\" opened with O_WRONLY. Changed to O_RDWR.", pathname);
+      flags &= ~O_WRONLY;
+      flags |= O_RDWR;
+    }
+
+    fd = posix::open(pathname, flags, mode);
+    DEBUG("posix::open(%s, %x, %x) = %d", pathname, flags, mode, fd);
+
+    if (unlikely(fd < 0)) {
+      WARN("File \"%s\" open failed: %m", pathname);
+      return false;
+    }
+
+    int rc = posix::fstat(fd, &stat_buf);
+    if (unlikely(rc < 0)) {
+      WARN("File \"%s\" fstat failed: %m. Fallback to syscall.", pathname);
+      return false;
+    }
+
+    // we don't handle non-normal file (e.g., socket, directory, block dev)
+    if (unlikely(!S_ISREG(stat_buf.st_mode) && !S_ISLNK(stat_buf.st_mode))) {
+      WARN("Non-normal file \"%s\". Fallback to syscall.", pathname);
+      return false;
+    }
+
+    if (!IS_ALIGNED(stat_buf.st_size, BLOCK_SIZE)) {
+      WARN("File size not aligned for \"%s\". Fallback to syscall", pathname);
+      return false;
+    }
+    return true;
   }
 
   friend std::ostream& operator<<(std::ostream& out, const File& f);

@@ -224,12 +224,11 @@ class MetaBlock : public BaseBlock {
   /*
    * Getters and setters
    */
-
-  const char* get_shm_name() {
-    if (cl1_meta.shm_name_is_ready.load(std::memory_order_acquire))
-      return cl1_meta.shm_name;
-    return nullptr;
+  bool is_shm_name_ready() {
+    return cl1_meta.shm_name_is_ready.load(std::memory_order_acquire);
   }
+
+  const char* get_shm_name() { return cl1_meta.shm_name; }
 
   const char* set_shm_name(const struct stat& stat) {
     sprintf(cl1_meta.shm_name, "ulayfs_%016lx_%013lx", stat.st_ino,

@@ -4,7 +4,9 @@
 #include <sys/syscall.h>
 #include <unistd.h>
 
+#include <cassert>
 #include <chrono>
+#include <cstring>
 
 #include "config.h"
 #include "params.h"
