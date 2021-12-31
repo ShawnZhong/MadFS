@@ -31,7 +31,7 @@ File::File(int fd, const struct stat& stat, int flags)
     meta->unlock();
   }
 
-  init_shm(shm_name, stat);
+  open_shm(shm_name, stat);
   // The first bit corresponds to the meta block which should always be set
   // to 1. If it is not, then bitmap needs to be initialized.
   // Bitmap::get is not thread safe but we are only reading one bit here.
@@ -225,7 +225,7 @@ Allocator* File::get_local_allocator() {
  * Helper functions
  */
 
-void File::init_shm(const char* shm_name, const struct stat& stat) {
+void File::open_shm(const char* shm_name, const struct stat& stat) {
   char shm_path[PATH_MAX];
   sprintf(shm_path, "/dev/shm/%s", shm_name);
   TRACE("Opening shared memory %s", shm_path);

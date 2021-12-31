@@ -157,7 +157,7 @@ class File {
    * @param[in] shm_path path to the shared memory object
    * @param[in] stat stat of the original file
    */
-  void init_shm(const char* shm_path, const struct stat& stat);
+  void open_shm(const char* shm_path, const struct stat& stat);
 
   void tx_gc();
 
