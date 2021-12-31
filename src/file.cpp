@@ -19,7 +19,7 @@ File::File(int fd, const struct stat& stat, int flags)
       flags(flags),
       can_read((flags & O_ACCMODE) == O_RDONLY ||
                (flags & O_ACCMODE) == O_RDWR),
-      can_write((flags & O_ACCMODE) == O_RDONLY ||
+      can_write((flags & O_ACCMODE) == O_WRONLY ||
                 (flags & O_ACCMODE) == O_RDWR) {
   pthread_spin_init(&spinlock, PTHREAD_PROCESS_PRIVATE);
   if (stat.st_size == 0) meta->init();
