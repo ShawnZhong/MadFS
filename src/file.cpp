@@ -25,7 +25,7 @@ File::File(int fd, const struct stat& stat, int flags, bool guard)
                 (flags & O_ACCMODE) == O_RDWR) {
   // lock the file to prevent gc before proceeding
   // the lock will be released only at close
-  if (guard) dram::GarbageCollector::flock_guard(fd);
+  if (guard) GarbageCollector::flock_guard(fd);
 
   pthread_spin_init(&spinlock, PTHREAD_PROCESS_PRIVATE);
   if (stat.st_size == 0) meta->init();
@@ -292,7 +292,7 @@ int File::open_shm(const struct stat& stat) {
     PANIC("Fd \"%d\" mmap bitmap failed: %m", fd);
   }
 
-  bitmap = static_cast<dram::Bitmap*>(shm);
+  bitmap = static_cast<Bitmap*>(shm);
   return shm_fd;
 }
 
