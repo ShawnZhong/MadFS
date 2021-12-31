@@ -202,11 +202,6 @@ int unlink(const char* name) {
 
   char buf[BLOCK_SIZE]{};
   ssize_t sz = posix::read(fd, buf, BLOCK_SIZE);
-  if (unlikely(sz < 0)) {
-    WARN("Could not read file \"%s\" for unlink: %m", name);
-    return -1;
-  }
-
   if (sz == BLOCK_SIZE) {
     auto meta = reinterpret_cast<const pmem::MetaBlock*>(buf);
     if (meta->is_valid()) {
