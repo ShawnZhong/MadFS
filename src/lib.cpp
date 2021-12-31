@@ -7,6 +7,7 @@
 #include <unordered_map>
 
 #include "config.h"
+#include "file.h"
 #include "posix.h"
 
 namespace ulayfs {
@@ -25,7 +26,6 @@ std::shared_ptr<dram::File> get_file(int fd) {
 extern "C" {
 int open(const char* pathname, int flags, ...) {
   // keep a record of the user's intented flags before we hijack it
-  int user_flags = flags;
   mode_t mode = 0;
 
   if (__OPEN_NEEDS_MODE(flags)) {
@@ -35,40 +35,13 @@ int open(const char* pathname, int flags, ...) {
     va_end(arg);
   }
 
-  if ((flags & O_ACCMODE) == O_WRONLY) {
-    INFO("File \"%s\" opened with O_WRONLY. Changed to O_RDWR.", pathname);
-    flags &= ~O_WRONLY;
-    flags |= O_RDWR;
-  }
-
-  int fd = posix::open(pathname, flags, mode);
-  DEBUG("posix::open(%s, %x, %x) = %d", pathname, flags, mode, fd);
-
-  if (unlikely(fd < 0)) {
-    WARN("File \"%s\" posix::open failed: %m", pathname);
-    return fd;
-  }
-
-  struct stat stat_buf;  // NOLINT(cppcoreguidelines-pro-type-member-init)
-  int rc = posix::fstat(fd, &stat_buf);
-  if (unlikely(rc < 0)) {
-    WARN("File \"%s\" fstat fialed: %m. Fallback to syscall.", pathname);
-    return fd;
-  }
-
-  // we don't handle non-normal file (e.g., socket, directory, block dev)
-  if (unlikely(!S_ISREG(stat_buf.st_mode) && !S_ISLNK(stat_buf.st_mode))) {
-    WARN("Non-normal file \"%s\". Fallback to syscall.", pathname);
-    return fd;
-  }
-
-  if (!IS_ALIGNED(stat_buf.st_size, BLOCK_SIZE)) {
-    WARN("File size not aligned for \"%s\". Fallback to syscall", pathname);
-    return fd;
-  }
+  int fd;
+  struct stat stat_buf;
+  bool is_valid = dram::File::try_open(fd, stat_buf, pathname, flags, mode);
+  if (!is_valid) return fd;
 
   try {
-    files.emplace(fd, std::make_shared<dram::File>(fd, stat_buf, user_flags));
+    files.emplace(fd, std::make_shared<dram::File>(fd, stat_buf, flags));
     INFO("ulayfs::open(%s, %x, %x) = %d", pathname, flags, mode, fd);
   } catch (const FileInitException& e) {
     WARN("File \"%s\": ulayfs::open failed: %s. Fallback to syscall", pathname,
@@ -77,7 +50,6 @@ int open(const char* pathname, int flags, ...) {
     WARN("File \"%s\": ulayfs::open failed with fatal error.", pathname);
     return -1;
   }
-
   return fd;
 }
 

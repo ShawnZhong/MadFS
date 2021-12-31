@@ -4,11 +4,13 @@
 #include <cstdio>
 #include <iomanip>
 
+#include "gc.h"
 #include "idx.h"
+#include "utils.h"
 
 namespace ulayfs::dram {
 
-File::File(int fd, const struct stat& stat, int flags)
+File::File(int fd, const struct stat& stat, int flags, bool guard)
     : fd(fd),
       mem_table(fd, stat.st_size, (flags & O_ACCMODE) == O_RDONLY),
       meta(mem_table.get_meta()),
@@ -21,17 +23,21 @@ File::File(int fd, const struct stat& stat, int flags)
                (flags & O_ACCMODE) == O_RDWR),
       can_write((flags & O_ACCMODE) == O_WRONLY ||
                 (flags & O_ACCMODE) == O_RDWR) {
+  // lock the file to prevent gc before proceeding
+  // the lock will be released only at close
+  if (guard) GarbageCollector::flock_guard(fd);
+
   pthread_spin_init(&spinlock, PTHREAD_PROCESS_PRIVATE);
   if (stat.st_size == 0) meta->init();
 
-  const char* shm_name = meta->get_shm_name();
-  if (!shm_name) {
+  if (!meta->is_shm_name_ready()) {
     meta->lock();
-    if (!(shm_name = meta->get_shm_name())) shm_name = meta->set_shm_name(stat);
+    if (!meta->is_shm_name_ready()) meta->set_shm_name(stat);
     meta->unlock();
   }
 
-  open_shm(shm_name, stat);
+  open_shm(stat);
+
   // The first bit corresponds to the meta block which should always be set
   // to 1. If it is not, then bitmap needs to be initialized.
   // Bitmap::get is not thread safe but we are only reading one bit here.
@@ -240,9 +246,9 @@ Allocator* File::get_local_allocator() {
  * Helper functions
  */
 
-void File::open_shm(const char* shm_name, const struct stat& stat) {
-  char shm_path[PATH_MAX];
-  sprintf(shm_path, "/dev/shm/%s", shm_name);
+void File::open_shm(const struct stat& stat) {
+  char shm_path[64];
+  sprintf(shm_path, "/dev/shm/%s", meta->get_shm_name());
   TRACE("Opening shared memory %s", shm_path);
   // use posix::open instead of shm_open since shm_open calls open, which is
   // overloaded by ulayfs
@@ -302,6 +308,13 @@ void File::open_shm(const char* shm_name, const struct stat& stat) {
   }
 
   bitmap = static_cast<Bitmap*>(shm);
+}
+
+void File::unlink_shm() {
+  char shm_path[64];
+  sprintf(shm_path, "/dev/shm/%s", meta->get_shm_name());
+  int ret = posix::unlink(shm_path);
+  if (ret != 0) INFO("Fail to unlink bitmaps on shared memory: %m");
 }
 
 void File::tx_gc() {

@@ -25,6 +25,8 @@ INIT_FN(mremap);
 INIT_FN(munmap);
 INIT_FN(fallocate);
 INIT_FN(fsync);
+INIT_FN(flock);
+INIT_FN(unlink);
 
 #undef INIT_FN
 

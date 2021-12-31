@@ -11,6 +11,7 @@ add_library(ulayfs SHARED
     src/debug.h src/debug.cpp
     src/entry.h
     src/file.h src/file.cpp
+    src/gc.h
     src/idx.h
     src/lib.h src/lib.cpp
     src/log.h src/log.cpp
