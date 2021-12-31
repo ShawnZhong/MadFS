@@ -127,14 +127,6 @@ void test_lseek() {
   assert(rc == 0);
 }
 
-void test_stream() {
-  fprintf(stderr, "test_stream\n");
-
-  int fd = open(FILEPATH, O_CREAT | O_RDWR, S_IRUSR | S_IWUSR);
-  FILE* stream = fdopen(fd, "w");
-  fclose(stream);
-}
-
 void test_stat() {
   fprintf(stderr, "test_stat\n");
   remove(FILEPATH);
@@ -161,6 +153,34 @@ void test_stat() {
   assert(stat_buf.st_size == static_cast<off_t>(test_str.length()));
 }
 
+void test_stream() {
+  fprintf(stderr, "test_stream\n");
+
+  int fd = open(FILEPATH, O_CREAT | O_RDWR, S_IRUSR | S_IWUSR);
+  assert(fd >= 0);
+
+  FILE* stream = fdopen(fd, "w");
+  assert(stream != nullptr);
+
+  rc = fclose(stream);
+  assert(rc == 0);
+}
+
+void test_unlink() {
+  fprintf(stderr, "test_unlink\n");
+
+  system("rm -rf /dev/shm/ulayfs_*");
+
+  int fd = open(FILEPATH, O_CREAT | O_RDWR, S_IRUSR | S_IWUSR);
+  assert(fd >= 0);
+
+  rc = unlink(FILEPATH);
+  assert(rc == 0);
+
+  rc = system("find /dev/shm -maxdepth 1 -name ulayfs_* | grep .");
+  assert(rc != 0);  // make sure that there is no bitmap left
+}
+
 int main() {
   test_str = random_string(STR_LEN);
   remove(FILEPATH);
@@ -171,5 +191,6 @@ int main() {
   test_mmap();
   test_stat();
   test_stream();
+  test_unlink();
   return 0;
 }

@@ -201,7 +201,7 @@ class MetaBlock : public BaseBlock {
   }
 
   // check whether the meta block is valid
-  bool is_valid() {
+  [[nodiscard]] bool is_valid() const {
     return std::strncmp(cl1_meta.signature, FILE_SIGNATURE, SIGNATURE_SIZE) ==
            0;
   }
@@ -224,11 +224,11 @@ class MetaBlock : public BaseBlock {
   /*
    * Getters and setters
    */
-  bool is_shm_name_ready() {
+  [[nodiscard]] bool is_shm_name_ready() const {
     return cl1_meta.shm_name_is_ready.load(std::memory_order_acquire);
   }
 
-  const char* get_shm_name() { return cl1_meta.shm_name; }
+  [[nodiscard]] const char* get_shm_name() const { return cl1_meta.shm_name; }
 
   const char* set_shm_name(const struct stat& stat) {
     sprintf(cl1_meta.shm_name, "ulayfs_%016lx_%013lx", stat.st_ino,
