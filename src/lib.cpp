@@ -97,11 +97,13 @@ int fclose(FILE* stream) {
 
 ssize_t write(int fd, const void* buf, size_t count) {
   if (auto file = get_file(fd)) {
-    DEBUG("ulayfs::write(%d, buf, %zu)", fd, count);
-    return file->write(buf, count);
+    ssize_t rc = file->write(buf, count);
+    DEBUG("ulayfs::write(%d, buf, %zu) = %zu", fd, count, rc);
+    return rc;
   } else {
-    DEBUG("posix::write(%d, buf, %zu)", fd, count);
-    return posix::write(fd, buf, count);
+    ssize_t rc = posix::write(fd, buf, count);
+    DEBUG("posix::write(%d, buf, %zu) = %zu", fd, count, rc);
+    return rc;
   }
 }
 
@@ -158,19 +160,16 @@ int fsync(int fd) {
 void* mmap(void* addr, size_t length, int prot, int flags, int fd,
            off_t offset) {
   if (auto file = get_file(fd)) {
-    DEBUG("ulayfs::mmap(%p, %zu, %x, %x, %d, %ld)", addr, length, prot, flags,
-          fd, offset);
-    return file->mmap(addr, length, prot, flags, offset);
+    void* ret = file->mmap(addr, length, prot, flags, offset);
+    DEBUG("ulayfs::mmap(%p, %zu, %x, %x, %d, %ld) = %p", addr, length, prot,
+          flags, fd, offset, ret);
+    return ret;
   } else {
-    DEBUG("posix::mmap(%p, %zu, %x, %x, %d, %ld)", addr, length, prot, flags,
-          fd, offset);
-    return posix::mmap(addr, length, prot, flags, fd, offset);
+    void* ret = posix::mmap(addr, length, prot, flags, fd, offset);
+    DEBUG("posix::mmap(%p, %zu, %x, %x, %d, %ld) = %p", addr, length, prot,
+          flags, fd, offset, ret);
+    return ret;
   }
-}
-
-int munmap(void* addr, size_t length) {
-  DEBUG("posix::munmap(%p, %zu)", addr, length);
-  return posix::munmap(addr, length);
 }
 
 int fstat(int fd, struct stat* buf) {

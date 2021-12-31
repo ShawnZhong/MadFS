@@ -42,8 +42,8 @@ DECL_FN(open);
 DECL_FN(close);
 DECL_FN(fclose);
 DECL_FN(mmap);
+DECL_FN(mremap);
 DECL_FN(munmap);
-DECL_FN(remap_file_pages);
 DECL_FN(fallocate);
 DECL_FN(fsync);
 
