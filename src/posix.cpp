@@ -21,6 +21,7 @@ INIT_FN(open);
 INIT_FN(close);
 INIT_FN(fclose);
 INIT_FN(mmap);
+INIT_FN(mremap);
 INIT_FN(munmap);
 INIT_FN(fallocate);
 INIT_FN(fsync);

@@ -67,7 +67,7 @@ void test_read() {
 void test_mmap() {
   fprintf(stderr, "test_mmap\n");
 
-  int fd = open(FILEPATH, O_RDWR);
+  int fd = open(FILEPATH, O_RDONLY);
   assert(fd >= 0);
 
   void* ptr = mmap(nullptr, test_str.length(), PROT_READ, MAP_SHARED, fd, 0);
@@ -168,9 +168,7 @@ int main() {
   test_write();
   test_read();
   test_lseek();
-#if ULAYFS_USE_PMEMCHECK == 0
   test_mmap();
-#endif
   test_stat();
   test_stream();
   return 0;

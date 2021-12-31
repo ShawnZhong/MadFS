@@ -155,10 +155,9 @@ class File {
    * metablock) indicates if the bitmap needs to be initialized.
    *
    * @param[in] stat stat of the original file
-   * @return the file descriptor for the shared memory object on success,
-   * -1 otherwise
+   * @return the file descriptor for the shared memory object on success
    */
-  int open_shm(const struct stat& stat);
+  void open_shm(const struct stat& stat);
 
   /**
    * Remove the shared memory object associated with the current file.

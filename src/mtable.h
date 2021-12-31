@@ -86,30 +86,7 @@ class MemTable {
   }
 
  public:
-  MemTable(int fd, off_t file_size, bool read_only) {
-    this->fd = fd;
-
-    // grow to multiple of grow_unit_size if the file is empty or the file
-    // size is not grow_unit aligned
-    bool should_grow = file_size == 0 || !IS_ALIGNED(file_size, GROW_UNIT_SIZE);
-    if (should_grow) {
-      file_size =
-          file_size == 0 ? PREALLOC_SIZE : ALIGN_UP(file_size, GROW_UNIT_SIZE);
-      int ret = posix::fallocate(fd, 0, 0, file_size);
-      PANIC_IF(ret, "fallocate failed");
-    }
-
-    pmem::Block* blocks = mmap_file(file_size, 0, 0, read_only);
-    meta = &blocks->meta_block;
-
-    // compute number of blocks and update the mata block if necessary
-    auto num_blocks = BLOCK_SIZE_TO_IDX(file_size);
-    if (should_grow) meta->set_num_blocks_if_larger(num_blocks);
-
-    // initialize the mapping
-    for (LogicalBlockIdx idx = 0; idx < num_blocks; idx += NUM_BLOCKS_PER_GROW)
-      table.emplace(idx, blocks + idx);
-  }
+  MemTable(int fd, off_t file_size, bool read_only);
 
   ~MemTable() {
     for (const auto& [addr, length] : mmap_regions) {
@@ -158,14 +135,7 @@ class MemTable {
     return hugepage_blocks + hugepage_local_idx;
   }
 
-  friend std::ostream& operator<<(std::ostream& out, const MemTable& m) {
-    out << "MemTable:\n";
-    for (const auto& [blk_idx, mem_addr] : m.table) {
-      out << "\t" << blk_idx << " - " << blk_idx + NUM_BLOCKS_PER_GROW << ": ";
-      out << mem_addr << " - " << mem_addr + NUM_BLOCKS_PER_GROW << "\n";
-    }
-    return out;
-  }
+  friend std::ostream& operator<<(std::ostream& out, const MemTable& m);
 };
 
 }  // namespace ulayfs::dram

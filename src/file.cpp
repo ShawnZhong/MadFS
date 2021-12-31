@@ -21,7 +21,7 @@ File::File(int fd, const struct stat& stat, int flags, bool guard)
       flags(flags),
       can_read((flags & O_ACCMODE) == O_RDONLY ||
                (flags & O_ACCMODE) == O_RDWR),
-      can_write((flags & O_ACCMODE) == O_RDONLY ||
+      can_write((flags & O_ACCMODE) == O_WRONLY ||
                 (flags & O_ACCMODE) == O_RDWR) {
   // lock the file to prevent gc before proceeding
   // the lock will be released only at close
@@ -36,7 +36,8 @@ File::File(int fd, const struct stat& stat, int flags, bool guard)
     meta->unlock();
   }
 
-  shm_fd = open_shm(stat);
+  open_shm(stat);
+
   // The first bit corresponds to the meta block which should always be set
   // to 1. If it is not, then bitmap needs to be initialized.
   // Bitmap::get is not thread safe but we are only reading one bit here.
@@ -140,6 +141,7 @@ off_t File::lseek(off_t offset, int whence) {
   pthread_spin_unlock(&spinlock);
   return ret;
 }
+
 void* File::mmap(void* addr_hint, size_t length, int prot, int mmap_flags,
                  off_t offset) {
   if (offset % BLOCK_SIZE != 0) {
@@ -147,46 +149,60 @@ void* File::mmap(void* addr_hint, size_t length, int prot, int mmap_flags,
     return MAP_FAILED;
   }
 
-  // temporarily map the first `length` bytes of the file
-  void* addr = posix::mmap(addr_hint, length, prot, mmap_flags, fd, 0);
-  if (addr == MAP_FAILED) {
+  // reserve address space by memory-mapping /dev/zero
+  static int zero_fd = posix::open("/dev/zero", O_RDONLY);
+  if (zero_fd == -1) {
+    WARN("open(/dev/zero) failed");
+    return MAP_FAILED;
+  }
+  void* res = posix::mmap(addr_hint, length, prot, mmap_flags, zero_fd, 0);
+  if (res == MAP_FAILED) {
     WARN("mmap failed: %m");
     return MAP_FAILED;
   }
+  char* new_addr = reinterpret_cast<char*>(res);
+  char* old_addr = reinterpret_cast<char*>(meta);
+
+  auto remap = [&old_addr, &new_addr](LogicalBlockIdx lidx,
+                                      LogicalBlockIdx vidx, int num_blocks) {
+    char* old_block_addr = old_addr + BLOCK_IDX_TO_SIZE(lidx);
+    char* new_block_addr = new_addr + BLOCK_IDX_TO_SIZE(vidx);
+    size_t len = BLOCK_IDX_TO_SIZE(num_blocks);
+    int flag = MREMAP_MAYMOVE | MREMAP_FIXED;
+
+    void* ret = posix::mremap(old_block_addr, len, len, flag, new_block_addr);
+    return ret == new_block_addr;
+  };
 
   // remap the blocks in the file
-  VirtualBlockIdx vidx_begin = BLOCK_SIZE_TO_IDX(offset);
   VirtualBlockIdx vidx_end =
       BLOCK_SIZE_TO_IDX(ALIGN_UP(offset + length, BLOCK_SIZE));
-
-  LogicalBlockIdx lidx_curr_group_start = blk_table.get(vidx_begin);
-  int num_contig_blocks = 0;
-  for (size_t vidx = vidx_begin; vidx < vidx_end; vidx++) {
+  VirtualBlockIdx vidx_group_begin = BLOCK_SIZE_TO_IDX(offset);
+  LogicalBlockIdx lidx_group_begin = blk_table.get(vidx_group_begin);
+  int num_blocks = 0;
+  for (size_t vidx = vidx_group_begin; vidx < vidx_end; vidx++) {
     LogicalBlockIdx lidx = blk_table.get(vidx);
     if (lidx == 0) PANIC("hole vidx=%ld in mmap", vidx);
 
-    if (lidx == lidx_curr_group_start + num_contig_blocks) {
-      num_contig_blocks++;
+    if (lidx == lidx_group_begin + num_blocks) {
+      num_blocks++;
       continue;
     }
 
-    if (remap_file_pages(addr, BLOCK_IDX_TO_SIZE(num_contig_blocks), 0,
-                         lidx_curr_group_start, mmap_flags) != 0)
-      goto error;
+    if (!remap(lidx_group_begin, vidx_group_begin, num_blocks)) goto error;
 
-    lidx_curr_group_start = lidx;
-    num_contig_blocks = 1;
+    lidx_group_begin = lidx;
+    vidx_group_begin = vidx;
+    num_blocks = 1;
   }
 
-  if (remap_file_pages(addr, BLOCK_IDX_TO_SIZE(num_contig_blocks), 0,
-                       lidx_curr_group_start, mmap_flags) != 0)
-    goto error;
+  if (!remap(lidx_group_begin, vidx_group_begin, num_blocks)) goto error;
 
-  return addr;
+  return new_addr;
 
 error:
-  WARN("remap_file_pages failed: %m");
-  posix::munmap(addr, length);
+  WARN("remap failed: %m");
+  posix::munmap(new_addr, length);
   return MAP_FAILED;
 }
 
@@ -230,13 +246,13 @@ Allocator* File::get_local_allocator() {
  * Helper functions
  */
 
-int File::open_shm(const struct stat& stat) {
+void File::open_shm(const struct stat& stat) {
   char shm_path[64];
   sprintf(shm_path, "/dev/shm/%s", meta->get_shm_name());
   TRACE("Opening shared memory %s", shm_path);
   // use posix::open instead of shm_open since shm_open calls open, which is
   // overloaded by ulayfs
-  int shm_fd =
+  shm_fd =
       posix::open(shm_path, O_RDWR | O_NOFOLLOW | O_CLOEXEC, S_IRUSR | S_IWUSR);
 
   // if the file does not exist, create it
@@ -248,22 +264,22 @@ int File::open_shm(const struct stat& stat) {
         posix::open("/dev/shm", O_TMPFILE | O_RDWR | O_NOFOLLOW | O_CLOEXEC,
                     S_IRUSR | S_IWUSR);
     if (unlikely(shm_fd < 0)) {
-      PANIC("Fd \"%d\": create the temporary file failed: %m", fd);
+      PANIC("create the temporary file failed");
     }
 
     // change permission and ownership of the new shared memory
     if (fchmod(shm_fd, stat.st_mode) < 0) {
       posix::close(shm_fd);
-      PANIC("Fd \"%d\": fchmod on shared memory failed: %m", fd);
+      PANIC("fchmod on shared memory failed");
     }
     if (fchown(shm_fd, stat.st_uid, stat.st_gid) < 0) {
       posix::close(shm_fd);
-      PANIC("Fd \"%d\": fchown on shared memory failed: %m", fd);
+      PANIC("fchown on shared memory failed");
     }
     // TODO: enable dynamically grow bitmap
     if (posix::fallocate(shm_fd, 0, 0, static_cast<off_t>(BITMAP_SIZE)) < 0) {
       posix::close(shm_fd);
-      PANIC("Fd \"%d\": fallocate on shared memory failed: %m", fd);
+      PANIC("fallocate on shared memory failed");
     }
 
     // publish the created tmpfile.
@@ -278,8 +294,7 @@ int File::open_shm(const struct stat& stat) {
       shm_fd = posix::open(shm_path, O_RDWR | O_NOFOLLOW | O_CLOEXEC,
                            S_IRUSR | S_IWUSR);
       if (shm_fd < 0) {
-        PANIC("Fd \"%d\" cannot open or create the shared memory object: %m",
-              fd);
+        PANIC("cannot open or create the shared memory object");
       }
     }
   }
@@ -289,11 +304,10 @@ int File::open_shm(const struct stat& stat) {
                           MAP_SHARED, shm_fd, 0);
   if (shm == MAP_FAILED) {
     posix::close(shm_fd);
-    PANIC("Fd \"%d\" mmap bitmap failed: %m", fd);
+    PANIC("mmap bitmap failed");
   }
 
   bitmap = static_cast<Bitmap*>(shm);
-  return shm_fd;
 }
 
 void File::unlink_shm() {
