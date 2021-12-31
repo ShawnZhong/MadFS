@@ -135,6 +135,7 @@ off_t File::lseek(off_t offset, int whence) {
   pthread_spin_unlock(&spinlock);
   return ret;
 }
+
 void* File::mmap(void* addr_hint, size_t length, int prot, int mmap_flags,
                  off_t offset) {
   if (offset % BLOCK_SIZE != 0) {
@@ -142,46 +143,60 @@ void* File::mmap(void* addr_hint, size_t length, int prot, int mmap_flags,
     return MAP_FAILED;
   }
 
-  // temporarily map the first `length` bytes of the file
-  void* addr = posix::mmap(addr_hint, length, prot, mmap_flags, fd, 0);
-  if (addr == MAP_FAILED) {
+  // reserve address space by memory-mapping /dev/zero
+  int zero_fd = posix::open("/dev/zero", O_RDONLY);
+  if (zero_fd == -1) {
+    WARN("open(/dev/zero) failed");
+    return MAP_FAILED;
+  }
+  void* res = posix::mmap(addr_hint, length, prot, mmap_flags, zero_fd, 0);
+  if (res == MAP_FAILED) {
     WARN("mmap failed: %m");
     return MAP_FAILED;
   }
+  char* new_addr = reinterpret_cast<char*>(res);
+  char* old_addr = reinterpret_cast<char*>(meta);
+
+  auto remap = [&old_addr, &new_addr](LogicalBlockIdx lidx,
+                                      LogicalBlockIdx vidx, int num_blocks) {
+    char* old_block_addr = old_addr + BLOCK_IDX_TO_SIZE(lidx);
+    char* new_block_addr = new_addr + BLOCK_IDX_TO_SIZE(vidx);
+    size_t len = BLOCK_IDX_TO_SIZE(num_blocks);
+    int flag = MREMAP_MAYMOVE | MREMAP_FIXED;
+
+    void* ret = posix::mremap(old_block_addr, len, len, flag, new_block_addr);
+    return ret == new_block_addr;
+  };
 
   // remap the blocks in the file
-  VirtualBlockIdx vidx_begin = BLOCK_SIZE_TO_IDX(offset);
   VirtualBlockIdx vidx_end =
       BLOCK_SIZE_TO_IDX(ALIGN_UP(offset + length, BLOCK_SIZE));
-
-  LogicalBlockIdx lidx_curr_group_start = blk_table.get(vidx_begin);
-  int num_contig_blocks = 0;
-  for (size_t vidx = vidx_begin; vidx < vidx_end; vidx++) {
+  VirtualBlockIdx vidx_group_start = BLOCK_SIZE_TO_IDX(offset);
+  LogicalBlockIdx lidx_group_start = blk_table.get(vidx_group_start);
+  int num_blocks = 0;
+  for (size_t vidx = vidx_group_start; vidx < vidx_end; vidx++) {
     LogicalBlockIdx lidx = blk_table.get(vidx);
     if (lidx == 0) PANIC("hole vidx=%ld in mmap", vidx);
 
-    if (lidx == lidx_curr_group_start + num_contig_blocks) {
-      num_contig_blocks++;
+    if (lidx == lidx_group_start + num_blocks) {
+      num_blocks++;
       continue;
     }
 
-    if (posix::remap_file_pages(addr, BLOCK_IDX_TO_SIZE(num_contig_blocks), 0,
-                                lidx_curr_group_start, mmap_flags) != 0)
-      goto error;
+    if (!remap(lidx_group_start, vidx_group_start, num_blocks)) goto error;
 
-    lidx_curr_group_start = lidx;
-    num_contig_blocks = 1;
+    lidx_group_start = lidx;
+    vidx_group_start = vidx;
+    num_blocks = 1;
   }
 
-  if (posix::remap_file_pages(addr, BLOCK_IDX_TO_SIZE(num_contig_blocks), 0,
-                              lidx_curr_group_start, mmap_flags) != 0)
-    goto error;
+  if (!remap(lidx_group_start, vidx_group_start, num_blocks)) goto error;
 
-  return addr;
+  return new_addr;
 
 error:
-  WARN("remap_file_pages failed: %m");
-  posix::munmap(addr, length);
+  WARN("remap failed: %m");
+  posix::munmap(new_addr, length);
   return MAP_FAILED;
 }
 
