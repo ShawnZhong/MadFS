@@ -144,7 +144,7 @@ void* File::mmap(void* addr_hint, size_t length, int prot, int mmap_flags,
   }
 
   // reserve address space by memory-mapping /dev/zero
-  int zero_fd = posix::open("/dev/zero", O_RDONLY);
+  static int zero_fd = posix::open("/dev/zero", O_RDONLY);
   if (zero_fd == -1) {
     WARN("open(/dev/zero) failed");
     return MAP_FAILED;
