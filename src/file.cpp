@@ -6,6 +6,7 @@
 
 #include "gc.h"
 #include "idx.h"
+#include "utils.h"
 
 namespace ulayfs::dram {
 
@@ -298,7 +299,8 @@ int File::open_shm(const struct stat& stat) {
 void File::unlink_shm() {
   char shm_path[64];
   sprintf(shm_path, "/dev/shm/%s", meta->get_shm_name());
-  posix::unlink(shm_path);
+  int ret = posix::unlink(shm_path);
+  if (ret != 0) INFO("Fail to unlink bitmaps on shared memory: %m");
 }
 
 void File::tx_gc() {
