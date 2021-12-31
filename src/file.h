@@ -36,6 +36,7 @@ class File {
   const bool can_read;
   const bool can_write;
   pthread_spinlock_t spinlock;
+  char shm_path[SHM_PATH_LEN];
 
   // each thread tid has its local allocator
   // the allocator is a per-thread per-file data structure

@@ -174,6 +174,9 @@ void test_unlink() {
   int fd = open(FILEPATH, O_CREAT | O_RDWR, S_IRUSR | S_IWUSR);
   assert(fd >= 0);
 
+  rc = close(fd);
+  assert(rc == 0);
+
   rc = unlink(FILEPATH);
   assert(rc == 0);
 

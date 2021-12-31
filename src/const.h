@@ -8,7 +8,8 @@ namespace ulayfs {
 // signature
 constexpr static int SIGNATURE_SIZE = 8;
 constexpr static char FILE_SIGNATURE[SIGNATURE_SIZE] = "ULAYFS";
-constexpr static uint16_t SHM_NAME_LEN = 40;
+constexpr static char SHM_XATTR_NAME[] = "user.shm_path";
+constexpr static uint16_t SHM_PATH_LEN = 64;
 
 constexpr static uint16_t NUM_CL_PER_BLOCK = BLOCK_SIZE / CACHELINE_SIZE;
 
