@@ -156,11 +156,8 @@ class File {
    *
    * @param[in] shm_path path to the shared memory object
    * @param[in] stat stat of the original file
-   * @param[out] bitmap the bitmap opened or created in the shared memory
-   * @return the file descriptor for the shared memory object on success,
-   * -1 otherwise
    */
-  int open_shm(const char* shm_path, const struct stat& stat, Bitmap*& bitmap);
+  void open_shm(const char* shm_path, const struct stat& stat);
 
   void tx_gc();
 

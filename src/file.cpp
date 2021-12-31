@@ -31,7 +31,7 @@ File::File(int fd, const struct stat& stat, int flags)
     meta->unlock();
   }
 
-  shm_fd = open_shm(shm_name, stat, bitmap);
+  open_shm(shm_name, stat);
   // The first bit corresponds to the meta block which should always be set
   // to 1. If it is not, then bitmap needs to be initialized.
   // Bitmap::get is not thread safe but we are only reading one bit here.
@@ -240,14 +240,13 @@ Allocator* File::get_local_allocator() {
  * Helper functions
  */
 
-int File::open_shm(const char* shm_name, const struct stat& stat,
-                   Bitmap*& bitmap) {
-  char shm_path[64];
+void File::open_shm(const char* shm_name, const struct stat& stat) {
+  char shm_path[PATH_MAX];
   sprintf(shm_path, "/dev/shm/%s", shm_name);
   TRACE("Opening shared memory %s", shm_path);
   // use posix::open instead of shm_open since shm_open calls open, which is
   // overloaded by ulayfs
-  int shm_fd =
+  shm_fd =
       posix::open(shm_path, O_RDWR | O_NOFOLLOW | O_CLOEXEC, S_IRUSR | S_IWUSR);
 
   // if the file does not exist, create it
@@ -259,22 +258,22 @@ int File::open_shm(const char* shm_name, const struct stat& stat,
         posix::open("/dev/shm", O_TMPFILE | O_RDWR | O_NOFOLLOW | O_CLOEXEC,
                     S_IRUSR | S_IWUSR);
     if (unlikely(shm_fd < 0)) {
-      PANIC("Fd \"%d\": create the temporary file failed: %m", fd);
+      PANIC("create the temporary file failed");
     }
 
     // change permission and ownership of the new shared memory
     if (fchmod(shm_fd, stat.st_mode) < 0) {
       posix::close(shm_fd);
-      PANIC("Fd \"%d\": fchmod on shared memory failed: %m", fd);
+      PANIC("fchmod on shared memory failed");
     }
     if (fchown(shm_fd, stat.st_uid, stat.st_gid) < 0) {
       posix::close(shm_fd);
-      PANIC("Fd \"%d\": fchown on shared memory failed: %m", fd);
+      PANIC("fchown on shared memory failed");
     }
     // TODO: enable dynamically grow bitmap
     if (posix::fallocate(shm_fd, 0, 0, static_cast<off_t>(BITMAP_SIZE)) < 0) {
       posix::close(shm_fd);
-      PANIC("Fd \"%d\": fallocate on shared memory failed: %m", fd);
+      PANIC("fallocate on shared memory failed");
     }
 
     // publish the created tmpfile.
@@ -289,8 +288,7 @@ int File::open_shm(const char* shm_name, const struct stat& stat,
       shm_fd = posix::open(shm_path, O_RDWR | O_NOFOLLOW | O_CLOEXEC,
                            S_IRUSR | S_IWUSR);
       if (shm_fd < 0) {
-        PANIC("Fd \"%d\" cannot open or create the shared memory object: %m",
-              fd);
+        PANIC("cannot open or create the shared memory object");
       }
     }
   }
@@ -300,11 +298,10 @@ int File::open_shm(const char* shm_name, const struct stat& stat,
                           MAP_SHARED, shm_fd, 0);
   if (shm == MAP_FAILED) {
     posix::close(shm_fd);
-    PANIC("Fd \"%d\" mmap bitmap failed: %m", fd);
+    PANIC("mmap bitmap failed");
   }
 
-  bitmap = static_cast<dram::Bitmap*>(shm);
-  return shm_fd;
+  bitmap = static_cast<Bitmap*>(shm);
 }
 
 void File::tx_gc() {

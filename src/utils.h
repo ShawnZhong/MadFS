@@ -44,7 +44,7 @@ extern FILE *log_file;
     if (likely(!(expr))) break;                            \
     FPRINTF(stderr, "[PANIC] " msg ": %m", ##__VA_ARGS__); \
     assert(false);                                         \
-    exit(EXIT_FAILURE);                                    \
+    throw FatalException();                                \
   } while (0)
 #define PANIC(msg, ...) PANIC_IF(true, msg, ##__VA_ARGS__)
 
@@ -74,7 +74,17 @@ extern FILE *log_file;
 #define ALIGN_DOWN(x, a) ((x) & ~((typeof(x))(a)-1))
 #define IS_ALIGNED(x, a) (((x) & ((typeof(x))(a)-1)) == 0)
 
-namespace ulayfs::pmem {
+namespace ulayfs {
+
+struct FileInitException : public std::exception {
+  explicit FileInitException(const char *msg) : msg(msg) {}
+  [[nodiscard]] const char *what() const noexcept override { return msg; }
+  const char *msg;
+};
+
+struct FatalException : public std::exception {};
+
+namespace pmem {
 /**
  * persist the cache line that contains p from any level of the cache
  * hierarchy using the appropriate instruction
@@ -123,4 +133,5 @@ static inline void persist_fenced(void *buf, uint64_t len) {
   persist_unfenced(buf, len);
   _mm_sfence();
 }
-}  // namespace ulayfs::pmem
+}  // namespace pmem
+}  // namespace ulayfs
