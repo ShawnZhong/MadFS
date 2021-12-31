@@ -221,6 +221,8 @@ int unlink(const char* name) {
 
   int rc = posix::unlink(name);
   DEBUG("posix::unlink(%s) = %d", name, rc);
+
+  close(fd);
   return rc;
 }
 
