@@ -200,7 +200,7 @@ int unlink(const char* name) {
     return -1;
   }
 
-  char buf[BLOCK_SIZE];
+  char buf[BLOCK_SIZE]{};
   ssize_t sz = posix::read(fd, buf, BLOCK_SIZE);
   if (sz == BLOCK_SIZE) {
     auto meta = reinterpret_cast<const pmem::MetaBlock*>(buf);
