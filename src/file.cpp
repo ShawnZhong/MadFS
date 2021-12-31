@@ -240,22 +240,22 @@ void File::init_shm(const char* shm_name, const struct stat& stat) {
         posix::open("/dev/shm", O_TMPFILE | O_RDWR | O_NOFOLLOW | O_CLOEXEC,
                     S_IRUSR | S_IWUSR);
     if (unlikely(shm_fd < 0)) {
-      throw InitException("create the temporary file failed");
+      PANIC("create the temporary file failed");
     }
 
     // change permission and ownership of the new shared memory
     if (fchmod(shm_fd, stat.st_mode) < 0) {
       posix::close(shm_fd);
-      throw InitException("fchmod on shared memory failed");
+      PANIC("fchmod on shared memory failed");
     }
     if (fchown(shm_fd, stat.st_uid, stat.st_gid) < 0) {
       posix::close(shm_fd);
-      throw InitException("fchown on shared memory failed");
+      PANIC("fchown on shared memory failed");
     }
     // TODO: enable dynamically grow bitmap
     if (posix::fallocate(shm_fd, 0, 0, static_cast<off_t>(BITMAP_SIZE)) < 0) {
       posix::close(shm_fd);
-      throw InitException("fallocate on shared memory failed");
+      PANIC("fallocate on shared memory failed");
     }
 
     // publish the created tmpfile.
@@ -270,7 +270,7 @@ void File::init_shm(const char* shm_name, const struct stat& stat) {
       shm_fd = posix::open(shm_path, O_RDWR | O_NOFOLLOW | O_CLOEXEC,
                            S_IRUSR | S_IWUSR);
       if (shm_fd < 0) {
-        throw InitException("cannot open or create the shared memory object");
+        PANIC("cannot open or create the shared memory object");
       }
     }
   }
@@ -280,7 +280,7 @@ void File::init_shm(const char* shm_name, const struct stat& stat) {
                           MAP_SHARED, shm_fd, 0);
   if (shm == MAP_FAILED) {
     posix::close(shm_fd);
-    throw InitException("mmap bitmap failed");
+    PANIC("mmap bitmap failed");
   }
 
   bitmap = static_cast<Bitmap*>(shm);

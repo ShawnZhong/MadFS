@@ -167,12 +167,6 @@ class File {
     return tx_mgr.tx_idx_greater(lhs_idx, rhs_idx, lhs_block, rhs_block);
   }
 
-  struct InitException : public std::exception {
-    explicit InitException(const char* msg) : msg(msg) {}
-    const char* msg;
-    [[nodiscard]] const char* what() const noexcept override { return msg; }
-  };
-
   friend std::ostream& operator<<(std::ostream& out, const File& f);
 };
 
