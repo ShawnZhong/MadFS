@@ -39,7 +39,10 @@ int open(const char* pathname, int flags, ...) {
   int fd;
   struct stat stat_buf;
   bool is_valid = dram::File::try_open(fd, stat_buf, pathname, flags, mode);
-  if (!is_valid) return fd;
+  if (!is_valid) {
+    DEBUG("posix::open(%s, %x, %x) = %d", pathname, flags, mode, fd);
+    return fd;
+  }
 
   try {
     files.emplace(fd, std::make_shared<dram::File>(fd, stat_buf, flags));
@@ -47,6 +50,7 @@ int open(const char* pathname, int flags, ...) {
   } catch (const FileInitException& e) {
     WARN("File \"%s\": ulayfs::open failed: %s. Fallback to syscall", pathname,
          e.what());
+    DEBUG("posix::open(%s, %x, %x) = %d", pathname, flags, mode, fd);
   } catch (const FatalException& e) {
     WARN("File \"%s\": ulayfs::open failed with fatal error.", pathname);
     return -1;

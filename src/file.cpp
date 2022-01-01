@@ -73,7 +73,6 @@ File::File(int fd, const struct stat& stat, int flags, bool guard)
 
 File::~File() {
   pthread_spin_destroy(&spinlock);
-  DEBUG("posix::close(%d)", fd);
   posix::close(fd);
   posix::close(shm_fd);
   allocators.clear();

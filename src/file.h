@@ -185,7 +185,6 @@ class File {
     }
 
     fd = posix::open(pathname, flags, mode);
-    DEBUG("posix::open(%s, %x, %x) = %d", pathname, flags, mode, fd);
 
     if (unlikely(fd < 0)) {
       WARN("File \"%s\" open failed: %m", pathname);
