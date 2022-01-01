@@ -1,16 +1,5 @@
 #pragma once
 
-#ifndef __has_feature
-#define __has_feature(x) 0
-#endif
-
-#if __has_feature(memory_sanitizer)
-#include <sanitizer/msan_interface.h>
-#else
-// ref: https://github.com/google/sanitizers/wiki/MemorySanitizer#interface
-#define __msan_unpoison(...) ({})
-#endif
-
 #include <fcntl.h>
 #include <sys/file.h>
 #include <sys/mman.h>
@@ -19,6 +8,8 @@
 
 #include <cerrno>
 #include <cstdio>
+
+#include "utils.h"
 
 namespace ulayfs::posix {
 
