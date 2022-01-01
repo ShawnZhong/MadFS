@@ -18,10 +18,9 @@ class File;
 class LogMgr {
  private:
   File* file;
-  pmem::MetaBlock* meta;
 
  public:
-  LogMgr(File* file, pmem::MetaBlock* meta) : file(file), meta(meta) {}
+  LogMgr(File* file) : file(file) {}
 
  private:
   /**
