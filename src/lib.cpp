@@ -155,7 +155,6 @@ void* mmap(void* addr, size_t length, int prot, int flags, int fd,
 }
 
 int __fxstat(int ver, int fd, struct stat* buf) {
-  assert(ver == _STAT_VER);
   int rc = posix::fstat(fd, buf);
   if (unlikely(rc < 0)) {
     WARN("fstat failed for fd = %d: %m", fd);
@@ -173,7 +172,6 @@ int __fxstat(int ver, int fd, struct stat* buf) {
 }
 
 int __xstat(int ver, const char* pathname, struct stat* buf) {
-  assert(ver == _STAT_VER);
   int fd = open(pathname, O_RDONLY);
   if (unlikely(fd < 0)) {
     WARN("Could not open file \"%s\" for stat: %m", pathname);

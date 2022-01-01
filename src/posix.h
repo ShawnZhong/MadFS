@@ -1,5 +1,16 @@
 #pragma once
 
+#ifndef __has_feature
+#define __has_feature(x) 0
+#endif
+
+#if __has_feature(memory_sanitizer)
+#include <sanitizer/msan_interface.h>
+#else
+// ref: https://github.com/google/sanitizers/wiki/MemorySanitizer#interface
+#define __msan_unpoison(...) ({})
+#endif
+
 #include <fcntl.h>
 #include <sys/file.h>
 #include <sys/mman.h>
@@ -58,12 +69,15 @@ DECL_FN(__fxstat);
 // [lf]stat are wrappers to internal functions in glibc, so we need to hook the
 // actual functions instead
 static int stat(const char *filename, struct stat *buf) {
+  __msan_unpoison(buf, sizeof(struct stat));
   return posix::__xstat(_STAT_VER, filename, buf);
 }
 static int lstat(const char *filename, struct stat *buf) {
+  __msan_unpoison(buf, sizeof(struct stat));
   return posix::__lxstat(_STAT_VER, filename, buf);
 }
 static int fstat(int fd, struct stat *buf) {
+  __msan_unpoison(buf, sizeof(struct stat));
   return posix::__fxstat(_STAT_VER, fd, buf);
 }
 
