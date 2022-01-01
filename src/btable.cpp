@@ -69,12 +69,14 @@ void BlkTable::apply_tx(pmem::TxEntryIndirect tx_commit_entry, LogMgr* log_mgr,
 
   do {
     head_entry = log_mgr->read_head(unpack_idx, num_blocks);
-    LogicalBlockIdx le_begin_lidxs[num_blocks / 64 + 1];
+    LogicalBlockIdx le_begin_lidxs[num_blocks / MAX_BLOCKS_PER_BODY + 1];
     has_more = log_mgr->read_body(unpack_idx, head_entry, num_blocks,
                                   &begin_vidx, le_begin_lidxs, &leftover_bytes);
 
     for (uint32_t offset = 0; offset < num_blocks; ++offset)
-      table[begin_vidx + offset] = le_begin_lidxs[offset / 64] + offset % 64;
+      table[begin_vidx + offset] =
+          le_begin_lidxs[offset / MAX_BLOCKS_PER_BODY] +
+          offset % MAX_BLOCKS_PER_BODY;
 
   } while (has_more);
 

@@ -351,7 +351,7 @@ std::ostream& operator<<(std::ostream& out, const TxMgr& tx_mgr) {
         head_entry = log_mgr->read_head(unpack_idx, num_blocks);
         out << "\t\t" << *head_entry << "\n";
 
-        LogicalBlockIdx le_begin_lidxs[num_blocks / 64 + 1];
+        LogicalBlockIdx le_begin_lidxs[num_blocks / MAX_BLOCKS_PER_BODY + 1];
         has_more = log_mgr->read_body(unpack_idx, head_entry, num_blocks,
                                       &le_first_vidx, le_begin_lidxs);
 
@@ -435,7 +435,7 @@ bool TxMgr::Tx::handle_conflict(pmem::TxEntry curr_entry,
         head_entry = log_mgr->read_head(unpack_idx, num_blocks);
         // technically, it should be ALIGN_UP(num_blocks, 64) / 64
         // but it won't hurt to just make it slightly larger
-        LogicalBlockIdx le_begin_lidxs[num_blocks / 64 + 1];
+        LogicalBlockIdx le_begin_lidxs[num_blocks / MAX_BLOCKS_PER_BODY + 1];
         has_more = log_mgr->read_body(unpack_idx, head_entry, num_blocks,
                                       &le_first_vidx, le_begin_lidxs);
         // get conflict segment-by-segment
@@ -447,7 +447,8 @@ bool TxMgr::Tx::handle_conflict(pmem::TxEntry curr_entry,
               std::min(num_blocks - seg_blocks, MAX_BLOCKS_PER_BODY),
               conflict_image);
         }
-        assert(len == ALIGN_UP(num_blocks, 64) / 64);
+        assert(len ==
+               ALIGN_UP(num_blocks, MAX_BLOCKS_PER_BODY) / MAX_BLOCKS_PER_BODY);
       } while (has_more);
     }
   next:

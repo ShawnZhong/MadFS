@@ -51,7 +51,8 @@ bool LogMgr::read_body(LogEntryUnpackIdx& unpack_idx,
          seg_blocks += MAX_BLOCKS_PER_BODY, ++len, unpack_idx.local_idx++) {
       begin_lidxs[len] = get_body_entry(unpack_idx)->begin_logical_idx;
     }
-    assert(len == ALIGN_UP(num_blocks, 64) / 64);
+    assert(len ==
+           ALIGN_UP(num_blocks, MAX_BLOCKS_PER_BODY) / MAX_BLOCKS_PER_BODY);
   }
 
   if (head_entry->overflow) {
