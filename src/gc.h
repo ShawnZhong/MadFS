@@ -14,7 +14,7 @@ class GarbageCollector {
     struct stat stat_buf;
     if (File::try_open(fd, stat_buf, pathname, O_RDWR, 0)) return nullptr;
 
-    is_exclusive = try_acquired(fd);
+    is_exclusive = flock::try_acquire(fd);
     return new File(fd, stat_buf, O_RDWR, /*guard*/ false);
   }
 

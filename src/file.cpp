@@ -27,7 +27,7 @@ File::File(int fd, const struct stat& stat, int flags, bool guard)
                 (flags & O_ACCMODE) == O_RDWR) {
   // lock the file to prevent gc before proceeding
   // the lock will be released only at close
-  if (guard) flock_guard(fd);
+  if (guard) flock::flock_guard(fd);
 
   pthread_spin_init(&spinlock, PTHREAD_PROCESS_PRIVATE);
   if (stat.st_size == 0) meta->init();
