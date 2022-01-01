@@ -199,7 +199,7 @@ class File {
 
     // we don't handle non-normal file (e.g., socket, directory, block dev)
     if (unlikely(!S_ISREG(stat_buf.st_mode) && !S_ISLNK(stat_buf.st_mode))) {
-      WARN("Non-normal file \"%s\". Fallback to syscall.", pathname);
+      INFO("Non-normal file \"%s\". Fallback to syscall.", pathname);
       return false;
     }
 
