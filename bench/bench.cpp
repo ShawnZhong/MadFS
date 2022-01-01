@@ -15,12 +15,13 @@ enum class BenchMode {
   OVERWRITE,
   READ,
   READ_WRITE,  // single reader multiple writers
+  OPEN_CLOSE,
 };
 
 #pragma GCC diagnostic push
 #pragma GCC diagnostic ignored "-Wunused-result"
 template <BenchMode mode>
-static void bench(benchmark::State& state) {
+void bench(benchmark::State& state) {
   // set up
   pin_node(0);
   if (state.thread_index == 0) {
@@ -71,6 +72,14 @@ static void bench(benchmark::State& state) {
     remove(FILEPATH);
   }
 }
+
+template <>
+void bench<BenchMode::OPEN_CLOSE>(benchmark::State& state) {
+  remove(FILEPATH);
+  close(open(FILEPATH, O_CREAT | O_RDWR, S_IRUSR | S_IWUSR));
+  for (auto _ : state) close(open(FILEPATH, O_RDWR));
+  state.SetItemsProcessed(static_cast<int64_t>(state.iterations()));
+}
 #pragma GCC diagnostic pop
 
 int main(int argc, char** argv) {
@@ -93,6 +102,9 @@ int main(int argc, char** argv) {
         ->Iterations(num_iter)
         ->UseRealTime();
   }
+
+  RegisterBenchmark("open_close", bench<BenchMode::OPEN_CLOSE>)
+      ->Iterations(num_iter);
 
   benchmark::RunSpecifiedBenchmarks();
   return 0;
