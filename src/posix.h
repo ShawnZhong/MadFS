@@ -49,19 +49,22 @@ DECL_FN(fallocate);
 DECL_FN(fsync);
 DECL_FN(flock);
 DECL_FN(unlink);
+DECL_FN(__xstat);
+DECL_FN(__lxstat);
+DECL_FN(__fxstat);
 
 #undef DECL_FN
 
 // [lf]stat are wrappers to internal functions in glibc, so we need to hook the
 // actual functions instead
 static int stat(const char *filename, struct stat *buf) {
-  return __xstat(_STAT_VER, filename, buf);
+  return posix::__xstat(_STAT_VER, filename, buf);
 }
 static int lstat(const char *filename, struct stat *buf) {
-  return __lxstat(_STAT_VER, filename, buf);
+  return posix::__lxstat(_STAT_VER, filename, buf);
 }
 static int fstat(int fd, struct stat *buf) {
-  return __fxstat(_STAT_VER, fd, buf);
+  return posix::__fxstat(_STAT_VER, fd, buf);
 }
 
 }  // namespace ulayfs::posix
