@@ -39,7 +39,10 @@ int open(const char* pathname, int flags, ...) {
   int fd;
   struct stat stat_buf;
   bool is_valid = dram::File::try_open(fd, stat_buf, pathname, flags, mode);
-  if (!is_valid) return fd;
+  if (!is_valid) {
+    DEBUG("posix::open(%s, %x, %x) = %d", pathname, flags, mode, fd);
+    return fd;
+  }
 
   try {
     files.emplace(fd, std::make_shared<dram::File>(fd, stat_buf, flags));
@@ -47,6 +50,7 @@ int open(const char* pathname, int flags, ...) {
   } catch (const FileInitException& e) {
     WARN("File \"%s\": ulayfs::open failed: %s. Fallback to syscall", pathname,
          e.what());
+    DEBUG("posix::open(%s, %x, %x) = %d", pathname, flags, mode, fd);
   } catch (const FatalException& e) {
     WARN("File \"%s\": ulayfs::open failed with fatal error.", pathname);
     return -1;
@@ -154,7 +158,7 @@ void* mmap(void* addr, size_t length, int prot, int flags, int fd,
   }
 }
 
-int fstat(int fd, struct stat* buf) {
+int __fxstat(int ver, int fd, struct stat* buf) {
   int rc = posix::fstat(fd, buf);
   if (unlikely(rc < 0)) {
     WARN("fstat failed for fd = %d: %m", fd);
@@ -171,7 +175,7 @@ int fstat(int fd, struct stat* buf) {
   return 0;
 }
 
-int stat(const char* pathname, struct stat* buf) {
+int __xstat(int ver, const char* pathname, struct stat* buf) {
   int fd = open(pathname, O_RDONLY);
   if (unlikely(fd < 0)) {
     WARN("Could not open file \"%s\" for stat: %m", pathname);

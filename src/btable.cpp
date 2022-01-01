@@ -104,7 +104,9 @@ void BlkTable::apply_tx(pmem::TxEntryInline tx_commit_inline_entry) {
 }
 
 std::ostream& operator<<(std::ostream& out, const BlkTable& b) {
-  out << "BlkTable: (virtual block index -> logical block index)\n";
+  out << "BlkTable:\n";
+  out << "\tfile_size: " << b.file_size << "\n";
+  out << "\ttail_tx_idx: " << b.tail_tx_idx << "\n";
   for (size_t i = 0; i < b.table.size(); ++i) {
     if (b.table[i] != 0) {
       out << "\t" << i << " -> " << b.table[i] << "\n";
