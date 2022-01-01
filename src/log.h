@@ -1,5 +1,6 @@
 #pragma once
 
+#include <cstdint>
 #include <ostream>
 #include <vector>
 
@@ -45,30 +46,59 @@ class LogMgr {
     return get_head_entry(LogEntryUnpackIdx::from_pack_idx(idx));
   }
 
-  // TODO: return op
-  // TODO: handle writev requests
   /**
-   * get total coverage of the group of log entries starting at the head at idx
+   * read the head entry and return number of blocks
    *
-   * @param first_head_idx LogEntryIdx of the first head entry
-   * @param[out] begin_virtual_idx begin_virtual_idx of the coverage
-   * @param[out] num_blocks number of blocks in the coverage
-   * @param[out] begin_logical_idxs pointer to vector of logical indices,
-   *                                if nonnull, pushes a list of corresponding
-   *                                logical indices; pass one when applying
-   *                                the transaction, and pass nullptr when
-   *                                first checking OCC
-   * @param[out] leftover_bytes pointer to an uint16_t, if nonnull, will be
-   *                            filled with the number of leftover bytes for
-   *                            this transaction
+   * @param[in,out] unpack_idx the unpack index of the head entry
+   * @param[out] num_blocks number of block mapping these entries contain
+   * @param[in] init_bitmap whether init bitmap
+   * @return address of the head entry (will be used by read_body)
    */
-  void get_coverage(LogEntryIdx first_head_idx,
-                    VirtualBlockIdx& begin_virtual_idx, uint32_t& num_blocks,
-                    std::vector<LogicalBlockIdx>* begin_logical_idxs = nullptr,
-                    uint16_t* leftover_bytes = nullptr,
-                    bool init_bitmap = false);
+  const pmem::LogHeadEntry* read_head(LogEntryUnpackIdx& unpack_idx,
+                                      uint32_t& num_blocks,
+                                      bool init_bitmap = false);
 
-  // TODO: handle writev requests
+  /**
+   * read body entries following the given head_entry
+   *
+   * @param[in,out] unpack_idx unpacked head_idx (will be updated)
+   * @param[in] head_entry address of head entry (returned from read_head)
+   * @param[in] num_blocks number of block mapping (returned from read_head)
+   * @param[out] begin_vidx begin virtual index of this mapping
+   * @param[out] begin_lidxs an array of logical indexes to store mapping, must
+   * be at least `ALIGN_UP(num_blocks, 64) / 64` large
+   * @param[out] leftover_bytes number of leftover bytes in the last block
+   * @return whether there are more entries
+   */
+  bool read_body(LogEntryUnpackIdx& unpack_idx,
+                 const pmem::LogHeadEntry* head_entry, uint32_t num_blocks,
+                 VirtualBlockIdx* begin_vidx = nullptr,
+                 LogicalBlockIdx begin_lidxs[] = nullptr,
+                 uint16_t* leftover_bytes = nullptr);
+
+  /**
+   * Only get the begin virtual index and number of blocks (assuming no vector
+   * write) but don't care actual mapping
+   *
+   * @param[in] first_head_idx the first head index (from TxEntryIndirect)
+   * @param[out] begin_vidx begin of this virtual-logical mapping
+   * @param[out] num_blocks length of this virtual-logical mapping
+   */
+  void get_coverage(LogEntryIdx first_head_idx, VirtualBlockIdx& begin_vidx,
+                    uint32_t& num_blocks) {
+    LogEntryUnpackIdx unpack_idx =
+        LogEntryUnpackIdx::from_pack_idx(first_head_idx);
+    const pmem::LogHeadEntry* head_entry = read_head(unpack_idx, num_blocks);
+    if (!read_body(unpack_idx, head_entry, num_blocks, &begin_vidx)) return;
+
+    // if there are multiple segments...
+    uint32_t num_blocks_segment;
+    do {
+      head_entry = read_head(unpack_idx, num_blocks_segment);
+      num_blocks += num_blocks_segment;
+    } while (read_body(unpack_idx, head_entry, num_blocks_segment));
+  }
+
   /**
    * populate log entries required by a single transaction
    *

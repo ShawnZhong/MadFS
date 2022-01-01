@@ -340,22 +340,31 @@ std::ostream& operator<<(std::ostream& out, const TxMgr& tx_mgr) {
 
     // print log entries if the tx is not inlined
     if (!tx_entry.is_inline()) {
-      auto head_entry_idx = tx_entry.commit_entry.log_entry_idx;
-      auto head_entry = log_mgr->get_head_entry(head_entry_idx);
-      out << "\t\t" << *head_entry << "\n";
-
-      // print log coverage
+      LogEntryUnpackIdx unpack_idx =
+          LogEntryUnpackIdx::from_pack_idx(tx_entry.commit_entry.log_entry_idx);
+      const pmem::LogHeadEntry* head_entry;
+      VirtualBlockIdx le_first_vidx;
       uint32_t num_blocks;
-      VirtualBlockIdx begin_virtual_idx;
-      std::vector<LogicalBlockIdx> begin_logical_idxs;
-      log_mgr->get_coverage(head_entry_idx, begin_virtual_idx, num_blocks,
-                            &begin_logical_idxs);
-      out << "\t\tLogCoverage{";
-      out << "n_blk=" << num_blocks << ", ";
-      out << "vidx=" << begin_virtual_idx << ", ";
-      out << "begin_lidxs=[";
-      for (const auto& idx : begin_logical_idxs) out << idx << ", ";
-      out << "]}\n";
+      bool has_more;
+
+      do {
+        head_entry = log_mgr->read_head(unpack_idx, num_blocks);
+        out << "\t\t" << *head_entry << "\n";
+
+        LogicalBlockIdx le_begin_lidxs[num_blocks / 64 + 1];
+        has_more = log_mgr->read_body(unpack_idx, head_entry, num_blocks,
+                                      &le_first_vidx, le_begin_lidxs);
+
+        out << "\t\tLogCoverage{";
+        out << "n_blk=" << num_blocks << ", ";
+        out << "vidx=" << le_first_vidx << ", ";
+        out << "begin_lidxs=[";
+        uint32_t seg_blocks, len;
+        for (seg_blocks = 0, len = 0; seg_blocks < num_blocks;
+             seg_blocks += MAX_BLOCKS_PER_BODY, ++len)
+          out << le_begin_lidxs[len] << ", ";
+        out << "]}\n";
+      } while (has_more);
     }
   next:
     if (!tx_mgr.advance_tx_idx(tx_idx, tx_block, /*do_alloc*/ false)) break;
@@ -388,61 +397,58 @@ bool TxMgr::Tx::handle_conflict(pmem::TxEntry curr_entry,
                                 VirtualBlockIdx first_vidx,
                                 VirtualBlockIdx last_vidx,
                                 LogicalBlockIdx conflict_image[]) {
-  // `le` prefix stands for "log entry", meaning read from log entry
-  VirtualBlockIdx le_first_vidx, le_last_vidx;
-  LogicalBlockIdx le_begin_lidx;
-  VirtualBlockIdx overlap_first_vidx, overlap_last_vidx;
-  uint32_t num_blocks;
   bool has_conflict = false;
 
+  // TODO: handle writev requests
   do {
-    // TODO: handle writev requests
     if (curr_entry.is_inline()) {  // inline tx entry
-      num_blocks = curr_entry.commit_inline_entry.num_blocks;
-      le_first_vidx = curr_entry.commit_inline_entry.begin_virtual_idx;
-      le_begin_lidx = curr_entry.commit_inline_entry.begin_logical_idx;
-      le_last_vidx = le_first_vidx + num_blocks - 1;
-
-      if (last_vidx < le_first_vidx || first_vidx > le_last_vidx) goto next;
-      has_conflict = true;
-      overlap_first_vidx =
-          le_first_vidx > first_vidx ? le_first_vidx : first_vidx;
-      overlap_last_vidx = le_last_vidx < last_vidx ? le_last_vidx : last_vidx;
-
-      for (VirtualBlockIdx vidx = overlap_first_vidx; vidx <= overlap_last_vidx;
-           ++vidx) {
-        auto offset = vidx - first_vidx;
-        conflict_image[offset] = le_begin_lidx + offset;
-      }
+      has_conflict |= get_conflict_image(
+          first_vidx, last_vidx,
+          curr_entry.commit_inline_entry.begin_virtual_idx,
+          curr_entry.commit_inline_entry.begin_logical_idx,
+          curr_entry.commit_inline_entry.num_blocks, conflict_image);
     } else {  // non-inline tx entry
-      le_begin_lidx = 0;
-      num_blocks = curr_entry.commit_entry.num_blocks;
-      if (num_blocks) {  // some info in log entries is partially inline
+      // `le` prefix stands for "log entry", meaning read from log entry
+      uint32_t num_blocks = curr_entry.commit_entry.num_blocks;
+      VirtualBlockIdx le_first_vidx;
+
+      // this if/else-statement will initialize le_first_vidx
+      if (num_blocks)  // some info in log entries is partially inline
         le_first_vidx = curr_entry.commit_entry.begin_virtual_idx;
-      } else {  // dereference log_entry_idx
+      else  // dereference log_entry_idx
         log_mgr->get_coverage(curr_entry.commit_entry.log_entry_idx,
                               le_first_vidx, num_blocks);
-      }
-      le_last_vidx = le_first_vidx + num_blocks - 1;
-      if (last_vidx < le_first_vidx || first_vidx > le_last_vidx) goto next;
 
+      if (last_vidx < le_first_vidx ||
+          first_vidx > le_first_vidx + num_blocks - 1)
+        goto next;
+      // it is known for sure it will conflict
       has_conflict = true;
-      overlap_first_vidx =
-          le_first_vidx > first_vidx ? le_first_vidx : first_vidx;
-      overlap_last_vidx = le_last_vidx < last_vidx ? le_last_vidx : last_vidx;
 
-      if (le_begin_lidx == 0) {  // lazy dereference log idx
-        std::vector<LogicalBlockIdx> le_begin_lidxs;
-        log_mgr->get_coverage(curr_entry.commit_entry.log_entry_idx,
-                              le_first_vidx, num_blocks, &le_begin_lidxs);
-        le_begin_lidx = le_begin_lidxs.front();
-      }
+      // lazy dereference log idx; potentially multiple le_begin_lidx
+      const pmem::LogHeadEntry* head_entry;
+      LogEntryUnpackIdx unpack_idx = LogEntryUnpackIdx::from_pack_idx(
+          curr_entry.commit_entry.log_entry_idx);
+      bool has_more;
 
-      for (VirtualBlockIdx vidx = overlap_first_vidx; vidx <= overlap_last_vidx;
-           ++vidx) {
-        auto offset = vidx - first_vidx;
-        conflict_image[offset] = le_begin_lidx + offset;
-      }
+      do {
+        head_entry = log_mgr->read_head(unpack_idx, num_blocks);
+        // technically, it should be ALIGN_UP(num_blocks, 64) / 64
+        // but it won't hurt to just make it slightly larger
+        LogicalBlockIdx le_begin_lidxs[num_blocks / 64 + 1];
+        has_more = log_mgr->read_body(unpack_idx, head_entry, num_blocks,
+                                      &le_first_vidx, le_begin_lidxs);
+        // get conflict segment-by-segment
+        uint32_t seg_blocks, len;
+        for (seg_blocks = 0, len = 0; seg_blocks < num_blocks;
+             seg_blocks += MAX_BLOCKS_PER_BODY, ++len) {
+          get_conflict_image(
+              first_vidx, last_vidx, le_first_vidx, le_begin_lidxs[len],
+              std::min(num_blocks - seg_blocks, MAX_BLOCKS_PER_BODY),
+              conflict_image);
+        }
+        assert(len == ALIGN_UP(num_blocks, 64) / 64);
+      } while (has_more);
     }
   next:
     if (!tx_mgr->advance_tx_idx(tail_tx_idx, tail_tx_block, /*do_alloc*/ false))
@@ -690,7 +696,7 @@ ssize_t TxMgr::MultiBlockTx::do_write() {
   const bool need_copy_first = begin_full_vidx != begin_vidx;
   const bool need_copy_last = end_full_vidx != end_vidx;
   // do_copy_first/last indicates do we actually need to do copy; in the case of
-  // redo, we may skip if no change is maded
+  // redo, we may skip if no change is made
   bool do_copy_first = true;
   bool do_copy_last = true;
   pmem::TxEntry conflict_entry;
