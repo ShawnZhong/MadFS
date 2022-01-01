@@ -191,6 +191,9 @@ void test_print() {
   int fd = open(FILEPATH, O_CREAT | O_RDWR, S_IRUSR | S_IWUSR);
   assert(fd >= 0);
 
+  sz = write(fd, test_str.data(), ulayfs::BLOCK_SIZE);
+  assert(sz == ulayfs::BLOCK_SIZE);
+
   sz = write(fd, test_str.data(), 8);
   assert(sz == 8);
 
