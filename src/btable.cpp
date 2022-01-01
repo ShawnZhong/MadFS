@@ -1,5 +1,6 @@
 #include "btable.h"
 
+#include "const.h"
 #include "file.h"
 #include "idx.h"
 
@@ -52,36 +53,34 @@ void BlkTable::resize_to_fit(VirtualBlockIdx idx) {
 
 void BlkTable::apply_tx(pmem::TxEntryIndirect tx_commit_entry, LogMgr* log_mgr,
                         bool init_bitmap) {
-  auto log_entry_idx = tx_commit_entry.log_entry_idx;
-
+  // first get begin_vidx and num_blocks for resizing
   uint32_t num_blocks;
+  VirtualBlockIdx begin_vidx;
+  log_mgr->get_coverage(tx_commit_entry.log_entry_idx, begin_vidx, num_blocks);
+  VirtualBlockIdx end_vidx = begin_vidx + num_blocks;
+  resize_to_fit(end_vidx);
+
+  // then read and populate the actual mappings
+  const pmem::LogHeadEntry* head_entry;
+  LogEntryUnpackIdx unpack_idx =
+      LogEntryUnpackIdx::from_pack_idx(tx_commit_entry.log_entry_idx);
   uint16_t leftover_bytes;
-  VirtualBlockIdx begin_virtual_idx;
-  std::vector<LogicalBlockIdx> begin_logical_idxs;
-  log_mgr->get_coverage(log_entry_idx, begin_virtual_idx, num_blocks,
-                        &begin_logical_idxs, &leftover_bytes, init_bitmap);
+  bool has_more;
 
-  size_t now_logical_idx_off = 0;
-  VirtualBlockIdx now_virtual_idx = begin_virtual_idx;
-  VirtualBlockIdx end_virtual_idx = begin_virtual_idx + num_blocks;
-  resize_to_fit(end_virtual_idx);
+  do {
+    head_entry = log_mgr->read_head(unpack_idx, num_blocks);
+    LogicalBlockIdx le_begin_lidxs[num_blocks / MAX_BLOCKS_PER_BODY + 1];
+    has_more = log_mgr->read_body(unpack_idx, head_entry, num_blocks,
+                                  &begin_vidx, le_begin_lidxs, &leftover_bytes);
 
-  // update block table mapping
-  while (now_virtual_idx < end_virtual_idx) {
-    uint16_t chunk_blocks =
-        end_virtual_idx > now_virtual_idx + MAX_BLOCKS_PER_BODY
-            ? MAX_BLOCKS_PER_BODY
-            : end_virtual_idx - now_virtual_idx;
-    for (uint32_t i = 0; i < chunk_blocks; ++i) {
-      table[now_virtual_idx + i] = begin_logical_idxs[now_logical_idx_off] + i;
-    }
-    now_virtual_idx += chunk_blocks;
-    now_logical_idx_off++;
-  }
+    for (uint32_t offset = 0; offset < num_blocks; ++offset)
+      table[begin_vidx + offset] =
+          le_begin_lidxs[offset / MAX_BLOCKS_PER_BODY] +
+          offset % MAX_BLOCKS_PER_BODY;
 
-  // update file size if this write exceeds current file size
-  // currently we don't support ftruncate, so the file size is always growing
-  uint64_t now_file_size = BLOCK_IDX_TO_SIZE(end_virtual_idx) - leftover_bytes;
+  } while (has_more);
+
+  uint64_t now_file_size = BLOCK_IDX_TO_SIZE(end_vidx) - leftover_bytes;
   if (now_file_size > file_size) file_size = now_file_size;
 }
 

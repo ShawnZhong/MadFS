@@ -1,5 +1,6 @@
 #pragma once
 
+#include <algorithm>
 #include <cstddef>
 #include <cstdint>
 #include <ostream>
@@ -170,6 +171,39 @@ class TxMgr::Tx {
   bool handle_conflict(pmem::TxEntry curr_entry, VirtualBlockIdx first_vidx,
                        VirtualBlockIdx last_vidx,
                        LogicalBlockIdx conflict_image[]);
+
+  /**
+   * Check if [first_vidx, last_vidx] has any overlap with [le_first_vidx,
+   * le_first_vidx + num_blocks - 1]; populate overlapped mapping if any
+   * "first/last" here means inclusive range "[first, last]"; "begin/end" means
+   * the range excluding the end "[begin, end)"
+   *
+   * @param[in] first_vidx the virtual index range (first) to check
+   * @param[in] last_vidx the virtual index range (last) to check
+   * @param[in] le_first_vidx the virtual range begin in log entry
+   * @param[in] le_begin_lidx the logical range begin in log entry
+   * @param[in] num_blocks number of blocks in the log entry mapping
+   * @param[out] conflict_image return overlapped mapping; if no overlapping,
+   * the corresponding array element is guaranteed untouched
+   * @return whether this is any overlap
+   */
+  bool get_conflict_image(VirtualBlockIdx first_vidx, VirtualBlockIdx last_vidx,
+                          VirtualBlockIdx le_first_vidx,
+                          LogicalBlockIdx le_begin_lidx, uint32_t num_blocks,
+                          LogicalBlockIdx conflict_image[]) {
+    VirtualBlockIdx le_last_vidx = le_first_vidx + num_blocks - 1;
+    if (last_vidx < le_first_vidx || first_vidx > le_last_vidx) return false;
+
+    VirtualBlockIdx overlap_first_vidx = std::max(le_first_vidx, first_vidx);
+    VirtualBlockIdx overlap_last_vidx = std::min(le_last_vidx, last_vidx);
+
+    for (VirtualBlockIdx vidx = overlap_first_vidx; vidx <= overlap_last_vidx;
+         ++vidx) {
+      auto offset = vidx - first_vidx;
+      conflict_image[offset] = le_begin_lidx + offset;
+    }
+    return true;
+  }
 
   // pointer to the outer class
   File* file;
