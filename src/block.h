@@ -142,11 +142,6 @@ class MetaBlock : public BaseBlock {
 
       // if inline_tx_entries is used up, this points to the next log block
       std::atomic<LogicalBlockIdx> next_tx_block;
-
-      std::atomic_bool shm_name_is_ready;
-
-      // buffer for the path to the shared memory object containing bitmaps.
-      char shm_name[SHM_NAME_LEN];
     } cl1_meta;
 
     // padding avoid cache line contention
@@ -224,22 +219,6 @@ class MetaBlock : public BaseBlock {
   /*
    * Getters and setters
    */
-  [[nodiscard]] bool is_shm_name_ready() const {
-    return cl1_meta.shm_name_is_ready.load(std::memory_order_acquire);
-  }
-
-  [[nodiscard]] const char* get_shm_name() const { return cl1_meta.shm_name; }
-
-  const char* set_shm_name(const struct stat& stat) {
-    sprintf(cl1_meta.shm_name, "ulayfs_%016lx_%013lx", stat.st_ino,
-            (stat.st_ctim.tv_sec * 1000000000 + stat.st_ctim.tv_nsec) >> 3);
-    // MUST set this bool to indicate shm_name is completed
-    // this ensure cl1_meta.shm_name is failure-atomic
-    cl1_meta.shm_name_is_ready.store(true, std::memory_order_release);
-    persist_cl_fenced(&cl1_meta);
-    return cl1_meta.shm_name;
-  }
-
   // called by other public functions with lock held
   void set_num_blocks_if_larger(uint32_t new_num_blocks) {
     uint32_t old_num_blocks =
@@ -345,7 +324,6 @@ class MetaBlock : public BaseBlock {
     out << "\tsignature: \"" << block.cl1_meta.signature << "\"\n";
     out << "\tnum_blocks: "
         << block.cl2_meta.num_blocks.load(std::memory_order_acquire) << "\n";
-    out << "\tshm_name: " << block.cl1_meta.shm_name << "\n";
     out << "\tnext_tx_block: "
         << block.cl1_meta.next_tx_block.load(std::memory_order_acquire) << "\n";
     out << "\ttx_tail: "

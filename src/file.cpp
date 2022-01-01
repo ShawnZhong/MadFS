@@ -1,5 +1,7 @@
 #include "file.h"
 
+#include <sys/xattr.h>
+
 #include <cerrno>
 #include <cstdio>
 #include <iomanip>
@@ -30,10 +32,14 @@ File::File(int fd, const struct stat& stat, int flags, bool guard)
   pthread_spin_init(&spinlock, PTHREAD_PROCESS_PRIVATE);
   if (stat.st_size == 0) meta->init();
 
-  if (!meta->is_shm_name_ready()) {
-    meta->lock();
-    if (!meta->is_shm_name_ready()) meta->set_shm_name(stat);
-    meta->unlock();
+  ssize_t rc = fgetxattr(fd, SHM_XATTR_NAME, &shm_path, sizeof(shm_path));
+  if (rc == -1 && errno == ENODATA) {  // no shm_path attribute, create one
+    sprintf(shm_path, "/dev/shm/ulayfs_%016lx_%013lx", stat.st_ino,
+            (stat.st_ctim.tv_sec * 1000000000 + stat.st_ctim.tv_nsec) >> 3);
+    rc = fsetxattr(fd, SHM_XATTR_NAME, shm_path, sizeof(shm_path), 0);
+    PANIC_IF(rc == -1, "failed to set shm_path attribute");
+  } else if (rc == -1) {
+    PANIC("failed to get shm_path attribute");
   }
 
   open_shm(stat);
@@ -247,8 +253,6 @@ Allocator* File::get_local_allocator() {
  */
 
 void File::open_shm(const struct stat& stat) {
-  char shm_path[64];
-  sprintf(shm_path, "/dev/shm/%s", meta->get_shm_name());
   TRACE("Opening shared memory %s", shm_path);
   // use posix::open instead of shm_open since shm_open calls open, which is
   // overloaded by ulayfs
@@ -311,8 +315,6 @@ void File::open_shm(const struct stat& stat) {
 }
 
 void File::unlink_shm() {
-  char shm_path[64];
-  sprintf(shm_path, "/dev/shm/%s", meta->get_shm_name());
   int ret = posix::unlink(shm_path);
   if (ret != 0) INFO("Fail to unlink bitmaps on shared memory: %m");
 }
@@ -327,6 +329,7 @@ void File::tx_gc() {
 
 std::ostream& operator<<(std::ostream& out, const File& f) {
   out << "File: fd = " << f.fd << "\n";
+  out << "\tshm_path = " << f.shm_path << "\n";
   out << *f.meta;
   out << f.blk_table;
   out << f.mem_table;
