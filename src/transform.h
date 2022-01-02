@@ -132,7 +132,7 @@ class Transformer {
     }
 
   done:
-    _mm_sfence();
+    pmem::persist_fenced(file->meta, BLOCK_SIZE);
     flock::release(fd);
     flock::flock_guard(fd);
     return file;
