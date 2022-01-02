@@ -14,6 +14,7 @@
 namespace ulayfs::utility {
 
 class Transformer {
+ public:
   // transform a normal file to a uLayFS file
   // fd must be opened with both read and write permission
   static dram::File* transform_to(int fd) {
@@ -49,12 +50,12 @@ class Transformer {
     PANIC_IF(ret, "Fail to pread");
     posix::pwrite(fd, block_buf, BLOCK_SIZE, block_align_size);
 
-    pmem::MetaBlock* meta = static_cast<pmem::MetaBlock*>(
-        posix::mmap(nullptr, BLOCK_SIZE, PROT_READ | PROT_WRITE,
-                    MAP_SHARED | MAP_POPULATE, fd, 0));
-    PANIC_IF(meta == MAP_FAILED, "Fail to mmap");
+    void* addr = posix::mmap(nullptr, BLOCK_SIZE, PROT_READ | PROT_WRITE,
+                             MAP_SHARED | MAP_POPULATE, fd, 0);
+    PANIC_IF(addr == MAP_FAILED, "Fail to mmap");
+    memset(addr, 0, BLOCK_SIZE);
+    pmem::MetaBlock* meta = static_cast<pmem::MetaBlock*>(addr);
 
-    memset(meta, 0, BLOCK_SIZE);
     meta->init();
     posix::munmap(meta, BLOCK_SIZE);
 
@@ -109,9 +110,9 @@ class Transformer {
 
     // if it's not full block or MetaBlock does not have the capacity, we still
     // need LogEntryBlock
-    need_le_block |=
-        leftover_bytes != 0 |
-        (num_blocks - 1) > ((NUM_INLINE_TX_ENTRY - 1) << BITMAP_CAPACITY_SHIFT);
+    need_le_block |= (leftover_bytes != 0) |
+                     ((num_blocks - 1) >
+                      ((NUM_INLINE_TX_ENTRY - 1) << BITMAP_CAPACITY_SHIFT));
 
     if (!need_le_block) {
       for (VirtualBlockIdx begin_vidx = 1; begin_vidx < num_blocks;
@@ -167,7 +168,8 @@ class Transformer {
 
     // copy data to the new region
     for (VirtualBlockIdx vidx = 0; vidx < virtual_num_blocks; ++vidx)
-      memcpy(&new_region[vidx], file->vidx_to_addr_ro(vidx), BLOCK_SIZE);
+      memcpy(new_region[vidx].data_rw(), file->vidx_to_addr_ro(vidx),
+             BLOCK_SIZE);
     pmem::persist_fenced(new_region, virtual_size_aligned);
 
     // unmap the new region
