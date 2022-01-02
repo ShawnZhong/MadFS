@@ -5,9 +5,6 @@
 #include "params.h"
 
 namespace ulayfs {
-// signature
-constexpr static int SIGNATURE_SIZE = 8;
-constexpr static char FILE_SIGNATURE[SIGNATURE_SIZE] = "ULAYFS";
 constexpr static char SHM_XATTR_NAME[] = "user.shm_path";
 constexpr static uint16_t SHM_PATH_LEN = 64;
 

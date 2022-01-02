@@ -133,9 +133,6 @@ class MetaBlock : public BaseBlock {
   // contents in the first cache line
   union {
     struct {
-      // file signature
-      char signature[SIGNATURE_SIZE];
-
       // hint to find tx log tail; not necessarily up-to-date
       // all tx entries before it must be flushed
       std::atomic<TxEntryIdx64> tx_tail;
@@ -189,16 +186,6 @@ class MetaBlock : public BaseBlock {
     pthread_mutexattr_setrobust(&attr, PTHREAD_MUTEX_ROBUST);
     pthread_mutex_init(&cl2_meta.mutex, &attr);
     VALGRIND_PMC_REMOVE_PMEM_MAPPING(&cl2_meta.mutex, sizeof(cl2_meta.mutex));
-
-    // initialize the signature
-    memcpy(cl1_meta.signature, FILE_SIGNATURE, SIGNATURE_SIZE);
-    persist_cl_fenced(&cl1);
-  }
-
-  // check whether the meta block is valid
-  [[nodiscard]] bool is_valid() const {
-    return std::strncmp(cl1_meta.signature, FILE_SIGNATURE, SIGNATURE_SIZE) ==
-           0;
   }
 
   // acquire/release meta lock (usually only during allocation)
@@ -313,15 +300,13 @@ class MetaBlock : public BaseBlock {
 
   // for garbage collection
   void invalidate_tx_entries() {
-    for (size_t i = 0; i < NUM_INLINE_TX_ENTRY; i++)
-      inline_tx_entries[i].store(TxEntry::TxEntryDummy,
-                                 std::memory_order_relaxed);
+    for (auto& inline_tx_entrie : inline_tx_entries)
+      inline_tx_entrie.store(TxEntry::TxEntryDummy, std::memory_order_relaxed);
     persist_fenced(inline_tx_entries, sizeof(TxEntry) * NUM_INLINE_TX_ENTRY);
   }
 
   friend std::ostream& operator<<(std::ostream& out, const MetaBlock& block) {
     out << "MetaBlock: \n";
-    out << "\tsignature: \"" << block.cl1_meta.signature << "\"\n";
     out << "\tnum_blocks: "
         << block.cl2_meta.num_blocks.load(std::memory_order_acquire) << "\n";
     out << "\tnext_tx_block: "

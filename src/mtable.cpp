@@ -7,6 +7,8 @@ namespace ulayfs::dram {
 MemTable::MemTable(int fd, off_t init_file_size, bool read_only) {
   this->fd = fd;
 
+  PANIC_IF(!IS_ALIGNED(init_file_size, BLOCK_SIZE), "not block aligned");
+
   bool is_empty = init_file_size == 0;
   // grow to multiple of grow_unit_size if the file is empty or the file
   // size is not grow_unit aligned
@@ -21,8 +23,6 @@ MemTable::MemTable(int fd, off_t init_file_size, bool read_only) {
 
   pmem::Block* blocks = mmap_file(file_size, 0, 0, read_only);
   meta = &blocks->meta_block;
-  if (!is_empty && !meta->is_valid())
-    throw FileInitException("invalid meta block");
 
   // compute number of blocks and update the mata block if necessary
   auto num_blocks = BLOCK_SIZE_TO_IDX(file_size);

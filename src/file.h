@@ -1,5 +1,6 @@
 #pragma once
 
+#include <sys/xattr.h>
 #include <tbb/concurrent_unordered_map.h>
 
 #include <iostream>
@@ -184,26 +185,20 @@ class File {
     }
 
     fd = posix::open(pathname, flags, mode);
-
     if (unlikely(fd < 0)) {
       WARN("File \"%s\" open failed: %m", pathname);
       return false;
     }
 
+    if (!(flags & O_CREAT)) {
+      // a non-empty file w/o shm_path cannot be a uLayFS file
+      ssize_t rc = fgetxattr(fd, SHM_XATTR_NAME, nullptr, 0);
+      if (rc == -1) return false;
+    }
+
     int rc = posix::fstat(fd, &stat_buf);
     if (unlikely(rc < 0)) {
       WARN("File \"%s\" fstat failed: %m. Fallback to syscall.", pathname);
-      return false;
-    }
-
-    // we don't handle non-normal file (e.g., socket, directory, block dev)
-    if (unlikely(!S_ISREG(stat_buf.st_mode) && !S_ISLNK(stat_buf.st_mode))) {
-      INFO("Non-normal file \"%s\". Fallback to syscall.", pathname);
-      return false;
-    }
-
-    if (!IS_ALIGNED(stat_buf.st_size, BLOCK_SIZE)) {
-      WARN("File size not aligned for \"%s\". Fallback to syscall", pathname);
       return false;
     }
     return true;
