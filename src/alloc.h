@@ -14,7 +14,6 @@ class File;
 // per-thread data structure
 class Allocator {
   File* file;
-  pmem::MetaBlock* meta;
   Bitmap* bitmap;
 
   // this local free_list maintains blocks allocated from the global free_list
@@ -42,9 +41,8 @@ class Allocator {
   LogLocalUnpackIdx free_log_local_idx;
 
  public:
-  Allocator(File* file, pmem::MetaBlock* meta, Bitmap* bitmap)
+  Allocator(File* file, Bitmap* bitmap)
       : file(file),
-        meta(meta),
         bitmap(bitmap),
         recent_bitmap_idx(),
         log_blocks(),

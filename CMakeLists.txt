@@ -25,6 +25,14 @@ add_library(ulayfs SHARED
     )
 
 #[[
+build flags
+]]
+
+set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -Wall -Wextra -Wno-unused-function -Wno-unused-private-field")
+target_compile_options(ulayfs PRIVATE -march=native -Werror)
+set_property(TARGET ulayfs PROPERTY INTERPROCEDURAL_OPTIMIZATION TRUE) # LTO
+
+#[[
 dependencies
 ]]
 
@@ -35,22 +43,6 @@ FetchContent_MakeAvailable(tbb)
 find_package(TBB REQUIRED HINTS ${tbb_SOURCE_DIR}/lib/cmake/tbb)
 target_link_libraries(ulayfs dl pthread TBB::tbb)
 
-
-#[[
-build flags
-]]
-
-set(CMAKE_CXX_FLAGS "\
-    ${CMAKE_CXX_FLAGS} \
-    -Wall -Wextra \
-    -Wno-unused-parameter \
-    -Wno-unused-function \
-    -Wno-unused-variable \
-    -Wno-unused-private-field \
-")
-
-target_compile_options(ulayfs PRIVATE -march=native -Werror)
-set_property(TARGET ulayfs PROPERTY INTERPROCEDURAL_OPTIMIZATION TRUE) # LTO
 
 #[[
 build options

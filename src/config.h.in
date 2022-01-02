@@ -48,7 +48,8 @@ constexpr static struct BuildOptions {
   constexpr static bool support_clflushopt = false;
 #endif
 
-  friend std::ostream& operator<<(std::ostream& out, const BuildOptions& _) {
+  friend std::ostream& operator<<(std::ostream& out,
+                                  [[maybe_unused]] const BuildOptions& opt) {
     out << "BuildOptions: \n";
     out << "\tbuild_type: " << build_type << "\n";
     out << "\tgit_branch: " << git_branch << "\n";

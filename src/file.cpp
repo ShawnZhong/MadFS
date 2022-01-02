@@ -17,10 +17,9 @@ File::File(int fd, const struct stat& stat, int flags, bool guard)
       mem_table(fd, stat.st_size, (flags & O_ACCMODE) == O_RDONLY),
       meta(mem_table.get_meta()),
       tx_mgr(this, meta),
-      log_mgr(this, meta),
+      log_mgr(this),
       blk_table(this, &tx_mgr),
       offset_mgr(this),
-      flags(flags),
       can_read((flags & O_ACCMODE) == O_RDONLY ||
                (flags & O_ACCMODE) == O_RDWR),
       can_write((flags & O_ACCMODE) == O_WRONLY ||
@@ -242,7 +241,7 @@ Allocator* File::get_local_allocator() {
     return &it->second;
   }
 
-  auto [it, ok] = allocators.emplace(tid, Allocator(this, meta, bitmap));
+  auto [it, ok] = allocators.emplace(tid, Allocator(this, bitmap));
   PANIC_IF(!ok, "insert to thread-local allocators failed");
   return &it->second;
 }
