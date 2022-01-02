@@ -3,24 +3,22 @@
 #include "posix.h"
 #include "utils.h"
 
-namespace ulayfs {
-
-namespace dram {
+namespace ulayfs::utility {
 
 class GarbageCollector {
  public:
-  static File* open_file(const char* pathname, bool& is_exclusive) {
+  static dram::File* open_file(const char* pathname, bool& is_exclusive) {
     int fd;
     struct stat stat_buf;
-    if (File::try_open(fd, stat_buf, pathname, O_RDWR, 0)) return nullptr;
+    if (dram::File::try_open(fd, stat_buf, pathname, O_RDWR, 0)) return nullptr;
 
     is_exclusive = flock::try_acquire(fd);
-    return new File(fd, stat_buf, O_RDWR, /*guard*/ false);
+    return new dram::File(fd, stat_buf, O_RDWR, /*guard*/ false);
   }
 
   static int do_gc(const char* pathname) {
     bool is_exclusive;
-    File* file = open_file(pathname, is_exclusive);
+    dram::File* file = open_file(pathname, is_exclusive);
     if (!file) return -1;
     INFO("GarbageCollector: open file %s in %s mode", pathname,
          is_exclusive ? "EX" : "SH");
@@ -34,5 +32,4 @@ class GarbageCollector {
   }
 };
 
-}  // namespace dram
-}  // namespace ulayfs
+}  // namespace ulayfs::utility
