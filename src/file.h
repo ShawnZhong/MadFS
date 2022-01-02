@@ -36,7 +36,6 @@ class File {
   OffsetMgr offset_mgr;
 
   int shm_fd;
-  int flags;
   const bool can_read;
   const bool can_write;
   pthread_spinlock_t spinlock;
@@ -194,7 +193,6 @@ class File {
     }
 
     fd = posix::open(pathname, flags, mode);
-    DEBUG("posix::open(%s, %x, %x) = %d", pathname, flags, mode, fd);
 
     if (unlikely(fd < 0)) {
       WARN("File \"%s\" open failed: %m", pathname);

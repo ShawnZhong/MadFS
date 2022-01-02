@@ -310,7 +310,6 @@ abort:
   // free the new tx blocks
   auto new_tx_blk_idx = first_tx_block_idx;
   do {
-    auto new_tx_blk = file->lidx_to_addr_ro(new_tx_blk_idx);
     auto next_tx_blk_idx = new_tx_block->get_next_tx_block();
     allocator->free(new_tx_blk_idx, 1);
     new_tx_blk_idx = next_tx_blk_idx;

@@ -68,7 +68,7 @@ void BlkTable::apply_tx(pmem::TxEntryIndirect tx_commit_entry, LogMgr* log_mgr,
   bool has_more;
 
   do {
-    head_entry = log_mgr->read_head(unpack_idx, num_blocks);
+    head_entry = log_mgr->read_head(unpack_idx, num_blocks, init_bitmap);
     LogicalBlockIdx le_begin_lidxs[num_blocks / MAX_BLOCKS_PER_BODY + 1];
     has_more = log_mgr->read_body(unpack_idx, head_entry, num_blocks,
                                   &begin_vidx, le_begin_lidxs, &leftover_bytes);
@@ -104,7 +104,9 @@ void BlkTable::apply_tx(pmem::TxEntryInline tx_commit_inline_entry) {
 }
 
 std::ostream& operator<<(std::ostream& out, const BlkTable& b) {
-  out << "BlkTable: (virtual block index -> logical block index)\n";
+  out << "BlkTable:\n";
+  out << "\tfile_size: " << b.file_size << "\n";
+  out << "\ttail_tx_idx: " << b.tail_tx_idx << "\n";
   for (size_t i = 0; i < b.table.size(); ++i) {
     if (b.table[i] != 0) {
       out << "\t" << i << " -> " << b.table[i] << "\n";

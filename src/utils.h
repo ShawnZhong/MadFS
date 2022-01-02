@@ -11,10 +11,24 @@
 #include "config.h"
 #include "params.h"
 
+#ifndef __has_feature
+#define __has_feature(x) 0
+#endif
+
+#if __has_feature(memory_sanitizer)
+#include <sanitizer/msan_interface.h>
+// ref:
+// https://github.com/llvm/llvm-project/blob/main/compiler-rt/include/sanitizer/msan_interface.h
+#else
+#define __msan_unpoison(...) ({})
+#define __msan_scoped_disable_interceptor_checks(...) ({})
+#define __msan_scoped_enable_interceptor_checks(...) ({})
+#endif
+
 #if ULAYFS_USE_PMEMCHECK == 1
 #include <valgrind/pmemcheck.h>
+// ref: https://pmem.io/valgrind/generated/pmc-manual.html
 #else
-// see https://pmem.io/valgrind/generated/pmc-manual.html for reference
 #define VALGRIND_PMC_REMOVE_PMEM_MAPPING(...) ({})
 #define VALGRIND_PMC_REGISTER_PMEM_MAPPING(...) ({})
 #endif

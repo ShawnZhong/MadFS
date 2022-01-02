@@ -23,7 +23,7 @@ jobs:
     timeout-minutes: 1
     strategy:
       matrix:
-        build_type: [ debug, release, pmemcheck, asan, ubsan, msan ]
+        build_type: [ debug, release, pmemcheck, asan, ubsan, msan, tsan ]
     steps:
       - uses: actions/checkout@v2
 
