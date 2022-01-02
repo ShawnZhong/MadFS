@@ -161,9 +161,9 @@ class Transformer {
     PANIC_IF(ret, "Fail to fallocate the new region");
 
     // map new region
-    pmem::Block* new_region = static_cast<pmem::Block*>(
-        mmap(nullptr, virtual_size_aligned, PROT_READ | PROT_WRITE,
-             MAP_SHARED | MAP_POPULATE, fd, BLOCK_IDX_TO_SIZE(new_begin_lidx)));
+    pmem::Block* new_region = static_cast<pmem::Block*>(posix::mmap(
+        nullptr, virtual_size_aligned, PROT_READ | PROT_WRITE,
+        MAP_SHARED | MAP_POPULATE, fd, BLOCK_IDX_TO_SIZE(new_begin_lidx)));
     PANIC_IF(new_region == MAP_FAILED, "Fail to mmap the new region");
 
     // copy data to the new region
@@ -173,7 +173,7 @@ class Transformer {
     pmem::persist_fenced(new_region, virtual_size_aligned);
 
     // unmap the new region
-    ret = munmap(new_region, virtual_size_aligned);
+    ret = posix::munmap(new_region, virtual_size_aligned);
     PANIC_IF(ret, "Fail to munmap the new region");
 
     // destroy everything about uLayFS on pmem
