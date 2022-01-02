@@ -48,6 +48,8 @@ class File {
 
   // transformer will have to do many dirty and inclusive operations
   friend utility::Transformer;
+  // Transformer may steal the ownership so that we should not close fd in dtor
+  bool is_fd_owned = true;
 
  public:
   File(int fd, const struct stat& stat, int flags, bool guard = true);

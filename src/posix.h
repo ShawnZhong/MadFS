@@ -46,6 +46,7 @@ DECL_FN(mmap);
 DECL_FN(mremap);
 DECL_FN(munmap);
 DECL_FN(fallocate);
+DECL_FN(ftruncate);
 DECL_FN(fsync);
 DECL_FN(flock);
 DECL_FN(unlink);

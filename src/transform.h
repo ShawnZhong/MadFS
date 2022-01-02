@@ -132,10 +132,61 @@ class Transformer {
 
   done:
     _mm_sfence();
+    flock::release(fd);
+    flock::flock_guard(fd);
     return file;
   }
 
-  // transform a uLayFS file to a normal file
-  static void transform_from(dram::File* file) {}
+  static int transform_from(dram::File* file) {
+    int ret;
+    int fd = file->fd;
+    flock::release(fd);
+    if (!flock::try_acquire(file->fd)) {
+      WARN("Target file locked, cannot perform transformation");
+      flock::flock_guard(fd);
+      return -1;
+    }
+
+    uint64_t virtual_size = file->blk_table.get_file_size();
+    uint64_t virtual_size_aligned = ALIGN_UP(virtual_size, BLOCK_SIZE);
+    uint32_t virtual_num_blocks =
+        BLOCK_SIZE_TO_IDX(ALIGN_UP(virtual_size_aligned, BLOCK_SIZE));
+
+    uint32_t logical_num_blocks = file->meta->get_num_blocks();
+    uint32_t new_begin_lidx =
+        ALIGN_UP(logical_num_blocks + 1, dram::NUM_BLOCKS_PER_GROW);
+    ret = posix::fallocate(fd, 0, BLOCK_IDX_TO_SIZE(new_begin_lidx),
+                           virtual_size_aligned);
+    PANIC_IF(ret, "Fail to fallocate the new region");
+
+    // map new region
+    pmem::Block* new_region = static_cast<pmem::Block*>(
+        mmap(nullptr, virtual_size_aligned, PROT_READ | PROT_WRITE,
+             MAP_SHARED | MAP_POPULATE, fd, BLOCK_IDX_TO_SIZE(new_begin_lidx)));
+    PANIC_IF(new_region == MAP_FAILED, "Fail to mmap the new region");
+
+    // copy data to the new region
+    for (VirtualBlockIdx vidx = 0; vidx < virtual_num_blocks; ++vidx)
+      memcpy(&new_region[vidx], file->vidx_to_addr_ro(vidx), BLOCK_SIZE);
+    pmem::persist_fenced(new_region, virtual_size_aligned);
+
+    // unmap the new region
+    ret = munmap(new_region, virtual_size_aligned);
+    PANIC_IF(ret, "Fail to munmap the new region");
+
+    // destroy everything about uLayFS on pmem
+    ret = posix::fallocate(fd, FALLOC_FL_COLLAPSE_RANGE, 0,
+                           BLOCK_IDX_TO_SIZE(new_begin_lidx));
+    PANIC_IF(ret, "Fail to fallocate collapse the old region");
+
+    if (virtual_size != virtual_size_aligned) {
+      ret = posix::ftruncate(fd, virtual_size);
+      PANIC_IF(ret, "Fail to ftruncate to the right size");
+    }
+
+    file->is_fd_owned = true;
+    flock::release(fd);
+    return fd;
+  }
 };
 }  // namespace ulayfs::utility
