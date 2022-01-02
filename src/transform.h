@@ -107,6 +107,7 @@ class Transformer {
       file->tx_mgr.try_commit(pmem::TxEntryIndirect(1, 0, log_entry_idx),
                               tx_idx, tx_block);
     }
+    file->tx_mgr.advance_tx_idx(tx_idx, tx_block, true);
 
     // if it's not full block or MetaBlock does not have the capacity, we still
     // need LogEntryBlock
@@ -120,6 +121,7 @@ class Transformer {
         uint32_t len = std::min(num_blocks - begin_vidx, BITMAP_CAPACITY);
         file->tx_mgr.try_commit(
             pmem::TxEntryInline(len, begin_vidx, begin_vidx), tx_idx, tx_block);
+        file->tx_mgr.advance_tx_idx(tx_idx, tx_block, true);
       }
     } else {
       auto log_entry_idx = file->log_mgr.append(
