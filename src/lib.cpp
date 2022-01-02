@@ -158,7 +158,7 @@ void* mmap(void* addr, size_t length, int prot, int flags, int fd,
   }
 }
 
-int __fxstat(int ver, int fd, struct stat* buf) {
+int __fxstat([[maybe_unused]] int ver, int fd, struct stat* buf) {
   int rc = posix::fstat(fd, buf);
   if (unlikely(rc < 0)) {
     WARN("fstat failed for fd = %d: %m", fd);
@@ -175,7 +175,7 @@ int __fxstat(int ver, int fd, struct stat* buf) {
   return 0;
 }
 
-int __xstat(int ver, const char* pathname, struct stat* buf) {
+int __xstat([[maybe_unused]] int ver, const char* pathname, struct stat* buf) {
   if (int rc = posix::stat(pathname, buf); unlikely(rc < 0)) {
     WARN("stat failed for pathname = %s: %m", pathname);
     return rc;
