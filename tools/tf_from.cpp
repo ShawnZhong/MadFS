@@ -13,7 +13,7 @@ int main(int argc, char *argv[]) {
 
   const char *filename = argv[1];
 
-  int fd = open(filename, O_RDONLY);
+  int fd = open(filename, O_RDWR);
   if (fd < 0) {
     std::cerr << "Failed to open " << filename << ": " << strerror(errno)
               << std::endl;

@@ -47,7 +47,7 @@ class Transformer {
 
     char block_buf[BLOCK_SIZE];
     ret = posix::pread(fd, block_buf, BLOCK_SIZE, 0);
-    PANIC_IF(ret, "Fail to pread");
+    PANIC_IF(ret != BLOCK_SIZE, "Fail to pread");
     posix::pwrite(fd, block_buf, BLOCK_SIZE, block_align_size);
 
     void* addr = posix::mmap(nullptr, BLOCK_SIZE, PROT_READ | PROT_WRITE,
