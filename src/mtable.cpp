@@ -23,6 +23,8 @@ MemTable::MemTable(int fd, off_t init_file_size, bool read_only) {
 
   pmem::Block* blocks = mmap_file(file_size, 0, 0, read_only);
   meta = &blocks->meta_block;
+  if (!is_empty && !meta->is_valid())
+    throw FileInitException("invalid meta block");
 
   // compute number of blocks and update the mata block if necessary
   auto num_blocks = BLOCK_SIZE_TO_IDX(file_size);

@@ -92,6 +92,12 @@ extern FILE *log_file;
 
 namespace ulayfs {
 
+struct FileInitException : public std::exception {
+  explicit FileInitException(const char *msg) : msg(msg) {}
+  [[nodiscard]] const char *what() const noexcept override { return msg; }
+  const char *msg;
+};
+
 struct FatalException : public std::exception {};
 
 namespace pmem {

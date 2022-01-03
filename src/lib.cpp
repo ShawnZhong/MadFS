@@ -47,6 +47,10 @@ int open(const char* pathname, int flags, ...) {
   try {
     files.emplace(fd, std::make_shared<dram::File>(fd, stat_buf, flags));
     INFO("ulayfs::open(%s, %x, %x) = %d", pathname, flags, mode, fd);
+  } catch (const FileInitException& e) {
+    WARN("File \"%s\": ulayfs::open failed: %s. Fallback to syscall", pathname,
+         e.what());
+    DEBUG("posix::open(%s, %x, %x) = %d", pathname, flags, mode, fd);
   } catch (const FatalException& e) {
     WARN("File \"%s\": ulayfs::open failed with fatal error.", pathname);
     return -1;

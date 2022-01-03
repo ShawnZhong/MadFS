@@ -133,6 +133,9 @@ class MetaBlock : public BaseBlock {
   // contents in the first cache line
   union {
     struct {
+      // file signature
+      char signature[SIGNATURE_SIZE];
+
       // hint to find tx log tail; not necessarily up-to-date
       // all tx entries before it must be flushed
       std::atomic<TxEntryIdx64> tx_tail;
@@ -186,8 +189,18 @@ class MetaBlock : public BaseBlock {
     pthread_mutexattr_setrobust(&attr, PTHREAD_MUTEX_ROBUST);
     pthread_mutex_init(&cl2_meta.mutex, &attr);
     VALGRIND_PMC_REMOVE_PMEM_MAPPING(&cl2_meta.mutex, sizeof(cl2_meta.mutex));
+
+    // initialize the signature
+    memcpy(cl1_meta.signature, FILE_SIGNATURE, SIGNATURE_SIZE);
+    persist_cl_fenced(&cl1);
   }
 
+  // check whether the meta block is valid
+  [[nodiscard]] bool is_valid() const {
+    return std::strncmp(cl1_meta.signature, FILE_SIGNATURE, SIGNATURE_SIZE) ==
+           0;
+  }
+  
   // acquire/release meta lock (usually only during allocation)
   // we don't need to call persistence since mutex is robust to crash
   void lock() {
