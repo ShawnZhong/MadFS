@@ -200,7 +200,7 @@ class MetaBlock : public BaseBlock {
     return std::strncmp(cl1_meta.signature, FILE_SIGNATURE, SIGNATURE_SIZE) ==
            0;
   }
-  
+
   // acquire/release meta lock (usually only during allocation)
   // we don't need to call persistence since mutex is robust to crash
   void lock() {
