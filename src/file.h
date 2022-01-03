@@ -19,7 +19,7 @@
 #include "utils.h"
 
 namespace ulayfs::utility {
-class Transformer;
+class Converter;
 }
 
 // data structure under this namespace must be in volatile memory (DRAM)
@@ -46,8 +46,8 @@ class File {
   tbb::concurrent_unordered_map<pid_t, Allocator> allocators;
 
   // transformer will have to do many dirty and inclusive operations
-  friend utility::Transformer;
-  // Transformer may steal the ownership so that we should not close fd in dtor
+  friend utility::Converter;
+  // Converter may steal the ownership so that we should not close fd in dtor
   bool is_fd_owned = true;
 
  public:

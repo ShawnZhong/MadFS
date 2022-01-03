@@ -1,9 +1,9 @@
 #include <iostream>
 
+#include "convert.h"
 #include "file.h"
 #include "lib.h"
 #include "posix.h"
-#include "transform.h"
 
 int main(int argc, char *argv[]) {
   if (argc != 2) {
@@ -13,15 +13,23 @@ int main(int argc, char *argv[]) {
 
   const char *filename = argv[1];
 
-  int fd = ulayfs::posix::open(filename, O_RDWR);
+  int fd = open(filename, O_RDWR);
   if (fd < 0) {
     std::cerr << "Failed to open " << filename << ": " << strerror(errno)
               << std::endl;
     return 1;
   }
 
-  ulayfs::dram::File *file = ulayfs::utility::Transformer::transform_to(fd);
-  delete file;
+  auto file = ulayfs::get_file(fd);
+
+  if (!file) {
+    std::cerr << filename << " is not a uLayFS file. \n";
+    return 0;
+  }
+
+  fd = ulayfs::utility::Converter::convert_from(file.get());
+  // now fd is just a normal file
+  ulayfs::posix::close(fd);
 
   return 0;
 }

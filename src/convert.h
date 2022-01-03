@@ -13,13 +13,13 @@
 
 namespace ulayfs::utility {
 
-class Transformer {
+class Converter {
  public:
-  // transform a normal file to a uLayFS file
+  // convert a normal file to a uLayFS file
   // fd must be opened with both read and write permission
-  static dram::File* transform_to(int fd) {
+  static dram::File* convert_to(int fd) {
     if (!flock::try_acquire(fd)) {
-      WARN("Target file locked, cannot perform transformation");
+      WARN("Target file locked, cannot perform conversion");
       return nullptr;
     }
 
@@ -140,12 +140,12 @@ class Transformer {
     return file;
   }
 
-  static int transform_from(dram::File* file) {
+  static int convert_from(dram::File* file) {
     int ret;
     int fd = file->fd;
     flock::release(fd);
     if (!flock::try_acquire(file->fd)) {
-      WARN("Target file locked, cannot perform transformation");
+      WARN("Target file locked, cannot perform conversion");
       flock::flock_guard(fd);
       return -1;
     }

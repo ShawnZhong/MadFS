@@ -20,7 +20,7 @@ add_library(ulayfs SHARED
     src/offset.h src/offset.cpp
     src/params.h
     src/posix.h src/posix.cpp
-    src/transform.h
+    src/convert.h
     src/tx.h src/tx.cpp
     src/utils.h src/utils.cpp
     )
@@ -99,10 +99,10 @@ endif ()
 if (ULAYFS_BUILD_TOOLS)
     add_executable(info tools/info.cpp)
     target_link_libraries(info ulayfs)
-    add_executable(tf_to tools/tf_to.cpp)
-    target_link_libraries(tf_to ulayfs)
-    add_executable(tf_from tools/tf_from.cpp)
-    target_link_libraries(tf_from ulayfs)
+    add_executable(to_ulayfs tools/to_ulayfs.cpp)
+    target_link_libraries(to_ulayfs ulayfs)
+    add_executable(from_ulayfs tools/from_ulayfs.cpp)
+    target_link_libraries(from_ulayfs ulayfs)
 endif ()
 
 if (ULAYFS_BUILD_BENCH)
