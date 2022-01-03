@@ -1,9 +1,11 @@
 #include "alloc.h"
 
 #include <algorithm>
+#include <bit>
 #include <cassert>
 #include <utility>
 
+#include "bitmap.h"
 #include "block.h"
 #include "file.h"
 #include "idx.h"
@@ -39,20 +41,34 @@ LogicalBlockIdx Allocator::alloc(uint32_t num_blocks) {
     }
   }
 
-  // then we have to allocate from global bitmaps
-  recent_bitmap_idx =
-      Bitmap::alloc_batch(bitmap, NUM_BITMAP, recent_bitmap_idx);
+  bool is_found = false;
+  int num_bits_left = 64;
+  BitmapIdx allocated_idx;
+  uint64_t allocated_bits;
 
-  assert(recent_bitmap_idx >= 0);
-  // push in decreasing order so pop will in increasing order
-  LogicalBlockIdx allocated_idx = recent_bitmap_idx;
-  if (num_blocks < BITMAP_CAPACITY) {
-    free_list.emplace_back(BITMAP_CAPACITY - num_blocks,
-                           allocated_idx + num_blocks);
-    std::sort(free_list.begin(), free_list.end());
+retry:
+  // then we have to allocate from global bitmaps
+  allocated_idx =
+      Bitmap::try_alloc(bitmap, NUM_BITMAP, recent_bitmap_idx, allocated_bits);
+  assert(allocated_idx >= 0);
+
+  while (num_bits_left > 0) {
+    int num_right_zeros =
+        std::min(std::countr_zero(allocated_bits), num_bits_left);
+    if (num_right_zeros == 0) break;
+    free_list.emplace_back(num_right_zeros,
+                           allocated_idx + BITMAP_CAPACITY - num_bits_left);
+    allocated_bits >>= num_right_zeros;
+    num_bits_left -= num_right_zeros;
+    int num_right_ones = std::countr_one(allocated_bits);
+    allocated_bits >>= num_right_ones;
+    num_bits_left -= num_right_ones;
   }
+
+  if (!is_found) goto retry;
+
   // this recent is not useful because we have taken all bits; move on
-  recent_bitmap_idx++;
+  recent_bitmap_idx = allocated_idx + BITMAP_CAPACITY;
   TRACE("Allocator::alloc: allocating from bitmap: [%u, %u)", allocated_idx,
         allocated_idx + num_blocks);
   return allocated_idx;
