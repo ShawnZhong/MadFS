@@ -49,7 +49,7 @@ class MemTable {
     uint64_t file_size = ALIGN_UP(BLOCK_IDX_TO_SIZE(idx + 1), GROW_UNIT_SIZE);
 
     int ret = posix::fallocate(fd, 0, 0, static_cast<off_t>(file_size));
-    PANIC_IF(ret, "fallocate failed");
+    PANIC_IF(ret, "fd %d: fallocate failed", fd);
     meta->set_num_blocks_if_larger(BLOCK_SIZE_TO_IDX(file_size));
   }
 

@@ -313,15 +313,13 @@ class MetaBlock : public BaseBlock {
 
   // for garbage collection
   void invalidate_tx_entries() {
-    for (size_t i = 0; i < NUM_INLINE_TX_ENTRY; i++)
-      inline_tx_entries[i].store(TxEntry::TxEntryDummy,
-                                 std::memory_order_relaxed);
+    for (auto& inline_tx_entrie : inline_tx_entries)
+      inline_tx_entrie.store(TxEntry::TxEntryDummy, std::memory_order_relaxed);
     persist_fenced(inline_tx_entries, sizeof(TxEntry) * NUM_INLINE_TX_ENTRY);
   }
 
   friend std::ostream& operator<<(std::ostream& out, const MetaBlock& block) {
     out << "MetaBlock: \n";
-    out << "\tsignature: \"" << block.cl1_meta.signature << "\"\n";
     out << "\tnum_blocks: "
         << block.cl2_meta.num_blocks.load(std::memory_order_acquire) << "\n";
     out << "\tnext_tx_block: "
