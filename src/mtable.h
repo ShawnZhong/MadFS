@@ -33,6 +33,7 @@ constexpr static uint32_t NUM_BLOCKS_PER_GROW = GROW_UNIT_SIZE >> BLOCK_SHIFT;
 class MemTable {
   pmem::MetaBlock* meta;
   int fd;
+  int prot;
 
   tbb::concurrent_unordered_map<LogicalBlockIdx, pmem::Block*> table;
 
@@ -56,15 +57,12 @@ class MemTable {
    * a private helper function that calls mmap internally
    * @return the pointer to the first block on the persistent memory
    */
-  pmem::Block* mmap_file(size_t length, off_t offset, int flags = 0,
-                         bool read_only = false) {
+  pmem::Block* mmap_file(size_t length, off_t offset, int flags = 0) {
     if constexpr (BuildOptions::use_map_sync)
       flags |= MAP_SHARED_VALIDATE | MAP_SYNC;
     else
       flags |= MAP_SHARED;
     if constexpr (BuildOptions::force_map_populate) flags |= MAP_POPULATE;
-
-    int prot = read_only ? PROT_READ : PROT_READ | PROT_WRITE;
 
     void* addr = posix::mmap(nullptr, length, prot, flags, fd, offset);
 

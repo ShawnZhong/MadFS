@@ -72,7 +72,7 @@ File::File(int fd, const struct stat& stat, int flags, bool guard)
 
 File::~File() {
   pthread_spin_destroy(&spinlock);
-  posix::close(fd);
+  if (likely(is_fd_owned)) posix::close(fd);
   posix::close(shm_fd);
   allocators.clear();
 }

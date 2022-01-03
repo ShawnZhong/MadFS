@@ -56,9 +56,8 @@ class TxMgr {
    * is false. The advance would happen anyway but in the case of false, it is
    * in a overflow state
    */
-  [[nodiscard]] bool advance_tx_idx(TxEntryIdx& tx_idx,
-                                    pmem::TxBlock*& tx_block,
-                                    bool do_alloc) const {
+  bool advance_tx_idx(TxEntryIdx& tx_idx, pmem::TxBlock*& tx_block,
+                      bool do_alloc) const {
     assert(tx_idx.local_idx >= 0);
     tx_idx.local_idx++;
     return handle_idx_overflow(tx_idx, tx_block, do_alloc);
@@ -79,8 +78,7 @@ class TxMgr {
    * Try to commit an entry
    *
    * @param[in] entry entry to commit
-   * @param[in,out] tx_idx idx of entry to commit; will be updated to the index
-   * of success slot if cont_if_fail is set
+   * @param[in,out] tx_idx idx of entry to commit
    * @param[in,out] tx_block block pointer of the block by tx_idx
    * @return empty entry on success; conflict entry otherwise
    */
