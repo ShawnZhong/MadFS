@@ -210,6 +210,18 @@ class File {
       WARN("File \"%s\" fstat failed: %m. Fallback to syscall.", pathname);
       return false;
     }
+
+    // we don't handle non-normal file (e.g., socket, directory, block dev)
+    if (unlikely(!S_ISREG(stat_buf.st_mode) && !S_ISLNK(stat_buf.st_mode))) {
+      WARN("Non-normal file \"%s\". Fallback to syscall.", pathname);
+      return false;
+    }
+
+    if (!IS_ALIGNED(stat_buf.st_size, BLOCK_SIZE)) {
+      WARN("File size not aligned for \"%s\". Fallback to syscall", pathname);
+      return false;
+    }
+
     return true;
   }
 

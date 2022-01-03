@@ -6,7 +6,6 @@ namespace ulayfs::dram {
 
 MemTable::MemTable(int fd, off_t init_file_size, bool read_only)
     : fd(fd), prot(read_only ? PROT_READ : PROT_READ | PROT_WRITE) {
-  PANIC_IF(!IS_ALIGNED(init_file_size, BLOCK_SIZE), "not block aligned");
   bool is_empty = init_file_size == 0;
   // grow to multiple of grow_unit_size if the file is empty or the file
   // size is not grow_unit aligned
