@@ -71,6 +71,12 @@ class Bitmap {
                  std::memory_order_relaxed);
   }
 
+  void set_allocated_all() {
+    bitmap.store(BITMAP_ALL_USED, std::memory_order_relaxed);
+  }
+
+  void set_unallocated_all() { bitmap.store(0, std::memory_order_relaxed); }
+
   // WARN: not thread-safe
   // get a read-only snapshot of bitmap
   [[nodiscard]] bool is_allocated(uint32_t idx) const {

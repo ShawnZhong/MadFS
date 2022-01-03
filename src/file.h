@@ -18,6 +18,10 @@
 #include "tx.h"
 #include "utils.h"
 
+namespace ulayfs::utility {
+class Transformer;
+}
+
 // data structure under this namespace must be in volatile memory (DRAM)
 namespace ulayfs::dram {
 
@@ -40,6 +44,11 @@ class File {
   // each thread tid has its local allocator
   // the allocator is a per-thread per-file data structure
   tbb::concurrent_unordered_map<pid_t, Allocator> allocators;
+
+  // transformer will have to do many dirty and inclusive operations
+  friend utility::Transformer;
+  // Transformer may steal the ownership so that we should not close fd in dtor
+  bool is_fd_owned = true;
 
  public:
   File(int fd, const struct stat& stat, int flags, bool guard = true);
