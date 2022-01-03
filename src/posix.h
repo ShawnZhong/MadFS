@@ -52,6 +52,7 @@ DECL_FN(ftruncate);
 DECL_FN(fsync);
 DECL_FN(flock);
 DECL_FN(unlink);
+DECL_FN(rename);
 DECL_FN(__xstat);
 DECL_FN(__lxstat);
 DECL_FN(__fxstat);

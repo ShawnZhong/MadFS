@@ -193,19 +193,25 @@ int __xstat([[maybe_unused]] int ver, const char* pathname, struct stat* buf) {
   return 0;
 }
 
-int unlink(const char* path) {
+void unlink_shm(const char* path) {
   char shm_path[SHM_PATH_LEN];
-  if (auto rc = getxattr(path, SHM_XATTR_NAME, &shm_path, sizeof(shm_path));
-      rc != 0) {
-    int ret = posix::unlink(shm_path);
-    DEBUG("posix::unlink(%s) = %d", shm_path, ret);
-    if (unlikely(ret < 0))
-      WARN("Could not unlink shm file \"%s\": %m", shm_path);
-  }
+  if (getxattr(path, SHM_XATTR_NAME, &shm_path, sizeof(shm_path)) == 0) return;
+  int ret = posix::unlink(shm_path);
+  DEBUG("posix::unlink(%s) = %d", shm_path, ret);
+  if (unlikely(ret < 0)) WARN("Could not unlink shm file \"%s\": %m", shm_path);
+}
 
+int unlink(const char* path) {
+  unlink_shm(path);
   int rc = posix::unlink(path);
   DEBUG("posix::unlink(%s) = %d", path, rc);
+  return rc;
+}
 
+int rename(const char* oldpath, const char* newpath) {
+  if (access(newpath, F_OK) == 0) unlink_shm(newpath);
+  int rc = posix::rename(oldpath, newpath);
+  DEBUG("posix::rename(%s, %s) = %d", oldpath, newpath, rc);
   return rc;
 }
 

@@ -28,6 +28,7 @@ INIT_FN(ftruncate);
 INIT_FN(fsync);
 INIT_FN(flock);
 INIT_FN(unlink);
+INIT_FN(rename);
 INIT_FN(__xstat);
 INIT_FN(__lxstat);
 INIT_FN(__fxstat);
