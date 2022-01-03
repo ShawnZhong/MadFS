@@ -3,7 +3,7 @@
 #include "file.h"
 #include "lib.h"
 #include "posix.h"
-#include "transform.h"
+#include "convert.h"
 
 int main(int argc, char *argv[]) {
   if (argc != 2) {
@@ -27,7 +27,7 @@ int main(int argc, char *argv[]) {
     return 0;
   }
 
-  fd = ulayfs::utility::Transformer::transform_from(file.get());
+  fd = ulayfs::utility::Converter::convert_from(file.get());
   // now fd is just a normal file
   ulayfs::posix::close(fd);
 

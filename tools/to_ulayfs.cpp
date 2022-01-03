@@ -3,7 +3,7 @@
 #include "file.h"
 #include "lib.h"
 #include "posix.h"
-#include "transform.h"
+#include "convert.h"
 
 int main(int argc, char *argv[]) {
   if (argc != 2) {
@@ -20,7 +20,7 @@ int main(int argc, char *argv[]) {
     return 1;
   }
 
-  ulayfs::dram::File *file = ulayfs::utility::Transformer::transform_to(fd);
+  ulayfs::dram::File *file = ulayfs::utility::Converter::convert_to(fd);
   delete file;
 
   return 0;
