@@ -1,4 +1,4 @@
-name: Benchmark
+name: Bench
 
 on:
   workflow_dispatch:
@@ -7,10 +7,10 @@ on:
         description: "build type"
         required: true
         default: "release"
-#  pull_request:
+  pull_request:
 
 jobs:
-  microbench:
+  micro:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v2
@@ -19,9 +19,9 @@ jobs:
         env:
           BENCH_NUM_ITER: 10
 
-  leveldb-test:
+  leveldb-tests:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v2
-      - name: db_test
-        run: ./run db_test ${{matrix.build_type}}
+      - name: leveldb_tests
+        run: ./run leveldb_tests ${{matrix.build_type}} --prog_args="-DBTest.Randomized"

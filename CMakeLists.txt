@@ -109,12 +109,16 @@ if (ULAYFS_BUILD_BENCH)
     add_executable(bench bench/bench.cpp bench/common.h)
 
     unset(CMAKE_CXX_STANDARD)
-    FetchContent_Declare(leveldb GIT_REPOSITORY https://github.com/google/leveldb.git)
+    FetchContent_Declare(
+        leveldb
+        GIT_REPOSITORY https://github.com/google/leveldb.git
+        GIT_TAG 8f464e7f68fd9d50ed39b2866ef8dac9c837439d
+    )
     FetchContent_MakeAvailable(leveldb)
     set(CMAKE_CXX_STANDARD 20)
 
     if (ULAYFS_LINK_LIBRARY)
-        target_link_libraries(db_test ulayfs)
+        target_link_libraries(leveldb_tests ulayfs)
         target_link_libraries(bench benchmark::benchmark ulayfs)
     else ()
         target_link_libraries(bench benchmark::benchmark)
