@@ -474,8 +474,7 @@ ssize_t TxMgr::ReadTx::do_read() {
   memset(redo_image, 0, sizeof(LogicalBlockIdx) * num_blocks);
 
   if (!is_offset_depend)
-    file->update(tail_tx_idx, tail_tx_block, &file_size,
-                 /*do_alloc*/ false);
+    file->update_for_read(tail_tx_idx, tail_tx_block, file_size);
   // reach EOF
   if (offset >= file_size) return 0;
   if (offset + count > file_size) {  // partial read; recalculate end_*
@@ -624,9 +623,7 @@ ssize_t TxMgr::AlignedTx::do_write() {
   }
 
   // make a local copy of the tx tail
-  if (!is_offset_depend)
-    file->update(tail_tx_idx, tail_tx_block, nullptr,
-                 /*do_alloc*/ true);
+  if (!is_offset_depend) file->update_for_write(tail_tx_idx, tail_tx_block);
   for (uint32_t i = 0; i < num_blocks; ++i)
     recycle_image[i] = file->vidx_to_lidx(begin_vidx + i);
 
@@ -651,9 +648,7 @@ ssize_t TxMgr::SingleBlockTx::do_write() {
   LogicalBlockIdx recycle_image[1];
 
   // must acquire the tx tail before any get
-  if (!is_offset_depend)
-    file->update(tail_tx_idx, tail_tx_block, nullptr,
-                 /*do_alloc*/ true);
+  if (!is_offset_depend) file->update_for_write(tail_tx_idx, tail_tx_block);
   recycle_image[0] = file->vidx_to_lidx(begin_vidx);
   assert(recycle_image[0] != dst_lidxs[0]);
 
@@ -733,9 +728,7 @@ ssize_t TxMgr::MultiBlockTx::do_write() {
   }
 
   // only get a snapshot of the tail when starting critical piece
-  if (!is_offset_depend)
-    file->update(tail_tx_idx, tail_tx_block, nullptr,
-                 /*do_alloc*/ true);
+  if (!is_offset_depend) file->update_for_write(tail_tx_idx, tail_tx_block);
   for (uint32_t i = 0; i < num_blocks; ++i)
     recycle_image[i] = file->vidx_to_lidx(begin_vidx + i);
   src_first_lidx = recycle_image[0];

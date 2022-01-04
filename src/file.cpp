@@ -51,7 +51,8 @@ File::File(int fd, const struct stat& stat, int flags, bool guard)
   if (!bitmap[0].is_allocated(0)) {
     meta->lock();
     if (!bitmap[0].is_allocated(0)) {
-      file_size = blk_table.get_file_size(/*init_bitmap*/ true);
+      blk_table.update(/*do_alloc*/ false, /*init_bitmap*/ true);
+      file_size = blk_table.get_file_size();
       file_size_updated = true;
       // We need to mark meta block as allocated
       // but this will make other alloc_all on this block fail
@@ -64,8 +65,10 @@ File::File(int fd, const struct stat& stat, int flags, bool guard)
     }
     meta->unlock();
   }
-  if (!file_size_updated)
-    file_size = blk_table.get_file_size(/*init_bitmap*/ false);
+  if (!file_size_updated) {
+    blk_table.update(/*do_alloc*/ false);
+    file_size = blk_table.get_file_size();
+  }
 
   if (flags & O_APPEND) offset_mgr.seek_absolute(file_size);
 }
@@ -215,7 +218,9 @@ error:
 int File::fsync() {
   TxEntryIdx tail_tx_idx;
   pmem::TxBlock* tail_tx_block;
-  blk_table.update(&tail_tx_idx, &tail_tx_block);
+  blk_table.update(/*do_alloc*/ false);
+  tail_tx_idx = blk_table.get_tx_idx();
+  tail_tx_block = blk_table.get_tx_block();
   tx_mgr.flush_tx_entries(meta->get_tx_tail(), tail_tx_idx, tail_tx_block);
   // we keep an invariant that tx_tail must be a valid (non-overflow) idx
   // an overflow index implies that the `next` pointer of the block is not set
@@ -324,7 +329,9 @@ void File::tx_gc() {
   DEBUG("Garbage Collect for fd %d", fd);
   TxEntryIdx tail_tx_idx;
   uint64_t file_size;
-  blk_table.update(&tail_tx_idx, /*tx_block*/ nullptr, &file_size);
+  blk_table.update(/*do_alloc*/ false);
+  tail_tx_idx = blk_table.get_tx_idx();
+  file_size = blk_table.get_file_size();
   tx_mgr.gc(tail_tx_idx.block_idx, file_size);
 }
 
