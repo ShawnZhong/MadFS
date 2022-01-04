@@ -16,7 +16,6 @@ void BlkTable::update(bool do_alloc, bool init_bitmap) {
   }
 
   LogicalBlockIdx prev_tx_block_idx = 0;
-
   while (true) {
     auto tx_entry = tx_mgr->get_entry_from_block(tail_tx_idx, tail_tx_block);
     if (!tx_entry.is_valid()) break;

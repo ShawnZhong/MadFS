@@ -54,14 +54,7 @@ File::File(int fd, const struct stat& stat, int flags, bool guard)
       blk_table.update(/*do_alloc*/ false, /*init_bitmap*/ true);
       file_size = blk_table.get_file_size();
       file_size_updated = true;
-      // We need to mark meta block as allocated
-      // but this will make other alloc_all on this block fail
-      // for better space utilization, the thread marks the first bit could just
-      // take these bits and put them into the local free list for future usage
-      if (bitmap[0].alloc_all() == 0)
-        get_local_allocator()->free(1, BITMAP_CAPACITY - 1);
-      else
-        bitmap[0].set_allocated(0);
+      bitmap[0].set_allocated(0);
     }
     meta->unlock();
   }
@@ -218,9 +211,7 @@ error:
 int File::fsync() {
   TxEntryIdx tail_tx_idx;
   pmem::TxBlock* tail_tx_block;
-  blk_table.update(/*do_alloc*/ false);
-  tail_tx_idx = blk_table.get_tx_idx();
-  tail_tx_block = blk_table.get_tx_block();
+  update_for_read(tail_tx_idx, tail_tx_block, /*do_alloc*/ false);
   tx_mgr.flush_tx_entries(meta->get_tx_tail(), tail_tx_idx, tail_tx_block);
   // we keep an invariant that tx_tail must be a valid (non-overflow) idx
   // an overflow index implies that the `next` pointer of the block is not set
