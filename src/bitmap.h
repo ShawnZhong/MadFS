@@ -162,8 +162,9 @@ class Bitmap {
    */
   static void free(Bitmap bitmaps[], BitmapIdx begin, uint8_t len) {
     TRACE("Freeing [%d, %d)", begin, begin + len);
-    bitmaps[begin >> BITMAP_CAPACITY_SHIFT].free(begin & (BITMAP_CAPACITY - 1),
-                                                 len);
+
+    bitmaps[static_cast<uint32_t>(begin) >> BITMAP_CAPACITY_SHIFT].free(
+        static_cast<uint32_t>(begin) & (BITMAP_CAPACITY - 1), len);
   }
 
   friend std::ostream& operator<<(std::ostream& out, const Bitmap& b) {
