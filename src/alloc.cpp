@@ -1,7 +1,5 @@
 #include "alloc.h"
 
-#include <bits/stdint-uintn.h>
-
 #include <algorithm>
 #include <bit>
 #include <cassert>
@@ -11,6 +9,7 @@
 #include "block.h"
 #include "file.h"
 #include "idx.h"
+#include "utils.h"
 
 namespace ulayfs::dram {
 
@@ -24,17 +23,24 @@ LogicalBlockIdx Allocator::alloc(uint32_t num_blocks) {
   if (it != free_list.end()) {
     auto idx = it->second;
     assert(idx != 0);
-    TRACE("Allocator::alloc: allocating from free list: [%u, %u)", idx,
-          idx + num_blocks);
 
     // exact match, remove from free list
     if (it->first == num_blocks) {
+      TRACE(
+          "Allocator::alloc: allocating from free list (fully consumed): "
+          "[n_blk: %d, lidx: %d]",
+          it->first, it->second);
       free_list.erase(it);
       return idx;
     }
 
     // split a free list element
     if (it->first > num_blocks) {
+      TRACE(
+          "Allocator::alloc: allocating from free list (partially consumed): "
+          "[n_blk: %d, lidx: %d] -> [n_blk: %d, lidx: %d]",
+          it->first, it->second, it->first - num_blocks,
+          it->second + num_blocks);
       it->first -= num_blocks;
       it->second += num_blocks;
       // re-sort these elements
@@ -44,6 +50,7 @@ LogicalBlockIdx Allocator::alloc(uint32_t num_blocks) {
   }
 
   bool is_found = false;
+  bool need_resort = false;
   uint32_t num_bits_left;
   BitmapIdx allocated_idx;
   LogicalBlockIdx allocated_block_idx;
@@ -55,9 +62,11 @@ retry:
   allocated_idx =
       Bitmap::try_alloc(bitmap, NUM_BITMAP, recent_bitmap_idx, allocated_bits);
   assert(allocated_idx >= 0);
+  TRACE("Allocator::alloc: allocating from bitmap %d: 0x%lx", allocated_idx,
+        allocated_bits);
 
   // add available bits to the local free list
-  num_bits_left = 64;
+  num_bits_left = BITMAP_CAPACITY;
   while (num_bits_left > 0) {
     // first remove all trailing ones
     uint32_t num_right_ones =
@@ -74,10 +83,23 @@ retry:
     if (!is_found && num_right_zeros >= num_blocks) {
       is_found = true;
       allocated_block_idx = allocated_idx + BITMAP_CAPACITY - num_bits_left;
-      if (num_right_zeros > num_blocks)
+      TRACE("Allocator::alloc: allocated blocks: [n_blk: %d, lidx: %d]",
+            num_right_zeros, allocated_block_idx);
+      if (num_right_zeros > num_blocks) {
         free_list.emplace_back(
             num_right_zeros - num_blocks,
             allocated_idx + BITMAP_CAPACITY - num_bits_left + num_blocks);
+        need_resort = true;
+        TRACE("Allocator::alloc: unused blocks saved: [n_blk: %d, lidx: %d]",
+              num_right_zeros - num_blocks,
+              allocated_idx + BITMAP_CAPACITY - num_bits_left + num_blocks);
+      }
+    } else {
+      free_list.emplace_back(num_right_zeros,
+                             allocated_idx + BITMAP_CAPACITY - num_bits_left);
+      need_resort = true;
+      TRACE("Allocator::alloc: unused blocks saved: [n_blk: %d, lidx: %d]",
+            num_right_zeros, allocated_idx + BITMAP_CAPACITY - num_bits_left);
     }
     allocated_bits >>= num_right_zeros;
     num_bits_left -= num_right_zeros;
@@ -87,9 +109,7 @@ retry:
 
   // don't have the right size, retry
   if (!is_found) goto retry;
-
-  TRACE("Allocator::alloc: allocating from bitmap: [%u, %u)", allocated_idx,
-        allocated_idx + num_blocks);
+  if (need_resort) std::sort(free_list.begin(), free_list.end());
   return allocated_block_idx;
 }
 
