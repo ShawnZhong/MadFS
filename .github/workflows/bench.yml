@@ -19,9 +19,11 @@ jobs:
         env:
           BENCH_NUM_ITER: 10
 
-  leveldb-tests:
+  leveldb:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v2
+      - name: configure
+        run: mount -o remount,size=4G /dev/shm
       - name: leveldb_tests
-        run: ./run leveldb_tests ${{matrix.build_type}} --prog_args="-DBTest.Randomized"
+        run: ./run leveldb_tests ${{matrix.build_type}} --prog_args="--gtest_filter=-DBTest.Randomized"
