@@ -5,11 +5,11 @@
 #include <vector>
 
 #include "block.h"
+#include "const.h"
 #include "entry.h"
 #include "file.h"
 #include "idx.h"
 #include "offset.h"
-#include "params.h"
 #include "utils.h"
 
 namespace ulayfs::dram {

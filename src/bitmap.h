@@ -9,14 +9,7 @@
 #include "idx.h"
 #include "utils.h"
 
-namespace ulayfs {
-
-// how many blocks a bitmap can manage
-// (that's why call it "capacity" instead of "size")
-constexpr static uint32_t BITMAP_CAPACITY_SHIFT = 6;
-constexpr static uint32_t BITMAP_CAPACITY = 1 << BITMAP_CAPACITY_SHIFT;
-
-namespace dram {
+namespace ulayfs::dram {
 // All member functions are thread-safe and require no locks
 class Bitmap {
  private:
@@ -175,7 +168,6 @@ class Bitmap {
   }
 };
 
-static_assert(sizeof(Bitmap) == 8, "Bitmap must of 64 bits");
+static_assert(sizeof(Bitmap) == BITMAP_SIZE, "Bitmap must of 64 bits");
 
-}  // namespace dram
-}  // namespace ulayfs
+}  // namespace ulayfs::dram

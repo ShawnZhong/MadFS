@@ -67,7 +67,7 @@ File::~File() {
   pthread_spin_destroy(&spinlock);
   allocators.clear();
   if (likely(is_fd_owned)) posix::close(fd);
-  posix::munmap(bitmap, BITMAP_SIZE);
+  posix::munmap(bitmap, SHM_SIZE);
   posix::close(shm_fd);
   DEBUG("~File(): close(%d) and close(%d)", fd, shm_fd);
 }
@@ -273,7 +273,7 @@ void File::open_shm(const struct stat& stat) {
       PANIC("fchown on shared memory failed");
     }
     // TODO: enable dynamically grow bitmap
-    if (posix::fallocate(shm_fd, 0, 0, static_cast<off_t>(BITMAP_SIZE)) < 0) {
+    if (posix::fallocate(shm_fd, 0, 0, static_cast<off_t>(SHM_SIZE)) < 0) {
       posix::close(shm_fd);
       PANIC("fallocate on shared memory failed");
     }
@@ -298,8 +298,8 @@ void File::open_shm(const struct stat& stat) {
   DEBUG("posix::open(%s) = %d", shm_path, shm_fd);
 
   // mmap bitmap
-  void* shm = posix::mmap(nullptr, BITMAP_SIZE, PROT_READ | PROT_WRITE,
-                          MAP_SHARED, shm_fd, 0);
+  void* shm = posix::mmap(nullptr, SHM_SIZE, PROT_READ | PROT_WRITE, MAP_SHARED,
+                          shm_fd, 0);
   if (shm == MAP_FAILED) {
     posix::close(shm_fd);
     PANIC("mmap bitmap failed");
