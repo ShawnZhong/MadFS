@@ -184,6 +184,22 @@ void test_unlink() {
   assert(rc != 0);  // make sure that there is no bitmap left
 }
 
+void test_creat_unlink() {
+  fprintf(stderr, "test_creat_unlink\n");
+  for (int i = 0; i < 10000; ++i) {
+    int fd = open(FILEPATH, O_CREAT | O_RDWR, S_IRUSR | S_IWUSR);
+    assert(fd >= 0);
+
+    rc = close(fd);
+    assert(rc == 0);
+
+    rc = unlink(FILEPATH);
+    assert(rc == 0);
+
+    fprintf(stderr, "\n");
+  }
+}
+
 void test_print() {
   fprintf(stderr, "test_print\n");
 
@@ -220,6 +236,7 @@ int main() {
   test_stat();
   test_stream();
   test_unlink();
+  test_creat_unlink();
   test_print();
   return 0;
 }
