@@ -24,4 +24,4 @@ jobs:
     steps:
       - uses: actions/checkout@v2
       - name: leveldb_tests
-        run: ./run leveldb_tests ${{matrix.build_type}} --prog_args="--gtest_filter=-DBTest.Randomized"
+        run: ./run leveldb_tests ${{matrix.build_type}}

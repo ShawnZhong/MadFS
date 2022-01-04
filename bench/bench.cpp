@@ -95,6 +95,9 @@ int main(int argc, char** argv) {
   int num_iter = 10000;
   if (auto str = std::getenv("BENCH_NUM_ITER"); str) num_iter = std::stoi(str);
 
+  RegisterBenchmark("open_close", bench<BenchMode::OPEN_CLOSE>)
+      ->Iterations(num_iter);
+
   for (auto& bm : {
            RegisterBenchmark("append", bench<BenchMode::APPEND>),
            RegisterBenchmark("overwrite", bench<BenchMode::OVERWRITE>),
@@ -110,9 +113,6 @@ int main(int argc, char** argv) {
         ->Iterations(num_iter)
         ->UseRealTime();
   }
-
-  RegisterBenchmark("open_close", bench<BenchMode::OPEN_CLOSE>)
-      ->Iterations(num_iter);
 
   benchmark::RunSpecifiedBenchmarks();
   return 0;

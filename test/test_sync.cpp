@@ -27,6 +27,8 @@ int main(int argc, char* argv[]) {
       fill_buff(buf, BYTES_PER_THREAD, i);
       ssize_t rc = pwrite(fd, buf, BYTES_PER_THREAD, i);
       assert(rc == BYTES_PER_THREAD);
+      rc = fsync(fd);
+      assert(rc == 0);
     }));
     // uncomment the line below to run sequentially
     //    threads.back().join();
