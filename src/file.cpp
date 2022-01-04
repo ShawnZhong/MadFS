@@ -51,17 +51,13 @@ File::File(int fd, const struct stat& stat, int flags, bool guard)
   if (!bitmap[0].is_allocated(0)) {
     meta->lock();
     if (!bitmap[0].is_allocated(0)) {
-      blk_table.update(/*do_alloc*/ false, /*init_bitmap*/ true);
-      file_size = blk_table.get_file_size();
+      file_size = blk_table.update(/*do_alloc*/ false, /*init_bitmap*/ true);
       file_size_updated = true;
       bitmap[0].set_allocated(0);
     }
     meta->unlock();
   }
-  if (!file_size_updated) {
-    blk_table.update(/*do_alloc*/ false);
-    file_size = blk_table.get_file_size();
-  }
+  if (!file_size_updated) file_size = blk_table.update(/*do_alloc*/ false);
 
   if (flags & O_APPEND) offset_mgr.seek_absolute(file_size);
 }
@@ -119,7 +115,7 @@ off_t File::lseek(off_t offset, int whence) {
   int64_t ret;
 
   pthread_spin_lock(&spinlock);
-  uint64_t file_size = blk_table.get_file_size();
+  uint64_t file_size = blk_table.update(/*do_alloc*/ false);
 
   switch (whence) {
     case SEEK_SET:
@@ -227,7 +223,7 @@ int File::fsync() {
 }
 
 void File::stat(struct stat* buf) {
-  buf->st_size = static_cast<off_t>(blk_table.get_file_size());
+  buf->st_size = static_cast<off_t>(blk_table.update(/*do_alloc*/ false));
 }
 
 /*
@@ -318,11 +314,8 @@ void File::unlink_shm() {
 
 void File::tx_gc() {
   DEBUG("Garbage Collect for fd %d", fd);
-  TxEntryIdx tail_tx_idx;
-  uint64_t file_size;
-  blk_table.update(/*do_alloc*/ false);
-  tail_tx_idx = blk_table.get_tx_idx();
-  file_size = blk_table.get_file_size();
+  uint64_t file_size = blk_table.update(/*do_alloc*/ false);
+  TxEntryIdx tail_tx_idx = blk_table.get_tx_idx();
   tx_mgr.gc(tail_tx_idx.block_idx, file_size);
 }
 

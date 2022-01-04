@@ -78,10 +78,9 @@ class File {
    */
   uint64_t update(TxEntryIdx& tx_idx, pmem::TxBlock*& tx_block, bool do_alloc) {
     pthread_spin_lock(&spinlock);
-    blk_table.update(do_alloc);
+    uint64_t new_file_size = blk_table.update(do_alloc);
     tx_idx = blk_table.get_tx_idx();
     tx_block = blk_table.get_tx_block();
-    uint64_t new_file_size = blk_table.get_file_size();
     pthread_spin_unlock(&spinlock);
     return new_file_size;
   }
@@ -91,10 +90,9 @@ class File {
                               uint64_t& ticket, uint64_t* new_file_size,
                               bool do_alloc) {
     pthread_spin_lock(&spinlock);
-    blk_table.update(do_alloc);
+    uint64_t new_file_size_local = blk_table.update(do_alloc);
     tx_idx = blk_table.get_tx_idx();
     tx_block = blk_table.get_tx_block();
-    uint64_t new_file_size_local = blk_table.get_file_size();
     auto old_offset = offset_mgr.acquire_offset(
         offset_change, new_file_size_local, stop_at_boundary, ticket);
     pthread_spin_unlock(&spinlock);

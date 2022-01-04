@@ -6,13 +6,13 @@
 
 namespace ulayfs::dram {
 
-void BlkTable::update(bool do_alloc, bool init_bitmap) {
+uint64_t BlkTable::update(bool do_alloc, bool init_bitmap) {
   // it's possible that the previous update move idx to overflow state
   if (!tx_mgr->handle_idx_overflow(tail_tx_idx, tail_tx_block, do_alloc)) {
     // if still overflow, do_alloc must be unset
     assert(!do_alloc);
     // if still overflow, we must have reached the tail already
-    return;
+    return file_size;
   }
 
   LogicalBlockIdx prev_tx_block_idx = 0;
@@ -32,6 +32,8 @@ void BlkTable::update(bool do_alloc, bool init_bitmap) {
   // mark all live data blocks in bitmap
   if (init_bitmap)
     for (const auto logical_idx : table) file->set_allocated(logical_idx);
+
+  return file_size;
 }
 
 void BlkTable::resize_to_fit(VirtualBlockIdx idx) {

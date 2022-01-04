@@ -53,11 +53,10 @@ class BlkTable {
    * @param do_alloc whether we allow allocation when iterating the tx_idx
    * @param init_bitmap whether we need to initialize the bitmap
    */
-  void update(bool do_alloc, bool init_bitmap = false);
+  uint64_t update(bool do_alloc, bool init_bitmap = false);
 
   [[nodiscard]] TxEntryIdx get_tx_idx() const { return tail_tx_idx; }
   [[nodiscard]] pmem::TxBlock* get_tx_block() const { return tail_tx_block; }
-  [[nodiscard]] uint64_t get_file_size() const { return file_size; }
 
  private:
   void resize_to_fit(VirtualBlockIdx idx);
