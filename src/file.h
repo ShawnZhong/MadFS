@@ -76,22 +76,14 @@ class File {
   /*
    * exported interface for update; init_bitmap is always false
    */
-  void update_for_read(TxEntryIdx& tx_idx, pmem::TxBlock*& tx_block,
-                       uint64_t& new_file_size) {
+  uint64_t update(TxEntryIdx& tx_idx, pmem::TxBlock*& tx_block, bool do_alloc) {
     pthread_spin_lock(&spinlock);
-    blk_table.update(/*do_alloc*/ false);
+    blk_table.update(do_alloc);
     tx_idx = blk_table.get_tx_idx();
     tx_block = blk_table.get_tx_block();
-    new_file_size = blk_table.get_file_size();
+    uint64_t new_file_size = blk_table.get_file_size();
     pthread_spin_unlock(&spinlock);
-  }
-
-  void update_for_write(TxEntryIdx& tx_idx, pmem::TxBlock*& tx_block) {
-    pthread_spin_lock(&spinlock);
-    blk_table.update(/*do_alloc*/ true);
-    tx_idx = blk_table.get_tx_idx();
-    tx_block = blk_table.get_tx_block();
-    pthread_spin_unlock(&spinlock);
+    return new_file_size;
   }
 
   uint64_t update_with_offset(TxEntryIdx& tx_idx, pmem::TxBlock*& tx_block,
