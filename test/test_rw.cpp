@@ -30,7 +30,7 @@ void test(TestOpt test_opt) {
 
   // write data
   {
-    remove(FILEPATH);
+    unlink(FILEPATH);
     int fd = open(FILEPATH, O_CREAT | O_RDWR, S_IRUSR | S_IWUSR);
     lseek(fd, init_offset, SEEK_SET);
 

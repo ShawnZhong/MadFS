@@ -12,7 +12,7 @@ constexpr auto BYTES_PER_THREAD = 2;
 int main(int argc, char* argv[]) {
   [[maybe_unused]] ssize_t ret;
 
-  remove(FILEPATH);
+  unlink(FILEPATH);
   int fd = open(FILEPATH, O_CREAT | O_RDWR, S_IRUSR | S_IWUSR);
 
   char empty_buf[NUM_BYTES]{};

@@ -129,7 +129,7 @@ void test_lseek() {
 
 void test_stat() {
   fprintf(stderr, "test_stat\n");
-  remove(FILEPATH);
+  unlink(FILEPATH);
 
   int fd = open(FILEPATH, O_CREAT | O_RDWR, S_IRUSR | S_IWUSR);
   assert(fd >= 0);
@@ -187,7 +187,7 @@ void test_unlink() {
 void test_print() {
   fprintf(stderr, "test_print\n");
 
-  remove(FILEPATH);
+  unlink(FILEPATH);
   int fd = open(FILEPATH, O_CREAT | O_RDWR, S_IRUSR | S_IWUSR);
   assert(fd >= 0);
 
@@ -211,7 +211,7 @@ void test_print() {
 
 int main() {
   test_str = random_string(STR_LEN);
-  remove(FILEPATH);
+  unlink(FILEPATH);
 
   test_write();
   test_read();

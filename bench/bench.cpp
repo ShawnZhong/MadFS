@@ -26,7 +26,7 @@ void bench(benchmark::State& state) {
   // set up
   pin_node(0);
   if (state.thread_index == 0) {
-    remove(FILEPATH);
+    unlink(FILEPATH);
     fd = open(FILEPATH, O_CREAT | O_RDWR, S_IRUSR | S_IWUSR);
   }
 
@@ -75,13 +75,13 @@ void bench(benchmark::State& state) {
   // tear down
   if (state.thread_index == 0) {
     close(fd);
-    remove(FILEPATH);
+    unlink(FILEPATH);
   }
 }
 
 template <>
 void bench<BenchMode::OPEN_CLOSE>(benchmark::State& state) {
-  remove(FILEPATH);
+  unlink(FILEPATH);
   close(open(FILEPATH, O_CREAT | O_RDWR, S_IRUSR | S_IWUSR));
   for (auto _ : state) close(open(FILEPATH, O_RDWR));
   state.SetItemsProcessed(static_cast<int64_t>(state.iterations()));
