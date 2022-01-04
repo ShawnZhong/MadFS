@@ -49,6 +49,12 @@ class Bitmap {
     return 0;
   }
 
+  // allocate all blocks in this bitmap that's unused
+  // need to manually check contiguous bits
+  uint64_t alloc_rest() {
+    return bitmap.exchange(BITMAP_ALL_USED, std::memory_order_acq_rel);
+  }
+
   // free blocks in [begin_idx, begin_idx + len)
   void free(BitmapIdx begin_idx, uint32_t len) {
   retry:
@@ -93,14 +99,13 @@ class Bitmap {
    * @param num_bitmaps the total number of bitmaps in the array
    * @param hint hint to the empty bit
    */
-  static BitmapIdx alloc_one(Bitmap bitmaps[], uint16_t num_bitmaps,
+  static BitmapIdx alloc_one(Bitmap bitmaps[], uint32_t num_bitmaps,
                              BitmapIdx hint) {
     BitmapIdx ret;
-    BitmapIdx idx = hint >> BITMAP_CAPACITY_SHIFT;
+    uint32_t idx = static_cast<uint32_t>(hint) >> BITMAP_CAPACITY_SHIFT;
     for (; idx < num_bitmaps; ++idx) {
       ret = bitmaps[idx].alloc_one();
-      if (ret < 0) continue;
-      return (idx << BITMAP_CAPACITY_SHIFT) + ret;
+      if (ret >= 0) return (idx << BITMAP_CAPACITY_SHIFT) + ret;
     }
     return -1;
   }
@@ -114,14 +119,35 @@ class Bitmap {
    * @param hint hint to the empty bit
    * @return the BitmapIdx
    */
-  static BitmapIdx alloc_batch(Bitmap bitmaps[], int32_t num_bitmaps,
+  static BitmapIdx alloc_batch(Bitmap bitmaps[], uint32_t num_bitmaps,
                                BitmapIdx hint) {
     BitmapIdx ret;
-    BitmapIdx idx = hint >> BITMAP_CAPACITY_SHIFT;
+    uint32_t idx = static_cast<uint32_t>(hint) >> BITMAP_CAPACITY_SHIFT;
     for (; idx < num_bitmaps; ++idx) {
       ret = bitmaps[idx].alloc_all();
-      if (ret < 0) continue;
-      return idx << BITMAP_CAPACITY_SHIFT;
+      if (ret >= 0) return idx << BITMAP_CAPACITY_SHIFT;
+    }
+    return -1;
+  }
+
+  /**
+   * try to allocate from hint until one bitmap contains at least one available
+   * block
+   *
+   * @param[in] bitmaps a pointer to an array of bitmaps
+   * @param[in] num_bitmaps the total number of bitmaps in the arrary
+   * @param[in] hint hint to search
+   * @param[out] allocated_bits the bitmap with blocks available (0 stands for
+   * not previous occupied and thus useable)
+   * @return the index of current bitmap
+   */
+  static BitmapIdx try_alloc(Bitmap bitmaps[], uint32_t num_bitmaps,
+                             BitmapIdx hint, uint64_t& allocated_bits) {
+    uint32_t idx = static_cast<uint32_t>(hint) >> BITMAP_CAPACITY_SHIFT;
+    for (; idx < num_bitmaps; ++idx) {
+      allocated_bits = bitmaps[idx].alloc_rest();
+      if (allocated_bits != BITMAP_ALL_USED)
+        return idx << BITMAP_CAPACITY_SHIFT;
     }
     return -1;
   }
@@ -136,8 +162,9 @@ class Bitmap {
    */
   static void free(Bitmap bitmaps[], BitmapIdx begin, uint8_t len) {
     TRACE("Freeing [%d, %d)", begin, begin + len);
-    bitmaps[begin >> BITMAP_CAPACITY_SHIFT].free(begin & (BITMAP_CAPACITY - 1),
-                                                 len);
+
+    bitmaps[static_cast<uint32_t>(begin) >> BITMAP_CAPACITY_SHIFT].free(
+        static_cast<uint32_t>(begin) & (BITMAP_CAPACITY - 1), len);
   }
 
   friend std::ostream& operator<<(std::ostream& out, const Bitmap& b) {
