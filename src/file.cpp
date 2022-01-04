@@ -215,9 +215,7 @@ error:
 int File::fsync() {
   TxEntryIdx tail_tx_idx;
   pmem::TxBlock* tail_tx_block;
-  pthread_spin_lock(&spinlock);
-  blk_table.update(&tail_tx_idx, &tail_tx_block);
-  pthread_spin_unlock(&spinlock);
+  update(tail_tx_idx, tail_tx_block, nullptr, /*do_alloc*/ false);
   tx_mgr.flush_tx_entries(meta->get_tx_tail(), tail_tx_idx, tail_tx_block);
   // we keep an invariant that tx_tail must be a valid (non-overflow) idx
   // an overflow index implies that the `next` pointer of the block is not set
