@@ -72,9 +72,6 @@ def run(cmake_target, build_type, cmake_args, prog_args, disable_ulayfs, output_
             log_path=run_log_path,
         )
 
-        # show perf results in terminal
-        system(f"perf report -i {perf_data}")
-
         # generate flamegraph
         system(
             f"perf script -i {perf_data} | "
