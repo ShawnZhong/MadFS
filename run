@@ -12,7 +12,7 @@ logger = logging.getLogger("run")
 
 
 def run(cmake_target, build_type, cmake_args, prog_args, disable_ulayfs, output_dir):
-    is_leveldb = cmake_target.startswith("db")
+    is_leveldb = cmake_target.startswith("leveldb")
     is_bench = cmake_target.startswith("bench")
     if is_bench or is_leveldb:
         cmake_args += " -DULAYFS_BUILD_BENCH=ON "

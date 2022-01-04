@@ -72,9 +72,11 @@ File::File(int fd, const struct stat& stat, int flags, bool guard)
 
 File::~File() {
   pthread_spin_destroy(&spinlock);
-  if (likely(is_fd_owned)) posix::close(fd);
-  posix::close(shm_fd);
   allocators.clear();
+  if (likely(is_fd_owned)) posix::close(fd);
+  posix::munmap(bitmap, BITMAP_SIZE);
+  posix::close(shm_fd);
+  DEBUG("~File(): close(%d) and close(%d)", fd, shm_fd);
 }
 
 /*
@@ -251,7 +253,6 @@ Allocator* File::get_local_allocator() {
  */
 
 void File::open_shm(const struct stat& stat) {
-  TRACE("Opening shared memory %s", shm_path);
   // use posix::open instead of shm_open since shm_open calls open, which is
   // overloaded by ulayfs
   shm_fd =
@@ -300,6 +301,8 @@ void File::open_shm(const struct stat& stat) {
       }
     }
   }
+
+  DEBUG("posix::open(%s) = %d", shm_path, shm_fd);
 
   // mmap bitmap
   void* shm = posix::mmap(nullptr, BITMAP_SIZE, PROT_READ | PROT_WRITE,
