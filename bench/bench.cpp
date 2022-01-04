@@ -13,6 +13,7 @@ int fd;
 enum class BenchMode {
   APPEND,
   OVERWRITE,
+  OVERWRITE_FSYNC,
   READ,
   READ_WRITE,  // single reader multiple writers
   OPEN_CLOSE,
@@ -42,6 +43,11 @@ void bench(benchmark::State& state) {
     for (auto _ : state) write(fd, src_buf, num_bytes);
   } else if constexpr (mode == BenchMode::OVERWRITE) {
     for (auto _ : state) pwrite(fd, src_buf, num_bytes, 0);
+  } else if constexpr (mode == BenchMode::OVERWRITE_FSYNC) {
+    for (auto _ : state) {
+      pwrite(fd, src_buf, num_bytes, 0);
+      fsync(fd);
+    }
   } else if constexpr (mode == BenchMode::READ) {
     for (auto _ : state) pread(fd, dst_buf, num_bytes, 0);
   } else if constexpr (mode == BenchMode::READ_WRITE) {
@@ -92,6 +98,8 @@ int main(int argc, char** argv) {
   for (auto& bm : {
            RegisterBenchmark("append", bench<BenchMode::APPEND>),
            RegisterBenchmark("overwrite", bench<BenchMode::OVERWRITE>),
+           RegisterBenchmark("overwrite_fsync",
+                             bench<BenchMode::OVERWRITE_FSYNC>),
            RegisterBenchmark("read", bench<BenchMode::READ>),
            RegisterBenchmark("read_write", bench<BenchMode::READ_WRITE>),
        }) {
