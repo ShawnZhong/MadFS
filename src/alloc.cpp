@@ -1,5 +1,7 @@
 #include "alloc.h"
 
+#include <bits/stdint-uintn.h>
+
 #include <algorithm>
 #include <bit>
 #include <cassert>
@@ -42,36 +44,53 @@ LogicalBlockIdx Allocator::alloc(uint32_t num_blocks) {
   }
 
   bool is_found = false;
-  int num_bits_left = 64;
+  uint32_t num_bits_left;
   BitmapIdx allocated_idx;
+  LogicalBlockIdx allocated_block_idx;
   uint64_t allocated_bits;
 
 retry:
   // then we have to allocate from global bitmaps
+  // but try_alloc doesn't necessarily return the number of blocks we want
   allocated_idx =
       Bitmap::try_alloc(bitmap, NUM_BITMAP, recent_bitmap_idx, allocated_bits);
   assert(allocated_idx >= 0);
 
+  // add available bits to the local free list
+  num_bits_left = 64;
   while (num_bits_left > 0) {
-    int num_right_zeros =
-        std::min(std::countr_zero(allocated_bits), num_bits_left);
-    if (num_right_zeros == 0) break;
-    free_list.emplace_back(num_right_zeros,
-                           allocated_idx + BITMAP_CAPACITY - num_bits_left);
-    allocated_bits >>= num_right_zeros;
-    num_bits_left -= num_right_zeros;
-    int num_right_ones = std::countr_one(allocated_bits);
+    // first remove all trailing ones
+    uint32_t num_right_ones =
+        static_cast<uint32_t>(std::countr_one(allocated_bits));
     allocated_bits >>= num_right_ones;
     num_bits_left -= num_right_ones;
+
+    // allocated_bits should have many trailing zeros
+    uint32_t num_right_zeros = std::min(
+        static_cast<uint32_t>(std::countr_zero(allocated_bits)), num_bits_left);
+    // if not, it means no bits left
+    if (num_right_zeros == 0) break;
+
+    if (!is_found && num_right_zeros >= num_blocks) {
+      is_found = true;
+      allocated_block_idx = allocated_idx + BITMAP_CAPACITY - num_bits_left;
+      if (num_right_zeros > num_blocks)
+        free_list.emplace_back(
+            num_right_zeros - num_blocks,
+            allocated_idx + BITMAP_CAPACITY - num_bits_left + num_blocks);
+    }
+    allocated_bits >>= num_right_zeros;
+    num_bits_left -= num_right_zeros;
   }
-
-  if (!is_found) goto retry;
-
   // this recent is not useful because we have taken all bits; move on
   recent_bitmap_idx = allocated_idx + BITMAP_CAPACITY;
+
+  // don't have the right size, retry
+  if (!is_found) goto retry;
+
   TRACE("Allocator::alloc: allocating from bitmap: [%u, %u)", allocated_idx,
         allocated_idx + num_blocks);
-  return allocated_idx;
+  return allocated_block_idx;
 }
 
 void Allocator::free(LogicalBlockIdx block_idx, uint32_t num_blocks) {
