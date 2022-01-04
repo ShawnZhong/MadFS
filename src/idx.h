@@ -98,16 +98,6 @@ struct TxEntryIdx {
   }
 };
 
-/**
- * TxEntryIdx padded to 64-bit to support atomic operations
- */
-union TxEntryIdx64 {
-  TxEntryIdx tx_entry_idx;
-  std::uint64_t raw_bits;
-
-  TxEntryIdx64(TxEntryIdx tx_entry_idx) : tx_entry_idx(tx_entry_idx) {}
-};
-
 static_assert(sizeof(TxEntryIdx) == 8, "TxEntryIdx must be 64 bits");
 
 }  // namespace ulayfs
