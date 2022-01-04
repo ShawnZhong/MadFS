@@ -72,10 +72,11 @@ File::File(int fd, const struct stat& stat, int flags, bool guard)
 
 File::~File() {
   pthread_spin_destroy(&spinlock);
+  allocators.clear();
   if (likely(is_fd_owned)) posix::close(fd);
+  posix::munmap(bitmap, BITMAP_SIZE);
   posix::close(shm_fd);
   DEBUG("~File(): close(%d) and close(%d)", fd, shm_fd);
-  allocators.clear();
 }
 
 /*
