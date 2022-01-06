@@ -14,10 +14,10 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v2
-      - name: bench
-        run: ./run bench ${{matrix.build_type}}
+      - name: micro
+        run: ./run micro ${{matrix.build_type}}
         env:
-          BENCH_NUM_ITER: 10
+          BENCH_NUM_ITER: 3
 
   leveldb:
     runs-on: ubuntu-latest

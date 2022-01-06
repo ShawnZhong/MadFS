@@ -1,4 +1,4 @@
-name: CI
+name: Test
 
 on:
   push:
@@ -6,24 +6,13 @@ on:
   pull_request:
 
 jobs:
-  format:
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v2
-        with:
-          ref: ${{github.head_ref}}
-
-      - name: run clang-format
-        run: clang-format -i -style=file **/*.cpp **/*.h **/*.h.in
-
-      - uses: stefanzweifel/git-auto-commit-action@v4.12.0
-
   test:
     runs-on: ubuntu-latest
     timeout-minutes: 1
     strategy:
       matrix:
         build_type: [ debug, release, pmemcheck, asan, ubsan, msan, tsan ]
+    name: ${{matrix.build_type}}
     steps:
       - uses: actions/checkout@v2
 
