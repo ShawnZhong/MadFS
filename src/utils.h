@@ -9,7 +9,7 @@
 #include <cstring>
 
 #include "config.h"
-#include "params.h"
+#include "const.h"
 
 #ifndef __has_feature
 #define __has_feature(x) 0

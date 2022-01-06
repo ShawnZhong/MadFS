@@ -3,11 +3,11 @@
 #include "alloc.h"
 #include "bitmap.h"
 #include "block.h"
+#include "const.h"
 #include "entry.h"
 #include "file.h"
 #include "flock.h"
 #include "idx.h"
-#include "params.h"
 #include "posix.h"
 #include "utils.h"
 

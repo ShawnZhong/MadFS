@@ -9,7 +9,6 @@
 #include "entry.h"
 #include "file.h"
 #include "idx.h"
-#include "params.h"
 
 namespace ulayfs::dram {
 

@@ -5,6 +5,7 @@
 #include <iostream>
 #include <tuple>
 
+#include "const.h"
 #include "idx.h"
 #include "utils.h"
 
@@ -188,9 +189,11 @@ union TxEntry {
   }
 };
 
-static_assert(sizeof(TxEntry) == 8, "TxEntry must be 64 bits");
-static_assert(sizeof(TxEntryIndirect) == 8, "TxEntryIndirect must be 64 bits");
-static_assert(sizeof(TxEntryInline) == 8, "TxEntryInline must be 64 bits");
+static_assert(sizeof(TxEntry) == TX_ENTRY_SIZE, "TxEntry must be 64 bits");
+static_assert(sizeof(TxEntryIndirect) == TX_ENTRY_SIZE,
+              "TxEntryIndirect must be 64 bits");
+static_assert(sizeof(TxEntryInline) == TX_ENTRY_SIZE,
+              "TxEntryInline must be 64 bits");
 
 enum class LogOp {
   LOG_INVALID = 0,
@@ -298,8 +301,10 @@ union LogEntry {
   // which entry is being worked on
 };
 
-static_assert(sizeof(LogEntry) == 8, "LogEntry must be 64 bits");
-static_assert(sizeof(LogHeadEntry) == 8, "LogHeadEntry must be 64 bits");
-static_assert(sizeof(LogBodyEntry) == 8, "LogBodyEntry must be 64 bits");
+static_assert(sizeof(LogEntry) == LOG_ENTRY_SIZE, "LogEntry must be 64 bits");
+static_assert(sizeof(LogHeadEntry) == LOG_ENTRY_SIZE,
+              "LogHeadEntry must be 64 bits");
+static_assert(sizeof(LogBodyEntry) == LOG_ENTRY_SIZE,
+              "LogBodyEntry must be 64 bits");
 
 }  // namespace ulayfs::pmem

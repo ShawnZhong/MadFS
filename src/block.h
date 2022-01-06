@@ -10,7 +10,6 @@
 #include "const.h"
 #include "entry.h"
 #include "idx.h"
-#include "params.h"
 #include "posix.h"
 #include "utils.h"
 
