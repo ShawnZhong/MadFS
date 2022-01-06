@@ -98,15 +98,15 @@ endif ()
 
 if (ULAYFS_BUILD_TOOLS)
     add_executable(info tools/info.cpp)
-    target_link_libraries(info ulayfs)
     add_executable(to_ulayfs tools/to_ulayfs.cpp)
-    target_link_libraries(to_ulayfs ulayfs)
     add_executable(from_ulayfs tools/from_ulayfs.cpp)
+    target_link_libraries(info ulayfs)
+    target_link_libraries(to_ulayfs ulayfs)
     target_link_libraries(from_ulayfs ulayfs)
 endif ()
 
 if (ULAYFS_BUILD_BENCH)
-    add_executable(bench bench/bench.cpp bench/common.h)
+    add_executable(micro bench/micro.cpp bench/common.h)
 
     unset(CMAKE_CXX_STANDARD)
     FetchContent_Declare(
@@ -119,9 +119,9 @@ if (ULAYFS_BUILD_BENCH)
 
     if (ULAYFS_LINK_LIBRARY)
         target_link_libraries(leveldb_tests ulayfs)
-        target_link_libraries(bench benchmark::benchmark ulayfs)
+        target_link_libraries(micro benchmark::benchmark ulayfs)
     else ()
-        target_link_libraries(bench benchmark::benchmark)
+        target_link_libraries(micro benchmark::benchmark)
     endif ()
 endif ()
 
