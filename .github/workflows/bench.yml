@@ -17,7 +17,7 @@ jobs:
       - name: micro
         run: ./run micro ${{matrix.build_type}}
         env:
-          BENCH_NUM_ITER: 3
+          BENCH_NUM_ITER: 10
 
   leveldb:
     runs-on: ubuntu-latest
@@ -25,3 +25,5 @@ jobs:
       - uses: actions/checkout@v2
       - name: leveldb_tests
         run: ./run leveldb_tests ${{matrix.build_type}}
+      - name: ycsb
+        run: ./scripts/bench_ycsb

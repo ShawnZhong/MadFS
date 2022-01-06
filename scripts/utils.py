@@ -29,3 +29,10 @@ def get_timestamp():
     import datetime
 
     return datetime.datetime.now().strftime("%Y%m%d-%H%M%S")
+
+
+def chdir_to_root():
+    import os
+    from pathlib import Path
+    
+    os.chdir(Path(__file__).parent.parent)

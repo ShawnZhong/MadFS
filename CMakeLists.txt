@@ -99,15 +99,15 @@ if (ULAYFS_BUILD_TOOLS)
     add_executable(info tools/info.cpp)
     add_executable(to_ulayfs tools/to_ulayfs.cpp)
     add_executable(from_ulayfs tools/from_ulayfs.cpp)
+
     target_link_libraries(info ulayfs)
     target_link_libraries(to_ulayfs ulayfs)
     target_link_libraries(from_ulayfs ulayfs)
 endif ()
 
 if (ULAYFS_BUILD_BENCH)
-    add_executable(micro bench/micro.cpp bench/common.h)
-
     unset(CMAKE_CXX_STANDARD)
+    set(CMAKE_RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR})
     FetchContent_Declare(
         leveldb
         GIT_REPOSITORY https://github.com/google/leveldb.git
@@ -116,10 +116,18 @@ if (ULAYFS_BUILD_BENCH)
     FetchContent_MakeAvailable(leveldb)
     set(CMAKE_CXX_STANDARD 20)
 
+    FetchContent_Declare(cxxopts URL https://github.com/jarro2783/cxxopts/archive/refs/tags/v2.2.0.zip)
+    FetchContent_MakeAvailable(cxxopts)
+    add_executable(leveldb_ycsb bench/leveldb_ycsb.cpp)
+
+    add_executable(micro bench/micro.cpp bench/common.h)
+
     if (ULAYFS_LINK_LIBRARY)
         target_link_libraries(leveldb_tests ulayfs)
+        target_link_libraries(leveldb_ycsb cxxopts leveldb ulayfs)
         target_link_libraries(micro benchmark::benchmark ulayfs)
     else ()
+        target_link_libraries(leveldb_ycsb cxxopts leveldb)
         target_link_libraries(micro benchmark::benchmark)
     endif ()
 endif ()
