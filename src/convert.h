@@ -3,11 +3,11 @@
 #include "alloc.h"
 #include "bitmap.h"
 #include "block.h"
+#include "const.h"
 #include "entry.h"
 #include "file.h"
 #include "flock.h"
 #include "idx.h"
-#include "params.h"
 #include "posix.h"
 #include "utils.h"
 
@@ -150,7 +150,7 @@ class Converter {
       return -1;
     }
 
-    uint64_t virtual_size = file->blk_table.get_file_size();
+    uint64_t virtual_size = file->blk_table.update();
     uint64_t virtual_size_aligned = ALIGN_UP(virtual_size, BLOCK_SIZE);
     uint32_t virtual_num_blocks =
         BLOCK_SIZE_TO_IDX(ALIGN_UP(virtual_size_aligned, BLOCK_SIZE));

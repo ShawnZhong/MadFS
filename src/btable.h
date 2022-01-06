@@ -50,25 +50,13 @@ class BlkTable {
   /**
    * Update the block table by applying the transactions; not thread-safe
    *
-   * @param[out] tx_idx the index of the current transaction tail
-   * @param[out] tx_block the log block corresponding to the transaction
-   * @param[out] file_size the file size after update (nullptr don't care)
-   * @param[in] do_alloc whether we allow allocation when iterating the tx_idx
-   * @param[in] init_bitmap whether we need to initialize the bitmap
-   */
-  void update(TxEntryIdx* tx_idx, pmem::TxBlock** tx_block,
-              uint64_t* new_file_size = nullptr, bool do_alloc = false,
-              bool init_bitmap = false);
-
-  /**
-   * Get the latest file size by applying the transactions
+   * @param do_alloc whether we allow allocation when iterating the tx_idx
    * @param init_bitmap whether we need to initialize the bitmap
-   * @return the latest file size
    */
-  [[nodiscard]] uint64_t get_file_size(bool init_bitmap = false) {
-    update(nullptr, nullptr, nullptr, false, init_bitmap);
-    return file_size;
-  }
+  uint64_t update(bool do_alloc, bool init_bitmap = false);
+
+  [[nodiscard]] TxEntryIdx get_tx_idx() const { return tail_tx_idx; }
+  [[nodiscard]] pmem::TxBlock* get_tx_block() const { return tail_tx_block; }
 
  private:
   void resize_to_fit(VirtualBlockIdx idx);

@@ -185,10 +185,12 @@ class TxMgr::Tx {
    * the corresponding array element is guaranteed untouched
    * @return whether this is any overlap
    */
-  bool get_conflict_image(VirtualBlockIdx first_vidx, VirtualBlockIdx last_vidx,
-                          VirtualBlockIdx le_first_vidx,
-                          LogicalBlockIdx le_begin_lidx, uint32_t num_blocks,
-                          LogicalBlockIdx conflict_image[]) {
+  static bool get_conflict_image(VirtualBlockIdx first_vidx,
+                                 VirtualBlockIdx last_vidx,
+                                 VirtualBlockIdx le_first_vidx,
+                                 LogicalBlockIdx le_begin_lidx,
+                                 uint32_t num_blocks,
+                                 LogicalBlockIdx conflict_image[]) {
     VirtualBlockIdx le_last_vidx = le_first_vidx + num_blocks - 1;
     if (last_vidx < le_first_vidx || first_vidx > le_last_vidx) return false;
 

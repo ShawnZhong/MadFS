@@ -51,14 +51,13 @@ File::File(int fd, const struct stat& stat, int flags, bool guard)
   if (!bitmap[0].is_allocated(0)) {
     meta->lock();
     if (!bitmap[0].is_allocated(0)) {
-      file_size = blk_table.get_file_size(/*init_bitmap*/ true);
+      file_size = blk_table.update(/*do_alloc*/ false, /*init_bitmap*/ true);
       file_size_updated = true;
       bitmap[0].set_allocated(0);
     }
     meta->unlock();
   }
-  if (!file_size_updated)
-    file_size = blk_table.get_file_size(/*init_bitmap*/ false);
+  if (!file_size_updated) file_size = blk_table.update(/*do_alloc*/ false);
 
   if (flags & O_APPEND) offset_mgr.seek_absolute(file_size);
 }
@@ -67,7 +66,7 @@ File::~File() {
   pthread_spin_destroy(&spinlock);
   allocators.clear();
   if (likely(is_fd_owned)) posix::close(fd);
-  posix::munmap(bitmap, BITMAP_SIZE);
+  posix::munmap(bitmap, SHM_SIZE);
   posix::close(shm_fd);
   DEBUG("~File(): close(%d) and close(%d)", fd, shm_fd);
 }
@@ -116,7 +115,7 @@ off_t File::lseek(off_t offset, int whence) {
   int64_t ret;
 
   pthread_spin_lock(&spinlock);
-  uint64_t file_size = blk_table.get_file_size();
+  uint64_t file_size = blk_table.update(/*do_alloc*/ false);
 
   switch (whence) {
     case SEEK_SET:
@@ -208,7 +207,7 @@ error:
 int File::fsync() {
   TxEntryIdx tail_tx_idx;
   pmem::TxBlock* tail_tx_block;
-  update(tail_tx_idx, tail_tx_block, nullptr, /*do_alloc*/ false);
+  update(tail_tx_idx, tail_tx_block, /*do_alloc*/ false);
   tx_mgr.flush_tx_entries(meta->get_tx_tail(), tail_tx_idx, tail_tx_block);
   // we keep an invariant that tx_tail must be a valid (non-overflow) idx
   // an overflow index implies that the `next` pointer of the block is not set
@@ -224,7 +223,7 @@ int File::fsync() {
 }
 
 void File::stat(struct stat* buf) {
-  buf->st_size = static_cast<off_t>(blk_table.get_file_size());
+  buf->st_size = static_cast<off_t>(blk_table.update(/*do_alloc*/ false));
 }
 
 /*
@@ -273,7 +272,7 @@ void File::open_shm(const struct stat& stat) {
       PANIC("fchown on shared memory failed");
     }
     // TODO: enable dynamically grow bitmap
-    if (posix::fallocate(shm_fd, 0, 0, static_cast<off_t>(BITMAP_SIZE)) < 0) {
+    if (posix::fallocate(shm_fd, 0, 0, static_cast<off_t>(SHM_SIZE)) < 0) {
       posix::close(shm_fd);
       PANIC("fallocate on shared memory failed");
     }
@@ -298,8 +297,8 @@ void File::open_shm(const struct stat& stat) {
   DEBUG("posix::open(%s) = %d", shm_path, shm_fd);
 
   // mmap bitmap
-  void* shm = posix::mmap(nullptr, BITMAP_SIZE, PROT_READ | PROT_WRITE,
-                          MAP_SHARED, shm_fd, 0);
+  void* shm = posix::mmap(nullptr, SHM_SIZE, PROT_READ | PROT_WRITE, MAP_SHARED,
+                          shm_fd, 0);
   if (shm == MAP_FAILED) {
     posix::close(shm_fd);
     PANIC("mmap bitmap failed");
@@ -315,9 +314,8 @@ void File::unlink_shm() {
 
 void File::tx_gc() {
   DEBUG("Garbage Collect for fd %d", fd);
-  TxEntryIdx tail_tx_idx;
-  uint64_t file_size;
-  blk_table.update(&tail_tx_idx, /*tx_block*/ nullptr, &file_size);
+  uint64_t file_size = blk_table.update(/*do_alloc*/ false);
+  TxEntryIdx tail_tx_idx = blk_table.get_tx_idx();
   tx_mgr.gc(tail_tx_idx.block_idx, file_size);
 }
 
