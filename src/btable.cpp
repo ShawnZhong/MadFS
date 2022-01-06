@@ -6,19 +6,16 @@
 
 namespace ulayfs::dram {
 
-void BlkTable::update(TxEntryIdx* tx_idx, pmem::TxBlock** tx_block,
-                      uint64_t* new_file_size, bool do_alloc,
-                      bool init_bitmap) {
-  LogicalBlockIdx prev_tx_block_idx = 0;
-
+uint64_t BlkTable::update(bool do_alloc, bool init_bitmap) {
   // it's possible that the previous update move idx to overflow state
   if (!tx_mgr->handle_idx_overflow(tail_tx_idx, tail_tx_block, do_alloc)) {
     // if still overflow, do_alloc must be unset
     assert(!do_alloc);
     // if still overflow, we must have reached the tail already
-    goto done;
+    return file_size;
   }
 
+  LogicalBlockIdx prev_tx_block_idx = 0;
   while (true) {
     auto tx_entry = tx_mgr->get_entry_from_block(tail_tx_idx, tail_tx_block);
     if (!tx_entry.is_valid()) break;
@@ -36,11 +33,7 @@ void BlkTable::update(TxEntryIdx* tx_idx, pmem::TxBlock** tx_block,
   if (init_bitmap)
     for (const auto logical_idx : table) file->set_allocated(logical_idx);
 
-done:
-  // return it out
-  if (tx_idx) *tx_idx = tail_tx_idx;
-  if (tx_block) *tx_block = tail_tx_block;
-  if (new_file_size) *new_file_size = file_size;
+  return file_size;
 }
 
 void BlkTable::resize_to_fit(VirtualBlockIdx idx) {
