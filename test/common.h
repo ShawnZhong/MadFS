@@ -1,9 +1,14 @@
 #pragma once
 
+#include <sys/mman.h>
+#include <sys/stat.h>
+#include <unistd.h>
+
 #include <algorithm>
 #include <cstdio>
+#include <cstring>
 
-#include "block.h"
+#include "const.h"
 #include "debug.h"
 
 #define CHECK_RESULT(expected, actual, length, fd) \
