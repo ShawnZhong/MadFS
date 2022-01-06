@@ -42,7 +42,7 @@ FetchContent_Declare(tbb URL https://github.com/oneapi-src/oneTBB/releases/downl
 FetchContent_MakeAvailable(tbb)
 
 find_package(TBB REQUIRED HINTS ${tbb_SOURCE_DIR}/lib/cmake/tbb)
-target_link_libraries(ulayfs dl pthread atomic TBB::tbb)
+target_link_libraries(ulayfs dl pthread TBB::tbb)
 
 
 #[[
