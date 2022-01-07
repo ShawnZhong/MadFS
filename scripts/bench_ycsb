@@ -21,10 +21,7 @@ def gen_cmd(ycsbcli: str, dbdir: str, workload: str,
 
 def exec_cmd(cmd: list, envs: dict) -> tuple:
     """Returns (num_reqeusts, microseconds) tuple."""
-    p = subprocess.run(cmd,
-                       capture_output=True,
-                       env=envs
-                       )
+    p = subprocess.run(cmd, capture_output=True, env=envs)
 
     if p.returncode != 0:
         print(f"exit code: {p.returncode}")
