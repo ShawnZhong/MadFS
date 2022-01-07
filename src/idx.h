@@ -15,7 +15,7 @@ using BitmapIdx = int32_t;
 // TODO: this may be helpful for dynamically growing DRAM bitmap
 
 // local index within a block; this can be -1 to indicate an error
-using TxLocalIdx = int16_t;
+using TxLocalIdx = int32_t;
 // Note: LogLocalIdx will persist and the valid range is [0, 255]
 using LogLocalIdx = uint16_t;
 // TODO: this will no longer be needed when we deprecate the head-body design
@@ -96,16 +96,6 @@ struct TxEntryIdx {
     out << "TxEntryIdx{" << idx.block_idx << "," << idx.local_idx << "}";
     return out;
   }
-};
-
-/**
- * TxEntryIdx padded to 64-bit to support atomic operations
- */
-union TxEntryIdx64 {
-  TxEntryIdx tx_entry_idx;
-  std::uint64_t raw_bits;
-
-  TxEntryIdx64(TxEntryIdx tx_entry_idx) : tx_entry_idx(tx_entry_idx) {}
 };
 
 static_assert(sizeof(TxEntryIdx) == 8, "TxEntryIdx must be 64 bits");

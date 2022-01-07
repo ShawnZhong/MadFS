@@ -137,7 +137,7 @@ class MetaBlock : public BaseBlock {
 
       // hint to find tx log tail; not necessarily up-to-date
       // all tx entries before it must be flushed
-      std::atomic<TxEntryIdx64> tx_tail;
+      std::atomic<TxEntryIdx> tx_tail;
 
       // if inline_tx_entries is used up, this points to the next log block
       std::atomic<LogicalBlockIdx> next_tx_block;
@@ -256,7 +256,7 @@ class MetaBlock : public BaseBlock {
    * @param tx_tail tail value to set
    * @param fenced whether use fence
    */
-  void set_tx_tail(TxEntryIdx64 tx_tail, bool fenced = false) {
+  void set_tx_tail(TxEntryIdx tx_tail, bool fenced = false) {
     cl1_meta.tx_tail.store(tx_tail, std::memory_order_relaxed);
     persist_cl(&cl1, fenced);
   }
@@ -290,7 +290,9 @@ class MetaBlock : public BaseBlock {
     return cl1_meta.next_tx_block.load(std::memory_order_acquire);
   }
   [[nodiscard]] TxEntryIdx get_tx_tail() const {
-    return cl1_meta.tx_tail.load(std::memory_order_relaxed).tx_entry_idx;
+    auto tx_tail = cl1_meta.tx_tail.load(std::memory_order_relaxed);
+    __msan_unpoison(&tx_tail, sizeof(tx_tail));
+    return tx_tail;
   }
 
   [[nodiscard]] TxEntry get_tx_entry(TxLocalIdx idx) const {
@@ -323,8 +325,7 @@ class MetaBlock : public BaseBlock {
     out << "\tnext_tx_block: "
         << block.cl1_meta.next_tx_block.load(std::memory_order_acquire) << "\n";
     out << "\ttx_tail: "
-        << block.cl1_meta.tx_tail.load(std::memory_order_acquire).tx_entry_idx
-        << "\n";
+        << block.cl1_meta.tx_tail.load(std::memory_order_acquire) << "\n";
     return out;
   }
 };
