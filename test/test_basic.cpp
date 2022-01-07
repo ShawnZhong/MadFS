@@ -210,6 +210,7 @@ void test_print() {
 }
 
 int main() {
+  unsetenv("LD_PRELOAD");
   test_str = random_string(STR_LEN);
   unlink(FILEPATH);
 

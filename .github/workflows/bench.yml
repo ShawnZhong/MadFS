@@ -14,16 +14,17 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v2
-      - name: micro
-        run: ./run micro ${{matrix.build_type}}
-        env:
-          BENCH_NUM_ITER: 10
+
+      - name: micro_st
+        run: BENCH_NUM_ITER=10 ./run micro_st ${{matrix.build_type}}
 
   leveldb:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v2
+
       - name: leveldb_tests
         run: ./run leveldb_tests ${{matrix.build_type}}
+
       - name: ycsb
         run: ./scripts/bench_ycsb

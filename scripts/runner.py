@@ -1,5 +1,6 @@
 import logging
 import pprint
+import shutil
 from pathlib import Path
 
 from utils import get_timestamp, system, chdir_to_root
@@ -12,7 +13,7 @@ class Runner:
     def __init__(self, cmake_target, build_type=None, output_path=None, **kwargs):
         chdir_to_root()
 
-        self.is_micro = cmake_target == "micro"
+        self.is_micro = cmake_target.startswith("micro")
         self.is_bench = self.is_micro or cmake_target.startswith("leveldb")
 
         if build_type is None:
@@ -36,8 +37,6 @@ class Runner:
         config_log_path = self.output_path / "config.log"
         build_log_path = self.output_path / "build.log"
 
-        cmake_args += f" -DULAYFS_LINK_LIBRARY={'ON' if link_ulayfs else 'OFF'} "
-
         # build
         system(
             f"make {self.build_type} "
@@ -54,17 +53,22 @@ class Runner:
         self.ulayfs_path = self.build_path / "libulayfs.so"
         self.exe_path = self.build_path / self.cmake_target
 
-    def run(self, prog_args="", load_so=False, **kwargs):
+    def run(self, prog_args="", load_ulayfs=True, numa=0, **kwargs):
         assert self.exe_path is not None
 
+        if self.is_micro:
+            prog_args += " --benchmark_counters_tabular=true "
         cmd = f"{self.exe_path} {prog_args}"
         run_log_path = self.output_path / "run.log"
 
-        if load_so:
+        if load_ulayfs:
             assert self.ulayfs_path is not None
             cmd = f"env LD_PRELOAD={self.ulayfs_path} {cmd}"
-        if self.is_micro:
-            prog_args += " --benchmark_counters_tabular=true "
+
+        if shutil.which("numactl"):
+            cmd = f"numactl --cpunodebind={numa} --membind={numa} {cmd}"
+        else:
+            logger.warning("numactl not found, NUMA not enabled")
 
         # execute
         if self.build_type == "pmemcheck":

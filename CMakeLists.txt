@@ -74,10 +74,9 @@ endif ()
 tests, benchmarks, and tools
 ]]
 
-option(ULAYFS_LINK_LIBRARY "Link uLayFS for tests and benchmarks" ON)
 option(ULAYFS_BUILD_TESTS "Build tests" ON)
-option(ULAYFS_BUILD_BENCH "Build benchmarks" OFF)
 option(ULAYFS_BUILD_TOOLS "Build tools" ON)
+option(ULAYFS_BUILD_BENCH "Build benchmarks" OFF)
 
 if (ULAYFS_BUILD_TESTS)
     include_directories(src)
@@ -86,13 +85,9 @@ if (ULAYFS_BUILD_TESTS)
     add_executable(test_rw test/test_rw.cpp test/common.h)
     add_executable(test_sync test/test_sync.cpp test/common.h)
 
-    if (ULAYFS_LINK_LIBRARY)
-        target_link_libraries(test_basic ulayfs)
-        target_link_libraries(test_rw ulayfs)
-        target_link_libraries(test_sync ulayfs pthread)
-    else ()
-        target_link_libraries(test_sync pthread)
-    endif ()
+    target_link_libraries(test_basic ulayfs)
+    target_link_libraries(test_rw ulayfs)
+    target_link_libraries(test_sync ulayfs pthread)
 endif ()
 
 if (ULAYFS_BUILD_TOOLS)
@@ -106,8 +101,9 @@ if (ULAYFS_BUILD_TOOLS)
 endif ()
 
 if (ULAYFS_BUILD_BENCH)
-    unset(CMAKE_CXX_STANDARD)
     set(CMAKE_RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR})
+
+    unset(CMAKE_CXX_STANDARD)
     FetchContent_Declare(
         leveldb
         GIT_REPOSITORY https://github.com/google/leveldb.git
@@ -118,18 +114,14 @@ if (ULAYFS_BUILD_BENCH)
 
     FetchContent_Declare(cxxopts URL https://github.com/jarro2783/cxxopts/archive/refs/tags/v2.2.0.zip)
     FetchContent_MakeAvailable(cxxopts)
+
     add_executable(leveldb_ycsb bench/leveldb_ycsb.cpp)
-
     add_executable(micro bench/micro.cpp bench/common.h)
+    add_executable(micro_st bench/micro_st.cpp bench/common.h)
 
-    if (ULAYFS_LINK_LIBRARY)
-        target_link_libraries(leveldb_tests ulayfs)
-        target_link_libraries(leveldb_ycsb cxxopts leveldb ulayfs)
-        target_link_libraries(micro benchmark::benchmark ulayfs)
-    else ()
-        target_link_libraries(leveldb_ycsb cxxopts leveldb)
-        target_link_libraries(micro benchmark::benchmark)
-    endif ()
+    target_link_libraries(leveldb_ycsb cxxopts leveldb)
+    target_link_libraries(micro benchmark::benchmark)
+    target_link_libraries(micro_st benchmark::benchmark)
 endif ()
 
 #[[
