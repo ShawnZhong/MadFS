@@ -290,7 +290,9 @@ class MetaBlock : public BaseBlock {
     return cl1_meta.next_tx_block.load(std::memory_order_acquire);
   }
   [[nodiscard]] TxEntryIdx get_tx_tail() const {
-    return cl1_meta.tx_tail.load(std::memory_order_relaxed);
+    auto tx_tail = cl1_meta.tx_tail.load(std::memory_order_relaxed);
+    __msan_unpoison(&tx_tail, sizeof(tx_tail));
+    return tx_tail;
   }
 
   [[nodiscard]] TxEntry get_tx_entry(TxLocalIdx idx) const {
