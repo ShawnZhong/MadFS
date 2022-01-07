@@ -33,4 +33,16 @@ jobs:
         run: ./run leveldb_tests ${{matrix.build_type}}
 
       - name: ycsb
-        run: ./scripts/bench_ycsb
+        run: |
+          ./run leveldb_ycsb -p="-f bench/ycsb-traces/a-load.txt"
+          ./run leveldb_ycsb -p="-f bench/ycsb-traces/a-run.txt"
+          ./run leveldb_ycsb -p="-f bench/ycsb-traces/b-load.txt"
+          ./run leveldb_ycsb -p="-f bench/ycsb-traces/b-run.txt"
+          ./run leveldb_ycsb -p="-f bench/ycsb-traces/c-load.txt"
+          ./run leveldb_ycsb -p="-f bench/ycsb-traces/c-run.txt"
+          ./run leveldb_ycsb -p="-f bench/ycsb-traces/d-load.txt"
+          ./run leveldb_ycsb -p="-f bench/ycsb-traces/d-run.txt"
+          ./run leveldb_ycsb -p="-f bench/ycsb-traces/e-load.txt"
+          ./run leveldb_ycsb -p="-f bench/ycsb-traces/e-run.txt"
+          ./run leveldb_ycsb -p="-f bench/ycsb-traces/f-load.txt"
+          ./run leveldb_ycsb -p="-f bench/ycsb-traces/f-run.txt"
