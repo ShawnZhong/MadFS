@@ -18,6 +18,12 @@ jobs:
       - name: micro_st
         run: BENCH_NUM_ITER=10 ./run micro_st ${{matrix.build_type}}
 
+      - name: micro_mt
+        run: BENCH_NUM_ITER=10 ./run micro_mt ${{matrix.build_type}}
+
+      - name: micro_meta
+        run: BENCH_NUM_ITER=10 ./run micro_meta ${{matrix.build_type}}
+
   leveldb:
     runs-on: ubuntu-latest
     steps:

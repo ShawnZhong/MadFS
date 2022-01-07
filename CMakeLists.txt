@@ -116,12 +116,14 @@ if (ULAYFS_BUILD_BENCH)
     FetchContent_MakeAvailable(cxxopts)
 
     add_executable(leveldb_ycsb bench/leveldb_ycsb.cpp)
-    add_executable(micro bench/micro.cpp bench/common.h)
     add_executable(micro_st bench/micro_st.cpp bench/common.h)
+    add_executable(micro_mt bench/micro_mt.cpp bench/common.h)
+    add_executable(micro_meta bench/micro_meta.cpp bench/common.h)
 
     target_link_libraries(leveldb_ycsb cxxopts leveldb)
-    target_link_libraries(micro benchmark::benchmark)
     target_link_libraries(micro_st benchmark::benchmark)
+    target_link_libraries(micro_mt benchmark::benchmark)
+    target_link_libraries(micro_meta benchmark::benchmark)
 endif ()
 
 #[[

@@ -1,14 +1,4 @@
-#include <benchmark/benchmark.h>
-#include <fcntl.h>
-#include <unistd.h>
-
 #include "common.h"
-
-constexpr char FILEPATH[] = "test.txt";
-constexpr int MAX_SIZE = 128 * 1024;
-
-int fd;
-int num_iter = 10000;
 
 enum class Mode {
   APPEND,
@@ -18,18 +8,16 @@ enum class Mode {
   RND_WRITE,
 };
 
-#pragma GCC diagnostic push
-#pragma GCC diagnostic ignored "-Wunused-result"
 template <Mode mode>
 void bench(benchmark::State& state) {
   const auto num_bytes = state.range(0);
 
-  unlink(FILEPATH);
-  fd = open(FILEPATH, O_CREAT | O_RDWR, S_IRUSR | S_IWUSR);
-
   [[maybe_unused]] char dst_buf[MAX_SIZE];
   [[maybe_unused]] char src_buf[MAX_SIZE];
   std::fill(src_buf, src_buf + MAX_SIZE, 'x');
+
+  unlink(FILEPATH);
+  fd = open(FILEPATH, O_CREAT | O_RDWR, S_IRUSR | S_IWUSR);
 
   // prepare random offset
   [[maybe_unused]] int rand_off[num_iter];
@@ -43,21 +31,30 @@ void bench(benchmark::State& state) {
     auto buf = new char[num_bytes * num_iter];
     pwrite(fd, buf, num_bytes * num_iter, 0);
     delete[] buf;
+    fsync(fd);
   }
 
   // run benchmark
-  if constexpr (mode == Mode::APPEND) {
-    for (auto _ : state) write(fd, src_buf, num_bytes);
+  if constexpr (mode == Mode::APPEND || mode == Mode::SEQ_WRITE) {
+    for (auto _ : state) {
+      write(fd, src_buf, num_bytes);
+      fsync(fd);
+    }
   } else if constexpr (mode == Mode::SEQ_READ) {
-    for (auto _ : state) read(fd, dst_buf, num_bytes);
-  } else if constexpr (mode == Mode::SEQ_WRITE) {
-    for (auto _ : state) write(fd, src_buf, num_bytes);
+    for (auto _ : state) {
+      read(fd, dst_buf, num_bytes);
+    }
   } else if constexpr (mode == Mode::RND_READ) {
-    for (auto _ : state)
-      pread(fd, dst_buf, num_bytes, rand_off[state.iterations()]);
+    int i = 0;
+    for (auto _ : state) {
+      pread(fd, dst_buf, num_bytes, rand_off[i++]);
+    }
   } else if constexpr (mode == Mode::RND_WRITE) {
-    for (auto _ : state)
-      pwrite(fd, src_buf, num_bytes, rand_off[state.iterations()]);
+    int i = 0;
+    for (auto _ : state) {
+      pwrite(fd, src_buf, num_bytes, rand_off[i++]);
+      fsync(fd);
+    }
   }
 
   // report result
@@ -70,13 +67,10 @@ void bench(benchmark::State& state) {
   close(fd);
   unlink(FILEPATH);
 }
-#pragma GCC diagnostic pop
 
 int main(int argc, char** argv) {
   benchmark::Initialize(&argc, argv);
   if (benchmark::ReportUnrecognizedArguments(argc, argv)) return 1;
-
-  if (auto str = std::getenv("BENCH_NUM_ITER"); str) num_iter = std::stoi(str);
 
   for (auto& bm : {
            RegisterBenchmark("seq_read", bench<Mode::SEQ_READ>),
