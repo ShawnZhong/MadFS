@@ -150,7 +150,7 @@ class Converter {
       return -1;
     }
 
-    uint64_t virtual_size = file->blk_table.update();
+    uint64_t virtual_size = file->blk_table.update(/*do_alloc*/ false);
     uint64_t virtual_size_aligned = ALIGN_UP(virtual_size, BLOCK_SIZE);
     uint32_t virtual_num_blocks =
         BLOCK_SIZE_TO_IDX(ALIGN_UP(virtual_size_aligned, BLOCK_SIZE));

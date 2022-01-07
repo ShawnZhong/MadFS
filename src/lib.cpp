@@ -215,6 +215,27 @@ int rename(const char* oldpath, const char* newpath) {
   return rc;
 }
 
+int truncate(const char* path, off_t length) {
+  PANIC("truncate not implemented");
+  UNUSED(path);
+  UNUSED(length);
+  return -1;
+}
+
+int ftruncate(int fd, off_t length) {
+  PANIC("ftruncate not implemented");
+  UNUSED(fd);
+  UNUSED(length);
+  return -1;
+}
+
+int flock(int fd, int operation) {
+  PANIC("flock not implemented");
+  UNUSED(fd);
+  UNUSED(operation);
+  return -1;
+}
+
 /**
  * Called when the shared library is first loaded
  *
