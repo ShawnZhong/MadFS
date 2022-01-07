@@ -147,6 +147,9 @@ class MetaBlock : public BaseBlock {
     char cl1[CACHELINE_SIZE];
   };
 
+  static_assert(std::atomic<TxEntryIdx>{}.is_always_lock_free,
+                "cl1_meta.tx_tail must be lock-free");
+
   static_assert(sizeof(cl1_meta) <= CACHELINE_SIZE,
                 "cl1_meta must be no larger than a cache line");
 
