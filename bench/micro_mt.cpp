@@ -101,6 +101,7 @@ auto register_bm(const char* name, F f, int num_bytes = 4096) {
 int main(int argc, char** argv) {
   benchmark::Initialize(&argc, argv);
   if (benchmark::ReportUnrecognizedArguments(argc, argv)) return 1;
+  if (auto str = std::getenv("BENCH_NUM_ITER"); str) num_iter = std::stoi(str);
 
   register_bm("no_overlap_0R", bench<Mode::NO_OVERLAP, 0>);
   register_bm("no_overlap_50R", bench<Mode::NO_OVERLAP, 50>);

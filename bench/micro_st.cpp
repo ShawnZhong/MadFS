@@ -71,6 +71,7 @@ void bench(benchmark::State& state) {
 int main(int argc, char** argv) {
   benchmark::Initialize(&argc, argv);
   if (benchmark::ReportUnrecognizedArguments(argc, argv)) return 1;
+  if (auto str = std::getenv("BENCH_NUM_ITER"); str) num_iter = std::stoi(str);
 
   for (auto& bm : {
            RegisterBenchmark("seq_read", bench<Mode::SEQ_READ>),
