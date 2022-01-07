@@ -195,7 +195,7 @@ int __xstat([[maybe_unused]] int ver, const char* pathname, struct stat* buf) {
 
 void unlink_shm(const char* path) {
   char shm_path[SHM_PATH_LEN];
-  if (getxattr(path, SHM_XATTR_NAME, &shm_path, sizeof(shm_path)) == 0) return;
+  if (getxattr(path, SHM_XATTR_NAME, &shm_path, sizeof(shm_path)) <= 0) return;
   int ret = posix::unlink(shm_path);
   DEBUG("posix::unlink(%s) = %d", shm_path, ret);
   if (unlikely(ret < 0)) WARN("Could not unlink shm file \"%s\": %m", shm_path);
