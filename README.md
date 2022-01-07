@@ -1,6 +1,7 @@
 # uLayFS
 
-[![workflow](https://github.com/shawnzhong/uLayFS/actions/workflows/default.yml/badge.svg)](https://github.com/ShawnZhong/uLayFS/actions/workflows/default.yml)
+[![workflow](https://github.com/shawnzhong/uLayFS/actions/workflows/test.yml/badge.svg)](https://github.com/ShawnZhong/uLayFS/actions/workflows/test.yml)
+[![workflow](https://github.com/shawnzhong/uLayFS/actions/workflows/bench.yml/badge.svg)](https://github.com/ShawnZhong/uLayFS/actions/workflows/bench.yml)
 
 ## Prerequisites
 
@@ -61,6 +62,14 @@
 
   ```shell
   LD_PRELOAD=./build-release/libulayfs.so ./your_program
+  ```
+- Run benchmarks
+
+  ```shell
+  ./run micro_st       # single-threaded microbenchmark
+  ./run micro_mt       # multi-threaded microbenchmark
+  ./run micro_meta     # microbenchmark with metadata
+  ./scripts/bench_ycsb # YCSB benchmark
   ```
 
 ## Development
