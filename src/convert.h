@@ -188,7 +188,8 @@ class Converter {
       PANIC_IF(ret, "Fail to ftruncate to the right size");
     }
 
-    file->is_fd_owned = true;
+    // we steal fd here so it won't be destroyed with File
+    file->fd = -1;
     flock::release(fd);
     return fd;
   }

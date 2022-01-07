@@ -59,7 +59,11 @@ File::File(int fd, const struct stat& stat, int flags, bool guard)
       }
       meta->unlock();
     }
+  } else {
+    shm_fd = -1;
+    bitmap = nullptr;
   }
+
   if (!file_size_updated) file_size = blk_table.update(/*do_alloc*/ false);
 
   if (flags & O_APPEND) offset_mgr.seek_absolute(file_size);
@@ -68,9 +72,9 @@ File::File(int fd, const struct stat& stat, int flags, bool guard)
 File::~File() {
   pthread_spin_destroy(&spinlock);
   allocators.clear();
-  if (likely(is_fd_owned)) posix::close(fd);
-  posix::munmap(bitmap, SHM_SIZE);
-  posix::close(shm_fd);
+  if (fd >= 0) posix::close(fd);
+  if (shm_fd >= 0) posix::close(shm_fd);
+  if (bitmap) posix::munmap(bitmap, SHM_SIZE);
   DEBUG("~File(): close(%d) and close(%d)", fd, shm_fd);
 }
 
