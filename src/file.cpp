@@ -41,21 +41,24 @@ File::File(int fd, const struct stat& stat, int flags, bool guard)
     PANIC("failed to get shm_path attribute");
   }
 
-  open_shm(stat);
-
-  // The first bit corresponds to the meta block which should always be set
-  // to 1. If it is not, then bitmap needs to be initialized.
-  // Bitmap::get is not thread safe but we are only reading one bit here.
   uint64_t file_size;
   bool file_size_updated = false;
-  if (!bitmap[0].is_allocated(0)) {
-    meta->lock();
+
+  // only open shared memory if we may write
+  if (can_write) {
+    open_shm(stat);
+    // The first bit corresponds to the meta block which should always be set
+    // to 1. If it is not, then bitmap needs to be initialized.
+    // Bitmap::is_allocated is not thread safe but we don't yet have concurrency
     if (!bitmap[0].is_allocated(0)) {
-      file_size = blk_table.update(/*do_alloc*/ false, /*init_bitmap*/ true);
-      file_size_updated = true;
-      bitmap[0].set_allocated(0);
+      meta->lock();
+      if (!bitmap[0].is_allocated(0)) {
+        file_size = blk_table.update(/*do_alloc*/ false, /*init_bitmap*/ true);
+        file_size_updated = true;
+        bitmap[0].set_allocated(0);
+      }
+      meta->unlock();
     }
-    meta->unlock();
   }
   if (!file_size_updated) file_size = blk_table.update(/*do_alloc*/ false);
 
