@@ -1,10 +1,8 @@
 #!/usr/bin/env python3
 
-import sys
-import os
 import glob
+import os
 import subprocess
-
 
 WORKLOADS = ("a", "b", "c", "d", "e", "f")
 VALUE_SIZES = (10, 100, 1000, 10000, 100000)
@@ -15,18 +13,16 @@ def gen_cmd(ycsbcli: str, dbdir: str, workload: str,
             value_size: int, load: bool = False) -> list:
     return [
         ycsbcli,
-        "-f", f"ycsb-traces/{workload}-{'load' if load else 'run'}.txt",
+        "-f", f"bench/ycsb-traces/{workload}-{'load' if load else 'run'}.txt",
         "-v", f"{value_size}",
         "-d", dbdir
     ]
 
+
 def exec_cmd(cmd: list, envs: dict) -> tuple:
     """Returns (num_reqeusts, microseconds) tuple."""
-    p = subprocess.run(cmd,
-        capture_output=True,
-        env=envs
-    )
-    
+    p = subprocess.run(cmd, capture_output=True, env=envs)
+
     if p.returncode != 0:
         print(f"exit code: {p.returncode}")
         print(f"\nstdout:\n{p.stdout.decode()}")
@@ -34,8 +30,8 @@ def exec_cmd(cmd: list, envs: dict) -> tuple:
         raise RuntimeError("ycsbcli returned non-zero rc")
 
     out = p.stdout.decode()
-    num_reqs = int(out[out.index("Finished ")+9:out.index(" requests")])
-    time_us = float(out[out.index("Time elapsed: ")+14:out.index(" us")])
+    num_reqs = int(out[out.index("Finished ") + 9:out.index(" requests")])
+    time_us = float(out[out.index("Time elapsed: ") + 14:out.index(" us")])
     return (num_reqs, time_us)
 
 
@@ -72,6 +68,7 @@ def bench_fs(ycsbcli: str, dbdir: str, libulayfs: str, results: dict):
             for f in dbfiles:
                 os.remove(f)
 
+
 def bench(ycsbcli: str, dbdir: str, libulayfs: str):
     results = dict()
 
@@ -95,10 +92,17 @@ def bench(ycsbcli: str, dbdir: str, libulayfs: str):
 
 
 if __name__ == "__main__":
-    assert len(sys.argv) == 3
-    dbdir = sys.argv[1]
-    libulayfs = sys.argv[2]
-    ycsbcli = "./ycsbcli"
+    from runner import Runner
+    import shutil
+
+    runner = Runner(cmake_target="leveldb_ycsb")
+    runner.build(link_ulayfs=False)
+    libulayfs = runner.ulayfs_path
+    ycsbcli = runner.exe_path
+
+    dbdir = "bench-dbdir"
+    shutil.rmtree(dbdir, ignore_errors=True)
+    os.makedirs(dbdir, exist_ok=True)
 
     assert os.path.isdir(dbdir)
     assert os.path.exists(ycsbcli)

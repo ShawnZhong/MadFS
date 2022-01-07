@@ -81,10 +81,10 @@
   ./run test_rw pmemcheck --cmake_args="-DULAYFS_TX_FLUSH_ONLY_FSYNC=ON"
   
   # profile 4K append with uLayFS
-  ./run bench profile --prog_args="--benchmark_filter='append/4096'"
+  ./run micro_mt profile --prog_args="--benchmark_filter='append/4096'"
   
-  # profile append benchmark with kernel filesystem
-  ./run bench profile --disable_ulayfs
+  # profile multithreaded microbenchmark with kernel filesystem
+  ./run micro_mt profile --disable_ulayfs
   ```
 
 - Environment variables
