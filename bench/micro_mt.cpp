@@ -1,5 +1,11 @@
 #include "common.h"
 
+constexpr int MAX_SIZE = 4096;
+constexpr int MAX_NUM_THREAD = 16;
+
+int fd;
+int num_iter = get_num_iter();
+
 enum class Mode {
   NO_OVERLAP,
   APPEND,
@@ -26,13 +32,6 @@ void bench(benchmark::State& state) {
     }
   }
 
-  // prepare random offset
-  [[maybe_unused]] bool is_read[num_iter];
-  if constexpr (mode == Mode::NO_OVERLAP) {
-    std::generate(is_read, is_read + num_iter,
-                  [&]() { return rand() % 100 < READ_PERCENT; });
-  }
-
   // run benchmark
   if constexpr (mode == Mode::APPEND) {
     for (auto _ : state) {
@@ -56,12 +55,16 @@ void bench(benchmark::State& state) {
       }
     }
   } else if constexpr (mode == Mode::NO_OVERLAP) {
+    bool is_read[num_iter];
+    std::generate(is_read, is_read + num_iter,
+                  [&]() { return rand() % 100 < READ_PERCENT; });
+    const off_t offset = state.thread_index * num_bytes;
     int i = 0;
     for (auto _ : state) {
       if (is_read[i++]) {
-        pread(fd, dst_buf, num_bytes, 0);
+        pread(fd, dst_buf, num_bytes, offset);
       } else {
-        pwrite(fd, src_buf, num_bytes, 0);
+        pwrite(fd, src_buf, num_bytes, offset);
         fsync(fd);
       }
     }
@@ -101,7 +104,6 @@ auto register_bm(const char* name, F f, int num_bytes = 4096) {
 int main(int argc, char** argv) {
   benchmark::Initialize(&argc, argv);
   if (benchmark::ReportUnrecognizedArguments(argc, argv)) return 1;
-  if (auto str = std::getenv("BENCH_NUM_ITER"); str) num_iter = std::stoi(str);
 
   register_bm("no_overlap_0R", bench<Mode::NO_OVERLAP, 0>);
   register_bm("no_overlap_50R", bench<Mode::NO_OVERLAP, 50>);

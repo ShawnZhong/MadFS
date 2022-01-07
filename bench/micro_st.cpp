@@ -1,5 +1,11 @@
 #include "common.h"
 
+constexpr int MIN_SIZE = 8;
+constexpr int MAX_SIZE = 128 * 1024;
+
+int fd;
+int num_iter = get_num_iter();
+
 enum class Mode {
   APPEND,
   SEQ_READ,
@@ -71,7 +77,6 @@ void bench(benchmark::State& state) {
 int main(int argc, char** argv) {
   benchmark::Initialize(&argc, argv);
   if (benchmark::ReportUnrecognizedArguments(argc, argv)) return 1;
-  if (auto str = std::getenv("BENCH_NUM_ITER"); str) num_iter = std::stoi(str);
 
   for (auto& bm : {
            RegisterBenchmark("seq_read", bench<Mode::SEQ_READ>),
@@ -80,7 +85,7 @@ int main(int argc, char** argv) {
            RegisterBenchmark("rnd_write", bench<Mode::RND_WRITE>),
            RegisterBenchmark("append", bench<Mode::APPEND>),
        }) {
-    bm->RangeMultiplier(2)->Range(8, MAX_SIZE)->Iterations(num_iter);
+    bm->RangeMultiplier(2)->Range(MIN_SIZE, MAX_SIZE)->Iterations(num_iter);
   }
 
   benchmark::RunSpecifiedBenchmarks();

@@ -19,7 +19,7 @@ class Runner:
         if build_type is None:
             build_type = "release" if self.is_bench else "debug"
         if output_path is None:
-            output_path = Path("results") / cmake_target / build_type / get_timestamp()
+            output_path = Path("results") / cmake_target / f"{get_timestamp()}-{build_type}"
 
         self.build_type = build_type
         self.build_path = Path(f"build-{build_type}")
@@ -27,6 +27,7 @@ class Runner:
         self.output_path = output_path
         self.exe_path = None
         self.ulayfs_path = None
+        self.result_path = None
 
         self.output_path.mkdir(parents=True, exist_ok=True)
 
@@ -56,10 +57,13 @@ class Runner:
     def run(self, prog_args="", load_ulayfs=True, numa=0, **kwargs):
         assert self.exe_path is not None
 
-        if self.is_micro:
-            prog_args += " --benchmark_counters_tabular=true "
-        cmd = f"{self.exe_path} {prog_args}"
         run_log_path = self.output_path / "run.log"
+
+        if self.is_micro:
+            self.result_path = self.output_path / "result.json"
+            prog_args += f" --benchmark_counters_tabular=true "
+            prog_args += f" --benchmark_out={self.result_path} "
+        cmd = f"{self.exe_path} {prog_args}"
 
         if load_ulayfs:
             assert self.ulayfs_path is not None

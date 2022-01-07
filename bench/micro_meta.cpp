@@ -2,6 +2,9 @@
 
 #include "common.h"
 
+int fd;
+int num_iter = get_num_iter(1000);
+
 enum class Mode {
   OPEN_CLOSE,
   STAT,
@@ -42,8 +45,6 @@ void bench(benchmark::State& state) {
 int main(int argc, char** argv) {
   benchmark::Initialize(&argc, argv);
   if (benchmark::ReportUnrecognizedArguments(argc, argv)) return 1;
-  num_iter = 1000;
-  if (auto str = std::getenv("BENCH_NUM_ITER"); str) num_iter = std::stoi(str);
 
   for (auto& bm : {RegisterBenchmark("open_close", bench<Mode::OPEN_CLOSE>),
                    RegisterBenchmark("stat", bench<Mode::STAT>),
