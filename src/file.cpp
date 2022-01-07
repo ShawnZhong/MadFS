@@ -31,22 +31,23 @@ File::File(int fd, const struct stat& stat, int flags, bool guard)
   pthread_spin_init(&spinlock, PTHREAD_PROCESS_PRIVATE);
   if (stat.st_size == 0) meta->init();
 
-  ssize_t rc = fgetxattr(fd, SHM_XATTR_NAME, &shm_path, sizeof(shm_path));
-  if (rc == -1 && errno == ENODATA) {  // no shm_path attribute, create one
-    sprintf(shm_path, "/dev/shm/ulayfs_%016lx_%013lx", stat.st_ino,
-            (stat.st_ctim.tv_sec * 1000000000 + stat.st_ctim.tv_nsec) >> 3);
-    rc = fsetxattr(fd, SHM_XATTR_NAME, shm_path, sizeof(shm_path), 0);
-    PANIC_IF(rc == -1, "failed to set shm_path attribute");
-  } else if (rc == -1) {
-    PANIC("failed to get shm_path attribute");
-  }
-
   uint64_t file_size;
   bool file_size_updated = false;
 
   // only open shared memory if we may write
   if (can_write) {
+    ssize_t rc = fgetxattr(fd, SHM_XATTR_NAME, &shm_path, sizeof(shm_path));
+    if (rc == -1 && errno == ENODATA) {  // no shm_path attribute, create one
+      sprintf(shm_path, "/dev/shm/ulayfs_%016lx_%013lx", stat.st_ino,
+              (stat.st_ctim.tv_sec * 1000000000 + stat.st_ctim.tv_nsec) >> 3);
+      rc = fsetxattr(fd, SHM_XATTR_NAME, shm_path, sizeof(shm_path), 0);
+      PANIC_IF(rc == -1, "failed to set shm_path attribute");
+    } else if (rc == -1) {
+      PANIC("failed to get shm_path attribute");
+    }
+
     open_shm(stat);
+
     // The first bit corresponds to the meta block which should always be set
     // to 1. If it is not, then bitmap needs to be initialized.
     // Bitmap::is_allocated is not thread safe but we don't yet have concurrency
@@ -328,16 +329,18 @@ void File::tx_gc() {
 
 std::ostream& operator<<(std::ostream& out, const File& f) {
   out << "File: fd = " << f.fd << "\n";
-  out << "\tshm_path = " << f.shm_path << "\n";
+  if (f.can_write) out << "\tshm_path = " << f.shm_path << "\n";
   out << *f.meta;
   out << f.blk_table;
   out << f.mem_table;
   out << f.offset_mgr;
-  out << "Bitmap: \n";
-  for (size_t i = 0; i < f.meta->get_num_blocks() / BITMAP_CAPACITY; ++i) {
-    out << "\t" << std::setw(6) << std::right << i * BITMAP_CAPACITY << " - "
-        << std::setw(6) << std::left << (i + 1) * BITMAP_CAPACITY - 1 << ": "
-        << f.bitmap[i] << "\n";
+  if (f.can_write) {
+    out << "Bitmap: \n";
+    for (size_t i = 0; i < f.meta->get_num_blocks() / BITMAP_CAPACITY; ++i) {
+      out << "\t" << std::setw(6) << std::right << i * BITMAP_CAPACITY << " - "
+          << std::setw(6) << std::left << (i + 1) * BITMAP_CAPACITY - 1 << ": "
+          << f.bitmap[i] << "\n";
+    }
   }
   out << f.tx_mgr;
   out << "\n";
