@@ -1,9 +1,8 @@
 import logging
 import pprint
 import shutil
-from pathlib import Path
 
-from utils import get_timestamp, system, chdir_to_root
+from utils import get_timestamp, system, root_dir
 
 logging.basicConfig(level=logging.DEBUG)
 logger = logging.getLogger("runner")
@@ -11,18 +10,16 @@ logger = logging.getLogger("runner")
 
 class Runner:
     def __init__(self, cmake_target, build_type=None, output_path=None, **kwargs):
-        chdir_to_root()
-
         self.is_micro = cmake_target.startswith("micro")
         self.is_bench = self.is_micro or cmake_target.startswith("leveldb")
 
         if build_type is None:
             build_type = "release" if self.is_bench else "debug"
         if output_path is None:
-            output_path = Path("results") / cmake_target / f"{get_timestamp()}-{build_type}"
+            output_path = root_dir / "results" / cmake_target / f"{get_timestamp()}-{build_type}"
 
         self.build_type = build_type
-        self.build_path = Path(f"build-{build_type}")
+        self.build_path = root_dir / f"build-{build_type}"
         self.cmake_target = cmake_target
         self.output_path = output_path
         self.exe_path = None
@@ -40,7 +37,7 @@ class Runner:
 
         # build
         system(
-            f"make {self.build_type} "
+            f"make {self.build_type} -C {root_dir} "
             f"CMAKE_ARGS='{cmake_args}' "
             f"BUILD_TARGETS='{self.cmake_target} ulayfs' ",
             log_path=build_log_path,
@@ -57,7 +54,7 @@ class Runner:
     def run(self, prog_args="", load_ulayfs=True, numa=0, **kwargs):
         assert self.exe_path is not None
 
-        run_log_path = self.output_path / "run.log"
+        prog_log_path = self.output_path / "prog.log"
 
         if self.is_micro:
             self.result_path = self.output_path / "result.json"
@@ -81,7 +78,7 @@ class Runner:
                 f"VALGRIND_LIB={pmemcheck_dir}/libexec/valgrind/ "
                 f"{pmemcheck_dir}/bin/valgrind --tool=pmemcheck --trace-children=yes "
                 f"{cmd}",
-                log_path=run_log_path,
+                log_path=prog_log_path,
             )
 
         elif self.build_type == "profile":
@@ -92,7 +89,7 @@ class Runner:
             # record perf data
             system(
                 f"perf record --freq=997 --call-graph dwarf -o {perf_data} {cmd}",
-                log_path=run_log_path,
+                log_path=prog_log_path,
             )
 
             # show perf results in terminal
@@ -107,4 +104,4 @@ class Runner:
             logger.info(f"The flamegraph is available at `{flamegraph_output}`")
 
         else:
-            system(cmd, log_path=run_log_path)
+            system(cmd, log_path=prog_log_path)
