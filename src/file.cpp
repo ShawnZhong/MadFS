@@ -31,32 +31,40 @@ File::File(int fd, const struct stat& stat, int flags, bool guard)
   pthread_spin_init(&spinlock, PTHREAD_PROCESS_PRIVATE);
   if (stat.st_size == 0) meta->init();
 
-  ssize_t rc = fgetxattr(fd, SHM_XATTR_NAME, &shm_path, sizeof(shm_path));
-  if (rc == -1 && errno == ENODATA) {  // no shm_path attribute, create one
-    sprintf(shm_path, "/dev/shm/ulayfs_%016lx_%013lx", stat.st_ino,
-            (stat.st_ctim.tv_sec * 1000000000 + stat.st_ctim.tv_nsec) >> 3);
-    rc = fsetxattr(fd, SHM_XATTR_NAME, shm_path, sizeof(shm_path), 0);
-    PANIC_IF(rc == -1, "failed to set shm_path attribute");
-  } else if (rc == -1) {
-    PANIC("failed to get shm_path attribute");
-  }
-
-  open_shm(stat);
-
-  // The first bit corresponds to the meta block which should always be set
-  // to 1. If it is not, then bitmap needs to be initialized.
-  // Bitmap::get is not thread safe but we are only reading one bit here.
   uint64_t file_size;
   bool file_size_updated = false;
-  if (!bitmap[0].is_allocated(0)) {
-    meta->lock();
-    if (!bitmap[0].is_allocated(0)) {
-      file_size = blk_table.update(/*do_alloc*/ false, /*init_bitmap*/ true);
-      file_size_updated = true;
-      bitmap[0].set_allocated(0);
+
+  // only open shared memory if we may write
+  if (can_write) {
+    ssize_t rc = fgetxattr(fd, SHM_XATTR_NAME, &shm_path, sizeof(shm_path));
+    if (rc == -1 && errno == ENODATA) {  // no shm_path attribute, create one
+      sprintf(shm_path, "/dev/shm/ulayfs_%016lx_%013lx", stat.st_ino,
+              (stat.st_ctim.tv_sec * 1000000000 + stat.st_ctim.tv_nsec) >> 3);
+      rc = fsetxattr(fd, SHM_XATTR_NAME, shm_path, sizeof(shm_path), 0);
+      PANIC_IF(rc == -1, "failed to set shm_path attribute");
+    } else if (rc == -1) {
+      PANIC("failed to get shm_path attribute");
     }
-    meta->unlock();
+
+    open_shm(stat);
+
+    // The first bit corresponds to the meta block which should always be set
+    // to 1. If it is not, then bitmap needs to be initialized.
+    // Bitmap::is_allocated is not thread safe but we don't yet have concurrency
+    if (!bitmap[0].is_allocated(0)) {
+      meta->lock();
+      if (!bitmap[0].is_allocated(0)) {
+        file_size = blk_table.update(/*do_alloc*/ false, /*init_bitmap*/ true);
+        file_size_updated = true;
+        bitmap[0].set_allocated(0);
+      }
+      meta->unlock();
+    }
+  } else {
+    shm_fd = -1;
+    bitmap = nullptr;
   }
+
   if (!file_size_updated) file_size = blk_table.update(/*do_alloc*/ false);
 
   if (flags & O_APPEND) offset_mgr.seek_absolute(file_size);
@@ -65,9 +73,9 @@ File::File(int fd, const struct stat& stat, int flags, bool guard)
 File::~File() {
   pthread_spin_destroy(&spinlock);
   allocators.clear();
-  if (likely(is_fd_owned)) posix::close(fd);
-  posix::munmap(bitmap, SHM_SIZE);
-  posix::close(shm_fd);
+  if (fd >= 0) posix::close(fd);
+  if (shm_fd >= 0) posix::close(shm_fd);
+  if (bitmap) posix::munmap(bitmap, SHM_SIZE);
   DEBUG("~File(): close(%d) and close(%d)", fd, shm_fd);
 }
 
@@ -321,16 +329,18 @@ void File::tx_gc() {
 
 std::ostream& operator<<(std::ostream& out, const File& f) {
   out << "File: fd = " << f.fd << "\n";
-  out << "\tshm_path = " << f.shm_path << "\n";
+  if (f.can_write) out << "\tshm_path = " << f.shm_path << "\n";
   out << *f.meta;
   out << f.blk_table;
   out << f.mem_table;
   out << f.offset_mgr;
-  out << "Bitmap: \n";
-  for (size_t i = 0; i < f.meta->get_num_blocks() / BITMAP_CAPACITY; ++i) {
-    out << "\t" << std::setw(6) << std::right << i * BITMAP_CAPACITY << " - "
-        << std::setw(6) << std::left << (i + 1) * BITMAP_CAPACITY - 1 << ": "
-        << f.bitmap[i] << "\n";
+  if (f.can_write) {
+    out << "Bitmap: \n";
+    for (size_t i = 0; i < f.meta->get_num_blocks() / BITMAP_CAPACITY; ++i) {
+      out << "\t" << std::setw(6) << std::right << i * BITMAP_CAPACITY << " - "
+          << std::setw(6) << std::left << (i + 1) * BITMAP_CAPACITY - 1 << ": "
+          << f.bitmap[i] << "\n";
+    }
   }
   out << f.tx_mgr;
   out << "\n";
