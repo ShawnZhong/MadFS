@@ -123,13 +123,11 @@ int main(int argc, char* argv[]) {
     std::string opcode;
     std::string key;
     while (input >> opcode >> key) {
-      ycsb_op_t op = opcode == "READ"
-                         ? READ
-                         : opcode == "INSERT"
-                               ? INSERT
-                               : opcode == "UPDATE"
-                                     ? UPDATE
-                                     : opcode == "SCAN" ? SCAN : UNKNOWN;
+      ycsb_op_t op = opcode == "READ"     ? READ
+                     : opcode == "INSERT" ? INSERT
+                     : opcode == "UPDATE" ? UPDATE
+                     : opcode == "SCAN"   ? SCAN
+                                          : UNKNOWN;
       size_t scan_len = 0;
       if (op == SCAN) input >> scan_len;
       ycsb_reqs.push_back(
