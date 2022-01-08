@@ -656,13 +656,16 @@ ssize_t TxMgr::SingleBlockTx::do_write() {
   recycle_image[0] = file->vidx_to_lidx(begin_vidx);
   assert(recycle_image[0] != dst_lidxs[0]);
 
+  // copy data from buf
+  memcpy(dst_blocks[0]->data_rw() + local_offset, buf, count);
+
 redo:
   // copy original data
   const pmem::Block* src_block = file->lidx_to_addr_ro(recycle_image[0]);
   assert(dst_blocks.size() == 1);
-  memcpy(dst_blocks[0]->data_rw(), src_block->data_ro(), BLOCK_SIZE);
-  // copy data from buf
-  memcpy(dst_blocks[0]->data_rw() + local_offset, buf, count);
+  memcpy(dst_blocks[0]->data_rw(), src_block->data_ro(), local_offset);
+  memcpy(dst_blocks[0]->data_rw() + local_offset + count, src_block->data_ro(),
+         BLOCK_SIZE - (local_offset + count));
 
   // persist the data
   persist_fenced(dst_blocks[0], BLOCK_SIZE);
