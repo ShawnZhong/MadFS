@@ -745,9 +745,9 @@ ssize_t TxMgr::MultiBlockTx::do_write() {
   src_last_lidx = recycle_image[num_blocks - 1];
 
   // write data from the buf to the first block
-  char* dst = dst_blocks[0]->data_rw() + first_block_local_offset;
-  memcpy(dst, buf, BLOCK_SIZE - first_block_local_offset);
-  pmem::persist_unfenced(dst, BLOCK_SIZE - first_block_local_offset);
+  char* dst = dst_blocks[0]->data_rw() + BLOCK_SIZE - first_block_local_offset;
+  memcpy(dst, buf, first_block_local_offset);
+  pmem::persist_unfenced(dst, first_block_local_offset);
 
   // write data from the buf to the last block
   pmem::Block* last_dst_block = dst_blocks.back() + end_full_vidx - begin_vidx -
@@ -762,8 +762,9 @@ redo:
     // copy the data from the first source block if exists
     memcpy(dst_blocks[0]->data_rw(),
            file->lidx_to_addr_ro(src_first_lidx)->data_ro(),
-           first_block_local_offset);
-    pmem::persist_unfenced(dst_blocks[0], first_block_local_offset);
+           BLOCK_SIZE - first_block_local_offset);
+    pmem::persist_unfenced(dst_blocks[0],
+                           BLOCK_SIZE - first_block_local_offset);
   }
 
   // copy last block
