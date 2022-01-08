@@ -22,8 +22,8 @@ void bench(benchmark::State& state) {
   std::fill(src_buf, src_buf + MAX_SIZE * MAX_NUM_THREAD, 'x');
 
   if (state.thread_index == 0) {
-    unlink(FILEPATH);
-    fd = open(FILEPATH, O_CREAT | O_RDWR, S_IRUSR | S_IWUSR);
+    unlink(filepath);
+    fd = open(filepath, O_CREAT | O_RDWR, S_IRUSR | S_IWUSR);
 
     // preallocate file
     if constexpr (mode != Mode::APPEND) {
@@ -87,7 +87,7 @@ void bench(benchmark::State& state) {
   // tear down
   if (state.thread_index == 0) {
     close(fd);
-    unlink(FILEPATH);
+    unlink(filepath);
   }
 }
 

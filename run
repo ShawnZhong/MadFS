@@ -40,7 +40,7 @@ if __name__ == "__main__":
         dest="load_ulayfs",
         help="do not load the ulayfs shared library",
     )
-    parser.add_argument("-o", "--output_path", type=Path, help="output directory")
+    parser.add_argument("-r", "--result_dir", type=Path, help="result directory")
     parser.add_argument("--numa", type=int, default=0, help="numa node to run on")
     check_any_args_passed(parser)
     args = parser.parse_args()

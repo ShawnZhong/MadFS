@@ -15,25 +15,25 @@ template <Mode mode>
 void bench(benchmark::State& state) {
   const auto num_tx = state.range(0);
 
-  unlink(FILEPATH);
+  unlink(filepath);
 
-  fd = open(FILEPATH, O_CREAT | O_RDWR, S_IRUSR | S_IWUSR);
+  fd = open(filepath, O_CREAT | O_RDWR, S_IRUSR | S_IWUSR);
   char buf[8];
   for (int i = 0; i < num_tx; ++i) write(fd, buf, sizeof(buf));
   close(fd);
 
   if constexpr (mode == Mode::OPEN_CLOSE) {
     for (auto _ : state) {
-      fd = open(FILEPATH, O_RDONLY);
+      fd = open(filepath, O_RDONLY);
       close(fd);
     }
   } else if constexpr (mode == Mode::STAT) {
     struct stat st;  // NOLINT(cppcoreguidelines-pro-type-member-init)
     for (auto _ : state) {
-      stat(FILEPATH, &st);
+      stat(filepath, &st);
     }
   } else if constexpr (mode == Mode::FSTAT) {
-    fd = open(FILEPATH, O_RDONLY);
+    fd = open(filepath, O_RDONLY);
     struct stat st;  // NOLINT(cppcoreguidelines-pro-type-member-init)
     for (auto _ : state) {
       fstat(fd, &st);

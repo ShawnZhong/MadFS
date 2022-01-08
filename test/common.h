@@ -5,6 +5,7 @@
 #include <unistd.h>
 
 #include <algorithm>
+#include <climits>
 #include <cstdio>
 #include <cstring>
 
@@ -33,7 +34,15 @@ void print_file(int fd) {
   }
 }
 
-constexpr char FILEPATH[] = "test.txt";
+const char* filepath = []() -> const char* {
+  char* pmem_path = std::getenv("PMEM_PATH");
+  if (!pmem_path) return "test.txt";
+  static char path[PATH_MAX];
+  strcpy(path, pmem_path);
+  strcat(path, "/test.txt");
+  return path;
+}();
+
 constexpr std::string_view chars =
     "0123456789abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ";
 

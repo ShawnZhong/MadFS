@@ -22,8 +22,8 @@ void bench(benchmark::State& state) {
   [[maybe_unused]] char src_buf[MAX_SIZE];
   std::fill(src_buf, src_buf + MAX_SIZE, 'x');
 
-  unlink(FILEPATH);
-  fd = open(FILEPATH, O_CREAT | O_RDWR, S_IRUSR | S_IWUSR);
+  unlink(filepath);
+  fd = open(filepath, O_CREAT | O_RDWR, S_IRUSR | S_IWUSR);
 
   // prepare random offset
   [[maybe_unused]] int rand_off[num_iter];
@@ -71,7 +71,7 @@ void bench(benchmark::State& state) {
 
   // tear down
   close(fd);
-  unlink(FILEPATH);
+  unlink(filepath);
 }
 
 int main(int argc, char** argv) {
