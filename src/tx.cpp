@@ -666,7 +666,8 @@ redo:
   assert(dst_blocks.size() == 1);
   memcpy(dst_blocks[0]->data_rw(), src_block->data_ro(), local_offset);
   pmem::persist_unfenced(dst_blocks[0]->data_rw(), local_offset);
-  memcpy(dst_blocks[0]->data_rw() + local_offset + count, src_block->data_ro(),
+  memcpy(dst_blocks[0]->data_rw() + local_offset + count,
+         src_block->data_ro() + local_offset + count,
          BLOCK_SIZE - (local_offset + count));
   pmem::persist_fenced(dst_blocks[0]->data_rw() + local_offset + count,
                        BLOCK_SIZE - (local_offset + count));
