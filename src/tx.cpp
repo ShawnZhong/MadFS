@@ -658,17 +658,18 @@ ssize_t TxMgr::SingleBlockTx::do_write() {
 
   // copy data from buf
   memcpy(dst_blocks[0]->data_rw() + local_offset, buf, count);
+  pmem::persist_unfenced(dst_blocks[0]->data_rw() + local_offset, count);
 
 redo:
   // copy original data
   const pmem::Block* src_block = file->lidx_to_addr_ro(recycle_image[0]);
   assert(dst_blocks.size() == 1);
   memcpy(dst_blocks[0]->data_rw(), src_block->data_ro(), local_offset);
+  pmem::persist_unfenced(dst_blocks[0]->data_rw(), local_offset);
   memcpy(dst_blocks[0]->data_rw() + local_offset + count, src_block->data_ro(),
          BLOCK_SIZE - (local_offset + count));
-
-  // persist the data
-  persist_fenced(dst_blocks[0], BLOCK_SIZE);
+  pmem::persist_fenced(dst_blocks[0]->data_rw() + local_offset + count,
+                       BLOCK_SIZE - (local_offset + count));
 
   if (is_offset_depend) file->wait_offset(ticket);
 
