@@ -35,7 +35,7 @@ int open(const char* pathname, int flags, ...) {
     mode = va_arg(arg, mode_t);
     va_end(arg);
   }
-
+  
   int fd;
   struct stat stat_buf;
   bool is_valid = dram::File::try_open(fd, stat_buf, pathname, flags, mode);
@@ -83,23 +83,25 @@ int fclose(FILE* stream) {
 
 ssize_t write(int fd, const void* buf, size_t count) {
   if (auto file = get_file(fd)) {
-    ssize_t rc = file->write(buf, count);
-    DEBUG("ulayfs::write(%d, buf, %zu) = %zu", fd, count, rc);
-    return rc;
+    ssize_t res = file->write(buf, count);
+    DEBUG("ulayfs::write(%d, buf, %zu) = %zu", fd, count, res);
+    return res;
   } else {
-    ssize_t rc = posix::write(fd, buf, count);
-    DEBUG("posix::write(%d, buf, %zu) = %zu", fd, count, rc);
-    return rc;
+    ssize_t res = posix::write(fd, buf, count);
+    DEBUG("posix::write(%d, buf, %zu) = %zu", fd, count, res);
+    return res;
   }
 }
 
 ssize_t read(int fd, void* buf, size_t count) {
   if (auto file = get_file(fd)) {
-    DEBUG("ulayfs::read(%d, buf, %zu)", fd, count);
-    return file->read(buf, count);
+    auto res = file->read(buf, count);
+    DEBUG("ulayfs::read(%d, buf, %zu) = %zu", fd, count, res);
+    return res;
   } else {
-    DEBUG("posix::read(%d, buf, %zu)", fd, count);
-    return posix::read(fd, buf, count);
+    auto res = posix::read(fd, buf, count);
+    DEBUG("posix::read(%d, buf, %zu) = %zu", fd, count, res);
+    return res;
   }
 }
 

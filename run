@@ -22,6 +22,7 @@ if __name__ == "__main__":
         choices=[
             "debug",
             "release",
+            "relwithdebinfo",
             "profile",
             "pmemcheck",
             "asan",

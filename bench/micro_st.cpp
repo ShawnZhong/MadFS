@@ -35,6 +35,7 @@ void bench(benchmark::State& state) {
   // preallocate file
   if constexpr (mode != Mode::APPEND) {
     auto buf = new char[num_bytes * num_iter];
+    std::fill(buf, buf + num_bytes * num_iter, 'x');
     pwrite(fd, buf, num_bytes * num_iter, 0);
     delete[] buf;
     fsync(fd);
@@ -48,7 +49,9 @@ void bench(benchmark::State& state) {
     }
   } else if constexpr (mode == Mode::SEQ_READ) {
     for (auto _ : state) {
-      read(fd, dst_buf, num_bytes);
+      ssize_t res = read(fd, dst_buf, num_bytes);
+      assert(res == num_bytes);
+      assert(memcmp(dst_buf, src_buf, num_bytes) == 0);
     }
   } else if constexpr (mode == Mode::RND_READ) {
     int i = 0;

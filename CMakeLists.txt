@@ -27,22 +27,9 @@ add_library(ulayfs SHARED
 #[[
 build flags
 ]]
-
 set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -Wall -Wextra -Wno-unused-function -Wno-unused-private-field")
 target_compile_options(ulayfs PRIVATE -march=native -Werror)
 set_property(TARGET ulayfs PROPERTY INTERPROCEDURAL_OPTIMIZATION TRUE) # LTO
-
-#[[
-dependencies
-]]
-
-include(FetchContent)
-FetchContent_Declare(tbb URL https://github.com/oneapi-src/oneTBB/releases/download/v2021.5.0/oneapi-tbb-2021.5.0-lin.tgz)
-FetchContent_MakeAvailable(tbb)
-
-find_package(TBB REQUIRED HINTS ${tbb_SOURCE_DIR}/lib/cmake/tbb)
-target_link_libraries(ulayfs dl pthread atomic TBB::tbb)
-
 
 #[[
 build options
@@ -69,6 +56,17 @@ execute_process(COMMAND git rev-parse HEAD
 if (NOT GIT_COMMIT_HASH)
     set(GIT_COMMIT_HASH Unknown)
 endif ()
+
+#[[
+dependencies
+]]
+
+include(FetchContent)
+FetchContent_Declare(tbb URL https://github.com/oneapi-src/oneTBB/releases/download/v2021.5.0/oneapi-tbb-2021.5.0-lin.tgz)
+FetchContent_MakeAvailable(tbb)
+
+find_package(TBB REQUIRED HINTS ${tbb_SOURCE_DIR}/lib/cmake/tbb)
+target_link_libraries(ulayfs dl pthread atomic TBB::tbb)
 
 #[[
 tests, benchmarks, and tools
@@ -130,42 +128,58 @@ endif ()
 sanitizers and tooling
 ]]
 
-set(CMAKE_CXX_FLAGS_ASAN
-    "${CMAKE_CXX_FLAGS_DEBUG} -fsanitize=address -fno-omit-frame-pointer" CACHE STRING
-    "Flags used by the C++ compiler during AddressSanitizer build." FORCE)
+string(TOLOWER "${CMAKE_BUILD_TYPE}" CMAKE_BUILD_TYPE)
 
-set(CMAKE_SHARED_LINKER_FLAGS_ASAN
-    "${CMAKE_SHARED_LINKER_FLAGS_DEBUG} -fsanitize=address" CACHE STRING
-    "Flags used by the C++ linker during AddressSanitizer build." FORCE)
+if (${CMAKE_BUILD_TYPE} STREQUAL "relwithdebinfo")
+    set(CMAKE_CXX_FLAGS_RELWITHDEBINFO "-O2 -g" CACHE STRING
+        "Flags used by the C++ compiler during RelwithDebInfo build" FORCE)
+endif ()
 
-set(CMAKE_CXX_FLAGS_UBSAN
-    "${CMAKE_CXX_FLAGS_DEBUG} -fsanitize=undefined" CACHE STRING
-    "Flags used by the C++ compiler during UndefinedBehaviourSanitizer build." FORCE)
+if (${CMAKE_BUILD_TYPE} STREQUAL "asan")
+    set(CMAKE_CXX_FLAGS_ASAN
+        "${CMAKE_CXX_FLAGS_DEBUG} -fsanitize=address -fno-omit-frame-pointer" CACHE STRING
+        "Flags used by the C++ compiler during AddressSanitizer build." FORCE)
 
-set(CMAKE_CXX_FLAGS_MSAN
-    "${CMAKE_CXX_FLAGS_DEBUG} -fsanitize=memory -fsanitize-memory-track-origins=2 -fno-omit-frame-pointer" CACHE STRING
-    "Flags used by the C++ compiler during MemorySanitizer build." FORCE)
+    set(CMAKE_SHARED_LINKER_FLAGS_ASAN
+        "${CMAKE_SHARED_LINKER_FLAGS_DEBUG} -fsanitize=address" CACHE STRING
+        "Flags used by the C++ linker during AddressSanitizer build." FORCE)
+endif ()
 
-set(CMAKE_CXX_FLAGS_TSAN
-    "${CMAKE_CXX_FLAGS_DEBUG} -fsanitize=thread" CACHE STRING
-    "Flags used by the C++ compiler during ThreadSanitizer build." FORCE)
+if (${CMAKE_BUILD_TYPE} STREQUAL "ubsan")
+    set(CMAKE_CXX_FLAGS_UBSAN
+        "${CMAKE_CXX_FLAGS_DEBUG} -fsanitize=undefined" CACHE STRING
+        "Flags used by the C++ compiler during UndefinedBehaviourSanitizer build." FORCE)
+endif ()
 
-set(CMAKE_CXX_FLAGS_PMEMCHECK
-    "${CMAKE_CXX_FLAGS_DEBUG} -mno-avx512f" CACHE STRING
-    "Flags used by the C++ compiler during Pmemcheck build." FORCE)
+if (${CMAKE_BUILD_TYPE} STREQUAL "msan")
+    set(CMAKE_CXX_FLAGS_MSAN
+        "${CMAKE_CXX_FLAGS_DEBUG} -fsanitize=memory -fsanitize-memory-track-origins=2 -fno-omit-frame-pointer" CACHE STRING
+        "Flags used by the C++ compiler during MemorySanitizer build." FORCE)
+endif ()
+
+if (${CMAKE_BUILD_TYPE} STREQUAL "tsan")
+    set(CMAKE_CXX_FLAGS_TSAN
+        "${CMAKE_CXX_FLAGS_DEBUG} -fsanitize=thread" CACHE STRING
+        "Flags used by the C++ compiler during ThreadSanitizer build." FORCE)
+endif ()
 
 if (${CMAKE_BUILD_TYPE} STREQUAL "pmemcheck")
+    set(CMAKE_CXX_FLAGS_PMEMCHECK
+        "${CMAKE_CXX_FLAGS_DEBUG} -mno-avx512f" CACHE STRING
+        "Flags used by the C++ compiler during Pmemcheck build." FORCE)
+
     set(ULAYFS_USE_PMEMCHECK ON)
     FetchContent_Declare(pmemcheck URL https://github.com/ShawnZhong/pmemcheck/releases/download/v3.17/pmemcheck.tgz)
     FetchContent_MakeAvailable(pmemcheck)
     include_directories(${pmemcheck_SOURCE_DIR}/include)
 endif ()
 
-set(CMAKE_CXX_FLAGS_PROFILE
-    "${CMAKE_CXX_FLAGS_RELWITHDEBINFO}" CACHE STRING
-    "Flags used by the C++ compiler during Profile build." FORCE)
 
 if (${CMAKE_BUILD_TYPE} STREQUAL "profile")
+    set(CMAKE_CXX_FLAGS_PROFILE
+        "${CMAKE_CXX_FLAGS_RELWITHDEBINFO}" CACHE STRING
+        "Flags used by the C++ compiler during Profile build." FORCE)
+
     FetchContent_Declare(flamegraph GIT_REPOSITORY https://github.com/brendangregg/FlameGraph)
     FetchContent_MakeAvailable(flamegraph)
 endif ()

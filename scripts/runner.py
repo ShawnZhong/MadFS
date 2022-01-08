@@ -45,7 +45,7 @@ class Runner:
         config_log_path = self.result_dir / "config.log"
         with open(config_log_path, "w") as fout:
             pprint.pprint(locals(), stream=fout)
-        system(f"cmake -L -N {self.build_path} >> {config_log_path}")
+        system(f"cmake -LA -N {self.build_path} >> {config_log_path}")
 
         self.ulayfs_path = self.build_path / "libulayfs.so"
         self.exe_path = self.build_path / self.cmake_target
