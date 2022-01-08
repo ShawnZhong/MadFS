@@ -24,10 +24,13 @@ void bench(benchmark::State& state) {
   if (state.thread_index == 0) {
     unlink(filepath);
     fd = open(filepath, O_CREAT | O_RDWR, S_IRUSR | S_IWUSR);
+    if (fd < 0) state.SkipWithError("open failed");
 
     // preallocate file
     if constexpr (mode != Mode::APPEND) {
-      write(fd, src_buf, num_bytes * MAX_NUM_THREAD);
+      auto len = num_bytes * MAX_NUM_THREAD;
+      [[maybe_unused]] ssize_t res = write(fd, src_buf, len);
+      assert(res == len);
       fsync(fd);
     }
   }
@@ -35,22 +38,27 @@ void bench(benchmark::State& state) {
   // run benchmark
   if constexpr (mode == Mode::APPEND) {
     for (auto _ : state) {
-      write(fd, src_buf, num_bytes);
+      [[maybe_unused]] ssize_t res = write(fd, src_buf, num_bytes);
+      assert(res == num_bytes);
       fsync(fd);
     }
   } else if constexpr (mode == Mode::CNCR_WRITE) {
     for (auto _ : state) {
-      pwrite(fd, src_buf, num_bytes, 0);
+      [[maybe_unused]] ssize_t res = pwrite(fd, src_buf, num_bytes, 0);
+      assert(res == num_bytes);
       fsync(fd);
     }
   } else if constexpr (mode == Mode::SRMW) {
     if (state.thread_index == 0) {
       for (auto _ : state) {
-        pread(fd, dst_buf, num_bytes, 0);
+        [[maybe_unused]] ssize_t res = pread(fd, dst_buf, num_bytes, 0);
+        assert(res == num_bytes);
+        assert(memcmp(dst_buf, src_buf, num_bytes) == 0);
       }
     } else {
       for (auto _ : state) {
-        pwrite(fd, src_buf, num_bytes, 0);
+        [[maybe_unused]] ssize_t res = pwrite(fd, src_buf, num_bytes, 0);
+        assert(res == num_bytes);
         fsync(fd);
       }
     }
@@ -62,9 +70,12 @@ void bench(benchmark::State& state) {
     int i = 0;
     for (auto _ : state) {
       if (is_read[i++]) {
-        pread(fd, dst_buf, num_bytes, offset);
+        [[maybe_unused]] ssize_t res = pread(fd, dst_buf, num_bytes, offset);
+        assert(res == num_bytes);
+        assert(memcmp(dst_buf, src_buf, num_bytes) == 0);
       } else {
-        pwrite(fd, src_buf, num_bytes, offset);
+        [[maybe_unused]] ssize_t res = pwrite(fd, src_buf, num_bytes, offset);
+        assert(res == num_bytes);
         fsync(fd);
       }
     }

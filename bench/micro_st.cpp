@@ -24,6 +24,7 @@ void bench(benchmark::State& state) {
 
   unlink(filepath);
   fd = open(filepath, O_CREAT | O_RDWR, S_IRUSR | S_IWUSR);
+  if (fd < 0) state.SkipWithError("open failed");
 
   // preallocate file
   if constexpr (mode != Mode::APPEND) {
@@ -60,8 +61,6 @@ void bench(benchmark::State& state) {
       for (auto _ : state) {
         [[maybe_unused]] ssize_t res =
             pread(fd, dst_buf, num_bytes, rand_off[i++]);
-
-
 
         assert(res == num_bytes);
         if (memcmp(dst_buf, src_buf, num_bytes) != 0) {
