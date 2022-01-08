@@ -770,7 +770,8 @@ redo:
   if (need_copy_last && do_copy_last) {
     // copy the data from the last source block if exits
     memcpy(last_dst_block->data_rw() + last_block_local_offset,
-           file->lidx_to_addr_ro(src_last_lidx)->data_ro(),
+           file->lidx_to_addr_ro(src_last_lidx)->data_ro() +
+               last_block_local_offset,
            BLOCK_SIZE - last_block_local_offset);
     pmem::persist_unfenced(last_dst_block->data_rw() + last_block_local_offset,
                            BLOCK_SIZE - last_block_local_offset);
