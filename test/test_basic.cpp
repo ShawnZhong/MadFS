@@ -18,7 +18,7 @@ int rc = 0;
 void test_write() {
   fprintf(stderr, "test_write\n");
 
-  int fd = open(FILEPATH, O_CREAT | O_RDWR, S_IRUSR | S_IWUSR);
+  int fd = open(filepath, O_CREAT | O_RDWR, S_IRUSR | S_IWUSR);
   assert(fd >= 0);
 
   size_t len = test_str.length();
@@ -43,7 +43,7 @@ void test_write() {
 void test_read() {
   fprintf(stderr, "test_read\n");
 
-  int fd = open(FILEPATH, O_RDONLY);
+  int fd = open(filepath, O_RDONLY);
   assert(fd >= 0);
 
   size_t first_half = test_str.length() / 2;
@@ -67,7 +67,7 @@ void test_read() {
 void test_mmap() {
   fprintf(stderr, "test_mmap\n");
 
-  int fd = open(FILEPATH, O_RDONLY);
+  int fd = open(filepath, O_RDONLY);
   assert(fd >= 0);
 
   void* ptr = mmap(nullptr, test_str.length(), PROT_READ, MAP_SHARED, fd, 0);
@@ -87,7 +87,7 @@ void test_mmap() {
 void test_lseek() {
   fprintf(stderr, "test_lseek\n");
 
-  int fd = open(FILEPATH, O_RDWR);
+  int fd = open(filepath, O_RDWR);
   assert(fd >= 0);
 
   sz = write(fd, test_str.data(), test_str.length());
@@ -129,9 +129,9 @@ void test_lseek() {
 
 void test_stat() {
   fprintf(stderr, "test_stat\n");
-  unlink(FILEPATH);
+  unlink(filepath);
 
-  int fd = open(FILEPATH, O_CREAT | O_RDWR, S_IRUSR | S_IWUSR);
+  int fd = open(filepath, O_CREAT | O_RDWR, S_IRUSR | S_IWUSR);
   assert(fd >= 0);
 
   struct stat stat_buf;  // NOLINT(cppcoreguidelines-pro-type-member-init)
@@ -148,7 +148,7 @@ void test_stat() {
   rc = close(fd);
   assert(rc == 0);
 
-  rc = stat(FILEPATH, &stat_buf);
+  rc = stat(filepath, &stat_buf);
   assert(rc == 0);
   assert(stat_buf.st_size == static_cast<off_t>(test_str.length()));
 }
@@ -156,7 +156,7 @@ void test_stat() {
 void test_stream() {
   fprintf(stderr, "test_stream\n");
 
-  int fd = open(FILEPATH, O_CREAT | O_RDWR, S_IRUSR | S_IWUSR);
+  int fd = open(filepath, O_CREAT | O_RDWR, S_IRUSR | S_IWUSR);
   assert(fd >= 0);
 
   FILE* stream = fdopen(fd, "w");
@@ -171,13 +171,13 @@ void test_unlink() {
 
   system("rm -rf /dev/shm/ulayfs_*");
 
-  int fd = open(FILEPATH, O_CREAT | O_RDWR, S_IRUSR | S_IWUSR);
+  int fd = open(filepath, O_CREAT | O_RDWR, S_IRUSR | S_IWUSR);
   assert(fd >= 0);
 
   rc = close(fd);
   assert(rc == 0);
 
-  rc = unlink(FILEPATH);
+  rc = unlink(filepath);
   assert(rc == 0);
 
   rc = system("find /dev/shm -maxdepth 1 -name ulayfs_* | grep .");
@@ -187,8 +187,8 @@ void test_unlink() {
 void test_print() {
   fprintf(stderr, "test_print\n");
 
-  unlink(FILEPATH);
-  int fd = open(FILEPATH, O_CREAT | O_RDWR, S_IRUSR | S_IWUSR);
+  unlink(filepath);
+  int fd = open(filepath, O_CREAT | O_RDWR, S_IRUSR | S_IWUSR);
   assert(fd >= 0);
 
   sz = write(fd, test_str.data(), ulayfs::BLOCK_SIZE);
@@ -201,7 +201,7 @@ void test_print() {
   rc = close(fd);
   assert(rc == 0);
 
-  fd = open(FILEPATH, O_RDONLY);
+  fd = open(filepath, O_RDONLY);
   assert(fd >= 0);
 
   print_file(fd);
@@ -212,7 +212,7 @@ void test_print() {
 int main() {
   unsetenv("LD_PRELOAD");
   test_str = random_string(STR_LEN);
-  unlink(FILEPATH);
+  unlink(filepath);
 
   test_write();
   test_read();

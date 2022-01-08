@@ -30,8 +30,8 @@ void test(TestOpt test_opt) {
 
   // write data
   {
-    unlink(FILEPATH);
-    int fd = open(FILEPATH, O_CREAT | O_RDWR, S_IRUSR | S_IWUSR);
+    unlink(filepath);
+    int fd = open(filepath, O_CREAT | O_RDWR, S_IRUSR | S_IWUSR);
     lseek(fd, init_offset, SEEK_SET);
 
     for (int i = 0; i < num_iter; ++i) {
@@ -45,7 +45,7 @@ void test(TestOpt test_opt) {
   }
 
   // reopen the file and check result
-  int fd = open(FILEPATH, O_CREAT | O_RDWR, S_IRUSR | S_IWUSR);
+  int fd = open(filepath, O_CREAT | O_RDWR, S_IRUSR | S_IWUSR);
 
   // check that the content before OFFSET are all zeros
   if (init_offset != 0) {

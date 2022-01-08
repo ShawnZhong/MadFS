@@ -11,9 +11,10 @@ NUM_ITERS = 5
 
 def gen_cmd(ycsbcli: str, dbdir: str, workload: str,
             value_size: int, load: bool = False) -> list:
+    from utils import root_dir
     return [
         ycsbcli,
-        "-f", f"bench/ycsb-traces/{workload}-{'load' if load else 'run'}.txt",
+        "-f", f"{root_dir}/bench/ycsb-traces/{workload}-{'load' if load else 'run'}.txt",
         "-v", f"{value_size}",
         "-d", dbdir
     ]

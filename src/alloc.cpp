@@ -61,7 +61,7 @@ retry:
   // but try_alloc doesn't necessarily return the number of blocks we want
   allocated_idx =
       Bitmap::try_alloc(bitmap, NUM_BITMAP, recent_bitmap_idx, allocated_bits);
-  assert(allocated_idx >= 0);
+  PANIC_IF(allocated_idx < 0, "Allocator::alloc: failed to alloc from Bitmap");
   TRACE("Allocator::alloc: allocating from bitmap %d: 0x%lx", allocated_idx,
         allocated_bits);
 
