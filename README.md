@@ -66,10 +66,10 @@
 - Run benchmarks
 
   ```shell
-  ./run micro_st       # single-threaded microbenchmark
-  ./run micro_mt       # multi-threaded microbenchmark
-  ./run micro_meta     # microbenchmark with metadata
-  ./scripts/bench_ycsb # YCSB benchmark
+  ./scripts/bench_micro st       # single-threaded microbenchmark
+  ./scripts/bench_micro mt       # multi-threaded microbenchmark
+  ./scripts/bench_micro meta     # microbenchmark with metadata
+  ./scripts/bench_ycsb           # YCSB benchmark
   ```
 
 ## Development
