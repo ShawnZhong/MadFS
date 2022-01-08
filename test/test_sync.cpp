@@ -9,7 +9,7 @@
 constexpr auto NUM_BYTES = 128;
 constexpr auto BYTES_PER_THREAD = 2;
 
-int main(int argc, char* argv[]) {
+int main() {
   [[maybe_unused]] ssize_t ret;
 
   unlink(filepath);

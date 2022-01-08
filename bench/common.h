@@ -1,5 +1,4 @@
 #pragma once
-#pragma GCC diagnostic ignored "-Wunused-result"
 
 #include <benchmark/benchmark.h>
 #include <fcntl.h>

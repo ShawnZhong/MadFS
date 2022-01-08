@@ -25,44 +25,59 @@ void bench(benchmark::State& state) {
   unlink(filepath);
   fd = open(filepath, O_CREAT | O_RDWR, S_IRUSR | S_IWUSR);
 
-  // prepare random offset
-  [[maybe_unused]] int rand_off[num_iter];
-  if constexpr (mode == Mode::RND_READ || mode == Mode::RND_WRITE) {
-    std::generate(rand_off, rand_off + num_iter,
-                  [&]() { return rand() % num_iter * num_bytes; });
-  }
-
   // preallocate file
   if constexpr (mode != Mode::APPEND) {
-    auto buf = new char[num_bytes * num_iter];
-    std::fill(buf, buf + num_bytes * num_iter, 'x');
-    pwrite(fd, buf, num_bytes * num_iter, 0);
-    delete[] buf;
+    auto len = num_bytes * num_iter;
+    auto buf = new char[len];
+    std::fill(buf, buf + len, 'x');
+    [[maybe_unused]] ssize_t res = pwrite(fd, buf, len, 0);
+    assert(res == len);
     fsync(fd);
+    delete[] buf;
   }
 
   // run benchmark
   if constexpr (mode == Mode::APPEND || mode == Mode::SEQ_WRITE) {
     for (auto _ : state) {
-      write(fd, src_buf, num_bytes);
+      [[maybe_unused]] ssize_t res = write(fd, src_buf, num_bytes);
+      assert(res == num_bytes);
       fsync(fd);
     }
   } else if constexpr (mode == Mode::SEQ_READ) {
     for (auto _ : state) {
-      ssize_t res = read(fd, dst_buf, num_bytes);
+      [[maybe_unused]] ssize_t res = read(fd, dst_buf, num_bytes);
       assert(res == num_bytes);
       assert(memcmp(dst_buf, src_buf, num_bytes) == 0);
     }
-  } else if constexpr (mode == Mode::RND_READ) {
+  } else if constexpr (mode == Mode::RND_READ || mode == Mode::RND_WRITE) {
+    // prepare random offset
+    int rand_off[num_iter];
+    std::generate(rand_off, rand_off + num_iter,
+                  [&]() { return rand() % num_iter * num_bytes; });
+
     int i = 0;
-    for (auto _ : state) {
-      pread(fd, dst_buf, num_bytes, rand_off[i++]);
-    }
-  } else if constexpr (mode == Mode::RND_WRITE) {
-    int i = 0;
-    for (auto _ : state) {
-      pwrite(fd, src_buf, num_bytes, rand_off[i++]);
-      fsync(fd);
+    if constexpr (mode == Mode::RND_READ) {
+      for (auto _ : state) {
+        [[maybe_unused]] ssize_t res =
+            pread(fd, dst_buf, num_bytes, rand_off[i++]);
+
+
+
+        assert(res == num_bytes);
+        if (memcmp(dst_buf, src_buf, num_bytes) != 0) {
+          fprintf(stderr, "dst_buf = %s\n", dst_buf);
+          fprintf(stderr, "src_buf = %s\n", src_buf);
+          assert(false);
+        }
+        assert(memcmp(dst_buf, src_buf, num_bytes) == 0);
+      }
+    } else if constexpr (mode == Mode::RND_WRITE) {
+      for (auto _ : state) {
+        [[maybe_unused]] ssize_t res =
+            pwrite(fd, src_buf, num_bytes, rand_off[i++]);
+        assert(res == num_bytes);
+        fsync(fd);
+      }
     }
   }
 
