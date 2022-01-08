@@ -743,36 +743,36 @@ ssize_t TxMgr::MultiBlockTx::do_write() {
   src_first_lidx = recycle_image[0];
   src_last_lidx = recycle_image[num_blocks - 1];
 
+  // write data from the buf to the first block
+  char* dst = dst_blocks[0]->data_rw() + first_block_local_offset;
+  memcpy(dst, buf, BLOCK_SIZE - first_block_local_offset);
+  pmem::persist_unfenced(dst, BLOCK_SIZE - first_block_local_offset);
+
+  // write data from the buf to the last block
+  pmem::Block* last_dst_block = dst_blocks.back() + end_full_vidx - begin_vidx -
+                                MAX_BLOCKS_PER_BODY * (dst_blocks.size() - 1);
+  const char* buf_src = buf + (count - last_block_local_offset);
+  memcpy(last_dst_block->data_rw(), buf_src, last_block_local_offset);
+  pmem::persist_unfenced(last_dst_block->data_rw(), last_block_local_offset);
+
 redo:
   // copy first block
   if (need_copy_first && do_copy_first) {
     // copy the data from the first source block if exists
-    const char* src = file->lidx_to_addr_ro(src_first_lidx)->data_ro();
-    memcpy(dst_blocks[0]->data_rw(), src, BLOCK_SIZE);
-
-    // write data from the buf to the first block
-    char* dst =
-        dst_blocks[0]->data_rw() + BLOCK_SIZE - first_block_local_offset;
-    memcpy(dst, buf, first_block_local_offset);
-
-    persist_unfenced(dst_blocks[0], BLOCK_SIZE);
+    memcpy(dst_blocks[0]->data_rw(),
+           file->lidx_to_addr_ro(src_first_lidx)->data_ro(),
+           first_block_local_offset);
+    pmem::persist_unfenced(dst_blocks[0], first_block_local_offset);
   }
 
   // copy last block
   if (need_copy_last && do_copy_last) {
-    pmem::Block* last_dst_block = dst_blocks.back() + end_full_vidx -
-                                  begin_vidx -
-                                  MAX_BLOCKS_PER_BODY * (dst_blocks.size() - 1);
-
     // copy the data from the last source block if exits
-    const char* block_src = file->lidx_to_addr_ro(src_last_lidx)->data_ro();
-    memcpy(last_dst_block->data_rw(), block_src, BLOCK_SIZE);
-
-    // write data from the buf to the last block
-    const char* buf_src = buf + (count - last_block_local_offset);
-    memcpy(last_dst_block->data_rw(), buf_src, last_block_local_offset);
-
-    persist_unfenced(last_dst_block, BLOCK_SIZE);
+    memcpy(last_dst_block->data_rw() + last_block_local_offset,
+           file->lidx_to_addr_ro(src_last_lidx)->data_ro(),
+           BLOCK_SIZE - last_block_local_offset);
+    pmem::persist_unfenced(last_dst_block->data_rw() + last_block_local_offset,
+                           BLOCK_SIZE - last_block_local_offset);
   }
   _mm_sfence();
 
