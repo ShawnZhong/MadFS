@@ -299,7 +299,8 @@ void TxMgr::gc(const LogicalBlockIdx tail_tx_block_idx, uint64_t file_size) {
   pmem::persist_fenced(new_tx_block, BLOCK_SIZE);
   while (!meta->set_next_tx_block(first_tx_block_idx, orig_tx_block_idx))
     ;
-  pmem::persist_fenced(meta, CACHELINE_SIZE);
+  // FIXME: use better API to flush the first cache line
+  pmem::persist_cl_fenced(&meta);
 
   // invalidate tx in meta block so we can free the log blocks they point to
   meta->invalidate_tx_entries();
@@ -617,10 +618,11 @@ ssize_t TxMgr::AlignedTx::do_write() {
     size_t num_bytes =
         rest_count > MAX_BYTES_PER_BODY ? MAX_BYTES_PER_BODY : rest_count;
     memcpy(block->data_rw(), rest_buf, num_bytes);
-    persist_fenced(block, num_bytes);
+    persist_unfenced(block, num_bytes);
     rest_buf += num_bytes;
     rest_count -= num_bytes;
   }
+  _mm_sfence();
 
   // make a local copy of the tx tail
   if (!is_offset_depend)
