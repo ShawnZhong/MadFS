@@ -38,7 +38,7 @@ def run_micro(benchmark):
             continue
 
         runner = Runner(cmake_target, result_dir=result_dir / fs.name)
-        runner.build(link_ulayfs=False)
+        runner.build()
         runner.run(load_ulayfs=fs.load_ulayfs, pmem_path=fs.pmem_path)
 
     return result_dir
