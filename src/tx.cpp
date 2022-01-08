@@ -462,8 +462,8 @@ bool TxMgr::Tx::handle_conflict(pmem::TxEntry curr_entry,
 
 // TODO: more fancy handle_conflict strategy
 ssize_t TxMgr::ReadTx::do_read() {
-  size_t first_block_local_offset = offset & (BLOCK_SIZE - 1);
-  size_t first_block_size = BLOCK_SIZE - first_block_local_offset;
+  size_t first_block_overlap_size = offset & (BLOCK_SIZE - 1);
+  size_t first_block_size = BLOCK_SIZE - first_block_overlap_size;
   if (first_block_size > count) first_block_size = count;
 
   VirtualBlockIdx curr_vidx;
@@ -486,7 +486,7 @@ ssize_t TxMgr::ReadTx::do_read() {
 
   // first handle the first block (which might not be full block)
   curr_block = file->vidx_to_addr_ro(begin_vidx);
-  memcpy(buf, curr_block->data_ro() + first_block_local_offset,
+  memcpy(buf, curr_block->data_ro() + first_block_overlap_size,
          first_block_size);
   buf_offset = first_block_size;
 
@@ -522,7 +522,7 @@ redo:
     redo_lidx = redo_image[0];
     if (redo_lidx) {
       curr_block = file->lidx_to_addr_ro(redo_lidx);
-      memcpy(buf, curr_block->data_ro() + first_block_local_offset,
+      memcpy(buf, curr_block->data_ro() + first_block_overlap_size,
              first_block_size);
       redo_image[0] = 0;
     }
@@ -717,7 +717,7 @@ ssize_t TxMgr::MultiBlockTx::do_write() {
       pmem::Block* full_blocks = dst_blocks[i];
       if (i == 0) {
         full_blocks += (begin_full_vidx - begin_vidx);
-        rest_buf += first_block_local_offset;
+        rest_buf += first_block_overlap_size;
       }
       // calculate num of full block bytes to be copied in this iter
       // takes care of last block in last chunk which might be partial
@@ -745,16 +745,16 @@ ssize_t TxMgr::MultiBlockTx::do_write() {
   src_last_lidx = recycle_image[num_blocks - 1];
 
   // write data from the buf to the first block
-  char* dst = dst_blocks[0]->data_rw() + BLOCK_SIZE - first_block_local_offset;
-  memcpy(dst, buf, first_block_local_offset);
-  pmem::persist_unfenced(dst, first_block_local_offset);
+  char* dst = dst_blocks[0]->data_rw() + BLOCK_SIZE - first_block_overlap_size;
+  memcpy(dst, buf, first_block_overlap_size);
+  pmem::persist_unfenced(dst, first_block_overlap_size);
 
   // write data from the buf to the last block
   pmem::Block* last_dst_block = dst_blocks.back() + end_full_vidx - begin_vidx -
                                 MAX_BLOCKS_PER_BODY * (dst_blocks.size() - 1);
-  const char* buf_src = buf + (count - last_block_local_offset);
-  memcpy(last_dst_block->data_rw(), buf_src, last_block_local_offset);
-  pmem::persist_unfenced(last_dst_block->data_rw(), last_block_local_offset);
+  const char* buf_src = buf + (count - last_block_overlap_size);
+  memcpy(last_dst_block->data_rw(), buf_src, last_block_overlap_size);
+  pmem::persist_unfenced(last_dst_block->data_rw(), last_block_overlap_size);
 
 redo:
   // copy first block
@@ -762,20 +762,20 @@ redo:
     // copy the data from the first source block if exists
     memcpy(dst_blocks[0]->data_rw(),
            file->lidx_to_addr_ro(src_first_lidx)->data_ro(),
-           BLOCK_SIZE - first_block_local_offset);
+           BLOCK_SIZE - first_block_overlap_size);
     pmem::persist_unfenced(dst_blocks[0],
-                           BLOCK_SIZE - first_block_local_offset);
+                           BLOCK_SIZE - first_block_overlap_size);
   }
 
   // copy last block
   if (need_copy_last && do_copy_last) {
     // copy the data from the last source block if exits
-    memcpy(last_dst_block->data_rw() + last_block_local_offset,
+    memcpy(last_dst_block->data_rw() + last_block_overlap_size,
            file->lidx_to_addr_ro(src_last_lidx)->data_ro() +
-               last_block_local_offset,
-           BLOCK_SIZE - last_block_local_offset);
-    pmem::persist_unfenced(last_dst_block->data_rw() + last_block_local_offset,
-                           BLOCK_SIZE - last_block_local_offset);
+               last_block_overlap_size,
+           BLOCK_SIZE - last_block_overlap_size);
+    pmem::persist_unfenced(last_dst_block->data_rw() + last_block_overlap_size,
+                           BLOCK_SIZE - last_block_overlap_size);
   }
   _mm_sfence();
 
