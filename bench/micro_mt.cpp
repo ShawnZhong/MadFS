@@ -110,8 +110,8 @@ int main(int argc, char** argv) {
   register_bm("no_overlap_95R", bench<Mode::NO_OVERLAP, 95>);
   register_bm("no_overlap_100R", bench<Mode::NO_OVERLAP, 100>);
 
-  register_bm("append", bench<Mode::APPEND>, 512);
-  register_bm("append", bench<Mode::APPEND>);
+  register_bm("append_512", bench<Mode::APPEND>, 512);
+  register_bm("append_4k", bench<Mode::APPEND>);
   register_bm("cncr_write", bench<Mode::CNCR_WRITE>);
   register_bm("srmw", bench<Mode::SRMW>);
 

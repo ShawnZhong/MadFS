@@ -12,54 +12,34 @@ logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger("plot")
 
 
-def read_file(filepath):
-    def parse(name, i):
-        return re.split("[/:]", name)[i]
-
-    def format_x(x):
-        if int(x) % 1024 == 0:
-            return f"{int(x) // 1024}K"
-        return x
-
-    with open(filepath, "r") as f:
-        json_data = json.load(f)
-        data = pd.DataFrame.from_dict(json_data["benchmarks"])
-        data["benchmark"] = data["name"].apply(parse, args=(0,))
-        data["x"] = data["name"].apply(parse, args=(1,)).apply(format_x)
-        data["y"] = data["bytes_per_second"].apply(lambda x: float(x) / 1024 ** 3)
-        return data
-
-
-def read_files(result_dir):
+def read_files(result_dir, post_process_fn):
     data = pd.DataFrame()
 
-    for path in Path(result_dir).glob('*'):
+    for path in Path(result_dir).glob("*"):
         if not path.is_dir():
             continue
         fs_name = path.name
-        result_path = path / 'result.json'
+        result_path = path / "result.json"
 
         if not result_path.exists():
             logger.warning(f"{result_path} does not exist")
             continue
 
-        res = read_file(result_path)
-        res["label"] = fs_name
-        data = data.append(res)
+        with open(result_path, "r") as f:
+            json_data = json.load(f)
+            df = pd.DataFrame.from_dict(json_data["benchmarks"])
+            df["label"] = fs_name
+            post_process_fn(df)
+            data = data.append(df)
 
     return data
 
 
 def plot_single_bm(
-        label_groups,
-        logx=False,
-        logy=False,
-        xlabel=None,
-        ylabel=None,
-        title=None,
-        output_path=None,
+        df, logx=False, logy=False, xlabel=None, ylabel=None, title=None, output_path=None,
 ):
     plt.clf()
+    label_groups = df.groupby("label")
     for label, group in label_groups:
         plt.plot(group["x"], group["y"], label=label, marker=".")
 
@@ -81,27 +61,54 @@ def plot_single_bm(
     plt.show()
 
 
-def plot_micro_st(result_dir):
-    data = read_files(result_dir)
+def plot_benchmarks(result_dir, post_process_fn, **kwargs):
+    data = read_files(result_dir, post_process_fn)
     for benchmark_name, benchmark in data.groupby("benchmark"):
         output_path = result_dir / f"{benchmark_name}.pdf"
+        kwargs = {"ylabel": "Throughput (GB/s)", **kwargs}
         plot_single_bm(
-            benchmark.groupby("label"),
-            title=benchmark_name,
-            xlabel="Number of Bytes",
-            ylabel="Throughput (GB/s)",
-            output_path=output_path,
+            benchmark, title=benchmark_name, output_path=output_path, **kwargs,
         )
+
+
+def parse_name(name, i):
+    return re.split("[/:]", name)[i]
+
+
+def format_1024(x):
+    if int(x) % 1024 == 0:
+        return f"{int(x) // 1024}K"
+    return x
+
+
+def plot_micro_st(result_dir):
+    def post_process(df):
+        df["benchmark"] = df["name"].apply(parse_name, args=(0,))
+        df["x"] = df["name"].apply(parse_name, args=(1,)).apply(format_1024)
+        df["y"] = df["bytes_per_second"].apply(lambda x: float(x) / 1024 ** 3)
+
+    plot_benchmarks(result_dir, post_process, xlabel="Number of Bytes")
 
 
 def plot_micro_mt(result_dir):
-    data = read_files(result_dir)
-    for benchmark_name, benchmark in data.groupby("benchmark"):
-        output_path = result_dir / f"{benchmark_name}.pdf"
-        plot_single_bm(
-            benchmark.groupby("label"),
-            title=benchmark_name,
-            xlabel="Number of Bytes",
-            ylabel="Throughput (GB/s)",
-            output_path=output_path,
-        )
+    def post_process(df):
+        df["benchmark"] = df["name"].apply(parse_name, args=(0,))
+        df["x"] = df["name"].apply(parse_name, args=(-1,)).apply(int)
+        df["y"] = df["bytes_per_second"].apply(lambda x: float(x) / 1024 ** 3)
+
+    plot_benchmarks(result_dir, post_process, xlabel="Number of Threads")
+
+
+def plot_micro_meta(result_dir):
+    def post_process(df):
+        df["benchmark"] = df["name"].apply(parse_name, args=(0,))
+        df["x"] = df["name"].apply(parse_name, args=(1,))
+        df["y"] = df["cpu_time"].apply(lambda x: float(x) / 1000)
+
+    plot_benchmarks(
+        result_dir,
+        post_process,
+        xlabel="Transaction History Length",
+        ylabel="Latency (us)",
+        logy=True,
+    )
