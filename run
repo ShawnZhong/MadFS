@@ -67,10 +67,10 @@ if __name__ == "__main__":
 
     logger.info(f"args={args}")
 
-    runner = Runner(cmake_target=args.cmake_target, build_type=args.build_type)
+    runner = Runner(name=args.cmake_target, build_type=args.build_type)
     runner.build(cmake_args=args.cmake_args)
     runner.run(
-        prog_args=args.prog_args,
+        additional_args=args.prog_args,
         load_ulayfs=not args.disable_ulayfs,
         numa=args.numa,
         pmem_path=args.pmem_path,

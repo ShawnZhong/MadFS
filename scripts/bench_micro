@@ -3,7 +3,7 @@ import argparse
 import logging
 from pathlib import Path
 
-from bench import get_fs_configs
+from bench_utils import get_fs_configs
 from plot import plot_micro_st, plot_micro_mt, plot_micro_meta
 from runner import Runner
 from utils import root_dir, get_timestamp

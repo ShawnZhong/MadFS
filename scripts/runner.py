@@ -9,26 +9,28 @@ logger = logging.getLogger("runner")
 
 
 class Runner:
-    def __init__(self, cmake_target, build_type=None, result_dir=None):
-        self.is_micro = cmake_target.startswith("micro")
-        self.is_bench = self.is_micro or cmake_target.startswith("leveldb") or cmake_target.startswith("tpcc")
+    def __init__(self, name, build_type=None, result_dir=None):
+        self.is_micro = name.startswith("micro")
+        self.is_bench = self.is_micro or name.startswith("leveldb") or name.startswith("tpcc")
 
         if build_type is None:
             build_type = "release" if self.is_bench else "debug"
         if result_dir is None:
-            result_dir = root_dir / "results" / cmake_target / build_type / get_timestamp()
+            result_dir = root_dir / "results" / name / build_type / get_timestamp()
 
+        self.name = name
         self.build_type = build_type
         self.build_path = root_dir / f"build-{build_type}"
-        self.cmake_target = cmake_target
         self.result_dir = result_dir
-        self.exe_path = None
+        self.prog_path = None
         self.ulayfs_path = None
         self.bm_output_path = None
 
         self.result_dir.mkdir(parents=True, exist_ok=True)
 
-    def build(self, cmake_args=""):
+    def build(self, cmake_target=None, cmake_args=""):
+        if cmake_target is None:
+            cmake_target = self.name
         if self.is_bench:
             cmake_args += " -DULAYFS_BUILD_BENCH=ON "
 
@@ -37,7 +39,7 @@ class Runner:
         system(
             f"make {self.build_type} -C {root_dir} "
             f"CMAKE_ARGS='{cmake_args}' "
-            f"BUILD_TARGETS='{self.cmake_target} ulayfs' ",
+            f"BUILD_TARGETS='{cmake_target} ulayfs' ",
             log_path=build_log_path,
         )
 
@@ -48,16 +50,19 @@ class Runner:
         system(f"cmake -LA -N {self.build_path} >> {config_log_path}")
 
         self.ulayfs_path = self.build_path / "libulayfs.so"
-        self.exe_path = self.build_path / self.cmake_target
+        self.prog_path = self.build_path / cmake_target
 
-    def run(self, prog_args="", load_ulayfs=True, numa=0, pmem_path=None):
-        assert self.exe_path is not None
+    def run(self, cmd=None, additional_args="", load_ulayfs=True, numa=0, pmem_path=None):
+        if cmd is None:
+            assert self.prog_path is not None
+            cmd = f"{self.prog_path} "
 
         if self.is_micro:
             self.bm_output_path = self.result_dir / "result.json"
-            prog_args += f" --benchmark_counters_tabular=true "
-            prog_args += f" --benchmark_out={self.bm_output_path} "
-        cmd = f"{self.exe_path} {prog_args}"
+            cmd += f" --benchmark_counters_tabular=true "
+            cmd += f" --benchmark_out={self.bm_output_path} "
+
+        cmd = f"{cmd} {additional_args}"
 
         # setup envs
         env = {}

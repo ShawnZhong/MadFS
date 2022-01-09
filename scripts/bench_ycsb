@@ -96,10 +96,10 @@ if __name__ == "__main__":
     from runner import Runner
     import shutil
 
-    runner = Runner(cmake_target="leveldb_ycsb")
-    runner.build(link_ulayfs=False)
+    runner = Runner("leveldb_ycsb")
+    runner.build()
     libulayfs = runner.ulayfs_path
-    ycsbcli = runner.exe_path
+    ycsbcli = runner.prog_path
 
     dbdir = "bench-dbdir"
     shutil.rmtree(dbdir, ignore_errors=True)
