@@ -1,6 +1,10 @@
 #include "mtable.h"
 
+#include <bits/stdint-uintn.h>
+
+#include "const.h"
 #include "file.h"
+#include "idx.h"
 
 namespace ulayfs::dram {
 
@@ -27,16 +31,22 @@ MemTable::MemTable(int fd, off_t init_file_size, bool read_only)
   auto num_blocks = BLOCK_SIZE_TO_IDX(file_size);
   if (should_grow) meta->set_num_blocks_if_larger(num_blocks);
 
+  table.reserve(num_blocks);
+
   // initialize the mapping
   for (LogicalBlockIdx idx = 0; idx < num_blocks; idx += NUM_BLOCKS_PER_GROW)
-    table.emplace(idx, blocks + idx);
+    table.emplace_back(blocks + idx);
 }
 
 std::ostream& operator<<(std::ostream& out, const MemTable& m) {
   out << "MemTable:\n";
-  for (const auto& [blk_idx, mem_addr] : m.table) {
-    out << "\t" << blk_idx << " - " << blk_idx + NUM_BLOCKS_PER_GROW << ": ";
+  uint32_t chunk_idx = 0;
+  for (const auto mem_addr : m.table) {
+    LogicalBlockIdx chunk_begin_lidx = chunk_idx << GROW_UNIT_IN_BLOCK_SHIFT;
+    out << "\t" << chunk_begin_lidx << " - "
+        << chunk_begin_lidx + NUM_BLOCKS_PER_GROW << ": ";
     out << mem_addr << " - " << mem_addr + NUM_BLOCKS_PER_GROW << "\n";
+    ++chunk_idx;
   }
   return out;
 }
