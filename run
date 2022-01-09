@@ -7,7 +7,7 @@ from pathlib import Path
 from scripts.runner import Runner
 from scripts.utils import check_any_args_passed
 
-logging.basicConfig(level=logging.DEBUG)
+logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger("run")
 
 if __name__ == "__main__":

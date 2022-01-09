@@ -4,7 +4,7 @@ import shutil
 
 from utils import get_timestamp, system, root_dir
 
-logging.basicConfig(level=logging.DEBUG)
+logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger("runner")
 
 

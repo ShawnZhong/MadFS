@@ -7,7 +7,7 @@ import psutil
 
 from utils import system, check_any_args_passed
 
-logging.basicConfig(level=logging.DEBUG)
+logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger("init")
 
 install_dev_deps_cmds = """
