@@ -74,6 +74,10 @@ FetchContent_MakeAvailable(tbb)
 find_package(TBB REQUIRED HINTS ${tbb_SOURCE_DIR}/lib/cmake/tbb)
 target_link_libraries(ulayfs dl pthread atomic TBB::tbb)
 
+if (ULAYFS_USE_LIBPMEM2)
+    target_link_libraries(ulayfs pmem2)
+endif()
+
 #[[
 tests, benchmarks, and tools
 ]]

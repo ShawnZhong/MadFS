@@ -80,10 +80,10 @@ constexpr static struct BuildOptions {
     out << "\tsupport_clflushopt: " << support_clflushopt << "\n";
     out << "\tpersist_impl: " << [&]() -> const char* {
       switch (persist_impl) {
-        case PersistImpl::KERNEL:
-          return "KERNEL";
         case PersistImpl::PMDK:
           return "PMDK";
+        case PersistImpl::KERNEL:
+          return "KERNEL";
         case PersistImpl::FLUSH:
           return "FLUSH";
         default:

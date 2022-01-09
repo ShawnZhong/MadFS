@@ -12,6 +12,10 @@
 #include "config.h"
 #include "const.h"
 
+#ifdef ULAYFS_USE_LIBPMEM2
+#include <libpmem2.h>
+#endif
+
 #ifndef __has_feature
 #define __has_feature(x) 0
 #endif
@@ -158,27 +162,28 @@ static inline void persist_fenced(void *buf, uint64_t len) {
  *
  * These functions should not be called directly but through memcpy_persist
  */
-static inline void memcpy_persist_flush(void *dst, const void *src,
-                                        size_t size);
 static inline void memcpy_persist_kernel(void *dst, const void *src,
                                          size_t size);
+static inline void memcpy_persist_pmdk(void *dst, const void *src, size_t size);
+static inline void memcpy_persist_flush(void *dst, const void *src,
+                                        size_t size);
 
 static inline void memcpy_persist(void *dst, const void *src, size_t size,
                                   bool fenced = false) {
-  if constexpr (BuildOptions::persist_impl == BuildOptions::PersistImpl::KERNEL)
-    memcpy_persist_kernel(dst, src, size);
-  else
-    memcpy_persist_flush(dst, src, size);
+  switch (BuildOptions::persist_impl) {
+    case BuildOptions::PersistImpl::PMDK:
+      memcpy_persist_pmdk(dst, src, size);
+      break;
+    case BuildOptions::PersistImpl::KERNEL:
+      memcpy_persist_kernel(dst, src, size);
+      break;
+    case BuildOptions::PersistImpl::FLUSH:
+      memcpy_persist_flush(dst, src, size);
+      break;
+    default:
+      assert(false);
+  }
   if (fenced) _mm_sfence();
-}
-
-/**
- * Naive implementation: use memcpy than flush
- */
-static inline void memcpy_persist_flush(void *dst, const void *src,
-                                        size_t size) {
-  memcpy(dst, src, size);
-  persist_unfenced(dst, size);
 }
 
 /**
@@ -242,6 +247,25 @@ static inline void memcpy_persist_kernel(void *dst, const void *src,
 
   /* cache copy for remaining bytes */
   if (size) memcpy_persist_flush((void *)dest, (void *)source, size);
+}
+
+static inline void memcpy_persist_pmdk(void *dst, const void *src,
+                                       size_t size) {
+#ifdef ULAYFS_USE_LIBPMEM2
+  return pmem_memcpy_nodrain(dst, src, size);
+#else
+  // fall back to kernel implementation
+  return memcpy_persist_kernel(dst, src, size);
+#endif
+}
+
+/**
+ * Naive implementation: use memcpy than flush
+ */
+static inline void memcpy_persist_flush(void *dst, const void *src,
+                                        size_t size) {
+  memcpy(dst, src, size);
+  persist_unfenced(dst, size);
 }
 
 }  // namespace pmem
