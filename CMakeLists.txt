@@ -101,14 +101,12 @@ endif ()
 if (ULAYFS_BUILD_BENCH)
     set(CMAKE_RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR})
 
-    unset(CMAKE_CXX_STANDARD)
     FetchContent_Declare(
         leveldb
         GIT_REPOSITORY https://github.com/google/leveldb.git
-        GIT_TAG 8f464e7f68fd9d50ed39b2866ef8dac9c837439d
+        GIT_TAG e4ccaa0c9cb1a019df3df74eb5db4ec55e9e02ed
     )
     FetchContent_MakeAvailable(leveldb)
-    set(CMAKE_CXX_STANDARD 20)
 
     FetchContent_Declare(cxxopts URL https://github.com/jarro2783/cxxopts/archive/refs/tags/v2.2.0.zip)
     FetchContent_MakeAvailable(cxxopts)
