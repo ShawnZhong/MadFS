@@ -39,7 +39,7 @@ option(ULAYFS_MEM_PROTECT "Enable memory protection to avoid stray writes" OFF)
 option(ULAYFS_NO_SHARING "Assume that no two processes concurrently operate on the same file" OFF)
 option(ULAYFS_RELAXED "Relax visibility and serialization guarantee on concurrent access" OFF)
 option(ULAYFS_USE_MAP_SYNC "Use MAP_SYNC for mmap" ON)
-option(ULAYFS_FORCE_MAP_POPULATE "Always use MAP_POPULATE for mmap" OFF)
+option(ULAYFS_FORCE_MAP_POPULATE "Always use MAP_POPULATE for mmap" ON)
 option(ULAYFS_TX_FLUSH_ONLY_FSYNC "Only flush transaction entries in fsync" OFF)
 option(ULAYFS_USE_PMEMCHECK "Enable pmemcheck macros" OFF)
 
