@@ -9,8 +9,8 @@ int num_iter = get_num_iter();
 enum class Mode {
   NO_OVERLAP,
   APPEND,
-  CNCR_WRITE,  // concurrent write to the same location
-  SRMW,        // single reader multiple concurrent writers to the same location
+  CONTENDED_WRITE,  // concurrent write to the same location
+  SRMW,  // single reader multiple concurrent writers to the same location
 };
 
 template <Mode mode, int READ_PERCENT = -1>
@@ -42,7 +42,7 @@ void bench(benchmark::State& state) {
       assert(res == num_bytes);
       fsync(fd);
     }
-  } else if constexpr (mode == Mode::CNCR_WRITE) {
+  } else if constexpr (mode == Mode::CONTENDED_WRITE) {
     for (auto _ : state) {
       [[maybe_unused]] ssize_t res = pwrite(fd, src_buf, num_bytes, 0);
       assert(res == num_bytes);
@@ -123,7 +123,7 @@ int main(int argc, char** argv) {
 
   register_bm("append_512", bench<Mode::APPEND>, 512);
   register_bm("append_4k", bench<Mode::APPEND>);
-  register_bm("cncr_write", bench<Mode::CNCR_WRITE>);
+  register_bm("contended_write", bench<Mode::CONTENDED_WRITE>);
   register_bm("srmw", bench<Mode::SRMW>);
 
   benchmark::RunSpecifiedBenchmarks();
