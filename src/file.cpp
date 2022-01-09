@@ -76,7 +76,6 @@ File::~File() {
   if (fd >= 0) posix::close(fd);
   if (shm_fd >= 0) posix::close(shm_fd);
   if (bitmap) posix::munmap(bitmap, SHM_SIZE);
-  DEBUG("~File(): close(%d) and close(%d)", fd, shm_fd);
 }
 
 /*
