@@ -5,7 +5,6 @@
 
 #include <cstdarg>
 #include <cstdio>
-#include <unordered_map>
 
 #include "config.h"
 #include "file.h"
@@ -81,35 +80,49 @@ int fclose(FILE* stream) {
   }
 }
 
-ssize_t write(int fd, const void* buf, size_t count) {
-  if (auto file = get_file(fd)) {
-    ssize_t rc = file->write(buf, count);
-    DEBUG("ulayfs::write(%d, buf, %zu) = %zu", fd, count, rc);
-    return rc;
-  } else {
-    ssize_t rc = posix::write(fd, buf, count);
-    DEBUG("posix::write(%d, buf, %zu) = %zu", fd, count, rc);
-    return rc;
-  }
-}
-
 ssize_t read(int fd, void* buf, size_t count) {
   if (auto file = get_file(fd)) {
-    DEBUG("ulayfs::read(%d, buf, %zu)", fd, count);
-    return file->read(buf, count);
+    auto res = file->read(buf, count);
+    DEBUG("ulayfs::read(%d, buf, %zu) = %zu", fd, count, res);
+    return res;
   } else {
-    DEBUG("posix::read(%d, buf, %zu)", fd, count);
-    return posix::read(fd, buf, count);
+    auto res = posix::read(fd, buf, count);
+    DEBUG("posix::read(%d, buf, %zu) = %zu", fd, count, res);
+    return res;
   }
 }
 
-off_t lseek(int fd, off_t offset, int whence) {
+ssize_t pread(int fd, void* buf, size_t count, off_t offset) {
   if (auto file = get_file(fd)) {
-    DEBUG("ulayfs::lseek(%d, %ld, %d)", fd, offset, whence);
-    return file->lseek(offset, whence);
+    DEBUG("ulayfs::pread(%d, buf, %zu, %ld)", fd, count, offset);
+    return file->pread(buf, count, offset);
   } else {
-    DEBUG("posix::lseek(%d, %ld, %d)", fd, offset, whence);
-    return posix::lseek(fd, offset, whence);
+    DEBUG("posix::pread(%d, buf, %zu, %ld)", fd, count, offset);
+    return posix::pread(fd, buf, count, offset);
+  }
+}
+
+ssize_t __read_chk(int fd, void* buf, size_t count,
+                   [[maybe_unused]] size_t buflen) {
+  assert(buflen >= count);
+  return read(fd, buf, count);
+}
+
+ssize_t __pread_chk(int fd, void* buf, size_t count, off_t offset,
+                    [[maybe_unused]] size_t buflen) {
+  assert(buflen >= count);
+  return pread(fd, buf, count, offset);
+}
+
+ssize_t write(int fd, const void* buf, size_t count) {
+  if (auto file = get_file(fd)) {
+    ssize_t res = file->write(buf, count);
+    DEBUG("ulayfs::write(%d, buf, %zu) = %zu", fd, count, res);
+    return res;
+  } else {
+    ssize_t res = posix::write(fd, buf, count);
+    DEBUG("posix::write(%d, buf, %zu) = %zu", fd, count, res);
+    return res;
   }
 }
 
@@ -123,13 +136,13 @@ ssize_t pwrite(int fd, const void* buf, size_t count, off_t offset) {
   }
 }
 
-ssize_t pread(int fd, void* buf, size_t count, off_t offset) {
+off_t lseek(int fd, off_t offset, int whence) {
   if (auto file = get_file(fd)) {
-    DEBUG("ulayfs::pread(%d, buf, %zu, %ld)", fd, count, offset);
-    return file->pread(buf, count, offset);
+    DEBUG("ulayfs::lseek(%d, %ld, %d)", fd, offset, whence);
+    return file->lseek(offset, whence);
   } else {
-    DEBUG("posix::pread(%d, buf, %zu, %ld)", fd, count, offset);
-    return posix::pread(fd, buf, count, offset);
+    DEBUG("posix::lseek(%d, %ld, %d)", fd, offset, whence);
+    return posix::lseek(fd, offset, whence);
   }
 }
 
@@ -215,24 +228,18 @@ int rename(const char* oldpath, const char* newpath) {
   return rc;
 }
 
-int truncate(const char* path, off_t length) {
+int truncate([[maybe_unused]] const char* path, [[maybe_unused]] off_t length) {
   PANIC("truncate not implemented");
-  UNUSED(path);
-  UNUSED(length);
   return -1;
 }
 
-int ftruncate(int fd, off_t length) {
+int ftruncate([[maybe_unused]] int fd, [[maybe_unused]] off_t length) {
   PANIC("ftruncate not implemented");
-  UNUSED(fd);
-  UNUSED(length);
   return -1;
 }
 
-int flock(int fd, int operation) {
+int flock([[maybe_unused]] int fd, [[maybe_unused]] int operation) {
   PANIC("flock not implemented");
-  UNUSED(fd);
-  UNUSED(operation);
   return -1;
 }
 

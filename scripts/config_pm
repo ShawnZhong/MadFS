@@ -54,5 +54,5 @@ if __name__ == "__main__":
     parser.add_argument("--unmount", action="store_true")
     check_any_args_passed(parser)
     args = parser.parse_args()
-    logger.debug(f"args={args}")
+    logger.info(f"args={args}")
     main(**vars(args))

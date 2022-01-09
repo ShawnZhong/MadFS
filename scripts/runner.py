@@ -9,7 +9,7 @@ logger = logging.getLogger("runner")
 
 
 class Runner:
-    def __init__(self, cmake_target, build_type=None, result_dir=None, **kwargs):
+    def __init__(self, cmake_target, build_type=None, result_dir=None):
         self.is_micro = cmake_target.startswith("micro")
         self.is_bench = self.is_micro or cmake_target.startswith("leveldb")
 
@@ -28,7 +28,7 @@ class Runner:
 
         self.result_dir.mkdir(parents=True, exist_ok=True)
 
-    def build(self, cmake_args="", link_ulayfs=True, **kwargs):
+    def build(self, cmake_args=""):
         if self.is_bench:
             cmake_args += " -DULAYFS_BUILD_BENCH=ON "
 
@@ -45,12 +45,12 @@ class Runner:
         config_log_path = self.result_dir / "config.log"
         with open(config_log_path, "w") as fout:
             pprint.pprint(locals(), stream=fout)
-        system(f"cmake -L -N {self.build_path} >> {config_log_path}")
+        system(f"cmake -LA -N {self.build_path} >> {config_log_path}")
 
         self.ulayfs_path = self.build_path / "libulayfs.so"
         self.exe_path = self.build_path / self.cmake_target
 
-    def run(self, prog_args="", load_ulayfs=True, numa=0, pmem_path=None, **kwargs):
+    def run(self, prog_args="", load_ulayfs=True, numa=0, pmem_path=None):
         assert self.exe_path is not None
 
         if self.is_micro:

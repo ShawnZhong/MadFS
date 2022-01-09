@@ -37,8 +37,6 @@
 #define likely(x) __builtin_expect(!!(x), 1)
 #define unlikely(x) __builtin_expect(!!(x), 0)
 
-#define UNUSED(x) ((void)(x))
-
 /*
  * The following macros used for assertion and logging
  * Defined as macros since we want to have access to __FILE__ and __LINE__

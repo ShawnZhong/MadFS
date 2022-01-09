@@ -1,12 +1,6 @@
 name: Bench
 
 on:
-  workflow_dispatch:
-    inputs:
-      build_type:
-        description: "build type"
-        required: true
-        default: "release"
   pull_request:
 
 jobs:
@@ -16,13 +10,13 @@ jobs:
       - uses: actions/checkout@v2
 
       - name: micro_st
-        run: BENCH_NUM_ITER=10 ./run micro_st ${{matrix.build_type}}
+        run: BENCH_NUM_ITER=10 ./run micro_st relwithdebinfo
 
       - name: micro_mt
-        run: BENCH_NUM_ITER=10 ./run micro_mt ${{matrix.build_type}}
+        run: BENCH_NUM_ITER=10 ./run micro_mt relwithdebinfo
 
       - name: micro_meta
-        run: BENCH_NUM_ITER=10 ./run micro_meta ${{matrix.build_type}}
+        run: BENCH_NUM_ITER=10 ./run micro_meta relwithdebinfo
 
   leveldb:
     runs-on: ubuntu-latest
@@ -30,7 +24,7 @@ jobs:
       - uses: actions/checkout@v2
 
       - name: leveldb_tests
-        run: ./run leveldb_tests ${{matrix.build_type}}
+        run: ./run leveldb_tests
 
       - name: ycsb
         run: |

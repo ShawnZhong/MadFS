@@ -77,7 +77,7 @@ void test(TestOpt test_opt) {
   close(fd);
 }
 
-int main(int argc, char* argv[]) {
+int main() {
   // everything block-aligned
   test({.num_bytes_per_iter = BLOCK_SIZE});
   test({.num_bytes_per_iter = BLOCK_SIZE * 8});

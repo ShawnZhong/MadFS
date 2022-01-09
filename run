@@ -19,7 +19,17 @@ if __name__ == "__main__":
     parser.add_argument(
         "build_type",
         nargs=argparse.OPTIONAL,
-        help="see Makefile for available build types",
+        choices=[
+            "debug",
+            "release",
+            "relwithdebinfo",
+            "profile",
+            "pmemcheck",
+            "asan",
+            "ubsan",
+            "msan",
+            "tsan",
+        ],
     )
     parser.add_argument(
         "-c",
@@ -36,16 +46,32 @@ if __name__ == "__main__":
     parser.add_argument(
         "-d",
         "--disable_ulayfs",
-        action="store_false",
-        dest="load_ulayfs",
+        action="store_true",
+        default=False,
         help="do not load the ulayfs shared library",
     )
-    parser.add_argument("-r", "--result_dir", type=Path, help="result directory")
+    parser.add_argument(
+        "--pmem_path",
+        type=Path,
+        help="Path to the pmem device",
+    )
     parser.add_argument("--numa", type=int, default=0, help="numa node to run on")
     check_any_args_passed(parser)
     args = parser.parse_args()
-    logger.debug(f"args={args}")
 
-    runner = Runner(**vars(args))
-    runner.build(**vars(args))
-    runner.run(**vars(args))
+    if args.pmem_path is None:
+        for path in [Path("/mnt/pmem0-ext4-dax"), Path("/mnt/pmem0")]:
+            if path.exists():
+                args.pmem_path = path
+                break
+
+    logger.info(f"args={args}")
+
+    runner = Runner(cmake_target=args.cmake_target, build_type=args.build_type)
+    runner.build(cmake_args=args.cmake_args)
+    runner.run(
+        prog_args=args.prog_args,
+        load_ulayfs=not args.disable_ulayfs,
+        numa=args.numa,
+        pmem_path=args.pmem_path,
+    )

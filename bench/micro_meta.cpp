@@ -18,13 +18,19 @@ void bench(benchmark::State& state) {
   unlink(filepath);
 
   fd = open(filepath, O_CREAT | O_RDWR, S_IRUSR | S_IWUSR);
+  if (fd < 0) state.SkipWithError("open failed");
+
   char buf[8];
-  for (int i = 0; i < num_tx; ++i) write(fd, buf, sizeof(buf));
+  for (int i = 0; i < num_tx; ++i) {
+    [[maybe_unused]] ssize_t res = write(fd, buf, sizeof(buf));
+    assert(res == sizeof(buf));
+  }
   close(fd);
 
   if constexpr (mode == Mode::OPEN_CLOSE) {
     for (auto _ : state) {
       fd = open(filepath, O_RDONLY);
+      assert(fd >= 0);
       close(fd);
     }
   } else if constexpr (mode == Mode::STAT) {
@@ -49,7 +55,7 @@ int main(int argc, char** argv) {
   for (auto& bm : {RegisterBenchmark("open_close", bench<Mode::OPEN_CLOSE>),
                    RegisterBenchmark("stat", bench<Mode::STAT>),
                    RegisterBenchmark("fstat", bench<Mode::FSTAT>)}) {
-    bm->RangeMultiplier(10)->Range(1, 10000)->Iterations(num_iter);
+    bm->DenseRange(100, 1000, 100)->Iterations(num_iter);
   }
 
   benchmark::RunSpecifiedBenchmarks();

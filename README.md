@@ -43,18 +43,9 @@
 
 ## Build and Run
 
-- Build the project
+- Build the uLayFS shared library
 
   ```shell
-  # usage: make [build_type] 
-  #             [CMAKE_ARGS="-DKEY1=VAL1 -DKEY2=VAL2 ..."] 
-  #             [BUILD_TARGETS="target1 target2 ..."] 
-  #             [BUILD_ARGS="..."]
-  
-  # build the uLayFS shared library and tests in debug mode
-  make
-  
-  # build just the uLayFS shared library in release mode
   make release BUILD_TARGETS="ulayfs"
   ```
 
@@ -66,15 +57,27 @@
 - Run benchmarks
 
   ```shell
-  ./scripts/bench_micro st       # single-threaded microbenchmark
-  ./scripts/bench_micro mt       # multi-threaded microbenchmark
-  ./scripts/bench_micro meta     # microbenchmark with metadata
-  ./scripts/bench_ycsb           # YCSB benchmark
+  ./scripts/bench_micro st       # run and plot single-threaded microbenchmark
+  ./scripts/bench_micro mt       # run and plot multi-threaded microbenchmark
+  ./scripts/bench_micro meta     # run and plot microbenchmark with metadata
+  ./scripts/bench_ycsb           # run YCSB benchmark
   ```
 
 ## Development
 
-- Build and run tests or benchmarks
+- Build
+
+  ```shell
+  # usage: make [build_type] 
+  #             [CMAKE_ARGS="-DKEY1=VAL1 -DKEY2=VAL2 ..."] 
+  #             [BUILD_TARGETS="target1 target2 ..."] 
+  #             [BUILD_ARGS="..."]
+  
+  # build the uLayFS shared library and tests in debug mode
+  make
+  ```
+
+- Build and run a single test suite or benchmark suite
 
   ```shell
   # print help message

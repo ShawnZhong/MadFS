@@ -1,12 +1,12 @@
-.PHONY: debug release profile pmemcheck
-debug release profile pmemcheck: export CC := gcc
-debug release profile pmemcheck: export CXX := g++
+.PHONY: debug release relwithdebinfo profile pmemcheck
+debug release profile relwithdebinfo pmemcheck: export CC := gcc
+debug release profile relwithdebinfo pmemcheck: export CXX := g++
 
 .PHONY: asan ubsan msan tsan
 asan ubsan msan tsan: export CC := clang
 asan ubsan msan tsan: export CXX := clang++
 
-debug release profile pmemcheck asan ubsan msan tsan:
+debug release relwithdebinfo profile pmemcheck asan ubsan msan tsan:
 	cmake -S . -B build-$@ -DCMAKE_BUILD_TYPE=$@ $(CMAKE_ARGS)
 	cmake --build build-$@ -j --target $(BUILD_TARGETS) -- --quiet $(BUILD_ARGS)
 
