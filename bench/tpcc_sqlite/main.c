@@ -127,7 +127,7 @@ int main( int argc, char *argv[] )
   /* initialize */
   hist_init();
   activate_transaction = 1;
-  counting_on = 0;
+  counting_on = 1;
 
   for ( i=0; i<5; i++ ){
     success[i]=0;
@@ -669,7 +669,7 @@ int thread_main (thread_arg* arg)
   
   /* exec sql connect :connect_string; */
   printf("%s: opening db, thread id = %lu\n", __func__, pthread_self());
-  sqlite3_open("/mnt/pmem_emul/tpcc.db", &sqlite3_db);
+  sqlite3_open(get_db_path(), &sqlite3_db);
   printf("%s: opened db, thread id = %lu\n", __func__, pthread_self());
 
   sqlite3_exec(sqlite3_db, "PRAGMA journal_mode = WAL;", 0, 0, 0);

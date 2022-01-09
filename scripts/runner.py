@@ -11,7 +11,7 @@ logger = logging.getLogger("runner")
 class Runner:
     def __init__(self, cmake_target, build_type=None, result_dir=None):
         self.is_micro = cmake_target.startswith("micro")
-        self.is_bench = self.is_micro or cmake_target.startswith("leveldb")
+        self.is_bench = self.is_micro or cmake_target.startswith("leveldb") or cmake_target.startswith("tpcc")
 
         if build_type is None:
             build_type = "release" if self.is_bench else "debug"

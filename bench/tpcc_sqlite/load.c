@@ -151,7 +151,7 @@ main(argc, argv)
 
     /* EXEC SQL WHENEVER SQLERROR GOTO Error_SqlCall; */
 
-    sqlite3_open("/mnt/pmem_emul/tpcc.db", &sqlite);
+    sqlite3_open(get_db_path(), &sqlite);
     if(!sqlite) {
 	    printf("%s: Failed to open DB\n", __func__);
     }
