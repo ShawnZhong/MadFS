@@ -1,7 +1,5 @@
 #include "mtable.h"
 
-#include <bits/stdint-uintn.h>
-
 #include "const.h"
 #include "file.h"
 #include "idx.h"
