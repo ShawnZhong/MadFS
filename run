@@ -53,13 +53,19 @@ if __name__ == "__main__":
     parser.add_argument(
         "--pmem_path",
         type=Path,
-        default="/mnt/pmem0-ext4-dax",
         help="Path to the pmem device",
     )
     parser.add_argument("--numa", type=int, default=0, help="numa node to run on")
     check_any_args_passed(parser)
     args = parser.parse_args()
-    logger.debug(f"args={args}")
+
+    if args.pmem_path is None:
+        for path in [Path("/mnt/pmem0-ext4-dax"), Path("/mnt/pmem0")]:
+            if path.exists():
+                args.pmem_path = path
+                break
+
+    logger.info(f"args={args}")
 
     runner = Runner(cmake_target=args.cmake_target, build_type=args.build_type)
     runner.build(cmake_args=args.cmake_args)
