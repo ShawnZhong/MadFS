@@ -28,7 +28,7 @@ constexpr static uint32_t NUM_BLOCKS_PER_GROW = GROW_UNIT_SIZE >> BLOCK_SHIFT;
 // - if this block is already mapped; return addr
 // - if this block is allocated from kernel filesystem, mmap and return
 //   the addr
-// - if this block is not even allocated from kernel filesystem, grow
+// - if this block is not even allocated from kernel filesystem, grow_to_fit
 //   it, map it, and return the address
 class MemTable {
   pmem::MetaBlock* meta;
@@ -40,12 +40,63 @@ class MemTable {
   // a vector of <addr, length> pairs
   tbb::concurrent_vector<std::tuple<void*, size_t>> mmap_regions;
 
+ public:
+  MemTable(int fd, off_t file_size, bool read_only);
+
+  ~MemTable() {
+    for (const auto& [addr, length] : mmap_regions) {
+      munmap(addr, length);
+      VALGRIND_PMC_REMOVE_PMEM_MAPPING(addr, length);
+    }
+  }
+
+  [[nodiscard]] pmem::MetaBlock* get_meta() const { return meta; }
+
+  /**
+   * the idx might pass Allocator's grow_to_fit() to ensure there is a backing
+   * kernel filesystem block
+   *
+   * it will then check if it has been mapped into the address space; if not,
+   * it does mapping first
+   *
+   * @param idx the logical block index
+   * @return the Block pointer if idx is not 0; nullptr for idx == 0, and the
+   * caller should handle this case
+   */
+  pmem::Block* get(LogicalBlockIdx idx) {
+    if (idx == 0) return nullptr;
+
+    LogicalBlockIdx hugepage_idx = idx & ~GROW_UNIT_IN_BLOCK_MASK;
+    LogicalBlockIdx hugepage_local_idx = idx & GROW_UNIT_IN_BLOCK_MASK;
+    if (auto it = table.find(hugepage_idx); it != table.end())
+      return it->second + hugepage_local_idx;
+
+    // validate_size if this idx has real blocks allocated; do allocation if not
+    validate_size(idx);
+
+    uint64_t hugepage_size = BLOCK_IDX_TO_SIZE(hugepage_idx);
+    pmem::Block* hugepage_blocks = mmap_file(
+        GROW_UNIT_SIZE, static_cast<off_t>(hugepage_size), MAP_POPULATE);
+    table.emplace(hugepage_idx, hugepage_blocks);
+    return hugepage_blocks + hugepage_local_idx;
+  }
+
  private:
+  // ask more blocks for the kernel filesystem, so that idx is valid
+  void validate_size(LogicalBlockIdx idx) {
+    // fast path: if smaller than the number of block; return
+    if (idx < meta->get_num_blocks()) return;
+
+    // slow path: acquire lock to verify and grow_to_fit if necessary
+    grow_to_fit(idx);
+  }
+
   // called by other public functions with lock held
-  void grow(LogicalBlockIdx idx) {
-    // the new file size should be a multiple of grow unit
-    // we have `idx + 1` since we want to grow the file when idx is a multiple
-    // of the number of blocks in a grow unit (e.g., 512 for 2 MB grow)
+  void grow_to_fit(LogicalBlockIdx idx) {
+    // the new file size should be a multiple of grow_to_fit unit
+    // we have `idx + 1` since we want to grow_to_fit the file when idx is a
+    // multiple of the number of blocks in a grow_to_fit unit (e.g., 512 for 2
+    // MB grow_to_fit)
     uint64_t file_size = ALIGN_UP(BLOCK_IDX_TO_SIZE(idx + 1), GROW_UNIT_SIZE);
 
     int ret = posix::fallocate(fd, 0, 0, static_cast<off_t>(file_size));
@@ -84,55 +135,6 @@ class MemTable {
   }
 
  public:
-  MemTable(int fd, off_t file_size, bool read_only);
-
-  ~MemTable() {
-    for (const auto& [addr, length] : mmap_regions) {
-      munmap(addr, length);
-      VALGRIND_PMC_REMOVE_PMEM_MAPPING(addr, length);
-    }
-  }
-
-  [[nodiscard]] pmem::MetaBlock* get_meta() const { return meta; }
-
-  // ask more blocks for the kernel filesystem, so that idx is valid
-  void validate(LogicalBlockIdx idx) {
-    // fast path: if smaller than the number of block; return
-    if (idx < meta->get_num_blocks()) return;
-
-    // slow path: acquire lock to verify and grow if necessary
-    grow(idx);
-  }
-
-  /**
-   * the idx might pass Allocator's grow() to ensure there is a backing kernel
-   * filesystem block
-   *
-   * it will then check if it has been mapped into the address space; if not,
-   * it does mapping first
-   *
-   * @param idx the logical block index
-   * @return the Block pointer if idx is not 0; nullptr for idx == 0, and the
-   * caller should handle this case
-   */
-  pmem::Block* get(LogicalBlockIdx idx) {
-    if (idx == 0) return nullptr;
-
-    LogicalBlockIdx hugepage_idx = idx & ~GROW_UNIT_IN_BLOCK_MASK;
-    LogicalBlockIdx hugepage_local_idx = idx & GROW_UNIT_IN_BLOCK_MASK;
-    if (auto it = table.find(hugepage_idx); it != table.end())
-      return it->second + hugepage_local_idx;
-
-    // validate if this idx has real blocks allocated; do allocation if not
-    validate(idx);
-
-    uint64_t hugepage_size = BLOCK_IDX_TO_SIZE(hugepage_idx);
-    pmem::Block* hugepage_blocks = mmap_file(
-        GROW_UNIT_SIZE, static_cast<off_t>(hugepage_size), MAP_POPULATE);
-    table.emplace(hugepage_idx, hugepage_blocks);
-    return hugepage_blocks + hugepage_local_idx;
-  }
-
   friend std::ostream& operator<<(std::ostream& out, const MemTable& m);
 };
 
