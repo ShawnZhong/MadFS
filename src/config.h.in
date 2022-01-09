@@ -56,7 +56,7 @@ constexpr static struct BuildOptions {
 
   // for memset and copy with persistence:
   enum class Persist {
-    NATIVE,   // do operation on cache then flush
+    NATIVE,  // do operation on cache then flush
     KERNEL,  // use Linux kerne's implementation (w/ movnti)
     PMDK,    // use PMDK's implementation
   };
