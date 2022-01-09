@@ -1,15 +1,17 @@
-.PHONY: debug release relwithdebinfo profile pmemcheck
-debug release profile relwithdebinfo pmemcheck: export CC := gcc
-debug release profile relwithdebinfo pmemcheck: export CXX := g++
+gcc_targets := debug release relwithdebinfo profile pmemcheck
+clang_targets := asan ubsan msan tsan
 
-.PHONY: asan ubsan msan tsan
-asan ubsan msan tsan: export CC := clang
-asan ubsan msan tsan: export CXX := clang++
+.PHONY: $(gcc_targets) $(clang_targets) clean
 
-debug release relwithdebinfo profile pmemcheck asan ubsan msan tsan:
+$(gcc_targets): export CC := gcc
+$(gcc_targets): export CXX := g++
+
+$(clang_targets): export CC := clang
+$(clang_targets): export CXX := clang++
+
+$(gcc_targets) $(clang_targets):
 	cmake -S . -B build-$@ -DCMAKE_BUILD_TYPE=$@ $(CMAKE_ARGS)
 	cmake --build build-$@ -j --target $(BUILD_TARGETS) -- --quiet $(BUILD_ARGS)
 
-.PHONY: clean
 clean:
 	rm -rf build* test.txt /dev/shm/ulayfs_*
