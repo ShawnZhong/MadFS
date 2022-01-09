@@ -57,6 +57,10 @@ if (NOT GIT_COMMIT_HASH)
     set(GIT_COMMIT_HASH Unknown)
 endif ()
 
+set(ULAY_PERSIST_IMPL "KERNEL"
+    CACHE STRING "Persist Implementation for memcpy and memset")
+set_property(CACHE ULAY_PERSIST_IMPL PROPERTY STRINGS "FLUSH" "KERNEL" "PMDK")
+
 #[[
 dependencies
 ]]

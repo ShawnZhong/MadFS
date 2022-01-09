@@ -8,6 +8,7 @@
 #cmakedefine01 ULAYFS_FORCE_MAP_POPULATE
 #cmakedefine01 ULAYFS_TX_FLUSH_ONLY_FSYNC
 #cmakedefine01 ULAYFS_USE_PMEMCHECK
+#cmakedefine ULAY_PERSIST_IMPL PersistImpl::@ULAY_PERSIST_IMPL@
 
 #cmakedefine GIT_BRANCH "@GIT_BRANCH@"
 #cmakedefine GIT_COMMIT_HASH "@GIT_COMMIT_HASH@"
@@ -48,6 +49,14 @@ constexpr static struct BuildOptions {
   constexpr static bool support_clflushopt = false;
 #endif
 
+  // for memset and memcpy with persistence:
+  enum class PersistImpl {
+    FLUSH,   // do operation on cache then flush
+    KERNEL,  // use Linux kerne's implementation (w/ movnti)
+    PMDK,    // use PMDK's implementation
+  };
+  constexpr static enum PersistImpl persist_impl = ULAY_PERSIST_IMPL;
+
   friend std::ostream& operator<<(std::ostream& out,
                                   [[maybe_unused]] const BuildOptions& opt) {
     out << "BuildOptions: \n";
@@ -64,6 +73,11 @@ constexpr static struct BuildOptions {
     out << "\ttx_flush_only_fsync: " << tx_flush_only_fsync << "\n";
     out << "\tsupport_clwb: " << support_clwb << "\n";
     out << "\tsupport_clflushopt: " << support_clflushopt << "\n";
+    out << "\tpersist_impl: "
+        << (persist_impl == PersistImpl::KERNEL
+                ? "KERNEL"
+                : (persist_impl == PersistImpl::PMDK ? "PMDK" : "FLUSH"))
+        << "\n";
     return out;
   }
 } build_options;
