@@ -150,5 +150,99 @@ static inline void persist_fenced(void *buf, uint64_t len) {
   persist_unfenced(buf, len);
   _mm_sfence();
 }
+
+/**
+ * Different implementation of memcpy:
+ * - flush: just memcpy then flush
+ * - kernel: linux kernel implementation, use movnti
+ *
+ * These functions should not be called directly but through memcpy_persist
+ */
+static inline void memcpy_persist_flush(void *dst, const void *src,
+                                        size_t size);
+static inline void memcpy_persist_kernel(void *dst, const void *src,
+                                         size_t size);
+
+static inline void memcpy_persist(void *dst, const void *src, size_t size,
+                                  bool fenced = false) {
+  if constexpr (BuildOptions::persist_impl == BuildOptions::PersistImpl::KERNEL)
+    memcpy_persist_kernel(dst, src, size);
+  else
+    memcpy_persist_flush(dst, src, size);
+  if (fenced) _mm_sfence();
+}
+
+/**
+ * Naive implementation: use memcpy than flush
+ */
+static inline void memcpy_persist_flush(void *dst, const void *src,
+                                        size_t size) {
+  memcpy(dst, src, size);
+  persist_unfenced(dst, size);
+}
+
+/**
+ * Linux kernel's implementation of memcpy_flushcache
+ * from: /arch/x86/lib/usercopy_64.c
+ * use as many movnti as possible
+ */
+static inline void memcpy_persist_kernel(void *dst, const void *src,
+                                         size_t size) {
+  unsigned long dest = (unsigned long)dst;
+  unsigned long source = (unsigned long)src;
+
+  /* cache copy and flush to align dest */
+  if (!IS_ALIGNED(dest, 8)) {
+    size_t len = std::min(size, ALIGN_UP(dest, 8) - dest);
+    memcpy_persist_flush((void *)dest, (void *)source, len);
+    dest += len;
+    source += len;
+    size -= len;
+    if (!size) return;
+  }
+
+  /* 4x8 movnti loop */
+  while (size >= 32) {
+    asm("movq    (%0), %%r8\n"
+        "movq   8(%0), %%r9\n"
+        "movq  16(%0), %%r10\n"
+        "movq  24(%0), %%r11\n"
+        "movnti  %%r8,   (%1)\n"
+        "movnti  %%r9,  8(%1)\n"
+        "movnti %%r10, 16(%1)\n"
+        "movnti %%r11, 24(%1)\n" ::"r"(source),
+        "r"(dest)
+        : "memory", "r8", "r9", "r10", "r11");
+    dest += 32;
+    source += 32;
+    size -= 32;
+  }
+
+  /* 1x8 movnti loop */
+  while (size >= 8) {
+    asm("movq    (%0), %%r8\n"
+        "movnti  %%r8,   (%1)\n" ::"r"(source),
+        "r"(dest)
+        : "memory", "r8");
+    dest += 8;
+    source += 8;
+    size -= 8;
+  }
+
+  /* 1x4 movnti loop */
+  while (size >= 4) {
+    asm("movl    (%0), %%r8d\n"
+        "movnti  %%r8d,   (%1)\n" ::"r"(source),
+        "r"(dest)
+        : "memory", "r8");
+    dest += 4;
+    source += 4;
+    size -= 4;
+  }
+
+  /* cache copy for remaining bytes */
+  if (size) memcpy_persist_flush((void *)dest, (void *)source, size);
+}
+
 }  // namespace pmem
 }  // namespace ulayfs
