@@ -4,7 +4,7 @@ import os
 import sys
 from pathlib import Path
 
-logging.basicConfig(level=logging.DEBUG)
+logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger("utils")
 
 root_dir = Path(__file__).parent.parent

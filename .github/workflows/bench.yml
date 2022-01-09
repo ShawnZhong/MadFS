@@ -9,6 +9,11 @@ jobs:
     steps:
       - uses: actions/checkout@v2
 
+      - name: build
+        run: make relwithdebinfo \
+          CMAKE_ARGS='-DULAYFS_BUILD_BENCH=ON' \
+          BUILD_TARGETS='micro_st micro_mt micro_meta ulayfs'
+
       - name: micro_st
         run: BENCH_NUM_ITER=10 ./run micro_st relwithdebinfo
 
@@ -22,6 +27,10 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v2
+
+      - name: build
+        run: make CMAKE_ARGS='-DULAYFS_BUILD_BENCH=ON' \
+          BUILD_TARGETS='leveldb_tests leveldb_ycsb ulayfs'
 
       - name: leveldb_tests
         run: ./run leveldb_tests
@@ -40,3 +49,15 @@ jobs:
           ./run leveldb_ycsb -p="-f bench/ycsb-traces/e-run.txt"
           ./run leveldb_ycsb -p="-f bench/ycsb-traces/f-load.txt"
           ./run leveldb_ycsb -p="-f bench/ycsb-traces/f-run.txt"
+
+  tpcc:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v2
+
+      - name: build
+        run: make CMAKE_ARGS='-DULAYFS_BUILD_BENCH=ON' \
+          BUILD_TARGETS='tpcc_load tpcc_start ulayfs'
+
+      - name: run
+        run: ./scripts/bench_tpcc
