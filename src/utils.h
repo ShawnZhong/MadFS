@@ -12,7 +12,7 @@
 #include "config.h"
 #include "const.h"
 
-#ifdef ULAYFS_USE_LIBPMEM
+#if ULAYFS_USE_LIBPMEM
 #include <libpmem.h>
 #endif
 
@@ -251,7 +251,7 @@ static inline void memcpy_persist_kernel(void *dst, const void *src,
 
 static inline void memcpy_persist_pmdk(void *dst, const void *src,
                                        size_t size) {
-#ifdef ULAYFS_USE_LIBPMEM
+#if ULAYFS_USE_LIBPMEM
   pmem_memcpy_nodrain(dst, src, size);
 #else
   // fall back to kernel implementation
