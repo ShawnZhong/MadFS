@@ -25,11 +25,11 @@ def run_tpcc():
         runner.run(cmd=f"sqlite3 {db_path} '.read {sql_path}'", load_ulayfs=fs.load_ulayfs)
 
         runner = Runner("tpcc_load", result_dir=result_dir / fs.name / "load")
-        runner.build()
+        runner.build(cmake_args=fs.cmake_args)
         runner.run(additional_args="-w 4", load_ulayfs=fs.load_ulayfs, pmem_path=fs.pmem_path)
 
         runner = Runner("tpcc_start", result_dir=result_dir / fs.name / "start")
-        runner.build()
+        runner.build(cmake_args=fs.cmake_args)
         runner.run(additional_args="-w 4 -c 1 -t 10000", load_ulayfs=fs.load_ulayfs, pmem_path=fs.pmem_path)
 
     return result_dir

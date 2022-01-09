@@ -42,6 +42,11 @@ option(ULAYFS_USE_MAP_SYNC "Use MAP_SYNC for mmap" ON)
 option(ULAYFS_FORCE_MAP_POPULATE "Always use MAP_POPULATE for mmap" ON)
 option(ULAYFS_TX_FLUSH_ONLY_FSYNC "Only flush transaction entries in fsync" OFF)
 option(ULAYFS_USE_PMEMCHECK "Enable pmemcheck macros" OFF)
+option(ULAYFS_USE_LIBPMEM2 "Enable PMDK libpmem2" OFF)
+
+set(ULAYFS_PERSIST "PMDK"
+    CACHE STRING "Persist Implementation for memcpy and memset")
+set_property(CACHE ULAYFS_PERSIST PROPERTY STRINGS "NATIVE" "KERNEL" "PMDK")
 
 execute_process(COMMAND git rev-parse --abbrev-ref HEAD
     OUTPUT_VARIABLE GIT_BRANCH
@@ -57,10 +62,6 @@ if (NOT GIT_COMMIT_HASH)
     set(GIT_COMMIT_HASH Unknown)
 endif ()
 
-set(ULAY_PERSIST_IMPL "KERNEL"
-    CACHE STRING "Persist Implementation for memcpy and memset")
-set_property(CACHE ULAY_PERSIST_IMPL PROPERTY STRINGS "FLUSH" "KERNEL" "PMDK")
-
 #[[
 dependencies
 ]]
@@ -71,6 +72,11 @@ FetchContent_MakeAvailable(tbb)
 
 find_package(TBB REQUIRED HINTS ${tbb_SOURCE_DIR}/lib/cmake/tbb)
 target_link_libraries(ulayfs dl pthread atomic TBB::tbb)
+
+if (${ULAYFS_PERSIST} STREQUAL "PMDK")
+    include(cmake/libpmem2.cmake)
+    target_link_libraries(ulayfs pmem2)
+endif ()
 
 #[[
 tests, benchmarks, and tools
@@ -203,5 +209,5 @@ if (${CMAKE_BUILD_TYPE} STREQUAL "profile")
     FetchContent_MakeAvailable(flamegraph)
 endif ()
 
-configure_file("src/config.h.in" "config.h")
+configure_file("src/config.h.in" "config.h" @ONLY)
 include_directories(${CMAKE_CURRENT_BINARY_DIR})

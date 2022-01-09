@@ -11,20 +11,27 @@ class Filesystem:
     name: str
     pmem_path: Path
     load_ulayfs: bool = False
+    cmake_args: str = ""
 
 
-def get_ulayfs_config():
-    for path in ["/mnt/pmem0-ext4-dax", "."]:
-        pmem_path = Path(path)
-        if pmem_path.exists():
-            return Filesystem("uLayFS", pmem_path=pmem_path, load_ulayfs=True)
+def get_ext4_dax_path():
+    pmem_path = Path("/mnt/pmem0-ext4-dax")
+    if pmem_path.exists():
+        return pmem_path
+
+    logger.warning(f"{pmem_path} does not exist, use current directory")
+    return Path(".")
 
 
 def get_fs_configs():
-    yield get_ulayfs_config()
+    ext4_dax_path = get_ext4_dax_path()
+
+    yield Filesystem("uLayFS-native", pmem_path=ext4_dax_path, load_ulayfs=True, cmake_args="-DULAYFS_PERSIST=NATIVE")
+    yield Filesystem("uLayFS-pmdk", pmem_path=ext4_dax_path, load_ulayfs=True, cmake_args="-DULAYFS_PERSIST=PMDK")
+    yield Filesystem("uLayFS-kernel", pmem_path=ext4_dax_path, load_ulayfs=True, cmake_args="-DULAYFS_PERSIST=KERNEL")
 
     for (name, path) in [
-        ("ext4-dax", "/mnt/pmem0-ext4-dax"),
+        ("ext4-dax", ext4_dax_path),
         ("ext4-journal", "/mnt/pmem0-ext4-journal"),
         ("NOVA", "/mnt/pmem0-nova"),
     ]:
