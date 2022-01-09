@@ -42,7 +42,7 @@ option(ULAYFS_USE_MAP_SYNC "Use MAP_SYNC for mmap" ON)
 option(ULAYFS_FORCE_MAP_POPULATE "Always use MAP_POPULATE for mmap" ON)
 option(ULAYFS_TX_FLUSH_ONLY_FSYNC "Only flush transaction entries in fsync" OFF)
 option(ULAYFS_USE_PMEMCHECK "Enable pmemcheck macros" OFF)
-option(ULAYFS_USE_LIBPMEM2 "Enable PMDK libpmem2" ON)
+option(ULAYFS_USE_LIBPMEM "Enable PMDK libpmem" ON)
 
 execute_process(COMMAND git rev-parse --abbrev-ref HEAD
     OUTPUT_VARIABLE GIT_BRANCH
@@ -60,7 +60,7 @@ endif ()
 
 set(ULAY_PERSIST_IMPL "PMDK"
     CACHE STRING
-    "Persist Implementation for memcpy and memset (fallback to KERNEL if PMDK is selected but ULAYFS_USE_LIBPMEM2 is disabled)")
+    "Persist Implementation for memcpy and memset (fallback to KERNEL if PMDK is selected but ULAYFS_USE_LIBPMEM is disabled)")
 set_property(CACHE ULAY_PERSIST_IMPL PROPERTY STRINGS "FLUSH" "KERNEL" "PMDK")
 
 #[[
@@ -74,8 +74,8 @@ FetchContent_MakeAvailable(tbb)
 find_package(TBB REQUIRED HINTS ${tbb_SOURCE_DIR}/lib/cmake/tbb)
 target_link_libraries(ulayfs dl pthread atomic TBB::tbb)
 
-if (ULAYFS_USE_LIBPMEM2)
-    target_link_libraries(ulayfs pmem2)
+if (ULAYFS_USE_LIBPMEM)
+    target_link_libraries(ulayfs pmem)
 endif()
 
 #[[
