@@ -381,26 +381,26 @@ class TxMgr::MultiBlockTx : public TxMgr::CoWTx {
   MultiBlockTx(File* file, TxMgr* tx_mgr, const char* buf, size_t count,
                size_t offset)
       : CoWTx(file, tx_mgr, buf, count, offset),
-        first_block_local_offset(ALIGN_UP(offset, BLOCK_SIZE) - offset),
-        last_block_local_offset(end_offset -
+        first_block_overlap_size(ALIGN_UP(offset, BLOCK_SIZE) - offset),
+        last_block_overlap_size(end_offset -
                                 ALIGN_DOWN(end_offset, BLOCK_SIZE)) {}
   MultiBlockTx(File* file, TxMgr* tx_mgr, const char* buf, size_t count,
                size_t offset, TxEntryIdx tail_tx_idx,
                pmem::TxBlock* tail_tx_block, uint64_t ticket)
       : CoWTx(file, tx_mgr, buf, count, offset, tail_tx_idx, tail_tx_block,
               ticket),
-        first_block_local_offset(ALIGN_UP(offset, BLOCK_SIZE) - offset),
-        last_block_local_offset(end_offset -
+        first_block_overlap_size(ALIGN_UP(offset, BLOCK_SIZE) - offset),
+        last_block_overlap_size(end_offset -
                                 ALIGN_DOWN(end_offset, BLOCK_SIZE)) {}
   ssize_t do_write();
 
  private:
   // number of bytes to be written in the beginning.
   // If the offset is 4097, then this var should be 4095.
-  const size_t first_block_local_offset;
+  const size_t first_block_overlap_size;
 
   // number of bytes to be written for the last block
   // If the end_offset is 4097, then this var should be 1.
-  const size_t last_block_local_offset;
+  const size_t last_block_overlap_size;
 };
 }  // namespace ulayfs::dram
