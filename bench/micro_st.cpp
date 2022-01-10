@@ -63,11 +63,6 @@ void bench(benchmark::State& state) {
             pread(fd, dst_buf, num_bytes, rand_off[i++]);
 
         assert(res == num_bytes);
-        if (memcmp(dst_buf, src_buf, num_bytes) != 0) {
-          fprintf(stderr, "dst_buf = %s\n", dst_buf);
-          fprintf(stderr, "src_buf = %s\n", src_buf);
-          assert(false);
-        }
         assert(memcmp(dst_buf, src_buf, num_bytes) == 0);
       }
     } else if constexpr (mode == Mode::RND_WRITE) {
