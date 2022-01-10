@@ -20,20 +20,14 @@ MemTable::MemTable(int fd, off_t init_file_size, bool read_only)
     PANIC_IF(ret < 0, "fallocate failed");
   }
 
-  pmem::Block* blocks = mmap_file(file_size, 0, 0);
-  meta = &blocks->meta_block;
+  first_region = mmap_file(file_size, 0, 0);
+  first_region_num_blocks = BLOCK_SIZE_TO_IDX(file_size);
+  meta = &first_region[0].meta_block;
   if (!is_empty && !meta->is_valid())
     throw FileInitException("invalid meta block");
 
-  // compute number of blocks and update the mata block if necessary
-  auto num_blocks = BLOCK_SIZE_TO_IDX(file_size);
-  if (should_grow) meta->set_num_blocks_if_larger(num_blocks);
-
-  table.reserve(num_blocks);
-
-  // initialize the mapping
-  for (LogicalBlockIdx idx = 0; idx < num_blocks; idx += NUM_BLOCKS_PER_GROW)
-    table.emplace_back(blocks + idx);
+  // update the mata block if necessary
+  if (should_grow) meta->set_num_blocks_if_larger(first_region_num_blocks);
 }
 
 std::ostream& operator<<(std::ostream& out, const MemTable& m) {

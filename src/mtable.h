@@ -35,7 +35,12 @@ class MemTable {
   int fd;
   int prot;
 
-  // map a chunk_idx to addr
+  // immutable after ctor
+  pmem::Block* first_region;
+  uint32_t first_region_num_blocks;
+
+  // map a chunk_idx to addr, where chunk_idx =
+  // (lidx - first_region_num_blocks) >> GROW_UNIT_IN_BLOCK_SHIFT
   tbb::concurrent_vector<pmem::Block*> table;
 
   // a vector of <addr, length> pairs
@@ -63,10 +68,13 @@ class MemTable {
    * caller should handle this case
    */
   pmem::Block* get(LogicalBlockIdx idx) {
-    if (idx == 0) return nullptr;
+    if (unlikely(idx == 0)) return nullptr;
+    // super fast path: within first_region, no need touch concurrent vector
+    if (idx < first_region_num_blocks) return &first_region[idx];
 
     // fast path: just look up
-    uint32_t chunk_idx = idx >> GROW_UNIT_IN_BLOCK_SHIFT;
+    uint32_t chunk_idx =
+        (idx - first_region_num_blocks) >> GROW_UNIT_IN_BLOCK_SHIFT;
     uint32_t chunk_local_idx = idx & GROW_UNIT_IN_BLOCK_MASK;
     if (chunk_idx < table.size()) {
       pmem::Block* chunk_addr = table[chunk_idx];
