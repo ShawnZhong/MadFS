@@ -12,6 +12,7 @@ root_dir = Path(__file__).parent.parent
 
 def system(cmd, log_path=None):
     if log_path:
+        log_path.parent.mkdir(parents=True, exist_ok=True)
         cmd = f"({cmd}) 2>&1 | tee -a {log_path}"
 
     cmd = f'/bin/bash -o pipefail -c "{cmd}"'

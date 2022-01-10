@@ -36,7 +36,9 @@ def init(install_build_deps=False, install_dev_deps=False, configure=False):
         system(configure_cmds)
         # disable CPU scaling
         for i in range(psutil.cpu_count()):
-            system(f"echo performance | sudo tee /sys/devices/system/cpu/cpu{i}/cpufreq/scaling_governor >/dev/null")
+            system(
+                f"echo performance | sudo tee /sys/devices/system/cpu/cpu{i}/cpufreq/scaling_governor >/dev/null"
+            )
 
 
 if __name__ == "__main__":
