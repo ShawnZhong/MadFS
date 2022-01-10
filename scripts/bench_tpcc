@@ -12,7 +12,7 @@ logger = logging.getLogger("bench_tpcc")
 
 
 def run_tpcc():
-    result_dir = root_dir / "results" / f"bench_tpcc" / get_timestamp()
+    result_dir = root_dir / "results" / "bench_tpcc" / get_timestamp()
     sql_path = root_dir / 'bench' / 'tpcc_sqlite' / 'create_table.sql'
 
     for fs in get_fs_configs():
