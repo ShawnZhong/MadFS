@@ -26,9 +26,11 @@ def get_ext4_dax_path():
 def get_fs_configs():
     ext4_dax_path = get_ext4_dax_path()
 
-    yield Filesystem("uLayFS-native", pmem_path=ext4_dax_path, load_ulayfs=True, cmake_args="-DULAYFS_PERSIST=NATIVE")
-    yield Filesystem("uLayFS-pmdk", pmem_path=ext4_dax_path, load_ulayfs=True, cmake_args="-DULAYFS_PERSIST=PMDK")
-    yield Filesystem("uLayFS-kernel", pmem_path=ext4_dax_path, load_ulayfs=True, cmake_args="-DULAYFS_PERSIST=KERNEL")
+    # yield Filesystem("uLayFS-native", pmem_path=ext4_dax_path, load_ulayfs=True, cmake_args="-DULAYFS_PERSIST=NATIVE")
+    # yield Filesystem("uLayFS-pmdk", pmem_path=ext4_dax_path, load_ulayfs=True, cmake_args="-DULAYFS_PERSIST=PMDK")
+    # yield Filesystem("uLayFS-kernel", pmem_path=ext4_dax_path, load_ulayfs=True, cmake_args="-DULAYFS_PERSIST=KERNEL")
+
+    yield Filesystem("uLayFS", pmem_path=ext4_dax_path, load_ulayfs=True)
 
     for (name, path) in [
         ("ext4-dax", ext4_dax_path),
