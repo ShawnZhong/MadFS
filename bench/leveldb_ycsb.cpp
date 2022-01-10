@@ -102,7 +102,7 @@ int main(int argc, char* argv[]) {
       "d,directory", "directory of db",
       cxxopts::value<std::string>(db_location)->default_value("./dbdir"))(
       "v,value_size", "size of value",
-      cxxopts::value<uint>(value_size)->default_value("64"))(
+      cxxopts::value<uint>(value_size)->default_value("100"))(
       "f,ycsb", "YCSB trace filename",
       cxxopts::value<std::string>(ycsb_filename)->default_value(""))(
       "s,sync", "force write sync",

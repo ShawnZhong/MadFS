@@ -11,7 +11,9 @@ logger = logging.getLogger("runner")
 class Runner:
     def __init__(self, name, build_type=None, result_dir=None):
         self.is_micro = name.startswith("micro")
-        self.is_bench = self.is_micro or name.startswith("leveldb") or name.startswith("tpcc")
+        self.is_bench = (
+            self.is_micro or name.startswith("leveldb") or name.startswith("tpcc")
+        )
 
         if build_type is None:
             build_type = "release" if self.is_bench else "debug"
@@ -52,7 +54,15 @@ class Runner:
         self.ulayfs_path = self.build_path / "libulayfs.so"
         self.prog_path = self.build_path / cmake_target
 
-    def run(self, cmd=None, additional_args="", load_ulayfs=True, numa=0, pmem_path=None):
+    def run(
+        self,
+        cmd=None,
+        additional_args="",
+        load_ulayfs=True,
+        numa=0,
+        pmem_path=None,
+        prog_log_name="prog.log",
+    ):
         if cmd is None:
             assert self.prog_path is not None
             cmd = f"{self.prog_path} "
@@ -80,7 +90,7 @@ class Runner:
             logger.warning("numactl not found, NUMA not enabled")
 
         # execute
-        prog_log_path = self.result_dir / "prog.log"
+        prog_log_path = self.result_dir / prog_log_name
         if self.build_type == "pmemcheck":
             pmemcheck_dir = self.build_path / "_deps" / "pmemcheck-src"
             system(

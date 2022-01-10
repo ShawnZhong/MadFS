@@ -122,6 +122,7 @@ if (ULAYFS_BUILD_BENCH)
         leveldb
         GIT_REPOSITORY https://github.com/google/leveldb.git
         GIT_TAG e4ccaa0c9cb1a019df3df74eb5db4ec55e9e02ed
+        PATCH_COMMAND git apply --reject ${CMAKE_SOURCE_DIR}/bench/leveldb.patch || true
     )
     FetchContent_Declare(cxxopts URL https://github.com/jarro2783/cxxopts/archive/refs/tags/v2.2.0.zip)
     FetchContent_MakeAvailable(leveldb cxxopts)

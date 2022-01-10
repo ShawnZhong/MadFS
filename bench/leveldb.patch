@@ -1,0 +1,36 @@
+diff --git a/db/db_impl.cc b/db/db_impl.cc
+index 1a4e459..d9694ef 100644
+--- a/db/db_impl.cc
++++ b/db/db_impl.cc
+@@ -106,11 +106,12 @@ Options SanitizeOptions(const std::string& dbname,
+     // Open a log file in the same directory as the db
+     src.env->CreateDir(dbname);  // In case it does not exist
+     src.env->RenameFile(InfoLogFileName(dbname), OldInfoLogFileName(dbname));
+-    Status s = src.env->NewLogger(InfoLogFileName(dbname), &result.info_log);
+-    if (!s.ok()) {
+-      // No place suitable for logging
+-      result.info_log = nullptr;
+-    }
++    // Status s = src.env->NewLogger(InfoLogFileName(dbname), &result.info_log);
++    // if (!s.ok()) {
++    //   // No place suitable for logging
++    //   result.info_log = nullptr;
++    // }
++    result.info_log = nullptr;
+   }
+   if (result.block_cache == nullptr) {
+     result.block_cache = NewLRUCache(8 << 20);
+diff --git a/util/env_posix.cc b/util/env_posix.cc
+index 24b1c4c..395d7d1 100644
+--- a/util/env_posix.cc
++++ b/util/env_posix.cc
+@@ -519,7 +519,8 @@ class PosixEnv : public Env {
+       return PosixError(filename, errno);
+     }
+ 
+-    if (!mmap_limiter_.Acquire()) {
++    // disallow mmap for ulayfs tests
++    if ((!mmap_limiter_.Acquire()) || true) {
+       *result = new PosixRandomAccessFile(filename, fd, &fd_limiter_);
+       return Status::OK();
+     }

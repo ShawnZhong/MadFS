@@ -167,6 +167,8 @@ void* File::mmap(void* addr_hint, size_t length, int prot, int mmap_flags,
   }
   char* new_addr = reinterpret_cast<char*>(res);
   char* old_addr = reinterpret_cast<char*>(meta);
+  // TODO: there is a kernel bug that when the old_addr is unmapped, accessing
+  //  new_addr results in kernel panic
 
   auto remap = [&old_addr, &new_addr](LogicalBlockIdx lidx,
                                       LogicalBlockIdx vidx, int num_blocks) {
