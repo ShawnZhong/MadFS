@@ -8,7 +8,7 @@
 #cmakedefine01 ULAYFS_FORCE_MAP_POPULATE
 #cmakedefine01 ULAYFS_TX_FLUSH_ONLY_FSYNC
 #cmakedefine01 ULAYFS_USE_PMEMCHECK
-#cmakedefine ULAY_PERSIST_IMPL PersistImpl::@ULAY_PERSIST_IMPL@
+#cmakedefine ULAY_PERSIST_IMPL PersistImpl::@ULAY_PERSIST_IMPL @
 
 #cmakedefine GIT_BRANCH "@GIT_BRANCH@"
 #cmakedefine GIT_COMMIT_HASH "@GIT_COMMIT_HASH@"
