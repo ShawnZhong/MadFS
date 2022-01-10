@@ -71,7 +71,12 @@ endif ()
 add_library(pmem2 STATIC ${libpmem2_SRC})
 set_property(TARGET pmem2 PROPERTY POSITION_INDEPENDENT_CODE ON)
 target_compile_options(pmem2 PRIVATE -march=native)
-target_compile_definitions(pmem2 PRIVATE -DSRCVERSION="0.2" -DAVX512F_AVAILABLE=${AVX512F_AVAILABLE})
+target_compile_definitions(pmem2 PRIVATE -DSRCVERSION="0.2")
+if (AVX512F_AVAILABLE)
+    target_compile_definitions(pmem2 PRIVATE -DAVX512F_AVAILABLE=1)
+else ()
+    target_compile_definitions(pmem2 PRIVATE -DAVX512F_AVAILABLE=0)
+endif ()
 target_include_directories(
     pmem2
     PUBLIC ${pmdk_SOURCE_DIR}
