@@ -27,8 +27,8 @@ add_library(ulayfs SHARED
 #[[
 build flags
 ]]
-set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -Wall -Wextra -Wno-unused-function -Wno-unused-private-field")
-target_compile_options(ulayfs PRIVATE -march=native -Werror)
+set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -march=native -Wall -Wextra -Wno-unused-function -Wno-unused-private-field")
+target_compile_options(ulayfs PRIVATE -Werror)
 set_property(TARGET ulayfs PROPERTY INTERPROCEDURAL_OPTIMIZATION TRUE) # LTO
 
 #[[
@@ -74,6 +74,7 @@ find_package(TBB REQUIRED HINTS ${tbb_SOURCE_DIR}/lib/cmake/tbb)
 target_link_libraries(ulayfs dl pthread atomic TBB::tbb)
 
 if (${ULAYFS_PERSIST} STREQUAL "PMDK")
+    set(ULAYFS_USE_LIBPMEM2 ON)
     include(cmake/libpmem2.cmake)
     target_link_libraries(ulayfs pmem2)
 endif ()

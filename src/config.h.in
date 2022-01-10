@@ -54,6 +54,12 @@ constexpr static struct BuildOptions {
   constexpr static bool support_clflushopt = false;
 #endif
 
+#ifdef __AVX512F__
+  constexpr static bool support_avx512f = true;
+#else
+  constexpr static bool support_avx512f = false;
+#endif
+
   // for memset and copy with persistence:
   enum class Persist {
     NATIVE,  // do operation on cache then flush
@@ -78,6 +84,7 @@ constexpr static struct BuildOptions {
     out << "\ttx_flush_only_fsync: " << tx_flush_only_fsync << "\n";
     out << "\tsupport_clwb: " << support_clwb << "\n";
     out << "\tsupport_clflushopt: " << support_clflushopt << "\n";
+    out << "\tsupport_avx512f: " << support_avx512f << "\n";
     out << "\tpersist_impl: " ULAYFS_PERSIST_STR << "\n";
     return out;
   }
