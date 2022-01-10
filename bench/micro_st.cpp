@@ -18,8 +18,8 @@ template <Mode mode>
 void bench(benchmark::State& state) {
   const auto num_bytes = state.range(0);
 
-  [[maybe_unused]] char dst_buf[MAX_SIZE];
-  [[maybe_unused]] char src_buf[MAX_SIZE];
+  [[maybe_unused]] char* dst_buf = new char[MAX_SIZE];
+  [[maybe_unused]] char* src_buf = new char[MAX_SIZE];
   std::fill(src_buf, src_buf + MAX_SIZE, 'x');
 
   unlink(filepath);
@@ -84,6 +84,9 @@ void bench(benchmark::State& state) {
   // tear down
   close(fd);
   unlink(filepath);
+
+  delete[] dst_buf;
+  delete[] src_buf;
 }
 
 int main(int argc, char** argv) {
