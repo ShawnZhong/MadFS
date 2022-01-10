@@ -30,18 +30,19 @@ void test(TestOpt test_opt) {
 
   // write data
   {
+    char* src_buf = new char[num_bytes_per_iter];
     unlink(filepath);
     int fd = open(filepath, O_CREAT | O_RDWR, S_IRUSR | S_IWUSR);
     lseek(fd, init_offset, SEEK_SET);
 
     for (int i = 0; i < num_iter; ++i) {
-      char src_buf[num_bytes_per_iter];
       fill_buff(src_buf, num_bytes_per_iter, num_bytes_per_iter * i);
       ret = write(fd, src_buf, num_bytes_per_iter);
       assert(ret == num_bytes_per_iter);
     }
     fsync(fd);
     close(fd);
+    delete[] src_buf;
   }
 
   // reopen the file and check result
@@ -49,28 +50,31 @@ void test(TestOpt test_opt) {
 
   // check that the content before OFFSET are all zeros
   if (init_offset != 0) {
-    char actual[init_offset];
+    char* actual = new char[init_offset];
+    char* expected = new char[init_offset];
+
     ret = read(fd, actual, init_offset);
     assert(ret == init_offset);
-
-    char expected[init_offset];
     memset(expected, 0, init_offset);
 
     CHECK_RESULT(expected, actual, init_offset, fd);
+    delete[] actual;
+    delete[] expected;
   }
 
   // check that content after OFFSET are written
   {
     int length = num_bytes_per_iter * num_iter;
+    char* actual = new char[length];
+    char* expected = new char[length];
 
-    char actual[length];
     ret = read(fd, actual, length);
     assert(ret == length);
-
-    char expected[length];
     fill_buff(expected, length);
 
     CHECK_RESULT(expected, actual, length, fd);
+    delete[] actual;
+    delete[] expected;
   }
 
   fsync(fd);
@@ -125,6 +129,11 @@ int main() {
   // multi-block huge write w/o alignment
   test({.num_bytes_per_iter = 356791, .num_iter = 2, .init_offset = 542});
   test({.num_bytes_per_iter = 1300000, .init_offset = 17});
+
+  // multi-block huge block-aligned write
+  test({.num_bytes_per_iter = BLOCK_SIZE * 1024, .init_offset = 0});
+  test({.num_bytes_per_iter = BLOCK_SIZE * 1024 * 4,
+        .init_offset = BLOCK_SIZE * 3});
 
   return 0;
 }
