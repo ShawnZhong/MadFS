@@ -39,21 +39,12 @@ void bench(benchmark::State& state) {
   close(fd);
 
   int open_flags = 0;
-  switch (mode) {
-    case Mode::SEQ_READ:
-    case Mode::RND_READ:
-      open_flags |= O_RDONLY;
-      break;
-    case Mode::APPEND:
-      open_flags |= O_APPEND;
-      // fall through
-    case Mode::SEQ_WRITE:
-    case Mode::RND_WRITE:
-      open_flags |= O_RDWR;
-      break;
-    default:
-      assert(false);
-  }
+  if constexpr (mode == Mode::SEQ_READ || mode == Mode::RND_READ)
+    open_flags = O_RDONLY;
+  else if constexpr (mode == Mode::SEQ_WRITE || mode == Mode::RND_WRITE)
+    open_flags = O_RDWR;
+  else if constexpr (mode == Mode::APPEND)
+    open_flags = O_RDWR | O_APPEND;
 
   fd = open(filepath, open_flags);
   if (fd < 0) state.SkipWithError("open failed");
