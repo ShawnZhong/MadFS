@@ -8,7 +8,12 @@
 #cmakedefine01 ULAYFS_FORCE_MAP_POPULATE
 #cmakedefine01 ULAYFS_TX_FLUSH_ONLY_FSYNC
 #cmakedefine01 ULAYFS_USE_PMEMCHECK
-#cmakedefine ULAY_PERSIST_IMPL PersistImpl::@ULAY_PERSIST_IMPL@
+#cmakedefine01 ULAYFS_USE_LIBPMEM2
+
+// clang-format off
+#cmakedefine ULAYFS_PERSIST @ULAYFS_PERSIST@
+#define ULAYFS_PERSIST_STR "@ULAYFS_PERSIST@"
+// clang-format on
 
 #cmakedefine GIT_BRANCH "@GIT_BRANCH@"
 #cmakedefine GIT_COMMIT_HASH "@GIT_COMMIT_HASH@"
@@ -49,13 +54,19 @@ constexpr static struct BuildOptions {
   constexpr static bool support_clflushopt = false;
 #endif
 
-  // for memset and memcpy with persistence:
-  enum class PersistImpl {
-    FLUSH,   // do operation on cache then flush
+#ifdef __AVX512F__
+  constexpr static bool support_avx512f = true;
+#else
+  constexpr static bool support_avx512f = false;
+#endif
+
+  // for memset and copy with persistence:
+  enum class Persist {
+    NATIVE,  // do operation on cache then flush
     KERNEL,  // use Linux kerne's implementation (w/ movnti)
     PMDK,    // use PMDK's implementation
   };
-  constexpr static enum PersistImpl persist_impl = ULAY_PERSIST_IMPL;
+  constexpr static enum Persist persist = Persist::ULAYFS_PERSIST;
 
   friend std::ostream& operator<<(std::ostream& out,
                                   [[maybe_unused]] const BuildOptions& opt) {
@@ -73,11 +84,8 @@ constexpr static struct BuildOptions {
     out << "\ttx_flush_only_fsync: " << tx_flush_only_fsync << "\n";
     out << "\tsupport_clwb: " << support_clwb << "\n";
     out << "\tsupport_clflushopt: " << support_clflushopt << "\n";
-    out << "\tpersist_impl: "
-        << (persist_impl == PersistImpl::KERNEL
-                ? "KERNEL"
-                : (persist_impl == PersistImpl::PMDK ? "PMDK" : "FLUSH"))
-        << "\n";
+    out << "\tsupport_avx512f: " << support_avx512f << "\n";
+    out << "\tpersist_impl: " ULAYFS_PERSIST_STR << "\n";
     return out;
   }
 } build_options;
