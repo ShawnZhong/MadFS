@@ -18,8 +18,8 @@ template <Mode mode>
 void bench(benchmark::State& state) {
   const auto num_bytes = state.range(0);
 
-  [[maybe_unused]] char dst_buf[MAX_SIZE];
-  [[maybe_unused]] char src_buf[MAX_SIZE];
+  [[maybe_unused]] char* dst_buf = new char[MAX_SIZE];
+  [[maybe_unused]] char* src_buf = new char[MAX_SIZE];
   std::fill(src_buf, src_buf + MAX_SIZE, 'x');
 
   unlink(filepath);
@@ -75,11 +75,6 @@ void bench(benchmark::State& state) {
             pread(fd, dst_buf, num_bytes, rand_off[i++]);
 
         assert(res == num_bytes);
-        if (memcmp(dst_buf, src_buf, num_bytes) != 0) {
-          fprintf(stderr, "dst_buf = %s\n", dst_buf);
-          fprintf(stderr, "src_buf = %s\n", src_buf);
-          assert(false);
-        }
         assert(memcmp(dst_buf, src_buf, num_bytes) == 0);
       }
     } else if constexpr (mode == Mode::RND_WRITE) {
@@ -101,6 +96,9 @@ void bench(benchmark::State& state) {
   // tear down
   close(fd);
   unlink(filepath);
+
+  delete[] dst_buf;
+  delete[] src_buf;
 }
 
 int main(int argc, char** argv) {
