@@ -32,7 +32,7 @@ void bench(benchmark::State& state) {
     auto len = num_bytes * num_iter;
     auto buf = new char[len];
     std::fill(buf, buf + len, 'x');
-    [[maybe_unused]] ssize_t res = write(fd, buf, len, 0);
+    [[maybe_unused]] ssize_t res = write(fd, buf, len);
     assert(res == len);
     fsync(fd);
     close(fd);
@@ -40,7 +40,7 @@ void bench(benchmark::State& state) {
   }
 
   int open_flags = 0;
-  switch constexpr (mode) {
+  switch (mode) {
     case Mode::SEQ_READ:
     case Mode::RND_READ:
       open_flags |= O_RDONLY;
