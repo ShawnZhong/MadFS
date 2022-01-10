@@ -23,19 +23,41 @@ void bench(benchmark::State& state) {
   std::fill(src_buf, src_buf + MAX_SIZE, 'x');
 
   unlink(filepath);
-  fd = open(filepath, O_CREAT | O_RDWR, S_IRUSR | S_IWUSR);
-  if (fd < 0) state.SkipWithError("open failed");
 
   // preallocate file
   if constexpr (mode != Mode::APPEND) {
+    fd = open(filepath, O_CREAT | O_RDWR | O_APPEND, S_IRUSR | S_IWUSR);
+    if (fd < 0) state.SkipWithError("open failed");
+
     auto len = num_bytes * num_iter;
     auto buf = new char[len];
     std::fill(buf, buf + len, 'x');
-    [[maybe_unused]] ssize_t res = pwrite(fd, buf, len, 0);
+    [[maybe_unused]] ssize_t res = write(fd, buf, len, 0);
     assert(res == len);
     fsync(fd);
+    close(fd);
     delete[] buf;
   }
+
+  int open_flags = 0;
+  switch constexpr (mode) {
+    case Mode::SEQ_READ:
+    case Mode::RND_READ:
+      open_flags |= O_RDONLY;
+      break;
+    case Mode::APPEND:
+      open_flags |= O_APPEND;
+      // fall through
+    case Mode::SEQ_WRITE:
+    case Mode::RND_WRITE:
+      open_flags |= O_RDWR;
+      break;
+    default:
+      assert(false);
+  }
+
+  fd = open(filepath, open_flags);
+  if (fd < 0) state.SkipWithError("open failed");
 
   // run benchmark
   if constexpr (mode == Mode::APPEND || mode == Mode::SEQ_WRITE) {
