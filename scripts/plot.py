@@ -200,7 +200,6 @@ def plot_tpcc(result_dir):
                 k: int(re.search(f"{k}: timing = (.+?) nanoseconds", data).group(1)) / 1000 ** 3
                 for k in ("neword", "payment", "ordstat", "delivery", "slev")
             }
-            result["time"] = float(re.search("(.+?) seconds", data).group(1))
             result["label"] = fs_name
             results.append(result)
     df = pd.DataFrame(results)

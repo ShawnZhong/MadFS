@@ -11,7 +11,6 @@ class Filesystem:
     name: str
     pmem_path: Path
     load_ulayfs: bool = False
-    cmake_args: str = ""
 
 
 def get_ext4_dax_path():

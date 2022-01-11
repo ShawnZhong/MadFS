@@ -21,7 +21,7 @@ def run_micro(benchmark):
 
     for fs in get_fs_configs():
         runner = Runner(cmake_target, result_dir=result_dir / fs.name)
-        runner.build(cmake_args=fs.cmake_args)
+        runner.build()
         runner.run(load_ulayfs=fs.load_ulayfs, pmem_path=fs.pmem_path)
 
     return result_dir
