@@ -1,10 +1,13 @@
 #pragma once
 
+#include <array>
 #include <stdexcept>
 #include <vector>
 
 #include "block.h"
 #include "config.h"
+#include "const.h"
+#include "idx.h"
 #include "mtable.h"
 #include "posix.h"
 
@@ -16,14 +19,9 @@ class Allocator {
   File* file;
   Bitmap* bitmap;
 
-  // this local free_list maintains blocks allocated from the global free_list
-  // and not used yet; pair: <size, idx>
-  // sorted in the increasing order (the smallest size first)
-  //
-  // Note: we choose to use a vector instead of a balanced tree because we limit
-  // the maximum number of blocks per allocation to be 64 blocks (256 KB), so
-  // the fragmentation should be low, resulting in a small free_list
-  std::vector<std::pair<uint32_t, LogicalBlockIdx>> free_list;
+  // free_lists[n] means a free list of size n beginning from LogicalBlockIdx
+  // free_lists[0] should be empty
+  std::array<std::vector<LogicalBlockIdx>, BITMAP_CAPACITY> free_lists;
 
   // used as a hint for search; recent is defined to be "the next one to search"
   // keep id for idx translation
@@ -47,9 +45,7 @@ class Allocator {
         recent_bitmap_idx(),
         log_blocks(),
         curr_log_block(nullptr),
-        free_log_local_idx(NUM_LOG_ENTRY) {
-    free_list.reserve(64);
-  }
+        free_log_local_idx(NUM_LOG_ENTRY) {}
 
   ~Allocator() { return_free_list(); }
 
@@ -75,7 +71,8 @@ class Allocator {
   void free(const LogicalBlockIdx recycle_image[], uint32_t image_size);
 
   void return_free_list() {
-    for (const auto& [len, begin] : free_list) Bitmap::free(bitmap, begin, len);
+    for (uint32_t n = 1; n < BITMAP_CAPACITY; ++n)
+      for (LogicalBlockIdx lidx : free_lists[n]) Bitmap::free(bitmap, lidx, n);
   }
   /*
    * LogEntry allocations
