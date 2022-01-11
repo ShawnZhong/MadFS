@@ -99,6 +99,7 @@ class MemTable {
             1 << (sizeof(chunk_idx) * 8 - std::countl_zero(chunk_idx));
         table.resize(next_pow2);
       }
+      assert(!table[chunk_idx]);
       table[chunk_idx] = chunk_addr;
       return chunk_addr + chunk_local_idx;
     }
@@ -112,7 +113,7 @@ class MemTable {
     PANIC_IF(ret, "fd %d: fallocate failed", fd);
     meta->set_num_blocks_if_larger(new_num_blocks);
 
-    pmem::Block* chunk_addr = mmap_file(
+    pmem::Block* chunks_addr = mmap_file(
         BLOCK_SIZE_TO_IDX(alloc_num_blocks),
         static_cast<off_t>(BLOCK_IDX_TO_SIZE(old_num_blocks)), MAP_POPULATE);
     uint32_t chunk_begin_idx =
@@ -128,12 +129,13 @@ class MemTable {
     }
 
     for (uint32_t chunk_curr_idx = chunk_begin_idx;
-         chunk_curr_idx < chunk_end_idx; ++chunk_curr_idx)
+         chunk_curr_idx < chunk_end_idx; ++chunk_curr_idx) {
+      assert(!table[chunk_curr_idx]);
       table[chunk_curr_idx] =
-          chunk_addr +
+          chunks_addr +
           ((chunk_curr_idx - chunk_begin_idx) >> GROW_UNIT_IN_BLOCK_SHIFT);
-
-    return chunk_addr +
+    }
+    return chunks_addr +
            ((chunk_idx - chunk_begin_idx) >> GROW_UNIT_IN_BLOCK_SHIFT) +
            chunk_local_idx;
   }
