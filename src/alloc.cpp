@@ -15,9 +15,9 @@ namespace ulayfs::dram {
 LogicalBlockIdx Allocator::alloc(uint32_t num_blocks) {
   assert(num_blocks <= BITMAP_CAPACITY);
 
-  if (!free_lists[num_blocks].empty()) {
-    LogicalBlockIdx lidx = free_lists[num_blocks].back();
-    free_lists[num_blocks].pop_back();
+  if (!free_lists[num_blocks - 1].empty()) {
+    LogicalBlockIdx lidx = free_lists[num_blocks - 1].back();
+    free_lists[num_blocks - 1].pop_back();
     TRACE(
         "Allocator::alloc: allocating from free list (fully consumed): "
         "[n_blk: %d, lidx: %d]",
@@ -25,11 +25,11 @@ LogicalBlockIdx Allocator::alloc(uint32_t num_blocks) {
     return lidx;
   }
 
-  for (uint32_t n = num_blocks + 1; n < BITMAP_CAPACITY; ++n) {
-    if (!free_lists[n].empty()) {
-      LogicalBlockIdx lidx = free_lists[n].back();
-      free_lists[n].pop_back();
-      free_lists[n - num_blocks].push_back(lidx + num_blocks);
+  for (uint32_t n = num_blocks + 1; n <= BITMAP_CAPACITY; ++n) {
+    if (!free_lists[n - 1].empty()) {
+      LogicalBlockIdx lidx = free_lists[n - 1].back();
+      free_lists[n - 1].pop_back();
+      free_lists[n - num_blocks - 1].push_back(lidx + num_blocks);
       TRACE(
           "Allocator::alloc: allocating from free list (partially consumed): "
           "[n_blk: %d, lidx: %d] -> [n_blk: %d, lidx: %d]",
@@ -74,15 +74,15 @@ retry:
       TRACE("Allocator::alloc: allocated blocks: [n_blk: %d, lidx: %d]",
             num_right_zeros, allocated_block_idx);
       if (num_right_zeros > num_blocks) {
-        free_lists[num_right_zeros - num_blocks].emplace_back(
+        free_lists[num_right_zeros - num_blocks - 1].emplace_back(
             allocated_idx + BITMAP_CAPACITY - num_bits_left + num_blocks);
         TRACE("Allocator::alloc: unused blocks saved: [n_blk: %d, lidx: %d]",
               num_right_zeros - num_blocks,
               allocated_idx + BITMAP_CAPACITY - num_bits_left + num_blocks);
       }
     } else {
-      free_lists[num_right_zeros].emplace_back(allocated_idx + BITMAP_CAPACITY -
-                                               num_bits_left);
+      free_lists[num_right_zeros - 1].emplace_back(
+          allocated_idx + BITMAP_CAPACITY - num_bits_left);
       TRACE("Allocator::alloc: unused blocks saved: [n_blk: %d, lidx: %d]",
             num_right_zeros, allocated_idx + BITMAP_CAPACITY - num_bits_left);
     }
@@ -101,7 +101,7 @@ void Allocator::free(LogicalBlockIdx block_idx, uint32_t num_blocks) {
   if (block_idx == 0) return;
   TRACE("Allocator::alloc: adding to free list: [%u, %u)", block_idx,
         num_blocks + block_idx);
-  free_lists[num_blocks].emplace_back(block_idx);
+  free_lists[num_blocks - 1].emplace_back(block_idx);
 }
 
 void Allocator::free(const LogicalBlockIdx recycle_image[],
@@ -125,7 +125,7 @@ void Allocator::free(const LogicalBlockIdx recycle_image[],
         continue;
       TRACE("Allocator::free: adding to free list: [%u, %u)", group_begin_lidx,
             curr - group_begin + group_begin_lidx);
-      free_lists[curr - group_begin].emplace_back(group_begin_lidx);
+      free_lists[curr - group_begin - 1].emplace_back(group_begin_lidx);
       group_begin_lidx = recycle_image[curr];
       if (group_begin_lidx != 0) group_begin = curr;
     }
@@ -133,7 +133,7 @@ void Allocator::free(const LogicalBlockIdx recycle_image[],
   if (group_begin_lidx != 0) {
     TRACE("Allocator::free: adding to free list: [%u, %u)", group_begin_lidx,
           group_begin_lidx + image_size - group_begin);
-    free_lists[image_size - group_begin].emplace_back(group_begin_lidx);
+    free_lists[image_size - group_begin - 1].emplace_back(group_begin_lidx);
   }
 }
 

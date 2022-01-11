@@ -19,8 +19,7 @@ class Allocator {
   File* file;
   Bitmap* bitmap;
 
-  // free_lists[n] means a free list of size n beginning from LogicalBlockIdx
-  // free_lists[0] should be empty
+  // free_lists[n-1] means a free list of size n beginning from LogicalBlockIdx
   std::array<std::vector<LogicalBlockIdx>, BITMAP_CAPACITY> free_lists;
 
   // used as a hint for search; recent is defined to be "the next one to search"
