@@ -15,8 +15,7 @@ static pmem2_memcpy_fn pmem2_memcpy = []() {
 }();
 #endif
 
-namespace ulayfs {
-namespace pmem {
+namespace ulayfs::pmem {
 namespace internal {
 /**
  * Different implementation of memcpy:
@@ -111,19 +110,4 @@ static inline void memcpy_persist(void *dst, const void *src, size_t size,
   }
   if (fenced) _mm_sfence();
 }
-}  // namespace pmem
-
-namespace dram {
-static inline void memcpy(void *dst, const void *src, size_t size) {
-  if constexpr (BuildOptions::persist == BuildOptions::Persist::PMDK) {
-#if ULAYFS_USE_LIBPMEM2
-    pmem2_memcpy(dst, src, size, PMEM2_F_MEM_TEMPORAL | PMEM2_F_MEM_NOFLUSH);
-#else
-    assert(false);
-#endif
-  } else {
-    std::memcpy(dst, src, size);
-  }
-}
-}  // namespace dram
-}  // namespace ulayfs
+}  // namespace ulayfs::pmem
