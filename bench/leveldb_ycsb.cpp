@@ -100,7 +100,7 @@ int main(int argc, char* argv[]) {
   add_opt("d,directory", "directory of db",
           cxxopts::value<std::string>(db_location)->default_value("./dbdir"));
   add_opt("v,value_size", "size of value",
-          cxxopts::value<uint>(value_size)->default_value("100000"));
+          cxxopts::value<uint>(value_size)->default_value("100"));
   add_opt("f,ycsb", "YCSB trace filename",
           cxxopts::value<std::string>(ycsb_filename)->default_value(""));
   auto result = cmd_args.parse(argc, argv);
@@ -115,15 +115,20 @@ int main(int argc, char* argv[]) {
   if (!ycsb_filename.empty()) {
     std::ifstream input(ycsb_filename);
     std::string opcode;
+    std::string table_name;
     std::string key;
-    while (input >> opcode >> key) {
+    std::string rest;
+    while (input >> opcode) {
       ycsb_op_t op = opcode == "READ"     ? READ
                      : opcode == "INSERT" ? INSERT
                      : opcode == "UPDATE" ? UPDATE
                      : opcode == "SCAN"   ? SCAN
                                           : UNKNOWN;
+      if (op == UNKNOWN) continue;
+      input >> table_name >> key;
       size_t scan_len = 0;
       if (op == SCAN) input >> scan_len;
+      std::getline(input, rest);
       ycsb_reqs.push_back({.op = op, .key = key, .scan_len = scan_len});
     }
   } else {

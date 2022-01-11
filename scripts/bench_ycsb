@@ -13,7 +13,7 @@ logger = logging.getLogger("bench_ycsb")
 def run_workload(runner, fs, dbdir: Path, workload: str, load):
     system("echo 3 | sudo tee /proc/sys/vm/drop_caches >/dev/null")
     trace_name = f"{workload}-{'load' if load else 'run'}"
-    trace_path = root_dir / "bench" / "ycsb-traces" / f"{trace_name}.txt"
+    trace_path = root_dir / "bench" / "ycsb-traces-large" / f"{trace_name}.txt"
     cmd = f"{runner.prog_path} -f {trace_path} -d {dbdir}"
     runner.run(cmd=cmd, load_ulayfs=fs.load_ulayfs, prog_log_name=f"{trace_name}.log")
 
@@ -68,6 +68,6 @@ if __name__ == "__main__":
         default=all_workloads,
         choices=all_workloads,
     )
-    argparser.add_argument("-n", "--num_iters", type=int, default=5)
+    argparser.add_argument("-n", "--num_iters", type=int, default=1)
     args = argparser.parse_args()
     main(**vars(args))
