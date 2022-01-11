@@ -4,7 +4,7 @@ import argparse
 import logging
 from pathlib import Path
 
-from scripts.bench_utils import get_ext4_dax_path
+from scripts.bench import get_ext4_dax_path
 from scripts.runner import Runner
 from scripts.utils import check_any_args_passed
 

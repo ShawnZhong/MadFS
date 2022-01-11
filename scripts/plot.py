@@ -36,14 +36,14 @@ def read_files(result_dir, post_process_fn):
 
 
 def plot_single_bm(
-        df,
-        barchart=False,
-        logx=False,
-        logy=False,
-        xlabel=None,
-        ylabel=None,
-        title=None,
-        output_path=None,
+    df,
+    barchart=False,
+    logx=False,
+    logy=False,
+    xlabel=None,
+    ylabel=None,
+    title=None,
+    output_path=None,
 ):
     plt.clf()
     label_groups = df.groupby("label")
@@ -140,8 +140,12 @@ def plot_ycsb(result_dir):
                 continue
             with open(result_path, "r") as f:
                 data = f.read()
-                total_num_requests = sum(int(e) for e in re.findall('Finished (.+?) requests', data))
-                total_time_us = sum(float(e) for e in re.findall('Time elapsed: (.+?) us', data))
+                total_num_requests = sum(
+                    int(e) for e in re.findall("Finished (.+?) requests", data)
+                )
+                total_time_us = sum(
+                    float(e) for e in re.findall("Time elapsed: (.+?) us", data)
+                )
                 mops_per_sec = total_num_requests / total_time_us
                 results.append({"benchmark": w, "x": fs_name, "y": mops_per_sec})
     df = pd.DataFrame(results)

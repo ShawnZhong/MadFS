@@ -27,7 +27,7 @@ def get_fs_configs():
     ext4_dax_path = get_ext4_dax_path()
 
     for (name, path, load_ulayfs) in [
-        ("uLayfs", ext4_dax_path, True),
+        ("uLayFS", ext4_dax_path, True),
         ("ext4", ext4_dax_path, False),
         ("NOVA", "/mnt/pmem0-nova", False),
     ]:
