@@ -39,8 +39,10 @@ namespace ulayfs::posix {
 DECL_FN(lseek);
 DECL_FN(write);
 DECL_FN(pwrite);
+DECL_FN(pwrite64);
 DECL_FN(read);
 DECL_FN(pread);
+DECL_FN(pread64);
 DECL_FN(open);
 DECL_FN(close);
 DECL_FN(fclose);

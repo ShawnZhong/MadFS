@@ -15,8 +15,10 @@ namespace ulayfs::posix {
 INIT_FN(lseek);
 INIT_FN(write);
 INIT_FN(pwrite);
+INIT_FN(pwrite64);
 INIT_FN(read);
 INIT_FN(pread);
+INIT_FN(pread64);
 INIT_FN(open);
 INIT_FN(close);
 INIT_FN(fclose);

@@ -106,6 +106,16 @@ ssize_t pread(int fd, void* buf, size_t count, off_t offset) {
   }
 }
 
+ssize_t pread64(int fd, void* buf, size_t count, off64_t offset) {
+  if (auto file = get_file(fd)) {
+    DEBUG("ulayfs::pread64(%d, buf, %zu, %ld)", fd, count, offset);
+    return file->pread(buf, count, offset);
+  } else {
+    DEBUG("posix::pread64(%d, buf, %zu, %ld)", fd, count, offset);
+    return posix::pread64(fd, buf, count, offset);
+  }
+}
+
 ssize_t __read_chk(int fd, void* buf, size_t count,
                    [[maybe_unused]] size_t buflen) {
   assert(buflen >= count);
@@ -137,6 +147,16 @@ ssize_t pwrite(int fd, const void* buf, size_t count, off_t offset) {
   } else {
     DEBUG("posix::pwrite(%d, buf, %zu, %ld)", fd, count, offset);
     return posix::pwrite(fd, buf, count, offset);
+  }
+}
+
+ssize_t pwrite64(int fd, const void* buf, size_t count, off64_t offset) {
+  if (auto file = get_file(fd)) {
+    DEBUG("ulayfs::pwrite64(%d, buf, %zu, %ld)", fd, count, offset);
+    return file->pwrite(buf, count, offset);
+  } else {
+    DEBUG("posix::pwrite64(%d, buf, %zu, %ld)", fd, count, offset);
+    return posix::pwrite64(fd, buf, count, offset);
   }
 }
 
