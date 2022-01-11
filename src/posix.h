@@ -50,6 +50,7 @@ DECL_FN(munmap);
 DECL_FN(fallocate);
 DECL_FN(ftruncate);
 DECL_FN(fsync);
+DECL_FN(fdatasync);
 DECL_FN(flock);
 DECL_FN(unlink);
 DECL_FN(rename);

@@ -160,6 +160,15 @@ int fsync(int fd) {
   }
 }
 
+int fdatasync(int fd) {
+  if (auto file = get_file(fd)) {
+    DEBUG("ulayfs::fdatasync(%d)", fd);
+    return file->fsync();
+  } else {
+    DEBUG("posix::fdatasync(%d)", fd);
+    return posix::fdatasync(fd);
+  }
+}
 void* mmap(void* addr, size_t length, int prot, int flags, int fd,
            off_t offset) {
   if (auto file = get_file(fd)) {

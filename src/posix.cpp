@@ -26,6 +26,7 @@ INIT_FN(munmap);
 INIT_FN(fallocate);
 INIT_FN(ftruncate);
 INIT_FN(fsync);
+INIT_FN(fdatasync);
 INIT_FN(flock);
 INIT_FN(unlink);
 INIT_FN(rename);
