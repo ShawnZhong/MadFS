@@ -15,9 +15,7 @@ def run_workload(runner, fs, dbdir: Path, workload: str, load):
     trace_name = f"{workload}-{'load' if load else 'run'}"
     trace_path = root_dir / "bench" / "ycsb-traces" / f"{trace_name}.txt"
     cmd = f"{runner.prog_path} -f {trace_path} -d {dbdir}"
-
-    prog_log_name = f"{trace_name}.log"
-    runner.run(cmd=cmd, load_ulayfs=fs.load_ulayfs, prog_log_name=prog_log_name)
+    runner.run(cmd=cmd, load_ulayfs=fs.load_ulayfs, prog_log_name=f"{trace_name}.log")
 
 
 def run_ycsb(workloads, num_iters):
@@ -30,9 +28,10 @@ def run_ycsb(workloads, num_iters):
     result_dir = root_dir / "results" / "bench_ycsb" / get_timestamp()
 
     for fs in get_fs_configs():
-        dbdir = fs.pmem_path / "bench-dbdir"
         runner = Runner("leveldb_ycsb", result_dir=result_dir / fs.name)
         runner.build()
+
+        dbdir = fs.pmem_path / "bench-dbdir"
         for workload in workloads:
             system(f"rm -rf {dbdir} && mkdir -p {dbdir}")
             run_workload(runner, fs, dbdir=dbdir, workload=workload, load=True)
