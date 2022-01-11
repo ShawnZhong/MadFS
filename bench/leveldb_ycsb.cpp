@@ -146,6 +146,9 @@ int main(int argc, char* argv[]) {
   // Generate value.
   std::string value(value_size, '0');
 
+  std::cout << "Running YCSB workload file \"" << ycsb_filename << "\" at \""
+            << db_location << "\" with value size " << value_size << std::endl;
+
   // Execute the actions of the YCSB trace.
   double microsecs;
   uint cnt = do_ycsb(db_location, ycsb_reqs, value, microsecs);

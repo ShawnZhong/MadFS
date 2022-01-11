@@ -19,7 +19,7 @@ def run_workload(runner, fs, dbdir: Path, workload: str, load):
 
 
 def run_ycsb(workloads, num_iters):
-    from fs_config import get_fs_configs
+    from bench_common import get_fs_configs
     from runner import Runner
     from init import init
 

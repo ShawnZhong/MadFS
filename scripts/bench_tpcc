@@ -3,7 +3,7 @@ import argparse
 import logging
 from pathlib import Path
 
-from fs_config import get_fs_configs
+from bench_common import get_fs_configs
 from runner import Runner
 from utils import root_dir, get_timestamp
 

@@ -11,7 +11,7 @@ $(trace_files): $(ycsb)
 	$(ycsb)/bin/ycsb.sh $(t) basic \
 		-P $(ycsb)/workloads/workload$(w) \
 		-p fieldcount=1 -p fieldlength=0 \
-		-p recordcount=100000 -p operationcount=100000 \
+		-p recordcount=1000000 -p operationcount=1000000 \
 		> $(w)-$(t).txt
 
 $(ycsb):
