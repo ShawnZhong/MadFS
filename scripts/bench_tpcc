@@ -4,6 +4,7 @@ import logging
 from pathlib import Path
 
 from bench_common import get_fs_configs
+from plot import plot_tpcc
 from runner import Runner
 from utils import root_dir, get_timestamp
 
@@ -50,6 +51,7 @@ def main(result_dir):
     if result_dir is None:
         result_dir = run_tpcc()
 
+    plot_tpcc(result_dir)
     logger.info(f"Results saved to {result_dir}")
 
 
