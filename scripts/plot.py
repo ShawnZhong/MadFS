@@ -146,7 +146,7 @@ def plot_ycsb(result_dir):
                 results.append({"benchmark": w, "x": fs_name, "y": mops_per_sec})
     df = pd.DataFrame(results)
     df["label"] = ""
-    print(df)
+    print(df.sort_values(by="benchmark"))
     plot_benchmarks(
         result_dir, df, xlabel="Filesystem", ylabel="Throughput (Mops/s)", barchart=True
     )

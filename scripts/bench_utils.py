@@ -15,30 +15,24 @@ class Filesystem:
 
 
 def get_ext4_dax_path():
-    pmem_path = Path("/mnt/pmem0-ext4-dax")
-    if pmem_path.exists():
-        return pmem_path
+    for path in ["/mnt/pmem0-ext4-dax", "/mnt/pmem0", "/mnt/pmem1"]:
+        if Path(path).exists():
+            return Path(path)
 
-    logger.warning(f"{pmem_path} does not exist, use current directory")
+    logger.warning(f"Cannot find ext4-dax path, use current directory")
     return Path(".")
 
 
 def get_fs_configs():
     ext4_dax_path = get_ext4_dax_path()
 
-    # yield Filesystem("uLayFS-native", pmem_path=ext4_dax_path, load_ulayfs=True, cmake_args="-DULAYFS_PERSIST=NATIVE")
-    # yield Filesystem("uLayFS-pmdk", pmem_path=ext4_dax_path, load_ulayfs=True, cmake_args="-DULAYFS_PERSIST=PMDK")
-    # yield Filesystem("uLayFS-kernel", pmem_path=ext4_dax_path, load_ulayfs=True, cmake_args="-DULAYFS_PERSIST=KERNEL")
-
-    yield Filesystem("uLayFS", pmem_path=ext4_dax_path, load_ulayfs=True)
-
-    for (name, path) in [
-        ("ext4-dax", ext4_dax_path),
-        ("ext4-journal", "/mnt/pmem0-ext4-journal"),
-        ("NOVA", "/mnt/pmem0-nova"),
+    for (name, path, load_ulayfs) in [
+        ("uLayfs", ext4_dax_path, True),
+        ("ext4", ext4_dax_path, False),
+        ("NOVA", "/mnt/pmem0-nova", False),
     ]:
         pmem_path = Path(path)
         if not pmem_path.exists():
             logger.warning(f"{pmem_path} does not exist, skipping {name}")
             continue
-        yield Filesystem(name, pmem_path)
+        yield Filesystem(name, pmem_path, load_ulayfs)

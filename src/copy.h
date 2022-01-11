@@ -7,7 +7,7 @@
 #include <libpmem2/map.h>
 #include <libpmem2/persist.h>
 void pmem2_set_mem_fns(struct pmem2_map *map);
-static pmem2_memcpy_fn pmem2_memcpy = []() -> pmem2_memcpy_fn {
+static pmem2_memcpy_fn pmem2_memcpy = []() {
   struct pmem2_map map;  // NOLINT(cppcoreguidelines-pro-type-member-init)
   map.effective_granularity = PMEM2_GRANULARITY_CACHE_LINE;
   pmem2_set_mem_fns(&map);
@@ -15,8 +15,8 @@ static pmem2_memcpy_fn pmem2_memcpy = []() -> pmem2_memcpy_fn {
 }();
 #endif
 
-namespace ulayfs::pmem::copy {
-
+namespace ulayfs {
+namespace pmem {
 namespace internal {
 /**
  * Different implementation of memcpy:
@@ -111,4 +111,19 @@ static inline void memcpy_persist(void *dst, const void *src, size_t size,
   }
   if (fenced) _mm_sfence();
 }
-}  // namespace ulayfs::pmem::copy
+}  // namespace pmem
+
+namespace dram {
+static inline void memcpy(void *dst, const void *src, size_t size) {
+  if constexpr (BuildOptions::persist == BuildOptions::Persist::PMDK) {
+#if ULAYFS_USE_LIBPMEM2
+    pmem2_memcpy(dst, src, size, PMEM2_F_MEM_TEMPORAL | PMEM2_F_MEM_NOFLUSH);
+#else
+    assert(false);
+#endif
+  } else {
+    std::memcpy(dst, src, size);
+  }
+}
+}  // namespace dram
+}  // namespace ulayfs

@@ -4,6 +4,7 @@ import argparse
 import logging
 from pathlib import Path
 
+from scripts.bench_utils import get_ext4_dax_path
 from scripts.runner import Runner
 from scripts.utils import check_any_args_passed
 
@@ -60,10 +61,7 @@ if __name__ == "__main__":
     args = parser.parse_args()
 
     if args.pmem_path is None:
-        for path in [Path("/mnt/pmem0-ext4-dax"), Path("/mnt/pmem0")]:
-            if path.exists():
-                args.pmem_path = path
-                break
+        args.pmem_path = get_ext4_dax_path()
 
     logger.info(f"args={args}")
 

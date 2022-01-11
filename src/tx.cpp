@@ -487,14 +487,14 @@ ssize_t TxMgr::ReadTx::do_read() {
 
   // first handle the first block (which might not be full block)
   curr_block = file->vidx_to_addr_ro(begin_vidx);
-  memcpy(buf, curr_block->data_ro() + first_block_overlap_size,
-         first_block_size);
+  dram::memcpy(buf, curr_block->data_ro() + first_block_overlap_size,
+               first_block_size);
   buf_offset = first_block_size;
 
   // then handle middle full blocks (which might not exist)
   for (curr_vidx = begin_vidx + 1; curr_vidx < end_vidx - 1; ++curr_vidx) {
     curr_block = file->vidx_to_addr_ro(curr_vidx);
-    memcpy(buf + buf_offset, curr_block->data_ro(), BLOCK_SIZE);
+    dram::memcpy(buf + buf_offset, curr_block->data_ro(), BLOCK_SIZE);
     buf_offset += BLOCK_SIZE;
   }
 
@@ -502,7 +502,7 @@ ssize_t TxMgr::ReadTx::do_read() {
   if (begin_vidx != end_vidx - 1) {
     assert(curr_vidx == end_vidx - 1);
     curr_block = file->vidx_to_addr_ro(curr_vidx);
-    memcpy(buf + buf_offset, curr_block->data_ro(), count - buf_offset);
+    dram::memcpy(buf + buf_offset, curr_block->data_ro(), count - buf_offset);
   }
 
 redo:
@@ -523,8 +523,8 @@ redo:
     redo_lidx = redo_image[0];
     if (redo_lidx) {
       curr_block = file->lidx_to_addr_ro(redo_lidx);
-      memcpy(buf, curr_block->data_ro() + first_block_overlap_size,
-             first_block_size);
+      dram::memcpy(buf, curr_block->data_ro() + first_block_overlap_size,
+                   first_block_size);
       redo_image[0] = 0;
     }
     buf_offset = first_block_size;
@@ -534,7 +534,7 @@ redo:
       redo_lidx = redo_image[curr_vidx - begin_vidx];
       if (redo_lidx) {
         curr_block = file->lidx_to_addr_ro(redo_lidx);
-        memcpy(buf + buf_offset, curr_block->data_ro(), BLOCK_SIZE);
+        dram::memcpy(buf + buf_offset, curr_block->data_ro(), BLOCK_SIZE);
         redo_image[curr_vidx - begin_vidx] = 0;
       }
       buf_offset += BLOCK_SIZE;
@@ -545,7 +545,8 @@ redo:
       redo_lidx = redo_image[curr_vidx - begin_vidx];
       if (redo_lidx) {
         curr_block = file->lidx_to_addr_ro(redo_lidx);
-        memcpy(buf + buf_offset, curr_block->data_ro(), count - buf_offset);
+        dram::memcpy(buf + buf_offset, curr_block->data_ro(),
+                     count - buf_offset);
         redo_image[curr_vidx - begin_vidx] = 0;
       }
     }
@@ -618,7 +619,7 @@ ssize_t TxMgr::AlignedTx::do_write() {
   for (auto block : dst_blocks) {
     size_t num_bytes =
         rest_count > MAX_BYTES_PER_BODY ? MAX_BYTES_PER_BODY : rest_count;
-    pmem::copy::memcpy_persist(block->data_rw(), rest_buf, num_bytes);
+    pmem::memcpy_persist(block->data_rw(), rest_buf, num_bytes);
     rest_buf += num_bytes;
     rest_count -= num_bytes;
   }
@@ -657,18 +658,17 @@ ssize_t TxMgr::SingleBlockTx::do_write() {
   assert(recycle_image[0] != dst_lidxs[0]);
 
   // copy data from buf
-  pmem::copy::memcpy_persist(dst_blocks[0]->data_rw() + local_offset, buf,
-                             count);
+  pmem::memcpy_persist(dst_blocks[0]->data_rw() + local_offset, buf, count);
 
 redo:
   // copy original data
   const pmem::Block* src_block = file->lidx_to_addr_ro(recycle_image[0]);
   assert(dst_blocks.size() == 1);
-  pmem::copy::memcpy_persist(dst_blocks[0]->data_rw(), src_block->data_ro(),
-                             local_offset);
-  pmem::copy::memcpy_persist(dst_blocks[0]->data_rw() + local_offset + count,
-                             src_block->data_ro() + local_offset + count,
-                             BLOCK_SIZE - (local_offset + count));
+  pmem::memcpy_persist(dst_blocks[0]->data_rw(), src_block->data_ro(),
+                       local_offset);
+  pmem::memcpy_persist(dst_blocks[0]->data_rw() + local_offset + count,
+                       src_block->data_ro() + local_offset + count,
+                       BLOCK_SIZE - (local_offset + count));
 
   if (is_offset_depend) file->wait_offset(ticket);
 
@@ -727,7 +727,7 @@ ssize_t TxMgr::MultiBlockTx::do_write() {
           num_bytes = MAX_BYTES_PER_BODY;
       }
       // actual memcpy
-      pmem::copy::memcpy_persist(full_blocks->data_rw(), rest_buf, num_bytes);
+      pmem::memcpy_persist(full_blocks->data_rw(), rest_buf, num_bytes);
       rest_buf += num_bytes;
       rest_full_count -= num_bytes;
     }
@@ -743,32 +743,31 @@ ssize_t TxMgr::MultiBlockTx::do_write() {
 
   // write data from the buf to the first block
   char* dst = dst_blocks[0]->data_rw() + BLOCK_SIZE - first_block_overlap_size;
-  pmem::copy::memcpy_persist(dst, buf, first_block_overlap_size);
+  pmem::memcpy_persist(dst, buf, first_block_overlap_size);
 
   // write data from the buf to the last block
   pmem::Block* last_dst_block = dst_blocks.back() + end_full_vidx - begin_vidx -
                                 MAX_BLOCKS_PER_BODY * (dst_blocks.size() - 1);
   const char* buf_src = buf + (count - last_block_overlap_size);
-  pmem::copy::memcpy_persist(last_dst_block->data_rw(), buf_src,
-                             last_block_overlap_size);
+  pmem::memcpy_persist(last_dst_block->data_rw(), buf_src,
+                       last_block_overlap_size);
 
 redo:
   // copy first block
   if (need_copy_first && do_copy_first) {
     // copy the data from the first source block if exists
-    pmem::copy::memcpy_persist(dst_blocks[0]->data_rw(),
-                               file->lidx_to_addr_ro(src_first_lidx)->data_ro(),
-                               BLOCK_SIZE - first_block_overlap_size);
+    pmem::memcpy_persist(dst_blocks[0]->data_rw(),
+                         file->lidx_to_addr_ro(src_first_lidx)->data_ro(),
+                         BLOCK_SIZE - first_block_overlap_size);
   }
 
   // copy last block
   if (need_copy_last && do_copy_last) {
     // copy the data from the last source block if exits
-    pmem::copy::memcpy_persist(
-        last_dst_block->data_rw() + last_block_overlap_size,
-        file->lidx_to_addr_ro(src_last_lidx)->data_ro() +
-            last_block_overlap_size,
-        BLOCK_SIZE - last_block_overlap_size);
+    pmem::memcpy_persist(last_dst_block->data_rw() + last_block_overlap_size,
+                         file->lidx_to_addr_ro(src_last_lidx)->data_ro() +
+                             last_block_overlap_size,
+                         BLOCK_SIZE - last_block_overlap_size);
   }
   _mm_sfence();
 
