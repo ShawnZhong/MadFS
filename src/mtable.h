@@ -80,7 +80,8 @@ class MemTable {
       pmem::Block* chunk_addr = table[chunk_idx];
       if (chunk_addr) return chunk_addr + chunk_local_idx;
     } else {
-      int next_pow2 = 1 << (sizeof(idx) * 8 - std::countl_zero(idx));
+      int next_pow2 =
+          1 << (sizeof(chunk_idx) * 8 - std::countl_zero(chunk_idx));
       table.resize(next_pow2);
     }
 
