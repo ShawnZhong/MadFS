@@ -1,12 +1,9 @@
-#include <unistd.h>
-
 #include <cassert>
 #include <chrono>
 #include <cmath>
 #include <cstring>
 #include <fstream>
 #include <iostream>
-#include <random>
 
 #include "cxxopts.hpp"
 #include "leveldb/db.h"
@@ -25,9 +22,9 @@ static leveldb::ReadOptions read_options = leveldb::ReadOptions();
 static leveldb::WriteOptions write_options = leveldb::WriteOptions();
 
 /** Run/load YCSB workload on a leveldb instance. */
-static uint do_ycsb(const std::string db_location,
+static uint do_ycsb(const std::string& db_location,
                     const std::vector<ycsb_req_t>& reqs,
-                    const std::string value, double& microsecs) {
+                    const std::string& value, double& microsecs) {
   // Open a leveldb database.
   leveldb::DB* db;
   leveldb::Options options;

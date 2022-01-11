@@ -11,7 +11,7 @@ logger = logging.getLogger("bench_ycsb")
 
 
 def run_workload(runner, fs, dbdir: Path, workload: str, load):
-    system("echo 3 | sudo tee /proc/sys/vm/drop_caches")
+    system("echo 3 | sudo tee /proc/sys/vm/drop_caches >/dev/null")
     trace_name = f"{workload}-{'load' if load else 'run'}"
     trace_path = root_dir / "bench" / "ycsb-traces" / f"{trace_name}.txt"
     cmd = f"{runner.prog_path} -f {trace_path} -d {dbdir}"

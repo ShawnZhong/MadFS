@@ -36,14 +36,14 @@ def read_files(result_dir, post_process_fn):
 
 
 def plot_single_bm(
-    df,
-    barchart=False,
-    logx=False,
-    logy=False,
-    xlabel=None,
-    ylabel=None,
-    title=None,
-    output_path=None,
+        df,
+        barchart=False,
+        logx=False,
+        logy=False,
+        xlabel=None,
+        ylabel=None,
+        title=None,
+        output_path=None,
 ):
     plt.clf()
     label_groups = df.groupby("label")
@@ -150,7 +150,7 @@ def plot_ycsb(result_dir):
                 results.append({"benchmark": w, "x": fs_name, "y": mops_per_sec})
     df = pd.DataFrame(results)
     df["label"] = ""
-    print(df.sort_values(by="benchmark"))
+    print(df)
     plot_benchmarks(
         result_dir, df, xlabel="Filesystem", ylabel="Throughput (Mops/s)", barchart=True
     )

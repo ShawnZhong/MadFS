@@ -57,21 +57,6 @@ if (${ULAYFS_PERSIST} STREQUAL "PMDK")
     target_link_libraries(ulayfs pmem2)
 endif ()
 
-execute_process(COMMAND git rev-parse --abbrev-ref HEAD
-    OUTPUT_VARIABLE GIT_BRANCH
-    OUTPUT_STRIP_TRAILING_WHITESPACE)
-if (NOT GIT_BRANCH)
-    set(GIT_BRANCH Unknown)
-endif ()
-
-execute_process(COMMAND git rev-parse HEAD
-    OUTPUT_VARIABLE GIT_COMMIT_HASH
-    OUTPUT_STRIP_TRAILING_WHITESPACE)
-if (NOT GIT_COMMIT_HASH)
-    set(GIT_COMMIT_HASH Unknown)
-endif ()
-
-
 configure_file("src/config.h.in" "config.h" @ONLY)
 include_directories(${CMAKE_CURRENT_BINARY_DIR})
 
