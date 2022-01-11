@@ -24,6 +24,8 @@ constexpr static uint32_t GROW_UNIT_SIZE = 1 << GROW_UNIT_SHIFT;
 // preallocate must be multiple of grow_unit
 constexpr static uint32_t PREALLOC_SHIFT = 1 * GROW_UNIT_SHIFT;
 constexpr static uint32_t PREALLOC_SIZE = 1 * GROW_UNIT_SIZE;
+// preallocation is 1/16 of the current file size with GROW_UNIT_SIZE alignment
+constexpr static uint32_t GROW_UNIT_FACTOR = 16;
 
 /*
  * tx entry

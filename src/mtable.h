@@ -3,6 +3,7 @@
 #include <linux/mman.h>
 #include <tbb/concurrent_vector.h>
 
+#include <bit>
 #include <cstddef>
 #include <stdexcept>
 
@@ -76,43 +77,68 @@ class MemTable {
     uint32_t chunk_idx =
         (idx - first_region_num_blocks) >> GROW_UNIT_IN_BLOCK_SHIFT;
     uint32_t chunk_local_idx = idx & GROW_UNIT_IN_BLOCK_MASK;
+    bool need_resize = true;
     if (chunk_idx < table.size()) {
+      need_resize = false;
       pmem::Block* chunk_addr = table[chunk_idx];
       if (chunk_addr) return chunk_addr + chunk_local_idx;
-    } else {
-      int next_pow2 = 1 << (sizeof(idx) * 8 - std::countl_zero(idx));
-      table.resize(next_pow2);
     }
 
     // ensure this idx has real blocks allocated; do allocation if not
-    grow_to_fit(idx);
+    uint32_t old_num_blocks = meta->get_num_blocks();
+    assert(IS_ALIGNED(old_num_blocks, NUM_BLOCKS_PER_GROW));
+    if (idx < old_num_blocks) {
+      // only mmap the wanted chunk; not need to allocate
+      LogicalBlockIdx chunk_begin_lidx = idx & ~GROW_UNIT_IN_BLOCK_MASK;
+      pmem::Block* chunk_addr =
+          mmap_file(GROW_UNIT_SIZE,
+                    static_cast<off_t>(BLOCK_IDX_TO_SIZE(chunk_begin_lidx)),
+                    MAP_POPULATE);
+      if (need_resize) {
+        uint32_t next_pow2 =
+            1 << (sizeof(chunk_idx) * 8 - std::countl_zero(chunk_idx));
+        table.resize(next_pow2);
+      }
+      table[chunk_idx] = chunk_addr;
+      return chunk_addr + chunk_local_idx;
+    }
+    uint32_t alloc_num_blocks =
+        std::max(old_num_blocks / GROW_UNIT_FACTOR, idx + 1 - old_num_blocks);
+    alloc_num_blocks = ALIGN_UP(alloc_num_blocks, NUM_BLOCKS_PER_GROW);
+    uint32_t new_num_blocks = old_num_blocks + alloc_num_blocks;
+    int ret = posix::fallocate(
+        fd, 0, static_cast<off_t>(BLOCK_IDX_TO_SIZE(old_num_blocks)),
+        static_cast<off_t>(BLOCK_IDX_TO_SIZE(alloc_num_blocks)));
+    PANIC_IF(ret, "fd %d: fallocate failed", fd);
+    meta->set_num_blocks_if_larger(new_num_blocks);
 
-    LogicalBlockIdx chunk_begin_lidx = idx & ~GROW_UNIT_IN_BLOCK_MASK;
     pmem::Block* chunk_addr = mmap_file(
-        GROW_UNIT_SIZE, static_cast<off_t>(BLOCK_IDX_TO_SIZE(chunk_begin_lidx)),
-        MAP_POPULATE);
-    table[chunk_idx] = chunk_addr;
-    return chunk_addr + chunk_local_idx;
+        BLOCK_SIZE_TO_IDX(alloc_num_blocks),
+        static_cast<off_t>(BLOCK_IDX_TO_SIZE(old_num_blocks)), MAP_POPULATE);
+    uint32_t chunk_begin_idx =
+        (old_num_blocks - first_region_num_blocks) >> GROW_UNIT_IN_BLOCK_SHIFT;
+    uint32_t chunk_end_idx =
+        (new_num_blocks - first_region_num_blocks) >> GROW_UNIT_IN_BLOCK_SHIFT;
+
+    // FIXME: can there be a race?
+    if (chunk_end_idx > table.size()) {
+      uint32_t next_pow2 =
+          1 << (sizeof(chunk_end_idx) * 8 - std::countl_zero(chunk_end_idx));
+      table.resize(next_pow2);
+    }
+
+    for (uint32_t chunk_curr_idx = chunk_begin_idx;
+         chunk_curr_idx < chunk_end_idx; ++chunk_curr_idx)
+      table[chunk_curr_idx] =
+          chunk_addr +
+          ((chunk_curr_idx - chunk_begin_idx) >> GROW_UNIT_IN_BLOCK_SHIFT);
+
+    return chunk_addr +
+           ((chunk_idx - chunk_begin_idx) >> GROW_UNIT_IN_BLOCK_SHIFT) +
+           chunk_local_idx;
   }
 
  private:
-  // ask more blocks for the kernel filesystem, so that idx is valid
-  void grow_to_fit(LogicalBlockIdx idx) {
-    // fast path: if smaller than the number of block; return
-    if (idx < meta->get_num_blocks()) return;
-
-    // slow path: acquire lock to verify and grow_to_fit if necessary
-    // the new file size should be a multiple of grow_to_fit unit
-    // we have `idx + 1` since we want to grow_to_fit the file when idx is a
-    // multiple of the number of blocks in a grow_to_fit unit (e.g., 512 for 2
-    // MB grow_to_fit)
-    uint64_t file_size = ALIGN_UP(BLOCK_IDX_TO_SIZE(idx + 1), GROW_UNIT_SIZE);
-
-    int ret = posix::fallocate(fd, 0, 0, static_cast<off_t>(file_size));
-    PANIC_IF(ret, "fd %d: fallocate failed", fd);
-    meta->set_num_blocks_if_larger(BLOCK_SIZE_TO_IDX(file_size));
-  }
-
   /**
    * a private helper function that calls mmap internally
    * @return the pointer to the first block on the persistent memory
