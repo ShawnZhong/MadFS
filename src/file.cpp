@@ -70,19 +70,16 @@ File::File(int fd, const struct stat& stat, int flags, const char* pathname,
 
   if (flags & O_APPEND) offset_mgr.seek_absolute(file_size);
 
-  if constexpr (BuildOptions::debug) {
-    path = pathname;
-  }
+  if constexpr (BuildOptions::debug) path = strdup(pathname);
 }
 
 File::~File() {
   pthread_spin_destroy(&spinlock);
-  uint64_t file_size = blk_table.update(/*do_alloc*/ false);
-  fsetxattr(fd, "user.filesize", &file_size, sizeof(file_size), 0);
   allocators.clear();
   if (fd >= 0) posix::close(fd);
   if (shm_fd >= 0) posix::close(shm_fd);
   if (bitmap) posix::munmap(bitmap, SHM_SIZE);
+  if constexpr (BuildOptions::debug) free((void*)path);
 }
 
 /*
@@ -310,7 +307,7 @@ void File::open_shm(const struct stat& stat) {
     }
   }
 
-  DEBUG("posix::open(%s) = %d", shm_path, shm_fd);
+  TRACE("posix::open(%s) = %d", shm_path, shm_fd);
 
   // mmap bitmap
   void* shm = posix::mmap(nullptr, SHM_SIZE, PROT_READ | PROT_WRITE, MAP_SHARED,

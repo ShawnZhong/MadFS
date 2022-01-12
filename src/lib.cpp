@@ -87,7 +87,7 @@ int openat64([[maybe_unused]] int dirfd, const char* pathname, int flags, ...) {
 
 int close(int fd) {
   if (auto file = get_file(fd)) {
-    DEBUG("ulayfs::close(%d)", fd);
+    DEBUG("ulayfs::close(%s)", file->path);
     files.unsafe_erase(fd);
     return 0;
   } else {
@@ -99,7 +99,7 @@ int close(int fd) {
 int fclose(FILE* stream) {
   int fd = fileno(stream);
   if (auto file = get_file(fd)) {
-    DEBUG("ulayfs::fclose(%d)", fd);
+    DEBUG("ulayfs::fclose(%s)", file->path);
     files.unsafe_erase(fd);
     return 0;
   } else {
@@ -198,7 +198,7 @@ int fsync(int fd) {
 
 int fdatasync(int fd) {
   if (auto file = get_file(fd)) {
-    DEBUG("ulayfs::fdatasync(%d)", fd);
+    DEBUG("ulayfs::fdatasync(%s)", file->path);
     return file->fsync();
   } else {
     DEBUG("posix::fdatasync(%d)", fd);
@@ -252,22 +252,15 @@ int __xstat([[maybe_unused]] int ver, const char* pathname, struct stat* buf) {
     return rc;
   }
 
-  uint64_t filesize = 0;
-  ssize_t rc = getxattr(pathname, "user.filesize", &filesize, sizeof(filesize));
-  if (rc >= 0) {
-    buf->st_size = filesize;
-    DEBUG("ulayfs::stat(%s) = {.st_size = %ld}", pathname, filesize);
-    return 0;
+  if (ssize_t rc = getxattr(pathname, SHM_XATTR_NAME, nullptr, 0); rc > 0) {
+    int fd = ulayfs::open(pathname, O_RDONLY);
+    get_file(fd)->stat(buf);
+    WARN("ulayfs::stat(%s) = {.st_size = %ld}", pathname, buf->st_size);
+    ulayfs::close(fd);
+    DEBUG("ulayfs::stat(%s)", pathname);
+  } else {
+    DEBUG("posix::stat(%s)", pathname);
   }
-
-  //  if (ssize_t rc = getxattr(pathname, SHM_XATTR_NAME, nullptr, 0); rc > 0) {
-  //    int fd = ulayfs::open(pathname, O_RDONLY);
-  //    get_file(fd)->stat(buf);
-  //    ulayfs::close(fd);
-  //    DEBUG("ulayfs::stat(%s)", pathname);
-  //  } else {
-  //    DEBUG("posix::stat(%s)", pathname);
-  //  }
 
   return 0;
 }
@@ -281,7 +274,7 @@ void unlink_shm(const char* path) {
   char shm_path[SHM_PATH_LEN];
   if (getxattr(path, SHM_XATTR_NAME, &shm_path, sizeof(shm_path)) <= 0) return;
   int ret = posix::unlink(shm_path);
-  DEBUG("posix::unlink(%s) = %d", shm_path, ret);
+  TRACE("posix::unlink(%s) = %d", shm_path, ret);
   if (unlikely(ret < 0)) WARN("Could not unlink shm file \"%s\": %m", shm_path);
 }
 
