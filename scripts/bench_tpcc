@@ -38,7 +38,7 @@ def run_tpcc(build_type, fs_names):
         runner = Runner("tpcc_start", result_dir=result_dir / fs.name / "start", build_type=build_type)
         runner.build()
         runner.run(
-            additional_args="-w 4 -c 1 -t 100",
+            additional_args="-w 4 -c 1 -t 200000",
             load_ulayfs=fs.load_ulayfs,
             pmem_path=fs.pmem_path,
         )

@@ -2,12 +2,12 @@
 
 import json
 import logging
-import os
 import re
-from pathlib import Path
 
 import pandas as pd
 from matplotlib import pyplot as plt
+
+from utils import get_sorted_subdirs
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger("plot")
@@ -17,10 +17,7 @@ plt.set_loglevel('WARNING')
 def read_files(result_dir, post_process_fn):
     data = pd.DataFrame()
 
-    paths = list(Path(result_dir).glob("*"))
-    paths = [p for p in paths if p.is_dir()]
-    paths.sort(key=os.path.getmtime)
-    for path in paths:
+    for path in get_sorted_subdirs(result_dir):
         fs_name = path.name
         result_path = path / "result.json"
 
@@ -81,6 +78,18 @@ def plot_benchmarks(result_dir, data, **kwargs):
         )
 
 
+def export_results(result_dir, data):
+    with open(result_dir / f"result.txt", "w") as f:
+        for name, benchmark in data[["benchmark", "label", "x", "y"]].groupby(["benchmark"], sort=False):
+            pt = pd.pivot_table(benchmark, values="y", index="x", columns="label", sort=False)
+            for c in pt.columns:
+                pt[f"{c}%"] = pt["uLayFS"] / pt[c] * 100
+            print(name)
+            print(pt)
+            print(name, file=f)
+            print(pt, file=f)
+
+
 def parse_name(name, i):
     return re.split("[/:]", name)[i]
 
@@ -97,11 +106,14 @@ def plot_micro_st(result_dir):
         df["x"] = df["name"].apply(parse_name, args=(1,)).apply(format_bytes)
         df["y"] = df["bytes_per_second"].apply(lambda x: float(x) / 1024 ** 3)
 
-    def post_plot(**kwargs):
+    def post_plot(ax, **kwargs):
         plt.xticks(rotation=45)
+        ax.yaxis.set_major_locator(plt.MaxNLocator(steps=[1, 5, 10]))
+        ax.yaxis.set_major_formatter(plt.FormatStrFormatter('%.1f'))
 
     data = read_files(result_dir, post_process)
-    plot_benchmarks(result_dir, data, post_plot=post_plot, xlabel="Number of Bytes", )
+    export_results(result_dir, data)
+    plot_benchmarks(result_dir, data, post_plot=post_plot, xlabel="I/O size (Bytes)", )
 
 
 def plot_micro_mt(result_dir):
@@ -125,6 +137,7 @@ def plot_micro_mt(result_dir):
             plt.xlabel("Number of Threads")
 
     data = read_files(result_dir, post_process)
+    export_results(result_dir, data)
     plot_benchmarks(result_dir, data, post_plot=post_plot)
 
 
@@ -145,11 +158,7 @@ def plot_micro_meta(result_dir):
 
 def plot_ycsb(result_dir):
     results = []
-    paths = list(Path(result_dir).glob("*"))
-    paths = [p for p in paths if p.is_dir()]
-    paths.sort(key=os.path.getmtime)
-
-    for path in paths:
+    for path in get_sorted_subdirs(result_dir):
         fs_name = path.name
 
         for w in ("a", "b", "c", "d", "e", "f"):
@@ -171,9 +180,12 @@ def plot_ycsb(result_dir):
     df_pivot = pd.pivot_table(df, values="y", index="x", columns="label", sort=False)
     df_pivot = df_pivot[df["label"].unique()]
     print(df_pivot)
+    with open(result_dir / "ycsb.txt", "w") as f:
+        print(df_pivot, file=f)
     df_pivot.plot(
         kind="bar",
         figsize=(5, 4),
+        rot=0,
         legend=False,
         ylabel="Throughput (Mops/s)",
         xlabel="Workload",
@@ -183,12 +195,16 @@ def plot_ycsb(result_dir):
 
 
 def plot_tpcc(result_dir):
-    results = []
-    paths = list(Path(result_dir).glob("*"))
-    paths = [p for p in paths if p.is_dir()]
-    paths.sort(key=os.path.getmtime)
+    name_mapping = {
+        "New\nOrder": "neword",
+        "Payment": "payment",
+        "Order\nStatus": "ordstat",
+        "Delivery": "delivery",
+        "Stock\nLevel": "slev"
+    }
 
-    for path in paths:
+    results = []
+    for path in get_sorted_subdirs(result_dir):
         fs_name = path.name
         result_path = path / "start" / "prog.log"
         if not result_path.exists():
@@ -196,11 +212,31 @@ def plot_tpcc(result_dir):
             continue
         with open(result_path, "r") as f:
             data = f.read()
-            result = {
-                k: int(re.search(f"{k}: timing = (.+?) nanoseconds", data).group(1)) / 1000 ** 3
-                for k in ("neword", "payment", "ordstat", "delivery", "slev")
-            }
+
+            result = {}
+            total_tx = 0
+            total_time_ms = 0
+            for i, (name, workload) in enumerate(name_mapping.items()):
+                num_tx = float(re.search(f"\[{i}\] sc:(.+?) lt:", data).group(1))
+                time_ms = float(re.search(f"{workload}: timing = (.+?) nanoseconds", data).group(1)) / 1000 ** 2
+                result[name] = num_tx / time_ms  # kops/s
+                total_tx += num_tx
+                total_time_ms += time_ms
+            result["Mix"] = total_tx / total_time_ms  # kops/s
             result["label"] = fs_name
             results.append(result)
     df = pd.DataFrame(results)
+    df.set_index("label", inplace=True)
     print(df)
+    with open(result_dir / "tpcc.txt", "w") as f:
+        print(df, file=f)
+    df.T.plot(
+        kind="bar",
+        rot=0,
+        figsize=(5, 4),
+        legend=False,
+        ylabel="Throughput (k txns/s)",
+        xlabel="Transaction Type",
+    )
+    plt.legend()
+    plt.savefig(result_dir / "tpcc.pdf", bbox_inches="tight")

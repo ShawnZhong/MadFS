@@ -129,7 +129,7 @@ class Runner:
         )
 
         # show perf results in terminal
-        system(f"perf report -i {perf_data}")
+        # system(f"perf report -i {perf_data}")
 
         # generate flamegraph
         system(
