@@ -124,7 +124,9 @@ class Runner:
 
         # record perf data
         system(
-            f"perf record --freq=997 --call-graph dwarf -o {perf_data} {cmd}",
+            f"perf record --freq=997 "
+            f"--call-graph dwarf "  # options: fp, lbr, dwarf
+            f"-o {perf_data} {cmd}",
             log_path=log_path,
         )
 

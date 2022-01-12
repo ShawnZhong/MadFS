@@ -1,0 +1,117 @@
+#!/usr/bin/env python3
+
+import matplotlib.pyplot as plt
+import pandas as pd
+
+from utils import root_dir
+
+result_dir = root_dir / "results"
+result_dir.mkdir(parents=True, exist_ok=True)
+
+
+def plot_io_breakdown():
+    """
+    BENCH_NUM_ITER=1000000 ./run micro_st profile -p="--benchmark_filter='append/4096'" && \
+    BENCH_NUM_ITER=1000000 ./run micro_st profile -p="--benchmark_filter='seq_write/4096'"
+    """
+    samples = {
+        "append": {
+            "memcpy": 900,
+            "page fault": 2257,
+            "update mapping": 556,
+            "commit tx": 285,
+            "others": 227,
+        },
+        "overwrite": {
+            "memcpy": 834,
+            "update mapping": 632,
+            "commit tx": 309,
+            "others": 202,
+        }
+    }
+
+    df = pd.DataFrame(samples)
+    df = df.div(df.sum(axis=0), axis=1)
+
+    # times the times taken
+    df["append"] *= 4909
+    df["overwrite"] *= 2516
+
+    df /= 1000
+
+    df = df.T
+    print(df)
+    ax = df.plot.barh(stacked=True, figsize=(5, 2.5))
+
+    ax.set_xlabel('Time (us)')
+    ax.legend()
+
+    plt.savefig(result_dir / "breakdown_io.pdf", bbox_inches="tight")
+
+
+def plot_meta_breakdown():
+    """
+    BENCH_NUM_ITER=100000 ./run micro_meta profile -p="--benchmark_filter='open_close/0'"
+    """
+
+    samples = {
+        "0": {
+            "sys_open": 121,
+            "mmap": 1830,
+            "block table": 0,
+            "others": 73,
+        },
+        "200": {
+            "sys_open": 103,
+            "mmap": 1845,
+            "block table": 273,
+            "others": 61,
+        },
+        "400": {
+            "sys_open": 105,
+            "mmap": 1866,
+            "block table": 385,
+            "others": 2396 - 105 - 1866 - 385,
+        },
+        "600": {
+            "sys_open": 128,
+            "mmap": 1857,
+            "block table": 649,
+            "others": 2681 - 128 - 1857 - 649,
+        },
+        "800": {
+            "sys_open": 114,
+            "mmap": 1870,
+            "block table": 877,
+            "others": 2911 - 114 - 1870 - 877,
+        },
+        "1000": {
+            "sys_open": 131,
+            "mmap": 1856,
+            "block table": 1075,
+            "others": 3122 - 131 - 1856 - 1075,
+        }
+    }
+    df = pd.DataFrame(samples)
+    df = df.div(df.sum(axis=0), axis=1)
+    df["0"] *= 21435
+    df["200"] *= 24731
+    df["400"] *= 26214
+    df["600"] *= 28594
+    df["800"] *= 30833
+    df["1000"] *= 32998
+    df = df.T
+    df /= 1000
+    df.columns = list(samples.values())[0].keys()
+    print(df)
+    ax = df.plot.bar(stacked=True, figsize=(5, 4), rot=0, )
+
+    ax.set_ylabel('Time (us)')
+    ax.set_xlabel('Transaction History Length')
+    ax.legend(ncol=2)
+
+    plt.savefig(result_dir / "breakdown_meta.pdf", bbox_inches="tight")
+
+
+plot_io_breakdown()
+plot_meta_breakdown()

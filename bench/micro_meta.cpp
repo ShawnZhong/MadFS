@@ -20,9 +20,9 @@ void bench(benchmark::State& state) {
   fd = open(filepath, O_CREAT | O_RDWR, S_IRUSR | S_IWUSR);
   if (fd < 0) state.SkipWithError("open failed");
 
-  char buf[8];
+  char buf[4096];
   for (int i = 0; i < num_tx; ++i) {
-    [[maybe_unused]] ssize_t res = write(fd, buf, sizeof(buf));
+    [[maybe_unused]] ssize_t res = pwrite(fd, buf, sizeof(buf), 0);
     assert(res == sizeof(buf));
   }
   close(fd);
