@@ -9,7 +9,7 @@ logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger("format_pm")
 
 
-def main(region, reformat_ns, mkfs, mount_ext4, mount_nova, unmount):
+def main(region, reformat_ns, mount_ext4, mount_nova, unmount):
     if reformat_ns:
         system("ndctl list -Nui")
         system(f"sudo ndctl destroy-namespace all --region=region{region} --force")
@@ -24,16 +24,10 @@ def main(region, reformat_ns, mkfs, mount_ext4, mount_nova, unmount):
             )
         system("ndctl list -N")
         system(f"ls /dev/pmem{region}*")
-    if mkfs:
-        system(f"sudo mkfs.ext4 /dev/pmem{region}")
-        system(f"sudo mkfs.ext4 /dev/pmem{region}.1")
     if mount_ext4:
+        system(f"sudo mkfs.ext4 /dev/pmem{region}")
         system(f"sudo mkdir -p /mnt/pmem{region}-ext4-dax")
-        system(f"sudo mkdir -p /mnt/pmem{region}-ext4-journal")
-        system(f"sudo mount -o dax           /dev/pmem0   /mnt/pmem{region}-ext4-dax")
-        system(
-            f"sudo mount -o data=journal  /dev/pmem0.1 /mnt/pmem{region}-ext4-journal"
-        )
+        system(f"sudo mount -o dax /dev/pmem0   /mnt/pmem{region}-ext4-dax")
     if mount_nova:
         system(f"sudo mkdir -p /mnt/pmem{region}-nova")
         system("sudo modprobe nova")
@@ -50,7 +44,6 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     parser.add_argument("--region", default="0", help="Region to operate on")
     parser.add_argument("--reformat_ns", action="store_true")
-    parser.add_argument("--mkfs", action="store_true")
     parser.add_argument("--mount_ext4", action="store_true")
     parser.add_argument("--mount_nova", action="store_true")
     parser.add_argument("--unmount", action="store_true")

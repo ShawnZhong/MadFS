@@ -29,9 +29,7 @@ std::shared_ptr<dram::File> get_file(int fd) {
 
 extern "C" {
 int open(const char* pathname, int flags, ...) {
-  // keep a record of the user's intented flags before we hijack it
   mode_t mode = 0;
-
   if (__OPEN_NEEDS_MODE(flags)) {
     va_list arg;
     va_start(arg, flags);
@@ -48,7 +46,8 @@ int open(const char* pathname, int flags, ...) {
   }
 
   try {
-    files.emplace(fd, std::make_shared<dram::File>(fd, stat_buf, flags));
+    files.emplace(fd,
+                  std::make_shared<dram::File>(fd, stat_buf, flags, pathname));
     INFO("ulayfs::open(%s, %x, %x) = %d", pathname, flags, mode, fd);
   } catch (const FileInitException& e) {
     WARN("File \"%s\": ulayfs::open failed: %s. Fallback to syscall", pathname,
@@ -61,9 +60,34 @@ int open(const char* pathname, int flags, ...) {
   return fd;
 }
 
+int open64(const char* pathname, int flags, ...) {
+  mode_t mode = 0;
+  if (__OPEN_NEEDS_MODE(flags)) {
+    va_list arg;
+    va_start(arg, flags);
+    mode = va_arg(arg, mode_t);
+    va_end(arg);
+  }
+
+  return open(pathname, flags, mode);
+}
+
+int openat64([[maybe_unused]] int dirfd, const char* pathname, int flags, ...) {
+  mode_t mode = 0;
+  if (__OPEN_NEEDS_MODE(flags)) {
+    va_list arg;
+    va_start(arg, flags);
+    mode = va_arg(arg, mode_t);
+    va_end(arg);
+  }
+
+  // TODO: implement the case where pathname is relative to dirfd
+  return open(pathname, flags, mode);
+}
+
 int close(int fd) {
   if (auto file = get_file(fd)) {
-    DEBUG("ulayfs::close(%d)", fd);
+    DEBUG("ulayfs::close(%s)", file->path);
     files.unsafe_erase(fd);
     return 0;
   } else {
@@ -75,7 +99,7 @@ int close(int fd) {
 int fclose(FILE* stream) {
   int fd = fileno(stream);
   if (auto file = get_file(fd)) {
-    DEBUG("ulayfs::fclose(%d)", fd);
+    DEBUG("ulayfs::fclose(%s)", file->path);
     files.unsafe_erase(fd);
     return 0;
   } else {
@@ -87,7 +111,7 @@ int fclose(FILE* stream) {
 ssize_t read(int fd, void* buf, size_t count) {
   if (auto file = get_file(fd)) {
     auto res = file->read(buf, count);
-    DEBUG("ulayfs::read(%d, buf, %zu) = %zu", fd, count, res);
+    DEBUG("ulayfs::read(%s, buf, %zu) = %zu", file->path, count, res);
     return res;
   } else {
     auto res = posix::read(fd, buf, count);
@@ -98,12 +122,16 @@ ssize_t read(int fd, void* buf, size_t count) {
 
 ssize_t pread(int fd, void* buf, size_t count, off_t offset) {
   if (auto file = get_file(fd)) {
-    DEBUG("ulayfs::pread(%d, buf, %zu, %ld)", fd, count, offset);
+    DEBUG("ulayfs::pread(%s, buf, %zu, %ld)", file->path, count, offset);
     return file->pread(buf, count, offset);
   } else {
     DEBUG("posix::pread(%d, buf, %zu, %ld)", fd, count, offset);
     return posix::pread(fd, buf, count, offset);
   }
+}
+
+ssize_t pread64(int fd, void* buf, size_t count, off64_t offset) {
+  return pread(fd, buf, count, offset);
 }
 
 ssize_t __read_chk(int fd, void* buf, size_t count,
@@ -121,7 +149,7 @@ ssize_t __pread_chk(int fd, void* buf, size_t count, off_t offset,
 ssize_t write(int fd, const void* buf, size_t count) {
   if (auto file = get_file(fd)) {
     ssize_t res = file->write(buf, count);
-    DEBUG("ulayfs::write(%d, buf, %zu) = %zu", fd, count, res);
+    DEBUG("ulayfs::write(%s, buf, %zu) = %zu", file->path, count, res);
     return res;
   } else {
     ssize_t res = posix::write(fd, buf, count);
@@ -132,12 +160,16 @@ ssize_t write(int fd, const void* buf, size_t count) {
 
 ssize_t pwrite(int fd, const void* buf, size_t count, off_t offset) {
   if (auto file = get_file(fd)) {
-    DEBUG("ulayfs::pwrite(%d, buf, %zu, %ld)", fd, count, offset);
+    DEBUG("ulayfs::pwrite(%s, buf, %zu, %ld)", file->path, count, offset);
     return file->pwrite(buf, count, offset);
   } else {
     DEBUG("posix::pwrite(%d, buf, %zu, %ld)", fd, count, offset);
     return posix::pwrite(fd, buf, count, offset);
   }
+}
+
+ssize_t pwrite64(int fd, const void* buf, size_t count, off64_t offset) {
+  return pwrite(fd, buf, count, offset);
 }
 
 off_t lseek(int fd, off_t offset, int whence) {
@@ -150,6 +182,10 @@ off_t lseek(int fd, off_t offset, int whence) {
   }
 }
 
+off64_t lseek64(int fd, off64_t offset, int whence) {
+  return lseek(fd, offset, whence);
+}
+
 int fsync(int fd) {
   if (auto file = get_file(fd)) {
     DEBUG("ulayfs::fsync(%d)", fd);
@@ -160,6 +196,15 @@ int fsync(int fd) {
   }
 }
 
+int fdatasync(int fd) {
+  if (auto file = get_file(fd)) {
+    DEBUG("ulayfs::fdatasync(%s)", file->path);
+    return file->fsync();
+  } else {
+    DEBUG("posix::fdatasync(%d)", fd);
+    return posix::fdatasync(fd);
+  }
+}
 void* mmap(void* addr, size_t length, int prot, int flags, int fd,
            off_t offset) {
   if (auto file = get_file(fd)) {
@@ -175,6 +220,11 @@ void* mmap(void* addr, size_t length, int prot, int flags, int fd,
   }
 }
 
+void* mmap64(void* addr, size_t length, int prot, int flags, int fd,
+             off64_t offset) {
+  return mmap(addr, length, prot, flags, fd, offset);
+}
+
 int __fxstat([[maybe_unused]] int ver, int fd, struct stat* buf) {
   int rc = posix::fstat(fd, buf);
   if (unlikely(rc < 0)) {
@@ -184,12 +234,16 @@ int __fxstat([[maybe_unused]] int ver, int fd, struct stat* buf) {
 
   if (auto file = get_file(fd)) {
     file->stat(buf);
-    DEBUG("ulayfs::fstat(%d)", fd);
+    DEBUG("ulayfs::fstat(%d, {.st_size = %ld})", fd, buf->st_size);
   } else {
     DEBUG("posix::fstat(%d)", fd);
   }
 
   return 0;
+}
+
+int __fxstat64([[maybe_unused]] int ver, int fd, struct stat64* buf) {
+  return __fxstat(ver, fd, reinterpret_cast<struct stat*>(buf));
 }
 
 int __xstat([[maybe_unused]] int ver, const char* pathname, struct stat* buf) {
@@ -201,6 +255,7 @@ int __xstat([[maybe_unused]] int ver, const char* pathname, struct stat* buf) {
   if (ssize_t rc = getxattr(pathname, SHM_XATTR_NAME, nullptr, 0); rc > 0) {
     int fd = ulayfs::open(pathname, O_RDONLY);
     get_file(fd)->stat(buf);
+    WARN("ulayfs::stat(%s) = {.st_size = %ld}", pathname, buf->st_size);
     ulayfs::close(fd);
     DEBUG("ulayfs::stat(%s)", pathname);
   } else {
@@ -210,11 +265,16 @@ int __xstat([[maybe_unused]] int ver, const char* pathname, struct stat* buf) {
   return 0;
 }
 
+int __xstat64([[maybe_unused]] int ver, const char* pathname,
+              struct stat64* buf) {
+  return __xstat(ver, pathname, reinterpret_cast<struct stat*>(buf));
+}
+
 void unlink_shm(const char* path) {
   char shm_path[SHM_PATH_LEN];
   if (getxattr(path, SHM_XATTR_NAME, &shm_path, sizeof(shm_path)) <= 0) return;
   int ret = posix::unlink(shm_path);
-  DEBUG("posix::unlink(%s) = %d", shm_path, ret);
+  TRACE("posix::unlink(%s) = %d", shm_path, ret);
   if (unlikely(ret < 0)) WARN("Could not unlink shm file \"%s\": %m", shm_path);
 }
 
@@ -245,6 +305,26 @@ int ftruncate([[maybe_unused]] int fd, [[maybe_unused]] off_t length) {
 int flock([[maybe_unused]] int fd, [[maybe_unused]] int operation) {
   PANIC("flock not implemented");
   return -1;
+}
+
+int fcntl(int fd, int cmd, ... /* arg */) {
+  return 0;
+  va_list arg;
+  va_start(arg, cmd);
+  auto res = posix::fcntl(fd, cmd, arg);
+  va_end(arg);
+  DEBUG("posix::fcntl(%d, %d, ...) = %d", fd, cmd, res);
+  return res;
+}
+
+int fcntl64(int fd, int cmd, ... /* arg */) {
+  return 0;
+  va_list arg;
+  va_start(arg, cmd);
+  auto res = posix::fcntl(fd, cmd, arg);
+  va_end(arg);
+  DEBUG("posix::fcntl(%d, %d, ...) = %d", fd, cmd, res);
+  return res;
 }
 
 /**

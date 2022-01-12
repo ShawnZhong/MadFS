@@ -46,11 +46,16 @@ class File {
   // the allocator is a per-thread per-file data structure
   tbb::concurrent_unordered_map<pid_t, Allocator> allocators;
 
+ public:
+  // only set at debug mode
+  const char* path;
+
   // transformer will have to do many dirty and inclusive operations
   friend utility::Converter;
 
  public:
-  File(int fd, const struct stat& stat, int flags, bool guard = true);
+  File(int fd, const struct stat& stat, int flags, const char* pathname,
+       bool guard = true);
   ~File();
 
   /*
