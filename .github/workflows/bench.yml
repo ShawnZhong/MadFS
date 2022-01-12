@@ -60,4 +60,7 @@ jobs:
           BUILD_TARGETS='tpcc_load tpcc_start ulayfs'
 
       - name: run
-        run: ./scripts/bench_tpcc
+        run: |
+          sqlite3 tpcc.db '.read bench/tpcc_sqlite/create_table.sql'
+          ./run tpcc_load -p="-w 1"
+          ./run tpcc_load -p="-w 4 -c 1 -t 10"
