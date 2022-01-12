@@ -234,7 +234,7 @@ int __fxstat([[maybe_unused]] int ver, int fd, struct stat* buf) {
 
   if (auto file = get_file(fd)) {
     file->stat(buf);
-    DEBUG("ulayfs::fstat(%d)", fd);
+    DEBUG("ulayfs::fstat(%d, {.st_size = %ld})", fd, buf->st_size);
   } else {
     DEBUG("posix::fstat(%d)", fd);
   }
@@ -253,9 +253,11 @@ int __xstat([[maybe_unused]] int ver, const char* pathname, struct stat* buf) {
   }
 
   uint64_t filesize = 0;
-  ssize_t rc = getxattr(pathname, "user.filesize", &filesize, 0);
+  ssize_t rc = getxattr(pathname, "user.filesize", &filesize, sizeof(filesize));
   if (rc >= 0) {
     buf->st_size = filesize;
+    DEBUG("ulayfs::stat(%s) = {.st_size = %ld}", pathname, filesize);
+    return 0;
   }
 
   //  if (ssize_t rc = getxattr(pathname, SHM_XATTR_NAME, nullptr, 0); rc > 0) {
