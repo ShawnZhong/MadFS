@@ -12,7 +12,8 @@
 
 namespace ulayfs::dram {
 
-File::File(int fd, const struct stat& stat, int flags, bool guard)
+File::File(int fd, const struct stat& stat, int flags, const char* pathname,
+           bool guard)
     : fd(fd),
       mem_table(fd, stat.st_size, (flags & O_ACCMODE) == O_RDONLY),
       meta(mem_table.get_meta()),
@@ -68,10 +69,16 @@ File::File(int fd, const struct stat& stat, int flags, bool guard)
   if (!file_size_updated) file_size = blk_table.update(/*do_alloc*/ false);
 
   if (flags & O_APPEND) offset_mgr.seek_absolute(file_size);
+
+  if constexpr (BuildOptions::debug) {
+    path = pathname;
+  }
 }
 
 File::~File() {
   pthread_spin_destroy(&spinlock);
+  uint64_t file_size = blk_table.update(/*do_alloc*/ false);
+  fsetxattr(fd, "user.filesize", &file_size, sizeof(file_size), 0);
   allocators.clear();
   if (fd >= 0) posix::close(fd);
   if (shm_fd >= 0) posix::close(shm_fd);

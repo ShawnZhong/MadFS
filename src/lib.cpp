@@ -46,7 +46,8 @@ int open(const char* pathname, int flags, ...) {
   }
 
   try {
-    files.emplace(fd, std::make_shared<dram::File>(fd, stat_buf, flags));
+    files.emplace(fd,
+                  std::make_shared<dram::File>(fd, stat_buf, flags, pathname));
     INFO("ulayfs::open(%s, %x, %x) = %d", pathname, flags, mode, fd);
   } catch (const FileInitException& e) {
     WARN("File \"%s\": ulayfs::open failed: %s. Fallback to syscall", pathname,
@@ -110,7 +111,7 @@ int fclose(FILE* stream) {
 ssize_t read(int fd, void* buf, size_t count) {
   if (auto file = get_file(fd)) {
     auto res = file->read(buf, count);
-    DEBUG("ulayfs::read(%d, buf, %zu) = %zu", fd, count, res);
+    DEBUG("ulayfs::read(%s, buf, %zu) = %zu", file->path, count, res);
     return res;
   } else {
     auto res = posix::read(fd, buf, count);
@@ -121,7 +122,7 @@ ssize_t read(int fd, void* buf, size_t count) {
 
 ssize_t pread(int fd, void* buf, size_t count, off_t offset) {
   if (auto file = get_file(fd)) {
-    DEBUG("ulayfs::pread(%d, buf, %zu, %ld)", fd, count, offset);
+    DEBUG("ulayfs::pread(%s, buf, %zu, %ld)", file->path, count, offset);
     return file->pread(buf, count, offset);
   } else {
     DEBUG("posix::pread(%d, buf, %zu, %ld)", fd, count, offset);
@@ -148,7 +149,7 @@ ssize_t __pread_chk(int fd, void* buf, size_t count, off_t offset,
 ssize_t write(int fd, const void* buf, size_t count) {
   if (auto file = get_file(fd)) {
     ssize_t res = file->write(buf, count);
-    DEBUG("ulayfs::write(%d, buf, %zu) = %zu", fd, count, res);
+    DEBUG("ulayfs::write(%s, buf, %zu) = %zu", file->path, count, res);
     return res;
   } else {
     ssize_t res = posix::write(fd, buf, count);
@@ -159,7 +160,7 @@ ssize_t write(int fd, const void* buf, size_t count) {
 
 ssize_t pwrite(int fd, const void* buf, size_t count, off_t offset) {
   if (auto file = get_file(fd)) {
-    DEBUG("ulayfs::pwrite(%d, buf, %zu, %ld)", fd, count, offset);
+    DEBUG("ulayfs::pwrite(%s, buf, %zu, %ld)", file->path, count, offset);
     return file->pwrite(buf, count, offset);
   } else {
     DEBUG("posix::pwrite(%d, buf, %zu, %ld)", fd, count, offset);
@@ -251,14 +252,20 @@ int __xstat([[maybe_unused]] int ver, const char* pathname, struct stat* buf) {
     return rc;
   }
 
-  if (ssize_t rc = getxattr(pathname, SHM_XATTR_NAME, nullptr, 0); rc > 0) {
-    int fd = ulayfs::open(pathname, O_RDONLY);
-    get_file(fd)->stat(buf);
-    ulayfs::close(fd);
-    DEBUG("ulayfs::stat(%s)", pathname);
-  } else {
-    DEBUG("posix::stat(%s)", pathname);
+  uint64_t filesize = 0;
+  ssize_t rc = getxattr(pathname, "user.filesize", &filesize, 0);
+  if (rc >= 0) {
+    buf->st_size = filesize;
   }
+
+  //  if (ssize_t rc = getxattr(pathname, SHM_XATTR_NAME, nullptr, 0); rc > 0) {
+  //    int fd = ulayfs::open(pathname, O_RDONLY);
+  //    get_file(fd)->stat(buf);
+  //    ulayfs::close(fd);
+  //    DEBUG("ulayfs::stat(%s)", pathname);
+  //  } else {
+  //    DEBUG("posix::stat(%s)", pathname);
+  //  }
 
   return 0;
 }
