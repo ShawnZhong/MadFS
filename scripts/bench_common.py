@@ -2,6 +2,8 @@ import logging
 from dataclasses import dataclass
 from pathlib import Path
 
+from utils import system
+
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger("bench")
 
@@ -35,3 +37,7 @@ def get_fs_configs():
             logger.warning(f"{pmem_path} does not exist, skipping {name}")
             continue
         yield Filesystem(name, pmem_path, load_ulayfs)
+
+
+def drop_cache():
+    system("echo 3 | sudo tee /proc/sys/vm/drop_caches >/dev/null")

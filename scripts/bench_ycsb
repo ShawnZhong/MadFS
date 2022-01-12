@@ -3,6 +3,7 @@ import argparse
 import logging
 from pathlib import Path
 
+from bench_common import drop_cache
 from plot import plot_ycsb
 from utils import system, root_dir, get_timestamp
 
@@ -11,7 +12,7 @@ logger = logging.getLogger("bench_ycsb")
 
 
 def run_workload(runner, fs, dbdir: Path, workload: str, load):
-    system("echo 3 | sudo tee /proc/sys/vm/drop_caches >/dev/null")
+    drop_cache()
     trace_name = f"{workload}-{'load' if load else 'run'}"
     trace_path = root_dir / "bench" / "ycsb-traces-large" / f"{trace_name}.txt"
     cmd = f"{runner.prog_path} -f {trace_path} -d {dbdir}"
