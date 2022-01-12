@@ -59,8 +59,20 @@ int open(const char* pathname, int flags, ...) {
   return fd;
 }
 
-int openat([[maybe_unused]]int dirfd, const char* pathname, int flags, ...) {
-  int mode;
+int open64(const char* pathname, int flags, ...) {
+  mode_t mode = 0;
+  if (__OPEN_NEEDS_MODE(flags)) {
+    va_list arg;
+    va_start(arg, flags);
+    mode = va_arg(arg, mode_t);
+    va_end(arg);
+  }
+
+  return open(pathname, flags, mode);
+}
+
+int openat64([[maybe_unused]] int dirfd, const char* pathname, int flags, ...) {
+  mode_t mode = 0;
   if (__OPEN_NEEDS_MODE(flags)) {
     va_list arg;
     va_start(arg, flags);
@@ -181,6 +193,16 @@ off_t lseek(int fd, off_t offset, int whence) {
   }
 }
 
+off64_t lseek64(int fd, off64_t offset, int whence) {
+  if (auto file = get_file(fd)) {
+    DEBUG("ulayfs::lseek64(%d, %ld, %d)", fd, offset, whence);
+    return file->lseek(offset, whence);
+  } else {
+    DEBUG("posix::lseek64(%d, %ld, %d)", fd, offset, whence);
+    return posix::lseek(fd, offset, whence);
+  }
+}
+
 int fsync(int fd) {
   if (auto file = get_file(fd)) {
     DEBUG("ulayfs::fsync(%d)", fd);
@@ -232,6 +254,10 @@ int __fxstat([[maybe_unused]] int ver, int fd, struct stat* buf) {
   return 0;
 }
 
+int __fxstat64([[maybe_unused]] int ver, int fd, struct stat64* buf) {
+  return __fxstat(ver, fd, reinterpret_cast<struct stat*>(buf));
+}
+
 int __xstat([[maybe_unused]] int ver, const char* pathname, struct stat* buf) {
   if (int rc = posix::stat(pathname, buf); unlikely(rc < 0)) {
     WARN("stat failed for pathname = %s: %m", pathname);
@@ -248,6 +274,11 @@ int __xstat([[maybe_unused]] int ver, const char* pathname, struct stat* buf) {
   }
 
   return 0;
+}
+
+int __xstat64([[maybe_unused]] int ver, const char* pathname,
+              struct stat64* buf) {
+  return __xstat(ver, pathname, reinterpret_cast<struct stat*>(buf));
 }
 
 void unlink_shm(const char* path) {
