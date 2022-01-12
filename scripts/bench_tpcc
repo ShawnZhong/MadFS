@@ -11,14 +11,14 @@ logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger("bench_tpcc")
 
 
-def run_tpcc(build_type):
+def run_tpcc(build_type, fs_names):
     from init import init
 
     init(configure=True)
     result_dir = root_dir / "results" / "bench_tpcc" / get_timestamp()
     sql_path = root_dir / "bench" / "tpcc_sqlite" / "create_table.sql"
 
-    for fs in get_fs_configs():
+    for fs in get_fs_configs(fs_names):
         db_path = fs.pmem_path / "tpcc.db"
         system(f"rm -f {db_path} {db_path}-shm {db_path}-wal")
 
@@ -46,9 +46,9 @@ def run_tpcc(build_type):
     return result_dir
 
 
-def main(result_dir, build_type):
+def main(result_dir, **kwargs):
     if result_dir is None:
-        result_dir = run_tpcc(build_type)
+        result_dir = run_tpcc(**kwargs)
 
     plot_tpcc(result_dir)
     logger.info(f"Results saved to {result_dir}")

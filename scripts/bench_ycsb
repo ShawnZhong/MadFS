@@ -19,7 +19,7 @@ def run_workload(runner, fs, dbdir: Path, workload: str, load):
     runner.run(cmd=cmd, load_ulayfs=fs.load_ulayfs, prog_log_name=f"{trace_name}.log")
 
 
-def run_ycsb(workloads, build_type):
+def run_ycsb(workloads, build_type, fs_names):
     from bench_common import get_fs_configs
     from runner import Runner
     from init import init
@@ -28,7 +28,7 @@ def run_ycsb(workloads, build_type):
 
     result_dir = root_dir / "results" / "bench_ycsb" / get_timestamp()
 
-    for fs in get_fs_configs():
+    for fs in get_fs_configs(fs_names):
         runner = Runner("leveldb_ycsb", result_dir=result_dir / fs.name, build_type=build_type)
         runner.build()
 
@@ -42,9 +42,9 @@ def run_ycsb(workloads, build_type):
     return result_dir
 
 
-def main(result_dir, workloads, build_type):
+def main(result_dir, **kwargs):
     if result_dir is None:
-        result_dir = run_ycsb(workloads, build_type)
+        result_dir = run_ycsb(**kwargs)
 
     plot_ycsb(result_dir)
     logger.info(f"Results saved to {result_dir}")

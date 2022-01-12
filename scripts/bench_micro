@@ -11,14 +11,14 @@ logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger("bench_micro")
 
 
-def run_micro(benchmark, build_type):
+def run_micro(benchmark, build_type, fs_names):
     from init import init
     init(configure=True)
 
     cmake_target = f"micro_{benchmark}"
     result_dir = root_dir / "results" / f"bench_{cmake_target}" / get_timestamp()
 
-    for fs in get_fs_configs():
+    for fs in get_fs_configs(fs_names):
         runner = Runner(cmake_target, result_dir=result_dir / fs.name, build_type=build_type)
         runner.build()
         runner.run(load_ulayfs=fs.load_ulayfs, pmem_path=fs.pmem_path)
@@ -26,9 +26,9 @@ def run_micro(benchmark, build_type):
     return result_dir
 
 
-def main(benchmark, result_dir, build_type):
+def main(benchmark, result_dir, **kwargs):
     if result_dir is None:
-        result_dir = run_micro(benchmark, build_type)
+        result_dir = run_micro(benchmark, **kwargs)
 
     if benchmark == "st":
         plot_micro_st(result_dir)
