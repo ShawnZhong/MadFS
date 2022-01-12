@@ -673,7 +673,7 @@ int thread_main (thread_arg* arg)
   sqlite3_open(get_db_path(), &sqlite3_db);
   printf("%s: opened db, thread id = %lu\n", __func__, pthread_self());
 
-  sqlite3_exec(sqlite3_db, "PRAGMA journal_mode = WAL;", 0, 0, 0);
+  sqlite3_exec(sqlite3_db, "PRAGMA journal_mode = OFF;", 0, 0, 0);
   
   if(!sqlite3_db) {
     goto sqlerr;
