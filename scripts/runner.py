@@ -7,6 +7,18 @@ from utils import get_timestamp, system, root_dir
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger("runner")
 
+build_types = [
+    "debug",
+    "release",
+    "relwithdebinfo",
+    "profile",
+    "pmemcheck",
+    "asan",
+    "ubsan",
+    "msan",
+    "tsan",
+]
+
 
 class Runner:
     def __init__(self, name, build_type=None, result_dir=None):

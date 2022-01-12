@@ -3,7 +3,7 @@ import argparse
 import logging
 from pathlib import Path
 
-from bench_common import drop_cache
+from bench_common import drop_cache, add_common_args
 from plot import plot_ycsb
 from utils import system, root_dir, get_timestamp
 
@@ -19,7 +19,7 @@ def run_workload(runner, fs, dbdir: Path, workload: str, load):
     runner.run(cmd=cmd, load_ulayfs=fs.load_ulayfs, prog_log_name=f"{trace_name}.log")
 
 
-def run_ycsb(workloads, num_iters):
+def run_ycsb(workloads, build_type):
     from bench_common import get_fs_configs
     from runner import Runner
     from init import init
@@ -29,23 +29,22 @@ def run_ycsb(workloads, num_iters):
     result_dir = root_dir / "results" / "bench_ycsb" / get_timestamp()
 
     for fs in get_fs_configs():
-        runner = Runner("leveldb_ycsb", result_dir=result_dir / fs.name)
+        runner = Runner("leveldb_ycsb", result_dir=result_dir / fs.name, build_type=build_type)
         runner.build()
 
         dbdir = fs.pmem_path / "bench-dbdir"
         for workload in workloads:
             system(f"rm -rf {dbdir} && mkdir -p {dbdir}")
             run_workload(runner, fs, dbdir=dbdir, workload=workload, load=True)
-            for exper_iter in range(num_iters):
-                run_workload(runner, fs, dbdir=dbdir, workload=workload, load=False)
+            run_workload(runner, fs, dbdir=dbdir, workload=workload, load=False)
             system(f"rm -rf {dbdir}")
 
     return result_dir
 
 
-def main(result_dir, workloads, num_iters):
+def main(result_dir, workloads, build_type):
     if result_dir is None:
-        result_dir = run_ycsb(workloads, num_iters)
+        result_dir = run_ycsb(workloads, build_type)
 
     plot_ycsb(result_dir)
     logger.info(f"Results saved to {result_dir}")
@@ -55,12 +54,7 @@ if __name__ == "__main__":
     all_workloads = ("a", "b", "c", "d", "e", "f")
 
     argparser = argparse.ArgumentParser()
-    argparser.add_argument(
-        "-p",
-        dest="result_dir",
-        type=Path,
-        help="If set, plot the results in the given directory w/o running the benchmark",
-    )
+    add_common_args(argparser)
     argparser.add_argument(
         "-w",
         "--workloads",
@@ -69,6 +63,5 @@ if __name__ == "__main__":
         default=all_workloads,
         choices=all_workloads,
     )
-    argparser.add_argument("-n", "--num_iters", type=int, default=1)
     args = argparser.parse_args()
     main(**vars(args))

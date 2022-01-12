@@ -5,7 +5,7 @@ import logging
 from pathlib import Path
 
 from scripts.bench_common import get_ext4_dax_path
-from scripts.runner import Runner
+from scripts.runner import Runner, build_types
 from scripts.utils import check_any_args_passed
 
 logging.basicConfig(level=logging.INFO)
@@ -20,17 +20,7 @@ if __name__ == "__main__":
     parser.add_argument(
         "build_type",
         nargs=argparse.OPTIONAL,
-        choices=[
-            "debug",
-            "release",
-            "relwithdebinfo",
-            "profile",
-            "pmemcheck",
-            "asan",
-            "ubsan",
-            "msan",
-            "tsan",
-        ],
+        choices=build_types,
     )
     parser.add_argument(
         "-c",

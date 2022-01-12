@@ -1,9 +1,8 @@
 #!/usr/bin/env python3
 import argparse
 import logging
-from pathlib import Path
 
-from bench_common import get_fs_configs
+from bench_common import get_fs_configs, add_common_args
 from plot import plot_micro_st, plot_micro_mt, plot_micro_meta
 from runner import Runner
 from utils import root_dir, get_timestamp
@@ -12,7 +11,7 @@ logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger("bench_micro")
 
 
-def run_micro(benchmark):
+def run_micro(benchmark, build_type):
     from init import init
     init(configure=True)
 
@@ -20,16 +19,16 @@ def run_micro(benchmark):
     result_dir = root_dir / "results" / f"bench_{cmake_target}" / get_timestamp()
 
     for fs in get_fs_configs():
-        runner = Runner(cmake_target, result_dir=result_dir / fs.name)
+        runner = Runner(cmake_target, result_dir=result_dir / fs.name, build_type=build_type)
         runner.build()
         runner.run(load_ulayfs=fs.load_ulayfs, pmem_path=fs.pmem_path)
 
     return result_dir
 
 
-def main(benchmark, result_dir):
+def main(benchmark, result_dir, build_type):
     if result_dir is None:
-        result_dir = run_micro(benchmark)
+        result_dir = run_micro(benchmark, build_type)
 
     if benchmark == "st":
         plot_micro_st(result_dir)
@@ -44,11 +43,6 @@ def main(benchmark, result_dir):
 if __name__ == "__main__":
     argparser = argparse.ArgumentParser()
     argparser.add_argument("benchmark", choices=["st", "mt", "meta"])
-    argparser.add_argument(
-        "-p",
-        dest="result_dir",
-        type=Path,
-        help="If set, plot the results in the given directory w/o running the benchmark",
-    )
+    add_common_args(argparser)
     args = argparser.parse_args()
     main(**vars(args))

@@ -1,9 +1,8 @@
 #!/usr/bin/env python3
 import argparse
 import logging
-from pathlib import Path
 
-from bench_common import get_fs_configs
+from bench_common import get_fs_configs, add_common_args
 from plot import plot_tpcc
 from runner import Runner
 from utils import root_dir, get_timestamp, system
@@ -12,7 +11,7 @@ logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger("bench_tpcc")
 
 
-def run_tpcc():
+def run_tpcc(build_type):
     from init import init
 
     init(configure=True)
@@ -36,10 +35,10 @@ def run_tpcc():
             additional_args="-w 4", load_ulayfs=fs.load_ulayfs, pmem_path=fs.pmem_path
         )
 
-        runner = Runner("tpcc_start", result_dir=result_dir / fs.name / "start")
+        runner = Runner("tpcc_start", result_dir=result_dir / fs.name / "start", build_type=build_type)
         runner.build()
         runner.run(
-            additional_args="-w 4 -c 1 -t 10000",
+            additional_args="-w 4 -c 1 -t 100",
             load_ulayfs=fs.load_ulayfs,
             pmem_path=fs.pmem_path,
         )
@@ -47,9 +46,9 @@ def run_tpcc():
     return result_dir
 
 
-def main(result_dir):
+def main(result_dir, build_type):
     if result_dir is None:
-        result_dir = run_tpcc()
+        result_dir = run_tpcc(build_type)
 
     plot_tpcc(result_dir)
     logger.info(f"Results saved to {result_dir}")
@@ -57,11 +56,6 @@ def main(result_dir):
 
 if __name__ == "__main__":
     argparser = argparse.ArgumentParser()
-    argparser.add_argument(
-        "-p",
-        dest="result_dir",
-        type=Path,
-        help="If set, plot the results in the given directory w/o running the benchmark",
-    )
+    add_common_args(argparser)
     args = argparser.parse_args()
     main(**vars(args))

@@ -2,6 +2,7 @@ import logging
 from dataclasses import dataclass
 from pathlib import Path
 
+from runner import build_types
 from utils import system
 
 logging.basicConfig(level=logging.INFO)
@@ -41,3 +42,18 @@ def get_fs_configs():
 
 def drop_cache():
     system("echo 3 | sudo tee /proc/sys/vm/drop_caches >/dev/null")
+
+
+def add_common_args(argparser):
+    argparser.add_argument(
+        "-p",
+        dest="result_dir",
+        type=Path,
+        help="If set, plot the results in the given directory w/o running the benchmark",
+    )
+    argparser.add_argument(
+        "-b",
+        "--build_type",
+        default="release",
+        choices=build_types,
+    )
