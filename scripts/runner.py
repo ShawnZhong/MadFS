@@ -111,7 +111,8 @@ class Runner:
         pmemcheck_dir = self.build_path / "_deps" / "pmemcheck-src"
         system(
             f"VALGRIND_LIB={pmemcheck_dir}/libexec/valgrind/ "
-            f"{pmemcheck_dir}/bin/valgrind --tool=pmemcheck --trace-children=yes "
+            f"{pmemcheck_dir}/bin/valgrind --tool=pmemcheck "
+            f"--trace-children=yes --trace-children-skip=/bin/sh --error-exitcode=-1 "
             f"{cmd}",
             log_path=log_path,
         )

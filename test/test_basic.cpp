@@ -197,6 +197,9 @@ void test_print() {
   sz = write(fd, test_str.data(), 8);
   assert(sz == 8);
 
+  rc = fsync(fd);
+  assert(rc == 0);
+
   print_file(fd);
   rc = close(fd);
   assert(rc == 0);
