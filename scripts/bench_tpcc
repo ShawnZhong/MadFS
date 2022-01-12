@@ -20,7 +20,7 @@ def run_tpcc(build_type, fs_names):
 
     for fs in get_fs_configs(fs_names):
         db_path = fs.pmem_path / "tpcc.db"
-        system(f"rm -f {db_path} {db_path}-shm {db_path}-wal")
+        system(f"rm -f {db_path} {db_path}-shm {db_path}-wal {db_path}-journal")
 
         runner = Runner("tpcc_create", result_dir=result_dir / fs.name / "create")
         if fs.load_ulayfs:
