@@ -29,9 +29,7 @@ std::shared_ptr<dram::File> get_file(int fd) {
 
 extern "C" {
 int open(const char* pathname, int flags, ...) {
-  // keep a record of the user's intented flags before we hijack it
   mode_t mode = 0;
-
   if (__OPEN_NEEDS_MODE(flags)) {
     va_list arg;
     va_start(arg, flags);
@@ -59,6 +57,19 @@ int open(const char* pathname, int flags, ...) {
     return -1;
   }
   return fd;
+}
+
+int openat([[maybe_unused]]int dirfd, const char* pathname, int flags, ...) {
+  int mode;
+  if (__OPEN_NEEDS_MODE(flags)) {
+    va_list arg;
+    va_start(arg, flags);
+    mode = va_arg(arg, mode_t);
+    va_end(arg);
+  }
+
+  // TODO: implement the case where pathname is relative to dirfd
+  return open(pathname, flags, mode);
 }
 
 int close(int fd) {
