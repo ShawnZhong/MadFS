@@ -148,6 +148,7 @@ def plot_micro_meta(result_dir):
         df["y"] = df["cpu_time"].apply(lambda x: float(x) / 1000)
 
     data = read_files(result_dir, post_process)
+    export_results(result_dir, data)
     plot_benchmarks(
         result_dir,
         data,

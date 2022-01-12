@@ -52,10 +52,12 @@ int main(int argc, char** argv) {
   benchmark::Initialize(&argc, argv);
   if (benchmark::ReportUnrecognizedArguments(argc, argv)) return 1;
 
-  for (auto& bm : {RegisterBenchmark("open_close", bench<Mode::OPEN_CLOSE>),
-                   RegisterBenchmark("stat", bench<Mode::STAT>),
-                   RegisterBenchmark("fstat", bench<Mode::FSTAT>)}) {
-    bm->DenseRange(100, 1000, 100)->Iterations(num_iter);
+  for (auto& bm : {
+           RegisterBenchmark("open_close", bench<Mode::OPEN_CLOSE>),
+           //           RegisterBenchmark("stat", bench<Mode::STAT>),
+           //           RegisterBenchmark("fstat", bench<Mode::FSTAT>),
+       }) {
+    bm->DenseRange(0, 1000, 200)->Iterations(num_iter);
   }
 
   benchmark::RunSpecifiedBenchmarks();
