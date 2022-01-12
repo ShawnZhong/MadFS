@@ -306,13 +306,23 @@ int flock([[maybe_unused]] int fd, [[maybe_unused]] int operation) {
 }
 
 int fcntl(int fd, int cmd, ... /* arg */) {
-  DEBUG("posix::fcntl(%d, %d, ...)", fd, cmd);
   return 0;
+  va_list arg;
+  va_start(arg, cmd);
+  auto res = posix::fcntl(fd, cmd, arg);
+  va_end(arg);
+  DEBUG("posix::fcntl(%d, %d, ...) = %d", fd, cmd, res);
+  return res;
 }
 
 int fcntl64(int fd, int cmd, ... /* arg */) {
-  DEBUG("posix::fcntl(%d, %d, ...)", fd, cmd);
   return 0;
+  va_list arg;
+  va_start(arg, cmd);
+  auto res = posix::fcntl(fd, cmd, arg);
+  va_end(arg);
+  DEBUG("posix::fcntl(%d, %d, ...) = %d", fd, cmd, res);
+  return res;
 }
 
 /**
