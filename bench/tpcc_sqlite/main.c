@@ -119,6 +119,7 @@ int main( int argc, char *argv[] )
   int fd, seed;
 
   printf("CHECKING IF SQLITE IS THREADSAFE: RETURN VALUE = %d\n", sqlite3_threadsafe());
+  sqlite3_vfs_register(sqlite3_vfs_find("unix-none"), 1);
   
   printf("***************************************\n");
   printf("*** ###easy### TPC-C Load Generator ***\n");
