@@ -130,13 +130,7 @@ ssize_t pread(int fd, void* buf, size_t count, off_t offset) {
 }
 
 ssize_t pread64(int fd, void* buf, size_t count, off64_t offset) {
-  if (auto file = get_file(fd)) {
-    DEBUG("ulayfs::pread64(%d, buf, %zu, %ld)", fd, count, offset);
-    return file->pread(buf, count, offset);
-  } else {
-    DEBUG("posix::pread64(%d, buf, %zu, %ld)", fd, count, offset);
-    return posix::pread64(fd, buf, count, offset);
-  }
+  return pread(fd, buf, count, offset);
 }
 
 ssize_t __read_chk(int fd, void* buf, size_t count,
@@ -174,13 +168,7 @@ ssize_t pwrite(int fd, const void* buf, size_t count, off_t offset) {
 }
 
 ssize_t pwrite64(int fd, const void* buf, size_t count, off64_t offset) {
-  if (auto file = get_file(fd)) {
-    DEBUG("ulayfs::pwrite64(%d, buf, %zu, %ld)", fd, count, offset);
-    return file->pwrite(buf, count, offset);
-  } else {
-    DEBUG("posix::pwrite64(%d, buf, %zu, %ld)", fd, count, offset);
-    return posix::pwrite64(fd, buf, count, offset);
-  }
+  return pwrite(fd, buf, count, offset);
 }
 
 off_t lseek(int fd, off_t offset, int whence) {
@@ -194,13 +182,7 @@ off_t lseek(int fd, off_t offset, int whence) {
 }
 
 off64_t lseek64(int fd, off64_t offset, int whence) {
-  if (auto file = get_file(fd)) {
-    DEBUG("ulayfs::lseek64(%d, %ld, %d)", fd, offset, whence);
-    return file->lseek(offset, whence);
-  } else {
-    DEBUG("posix::lseek64(%d, %ld, %d)", fd, offset, whence);
-    return posix::lseek(fd, offset, whence);
-  }
+  return lseek(fd, offset, whence);
 }
 
 int fsync(int fd) {
@@ -235,6 +217,11 @@ void* mmap(void* addr, size_t length, int prot, int flags, int fd,
           flags, fd, offset, ret);
     return ret;
   }
+}
+
+void* mmap64(void* addr, size_t length, int prot, int flags, int fd,
+             off64_t offset) {
+  return mmap(addr, length, prot, flags, fd, offset);
 }
 
 int __fxstat([[maybe_unused]] int ver, int fd, struct stat* buf) {
@@ -316,6 +303,16 @@ int ftruncate([[maybe_unused]] int fd, [[maybe_unused]] off_t length) {
 int flock([[maybe_unused]] int fd, [[maybe_unused]] int operation) {
   PANIC("flock not implemented");
   return -1;
+}
+
+int fcntl(int fd, int cmd, ... /* arg */) {
+  DEBUG("posix::fcntl(%d, %d, ...)", fd, cmd);
+  return 0;
+}
+
+int fcntl64(int fd, int cmd, ... /* arg */) {
+  DEBUG("posix::fcntl(%d, %d, ...)", fd, cmd);
+  return 0;
 }
 
 /**

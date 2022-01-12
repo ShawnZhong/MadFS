@@ -6,7 +6,7 @@ from pathlib import Path
 from bench_common import get_fs_configs
 from plot import plot_tpcc
 from runner import Runner
-from utils import root_dir, get_timestamp
+from utils import root_dir, get_timestamp, system
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger("bench_tpcc")
@@ -21,7 +21,7 @@ def run_tpcc():
 
     for fs in get_fs_configs():
         db_path = fs.pmem_path / "tpcc.db"
-        db_path.unlink(missing_ok=True)
+        system(f"rm -f {db_path} {db_path}-shm {db_path}-wal")
 
         runner = Runner("tpcc_create", result_dir=result_dir / fs.name / "create")
         if fs.load_ulayfs:
