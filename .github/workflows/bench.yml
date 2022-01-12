@@ -5,6 +5,7 @@ on:
 
 jobs:
   micro:
+    name: Microbenchmarks
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v2
@@ -24,6 +25,7 @@ jobs:
         run: BENCH_NUM_ITER=10 ./run micro_meta relwithdebinfo
 
   leveldb:
+    name: LevelDB
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v2
@@ -51,6 +53,7 @@ jobs:
           ./run leveldb_ycsb -p="-f bench/ycsb-traces/f-run.txt"
 
   tpcc:
+    name: SQLite
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v2
@@ -61,6 +64,6 @@ jobs:
 
       - name: run
         run: |
-          sqlite3 tpcc.db '.read bench/tpcc_sqlite/create_table.sql'
+          sqlite3 /mnt/pmem0-ext4-dax/tpcc.db '.read bench/tpcc_sqlite/create_table.sql'
           ./run tpcc_load -p="-w 1"
-          ./run tpcc_load -p="-w 4 -c 1 -t 10"
+          ./run tpcc_start -p="-w 4 -c 1 -t 10"
