@@ -31,7 +31,7 @@ class BlkTable {
   explicit BlkTable(File* file, TxMgr* tx_mgr)
       : file(file),
         tx_mgr(tx_mgr),
-        tail_tx_idx({0,0}),
+        tail_tx_idx({0, 0}),
         tail_tx_block(nullptr),
         file_size(0) {
     table.resize(16);
