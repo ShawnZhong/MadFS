@@ -154,9 +154,13 @@ def plot_micro_mt(result_dir):
     def post_plot(name, df, ax, **kwargs):
         labels = df["x"].unique()
         plt.xticks(ticks=labels, labels=labels)
-        ax.yaxis.set_major_locator(plt.MaxNLocator(steps=[1, 10]))
-        ax.yaxis.set_major_formatter(plt.FormatStrFormatter('%.1f'))
         ax.set_ylim(bottom=0)
+        if name != "no_overlap_100R":
+            ax.yaxis.set_major_locator(plt.MaxNLocator(steps=[1, 10]))
+            ax.yaxis.set_major_formatter(plt.FormatStrFormatter('%.1f'))
+        else:
+            ax.yaxis.set_major_locator(plt.MaxNLocator(steps=[1, 2]))
+            # ax.yaxis.set_major_formatter(plt.FormatStrFormatter('%f'))
         if name == "no_overlap_0R":
             plt.legend()
 
