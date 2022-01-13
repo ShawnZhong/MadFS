@@ -131,7 +131,14 @@ def plot_micro_st(result_dir):
 
     data = read_files(result_dir, post_process)
     export_results(result_dir, data)
-    plot_benchmarks(result_dir, data, post_plot=post_plot)
+    plot_benchmarks(
+        result_dir,
+        data,
+        post_plot=post_plot,
+        figsize=(2.75, 2.75),
+        xlabel="I/O Size (Bytes)",
+        ylabel="Throughput (GB/s)",
+    )
 
 
 def plot_micro_mt(result_dir):
@@ -150,16 +157,18 @@ def plot_micro_mt(result_dir):
         ax.yaxis.set_major_locator(plt.MaxNLocator(steps=[1, 10]))
         ax.yaxis.set_major_formatter(plt.FormatStrFormatter('%.1f'))
         ax.set_ylim(bottom=0)
-        if name == "srmw":
-            plt.xlabel("Number of Writer Threads")
-        else:
-            plt.xlabel("Number of Threads")
         if name == "no_overlap_0R":
             plt.legend()
 
     data = read_files(result_dir, post_process)
     export_results(result_dir, data)
-    plot_benchmarks(result_dir, data, post_plot=post_plot)
+    plot_benchmarks(
+        result_dir,
+        data,
+        post_plot=post_plot,
+        xlabel="Number of Threads",
+        ylabel="Throughput (Mops/sec)",
+    )
 
 
 def plot_micro_meta(result_dir):

@@ -14,15 +14,6 @@ enum class Mode {
   RND_WRITE,
 };
 
-void prepare_file(ssize_t len) {
-  auto buf = new char[len];
-  std::fill(buf, buf + len, 'x');
-  [[maybe_unused]] ssize_t res = write(fd, buf, len);
-  assert(res == len);
-  fsync(fd);
-  delete[] buf;
-}
-
 template <Mode mode>
 void bench(benchmark::State& state) {
   const auto num_bytes = state.range(0);
@@ -37,7 +28,7 @@ void bench(benchmark::State& state) {
   fd = open(filepath, O_CREAT | O_RDWR | O_APPEND, S_IRUSR | S_IWUSR);
   if (fd < 0) state.SkipWithError("open failed");
   if constexpr (mode != Mode::APPEND) {
-    prepare_file(num_bytes * num_iter);
+    append_file(fd, num_bytes * num_iter);
   }
   close(fd);
 

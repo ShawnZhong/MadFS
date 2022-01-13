@@ -52,44 +52,44 @@ def plot_io_breakdown():
     plt.savefig(result_dir / "breakdown_io.pdf", bbox_inches="tight")
 
 
-def plot_meta_breakdown():
+def plot_open_tx_breakdown():
     """
     BENCH_NUM_ITER=100000 ./run micro_meta profile -p="--benchmark_filter='open_close/0'"
     """
 
     samples = {
         "0": {
-            "open (syscall)": 121,
             "mmap": 1830,
             "block table": 0,
+            "open": 121,
             "others": 73,
         },
         "200": {
-            "open (syscall)": 103,
+            "open": 103,
             "mmap": 1845,
             "block table": 273,
             "others": 61,
         },
         "400": {
-            "open (syscall)": 105,
+            "open": 105,
             "mmap": 1866,
             "block table": 385,
             "others": 2396 - 105 - 1866 - 385,
         },
         "600": {
-            "open (syscall)": 128,
+            "open": 128,
             "mmap": 1857,
             "block table": 649,
             "others": 2681 - 128 - 1857 - 649,
         },
         "800": {
-            "open (syscall)": 114,
+            "open": 114,
             "mmap": 1870,
             "block table": 877,
             "others": 2911 - 114 - 1870 - 877,
         },
         "1000": {
-            "open (syscall)": 131,
+            "open": 131,
             "mmap": 1856,
             "block table": 1075,
             "others": 3122 - 131 - 1856 - 1075,
@@ -107,15 +107,75 @@ def plot_meta_breakdown():
     df /= 1000
     df.columns = list(samples.values())[0].keys()
     print(df)
-    ax = df.plot.bar(stacked=True, figsize=(5, 4), rot=0, )
+    ax = df.plot.barh(stacked=True, figsize=(5, 3), rot=0, )
 
-    ax.set_ylabel('Time (us)')
-    ax.set_xlabel('Transaction History Length')
-    ax.legend(ncol=2)
-    ax.set_ylim(top=38)
+    ax.set_xlabel('Time (us)')
+    ax.set_ylabel('Transaction History Length')
+    ax.set_xlim(xmax=42)
 
-    plt.savefig(result_dir / "breakdown_meta.pdf", bbox_inches="tight")
+    plt.savefig(result_dir / "open_tx_len.pdf", bbox_inches="tight")
 
 
-plot_io_breakdown()
-plot_meta_breakdown()
+def plot_open_file_size_breakdown():
+    """
+    ./run micro_meta profile -p="--benchmark_filter='open_file_size/2097152'"
+    ./run micro_meta profile -p="--benchmark_filter='open_file_size/4194304'"
+    ./run micro_meta profile -p="--benchmark_filter='open_file_size/8388608'"
+    ./run micro_meta profile -p="--benchmark_filter='open_file_size/16777216'"
+    ./run micro_meta profile -p="--benchmark_filter='open_file_size/33554432'"
+    """
+    samples = {
+        "2MB": {
+            "mmap": 2660,
+            "block table": 1012,
+            "total": 3919,
+            "time": 29672,
+        },
+        "4MB": {
+            "mmap": 2061,
+            "block table": 768,
+            "total": 2931,
+            "time": 54645,
+        },
+        "8MB": {
+            "mmap": 2285,
+            "block table": 866,
+            "total": 3207,
+            "time": 103318,
+        },
+        "16MB": {
+            "mmap": 2582,
+            "block table": 1053,
+            "total": 3667,
+            "time": 206791,
+        },
+        "32MB": {
+            "mmap": 3257,
+            "block table": 1271,
+            "total": 4566,
+            "time": 410118,
+        },
+    }
+
+    df = pd.DataFrame(samples)
+    df = df.T
+    df["others"] = df["total"] - df[["mmap", "block table"]].sum(axis=1)
+
+    plot_columns = ["mmap", "block table", "others"]
+    for c in plot_columns:
+        df[c] /= df["total"]
+        df[c] *= df["time"]
+    print(df)
+    df = df[plot_columns] / 1000
+    # df = df.apply(lambda x: x * 100 / sum(x), axis=1)
+    print(df)
+    ax = df.plot.barh(stacked=True, figsize=(5, 3), rot=0, )
+    ax.set_xlabel('Time (us)')
+    ax.set_ylabel('File size')
+
+    plt.savefig(result_dir / "open_file_size.pdf", bbox_inches="tight")
+
+
+# plot_io_breakdown()
+# plot_open_tx_breakdown()
+plot_open_file_size_breakdown()

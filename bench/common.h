@@ -28,3 +28,14 @@ int get_num_iter(int default_val = 10000) noexcept {
   fprintf(stderr, "================ num_iter: %d =============== \n", num_iter);
   return num_iter;
 }
+
+void append_file(int fd, long num_bytes, int num_iter = 1) {
+  auto buf = new char[num_bytes];
+  std::fill(buf, buf + num_bytes, 'x');
+  for (int i = 0; i < num_iter; ++i) {
+    [[maybe_unused]] ssize_t res = write(fd, buf, num_bytes);
+    assert(res == num_bytes);
+  }
+  fsync(fd);
+  delete[] buf;
+}

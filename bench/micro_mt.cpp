@@ -124,7 +124,7 @@ int main(int argc, char** argv) {
   register_bm("append_512", bench<Mode::APPEND>, 512);
   register_bm("append_4k", bench<Mode::APPEND>);
   register_bm("contended_512", bench<Mode::CONTENDED_WRITE>, 512);
-  register_bm("contended_2k", bench<Mode::CONTENDED_WRITE>, 2048);
+  register_bm("contended_3584", bench<Mode::CONTENDED_WRITE>, 3584);
 
   benchmark::RunSpecifiedBenchmarks();
   return 0;
