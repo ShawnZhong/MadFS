@@ -3,15 +3,31 @@
 import json
 import logging
 import re
+from pathlib import Path
 
 import pandas as pd
 from matplotlib import pyplot as plt
 
-from utils import get_sorted_subdirs
+pd.options.display.max_rows = 100
+pd.options.display.max_columns = 100
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger("plot")
 plt.set_loglevel('WARNING')
+
+
+def get_sorted_subdirs(path):
+    order = {
+        "uLayFS": 1,
+        "ext4": 2,
+        "ext4-DAX": 2,
+        "NOVA": 3,
+    }
+
+    paths = list(Path(path).glob("*"))
+    paths = [p for p in paths if p.is_dir()]
+    paths.sort(key=lambda x: order.get(x.name, 100))
+    return paths
 
 
 def read_files(result_dir, post_process_fn):
@@ -61,13 +77,10 @@ def plot_single_bm(
     if post_plot:
         post_plot(ax=ax, name=name, df=df)
 
-    if len(label_groups) > 1:
-        plt.legend()
-
     if output_path:
         plt.savefig(output_path, bbox_inches="tight")
 
-    plt.show()
+    # plt.show()
 
 
 def plot_benchmarks(result_dir, data, **kwargs):
@@ -106,14 +119,19 @@ def plot_micro_st(result_dir):
         df["x"] = df["name"].apply(parse_name, args=(1,)).apply(format_bytes)
         df["y"] = df["bytes_per_second"].apply(lambda x: float(x) / 1024 ** 3)
 
-    def post_plot(ax, **kwargs):
+    def post_plot(name, ax, **kwargs):
         plt.xticks(rotation=45)
         ax.yaxis.set_major_locator(plt.MaxNLocator(steps=[1, 5, 10]))
         ax.yaxis.set_major_formatter(plt.FormatStrFormatter('%.1f'))
+        ax.set_ylim(bottom=0)
+        if name == "seq_write":
+            plt.legend()
+        if name == "append":
+            ax.set_ylim(top=2)
 
     data = read_files(result_dir, post_process)
     export_results(result_dir, data)
-    plot_benchmarks(result_dir, data, post_plot=post_plot, xlabel="I/O size (Bytes)", )
+    plot_benchmarks(result_dir, data, post_plot=post_plot)
 
 
 def plot_micro_mt(result_dir):
@@ -131,10 +149,13 @@ def plot_micro_mt(result_dir):
         plt.xticks(ticks=labels, labels=labels)
         ax.yaxis.set_major_locator(plt.MaxNLocator(steps=[1, 10]))
         ax.yaxis.set_major_formatter(plt.FormatStrFormatter('%.1f'))
+        ax.set_ylim(bottom=0)
         if name == "srmw":
             plt.xlabel("Number of Writer Threads")
         else:
             plt.xlabel("Number of Threads")
+        if name == "no_overlap_0R":
+            plt.legend()
 
     data = read_files(result_dir, post_process)
     export_results(result_dir, data)
@@ -180,9 +201,6 @@ def plot_ycsb(result_dir):
     df = pd.DataFrame(results)
     df_pivot = pd.pivot_table(df, values="y", index="x", columns="label", sort=False)
     df_pivot = df_pivot[df["label"].unique()]
-    print(df_pivot)
-    with open(result_dir / "ycsb.txt", "w") as f:
-        print(df_pivot, file=f)
     df_pivot.plot(
         kind="bar",
         figsize=(5, 4),
@@ -193,6 +211,11 @@ def plot_ycsb(result_dir):
     )
     plt.legend()
     plt.savefig(result_dir / "ycsb.pdf", bbox_inches="tight")
+    for c in df_pivot.columns:
+        df_pivot[f"{c}%"] = df_pivot["uLayFS"] / df_pivot[c] * 100
+    print(df_pivot)
+    with open(result_dir / "tpcc.txt", "w") as f:
+        print(df_pivot, file=f)
 
 
 def plot_tpcc(result_dir):
@@ -228,10 +251,8 @@ def plot_tpcc(result_dir):
             results.append(result)
     df = pd.DataFrame(results)
     df.set_index("label", inplace=True)
-    print(df)
-    with open(result_dir / "tpcc.txt", "w") as f:
-        print(df, file=f)
-    df.T.plot(
+    df = df.T
+    df.plot(
         kind="bar",
         rot=0,
         figsize=(5, 4),
@@ -241,3 +262,9 @@ def plot_tpcc(result_dir):
     )
     plt.legend()
     plt.savefig(result_dir / "tpcc.pdf", bbox_inches="tight")
+
+    for c in df.columns:
+        df[f"{c}%"] = df["uLayFS"] / df[c] * 100
+    print(df)
+    with open(result_dir / "tpcc.txt", "w") as f:
+        print(df, file=f)

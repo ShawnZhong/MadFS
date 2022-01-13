@@ -34,10 +34,3 @@ def check_any_args_passed(parser):
 
 def get_timestamp():
     return datetime.datetime.now().strftime("%Y%m%d-%H%M%S")
-
-
-def get_sorted_subdirs(path):
-    paths = list(Path(path).glob("*"))
-    paths = [p for p in paths if p.is_dir()]
-    paths.sort(key=os.path.getmtime)
-    return paths
