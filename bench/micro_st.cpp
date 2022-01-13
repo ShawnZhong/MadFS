@@ -102,9 +102,9 @@ int main(int argc, char** argv) {
   for (auto& bm : {
            RegisterBenchmark("seq_read", bench<Mode::SEQ_READ>),
            RegisterBenchmark("rnd_read", bench<Mode::RND_READ>),
-           //           RegisterBenchmark("seq_write", bench<Mode::SEQ_WRITE>),
-           //           RegisterBenchmark("rnd_write", bench<Mode::RND_WRITE>),
-           //           RegisterBenchmark("append", bench<Mode::APPEND>),
+           RegisterBenchmark("seq_write", bench<Mode::SEQ_WRITE>),
+           RegisterBenchmark("rnd_write", bench<Mode::RND_WRITE>),
+           RegisterBenchmark("append", bench<Mode::APPEND>),
        }) {
     bm->RangeMultiplier(2)->Range(MIN_SIZE, MAX_SIZE)->Iterations(num_iter);
   }
