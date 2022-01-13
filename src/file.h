@@ -80,8 +80,11 @@ class File {
    * exported interface for update; init_bitmap is always false
    */
   uint64_t update(TxEntryIdx& tx_idx, pmem::TxBlock*& tx_block, bool do_alloc) {
+    uint64_t new_file_size;
+    if (!blk_table.need_update(tx_idx, tx_block, new_file_size, do_alloc))
+      return new_file_size;
     pthread_spin_lock(&spinlock);
-    uint64_t new_file_size = blk_table.update(do_alloc);
+    new_file_size = blk_table.update(do_alloc);
     tx_idx = blk_table.get_tx_idx();
     tx_block = blk_table.get_tx_block();
     pthread_spin_unlock(&spinlock);

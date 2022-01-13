@@ -20,7 +20,8 @@ int main(int argc, char *argv[]) {
     return 1;
   }
 
-  ulayfs::dram::File *file = ulayfs::utility::Converter::convert_to(fd);
+  ulayfs::dram::File *file =
+      ulayfs::utility::Converter::convert_to(fd, filename);
   delete file;
 
   return 0;
