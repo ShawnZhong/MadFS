@@ -68,10 +68,10 @@ class TxMgr {
    */
   [[nodiscard]] pmem::TxEntry get_entry_from_block(
       TxEntryIdx idx, pmem::TxBlock* tx_block) const {
-    const auto [block_idx, local_idx] = idx;
-    assert(local_idx < (block_idx == 0 ? NUM_INLINE_TX_ENTRY : NUM_TX_ENTRY));
-    if (block_idx == 0) return meta->get_tx_entry(local_idx);
-    return tx_block->get(local_idx);
+    assert(idx.local_idx <
+           (idx.block_idx == 0 ? NUM_INLINE_TX_ENTRY : NUM_TX_ENTRY));
+    if (idx.block_idx == 0) return meta->get_tx_entry(idx.local_idx);
+    return tx_block->get(idx.local_idx);
   }
 
   /**
