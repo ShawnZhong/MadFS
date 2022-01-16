@@ -7,7 +7,7 @@
 #include <libpmem2/map.h>
 #include <libpmem2/persist.h>
 void pmem2_set_mem_fns(struct pmem2_map *map);
-static pmem2_memcpy_fn pmem2_memcpy = []() -> pmem2_memcpy_fn {
+static pmem2_memcpy_fn pmem2_memcpy = []() {
   struct pmem2_map map;  // NOLINT(cppcoreguidelines-pro-type-member-init)
   map.effective_granularity = PMEM2_GRANULARITY_CACHE_LINE;
   pmem2_set_mem_fns(&map);
@@ -15,8 +15,7 @@ static pmem2_memcpy_fn pmem2_memcpy = []() -> pmem2_memcpy_fn {
 }();
 #endif
 
-namespace ulayfs::pmem::copy {
-
+namespace ulayfs::pmem {
 namespace internal {
 /**
  * Different implementation of memcpy:
@@ -111,4 +110,4 @@ static inline void memcpy_persist(void *dst, const void *src, size_t size,
   }
   if (fenced) _mm_sfence();
 }
-}  // namespace ulayfs::pmem::copy
+}  // namespace ulayfs::pmem

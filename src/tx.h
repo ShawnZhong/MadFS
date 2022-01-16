@@ -285,7 +285,6 @@ class TxMgr::WriteTx : public TxMgr::Tx {
     this->tail_tx_block = tail_tx_block;
     this->ticket = ticket;
   }
-  ssize_t do_write();
 
   template <typename TX>
   static ssize_t do_write_and_validate_offset(

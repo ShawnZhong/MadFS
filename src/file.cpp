@@ -12,7 +12,8 @@
 
 namespace ulayfs::dram {
 
-File::File(int fd, const struct stat& stat, int flags, bool guard)
+File::File(int fd, const struct stat& stat, int flags, const char* pathname,
+           bool guard)
     : fd(fd),
       mem_table(fd, stat.st_size, (flags & O_ACCMODE) == O_RDONLY),
       meta(mem_table.get_meta()),
@@ -68,6 +69,8 @@ File::File(int fd, const struct stat& stat, int flags, bool guard)
   if (!file_size_updated) file_size = blk_table.update(/*do_alloc*/ false);
 
   if (flags & O_APPEND) offset_mgr.seek_absolute(file_size);
+
+  if constexpr (BuildOptions::debug) path = strdup(pathname);
 }
 
 File::~File() {
@@ -76,6 +79,7 @@ File::~File() {
   if (fd >= 0) posix::close(fd);
   if (shm_fd >= 0) posix::close(shm_fd);
   if (bitmap) posix::munmap(bitmap, SHM_SIZE);
+  if constexpr (BuildOptions::debug) free((void*)path);
 }
 
 /*
@@ -167,6 +171,8 @@ void* File::mmap(void* addr_hint, size_t length, int prot, int mmap_flags,
   }
   char* new_addr = reinterpret_cast<char*>(res);
   char* old_addr = reinterpret_cast<char*>(meta);
+  // TODO: there is a kernel bug that when the old_addr is unmapped, accessing
+  //  new_addr results in kernel panic
 
   auto remap = [&old_addr, &new_addr](LogicalBlockIdx lidx,
                                       LogicalBlockIdx vidx, int num_blocks) {
@@ -301,7 +307,7 @@ void File::open_shm(const struct stat& stat) {
     }
   }
 
-  DEBUG("posix::open(%s) = %d", shm_path, shm_fd);
+  TRACE("posix::open(%s) = %d", shm_path, shm_fd);
 
   // mmap bitmap
   void* shm = posix::mmap(nullptr, SHM_SIZE, PROT_READ | PROT_WRITE, MAP_SHARED,

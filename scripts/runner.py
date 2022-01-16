@@ -7,11 +7,23 @@ from utils import get_timestamp, system, root_dir
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger("runner")
 
+build_types = [
+    "debug",
+    "release",
+    "relwithdebinfo",
+    "profile",
+    "pmemcheck",
+    "asan",
+    "ubsan",
+    "msan",
+    "tsan",
+]
+
 
 class Runner:
     def __init__(self, name, build_type=None, result_dir=None):
         self.is_micro = name.startswith("micro")
-        self.is_bench = self.is_micro or name.startswith("leveldb") or name.startswith("tpcc")
+        self.is_bench = any(name.startswith(x) for x in ["micro", "leveldb", "tpcc"])
 
         if build_type is None:
             build_type = "release" if self.is_bench else "debug"
@@ -24,7 +36,6 @@ class Runner:
         self.result_dir = result_dir
         self.prog_path = None
         self.ulayfs_path = None
-        self.bm_output_path = None
 
         self.result_dir.mkdir(parents=True, exist_ok=True)
 
@@ -52,15 +63,23 @@ class Runner:
         self.ulayfs_path = self.build_path / "libulayfs.so"
         self.prog_path = self.build_path / cmake_target
 
-    def run(self, cmd=None, additional_args="", load_ulayfs=True, numa=0, pmem_path=None):
+    def run(
+            self,
+            cmd=None,
+            additional_args="",
+            load_ulayfs=True,
+            numa=0,
+            pmem_path=None,
+            prog_log_name="prog.log",
+    ):
         if cmd is None:
             assert self.prog_path is not None
             cmd = f"{self.prog_path} "
 
         if self.is_micro:
-            self.bm_output_path = self.result_dir / "result.json"
+            json_path = self.result_dir / "result.json"
             cmd += f" --benchmark_counters_tabular=true "
-            cmd += f" --benchmark_out={self.bm_output_path} "
+            cmd += f" --benchmark_out={json_path} "
 
         cmd = f"{cmd} {additional_args}"
 
@@ -80,37 +99,42 @@ class Runner:
             logger.warning("numactl not found, NUMA not enabled")
 
         # execute
-        prog_log_path = self.result_dir / "prog.log"
+        prog_log_path = self.result_dir / prog_log_name
         if self.build_type == "pmemcheck":
-            pmemcheck_dir = self.build_path / "_deps" / "pmemcheck-src"
-            system(
-                f"VALGRIND_LIB={pmemcheck_dir}/libexec/valgrind/ "
-                f"{pmemcheck_dir}/bin/valgrind --tool=pmemcheck --trace-children=yes "
-                f"{cmd}",
-                log_path=prog_log_path,
-            )
-
+            self._run_pmemcheck(cmd, log_path=prog_log_path)
         elif self.build_type == "profile":
-            perf_data = self.result_dir / "perf.data"
-            flamegraph_output = self.result_dir / "flamegraph.svg"
-            flamegraph_dir = self.build_path / "_deps" / "flamegraph-src"
-
-            # record perf data
-            system(
-                f"perf record --freq=997 --call-graph dwarf -o {perf_data} {cmd}",
-                log_path=prog_log_path,
-            )
-
-            # show perf results in terminal
-            system(f"perf report -i {perf_data}")
-
-            # generate flamegraph
-            system(
-                f"perf script -i {perf_data} | "
-                f"{flamegraph_dir}/stackcollapse-perf.pl | "
-                f"{flamegraph_dir}/flamegraph.pl > {flamegraph_output}"
-            )
-            logger.info(f"The flamegraph is available at `{flamegraph_output}`")
-
+            self._run_profile(cmd, log_path=prog_log_path)
         else:
             system(cmd, log_path=prog_log_path)
+
+    def _run_pmemcheck(self, cmd, log_path):
+        pmemcheck_dir = self.build_path / "_deps" / "pmemcheck-src"
+        system(
+            f"VALGRIND_LIB={pmemcheck_dir}/libexec/valgrind/ "
+            f"{pmemcheck_dir}/bin/valgrind --tool=pmemcheck "
+            f"--trace-children=yes --trace-children-skip=/bin/sh --error-exitcode=-1 "
+            f"{cmd}",
+            log_path=log_path,
+        )
+
+    def _run_profile(self, cmd, log_path):
+        perf_data = self.result_dir / "perf.data"
+        flamegraph_output = self.result_dir / "flamegraph.svg"
+        flamegraph_dir = self.build_path / "_deps" / "flamegraph-src"
+
+        # record perf data
+        system(
+            f"perf record --freq=997 --call-graph dwarf -o {perf_data} {cmd}",
+            log_path=log_path,
+        )
+
+        # show perf results in terminal
+        system(f"perf report -i {perf_data}")
+
+        # generate flamegraph
+        system(
+            f"perf script -i {perf_data} | "
+            f"{flamegraph_dir}/stackcollapse-perf.pl | "
+            f"{flamegraph_dir}/flamegraph.pl > {flamegraph_output}"
+        )
+        logger.info(f"The flamegraph is available at `{flamegraph_output}`")

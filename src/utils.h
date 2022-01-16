@@ -50,9 +50,9 @@ extern FILE *log_file;
     auto now = std::chrono::high_resolution_clock::now();                   \
     std::chrono::duration<double> sec = now.time_since_epoch();             \
     const char *s = strrchr(__FILE__, '/');                                 \
-    const char *filename = s ? s + 1 : __FILE__;                            \
+    const char *caller_filename = s ? s + 1 : __FILE__;                     \
     fprintf(file, "[Thread %d] %f [%14s:%-3d] " fmt "\n", tid, sec.count(), \
-            filename, __LINE__, ##__VA_ARGS__);                             \
+            caller_filename, __LINE__, ##__VA_ARGS__);                      \
   } while (0)
 
 // PANIC_IF is active for both debug and release modes

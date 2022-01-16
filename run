@@ -4,7 +4,8 @@ import argparse
 import logging
 from pathlib import Path
 
-from scripts.runner import Runner
+from scripts.bench_common import get_ext4_dax_path
+from scripts.runner import Runner, build_types
 from scripts.utils import check_any_args_passed
 
 logging.basicConfig(level=logging.INFO)
@@ -19,17 +20,7 @@ if __name__ == "__main__":
     parser.add_argument(
         "build_type",
         nargs=argparse.OPTIONAL,
-        choices=[
-            "debug",
-            "release",
-            "relwithdebinfo",
-            "profile",
-            "pmemcheck",
-            "asan",
-            "ubsan",
-            "msan",
-            "tsan",
-        ],
+        choices=build_types,
     )
     parser.add_argument(
         "-c",
@@ -60,10 +51,7 @@ if __name__ == "__main__":
     args = parser.parse_args()
 
     if args.pmem_path is None:
-        for path in [Path("/mnt/pmem0-ext4-dax"), Path("/mnt/pmem0")]:
-            if path.exists():
-                args.pmem_path = path
-                break
+        args.pmem_path = get_ext4_dax_path()
 
     logger.info(f"args={args}")
 

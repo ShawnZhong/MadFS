@@ -1,54 +1,61 @@
 #!/usr/bin/env python3
 import argparse
 import logging
-from pathlib import Path
 
-from bench_utils import get_fs_configs
+from bench_common import get_fs_configs, add_common_args
+from plot import plot_tpcc
 from runner import Runner
-from utils import root_dir, get_timestamp
+from utils import root_dir, get_timestamp, system
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger("bench_tpcc")
 
 
-def run_tpcc():
-    result_dir = root_dir / "results" / f"bench_tpcc" / get_timestamp()
-    sql_path = root_dir / 'bench' / 'tpcc_sqlite' / 'create_table.sql'
+def run_tpcc(build_type, fs_names):
+    from init import init
 
-    for fs in get_fs_configs():
-        db_path = fs.pmem_path / 'tpcc.db'
-        db_path.unlink(missing_ok=True)
+    init(configure=True)
+    result_dir = root_dir / "results" / "bench_tpcc" / get_timestamp()
+    sql_path = root_dir / "bench" / "tpcc_sqlite" / "create_table.sql"
+
+    for fs in get_fs_configs(fs_names):
+        db_path = fs.pmem_path / "tpcc.db"
+        system(f"rm -f {db_path} {db_path}-shm {db_path}-wal")
 
         runner = Runner("tpcc_create", result_dir=result_dir / fs.name / "create")
         if fs.load_ulayfs:
             runner.build("ulayfs")
-        runner.run(cmd=f"sqlite3 {db_path} '.read {sql_path}'", load_ulayfs=fs.load_ulayfs)
+        runner.run(
+            cmd=f"sqlite3 {db_path} '.read {sql_path}'", load_ulayfs=fs.load_ulayfs
+        )
 
         runner = Runner("tpcc_load", result_dir=result_dir / fs.name / "load")
-        runner.build(cmake_args=fs.cmake_args)
-        runner.run(additional_args="-w 4", load_ulayfs=fs.load_ulayfs, pmem_path=fs.pmem_path)
+        runner.build()
+        runner.run(
+            additional_args="-w 4", load_ulayfs=fs.load_ulayfs, pmem_path=fs.pmem_path
+        )
 
-        runner = Runner("tpcc_start", result_dir=result_dir / fs.name / "start")
-        runner.build(cmake_args=fs.cmake_args)
-        runner.run(additional_args="-w 4 -c 1 -t 10000", load_ulayfs=fs.load_ulayfs, pmem_path=fs.pmem_path)
+        runner = Runner("tpcc_start", result_dir=result_dir / fs.name / "start", build_type=build_type)
+        runner.build()
+        runner.run(
+            additional_args="-w 4 -c 1 -t 100",
+            load_ulayfs=fs.load_ulayfs,
+            pmem_path=fs.pmem_path,
+        )
 
     return result_dir
 
 
-def main(result_dir):
+def main(result_dir, **kwargs):
     if result_dir is None:
-        result_dir = run_tpcc()
+        result_dir = run_tpcc(**kwargs)
 
+    plot_tpcc(result_dir)
     logger.info(f"Results saved to {result_dir}")
 
 
 if __name__ == "__main__":
     argparser = argparse.ArgumentParser()
-    argparser.add_argument(
-        "-p",
-        dest="result_dir",
-        type=Path,
-        help="If set, plot the results in the given directory w/o running the benchmark",
-    )
+    add_common_args(argparser)
     args = argparser.parse_args()
     main(**vars(args))

@@ -12,18 +12,18 @@
 #include "const.h"
 #include "debug.h"
 
-#define CHECK_RESULT(expected, actual, length, fd) \
-  do {                                             \
-    if (memcmp(expected, actual, length) != 0) {   \
-      print_file(fd);                              \
-      std::cerr << "expected: \"";                 \
-      for (char i : expected) putc(i, stderr);     \
-      std::cerr << "\"\n";                         \
-      std::cerr << "actual  : \"";                 \
-      for (char i : actual) putc(i, stderr);       \
-      std::cerr << "\"\n";                         \
-      assert(false);                               \
-    }                                              \
+#define CHECK_RESULT(expected, actual, length, fd)                \
+  do {                                                            \
+    if (memcmp(expected, actual, length) != 0) {                  \
+      print_file(fd);                                             \
+      std::cerr << "expected: \"";                                \
+      for (int i = 0; i < length; ++i) putc(expected[i], stderr); \
+      std::cerr << "\"\n";                                        \
+      std::cerr << "actual  : \"";                                \
+      for (int i = 0; i < length; ++i) putc(actual[i], stderr);   \
+      std::cerr << "\"\n";                                        \
+      assert(false);                                              \
+    }                                                             \
   } while (0)
 
 void print_file(int fd) {
