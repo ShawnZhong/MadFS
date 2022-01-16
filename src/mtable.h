@@ -108,8 +108,7 @@ class MemTable {
     alloc_num_blocks = ALIGN_UP(alloc_num_blocks, NUM_BLOCKS_PER_GROW);
     uint32_t new_num_blocks = old_num_blocks + alloc_num_blocks;
     int ret = posix::fallocate(
-        fd, 0, static_cast<off_t>(BLOCK_IDX_TO_SIZE(old_num_blocks)),
-        static_cast<off_t>(BLOCK_IDX_TO_SIZE(alloc_num_blocks)));
+        fd, 0, 0, static_cast<off_t>(BLOCK_IDX_TO_SIZE(new_num_blocks)));
     PANIC_IF(ret, "fd %d: fallocate failed", fd);
     meta->set_num_blocks_if_larger(new_num_blocks);
 
