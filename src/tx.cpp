@@ -346,8 +346,7 @@ std::ostream& operator<<(std::ostream& out, const TxMgr& tx_mgr) {
           tx_entry.indirect_entry.get_log_entry_idx(), curr_block);
       assert(curr_entry && curr_block);
 
-      do
-        out << *curr_entry;
+      do out << *curr_entry;
       while ((curr_entry = log_mgr->get_next_entry(curr_entry, curr_block)));
     }
   next:
