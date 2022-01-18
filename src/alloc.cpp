@@ -147,7 +147,7 @@ pmem::LogEntry* Allocator::alloc_log_entry(uint32_t num_blocks,
   // if smaller than that, do not try to allocate log entry there
   constexpr uint32_t min_required_size =
       pmem::LogEntry::fixed_size + sizeof(LogicalBlockIdx);
-  if (BLOCK_SIZE - curr_log_offset < min_required_size) {
+  if (!curr_log_block_idx || BLOCK_SIZE - curr_log_offset < min_required_size) {
     // no enough space left, do block allocation
     curr_log_block_idx = alloc(1);
     curr_log_block =
@@ -155,16 +155,18 @@ pmem::LogEntry* Allocator::alloc_log_entry(uint32_t num_blocks,
     curr_log_offset = 0;
   }
 
-  first_idx = {curr_log_block_idx, curr_log_block_idx};
+  first_idx = {curr_log_block_idx, curr_log_offset};
   first_block = curr_log_block;
   pmem::LogEntry* first_entry = curr_log_block->get(curr_log_offset);
   pmem::LogEntry* curr_entry = first_entry;
   uint32_t needed_lidxs_cnt =
       ALIGN_UP(num_blocks, BITMAP_CAPACITY) >> BITMAP_CAPACITY_SHIFT;
   while (true) {
+    assert(curr_entry);
     curr_log_offset += pmem::LogEntry::fixed_size;
     uint32_t avail_lidxs_cnt =
         (BLOCK_SIZE - curr_log_offset) / sizeof(LogicalBlockIdx);
+    assert(avail_lidxs_cnt > 0);
     if (needed_lidxs_cnt <= avail_lidxs_cnt) {
       curr_entry->header.has_next = false;
       curr_entry->header.num_blocks = num_blocks;
@@ -190,6 +192,7 @@ pmem::LogEntry* Allocator::alloc_log_entry(uint32_t num_blocks,
       curr_entry->header.is_next_same_block = true;
       curr_entry->header.next.local_offset = curr_log_offset;
     }
+    curr_entry = curr_log_block->get(curr_log_offset);
   }
 }
 
