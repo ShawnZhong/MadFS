@@ -42,15 +42,6 @@ constexpr static uint16_t NUM_INLINE_TX_ENTRY =
     NUM_CL_TX_ENTRY_IN_META * NUM_TX_ENTRY_PER_CL;
 
 /*
- * log entry
- */
-constexpr static uint16_t LOG_ENTRY_SIZE = 8;
-constexpr static uint16_t NUM_LOG_ENTRY = BLOCK_SIZE / LOG_ENTRY_SIZE;
-static_assert(
-    NUM_LOG_ENTRY - 1 <= std::numeric_limits<LogLocalUnpackIdx>::max(),
-    "NUM_LOG_ENTRY - 1 should be representable with LogLocalUnpackIdx");
-
-/*
  * bitmap
  */
 constexpr static uint16_t BITMAP_SIZE = 8;
@@ -58,6 +49,9 @@ constexpr static uint16_t BITMAP_SIZE = 8;
 // (that's why call it "capacity" instead of "size")
 constexpr static uint32_t BITMAP_CAPACITY_SHIFT = 6;
 constexpr static uint32_t BITMAP_CAPACITY = 1 << BITMAP_CAPACITY_SHIFT;
+// how many bytes are covered by a single 64-bit bitmap
+constexpr static uint64_t BITMAP_CAPACITY_IN_BYTES = BITMAP_CAPACITY
+                                                     << BLOCK_SHIFT;
 
 // total number of bitmaps in DRAM
 // TODO: enable dynamic growing of bitmap
@@ -71,11 +65,6 @@ static_assert(
 constexpr static uint32_t NUM_BITMAP_BLOCKS = 512;
 constexpr static uint32_t SHM_SIZE = NUM_BITMAP_BLOCKS << BLOCK_SHIFT;
 constexpr static uint32_t NUM_BITMAP = NUM_BITMAP_BLOCKS * NUM_BITMAP_PER_BLOCK;
-
-// how many data blocks can be covered per CAS
-constexpr static uint32_t MAX_BLOCKS_PER_BODY = 64;
-constexpr static uint32_t MAX_BYTES_PER_BODY = MAX_BLOCKS_PER_BODY
-                                               << BLOCK_SHIFT;
 
 constexpr static uint16_t NUM_CL_PER_BLOCK = BLOCK_SIZE / CACHELINE_SIZE;
 constexpr static uint32_t NUM_OFFSET_QUEUE_SLOT = 16;

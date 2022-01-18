@@ -85,11 +85,10 @@ class Converter {
             tx_idx, tx_block);
       else {
         auto log_entry_idx = file->log_mgr.append(
-            allocator, pmem::LogOp::LOG_OVERWRITE, leftover_bytes,
-            /*total_blocks*/ 1, /*begin_vidx*/ 0, /*begin_lidxs*/ {1},
-            /*fenced*/ false);
-        file->tx_mgr.try_commit(pmem::TxEntryIndirect(1, 0, log_entry_idx),
-                                tx_idx, tx_block);
+            allocator, pmem::LogEntry::Op::LOG_OVERWRITE, leftover_bytes,
+            /*total_blocks*/ 1, /*begin_vidx*/ 0, /*begin_lidxs*/ {1});
+        file->tx_mgr.try_commit(pmem::TxEntryIndirect(log_entry_idx), tx_idx,
+                                tx_block);
       }
       goto done;
     }
@@ -102,11 +101,10 @@ class Converter {
     } else {
       need_le_block = true;
       auto log_entry_idx = file->log_mgr.append(
-          allocator, pmem::LogOp::LOG_OVERWRITE, /*leftover_bytes*/ 0,
-          /*total_blocks*/ 1, /*begin_vidx*/ 0, /*begin_lidxs*/ {num_blocks},
-          /*fenced*/ false);
-      file->tx_mgr.try_commit(pmem::TxEntryIndirect(1, 0, log_entry_idx),
-                              tx_idx, tx_block);
+          allocator, pmem::LogEntry::Op::LOG_OVERWRITE, /*leftover_bytes*/ 0,
+          /*total_blocks*/ 1, /*begin_vidx*/ 0, /*begin_lidxs*/ {num_blocks});
+      file->tx_mgr.try_commit(pmem::TxEntryIndirect(log_entry_idx), tx_idx,
+                              tx_block);
     }
     file->tx_mgr.advance_tx_idx(tx_idx, tx_block, true);
 
@@ -126,12 +124,11 @@ class Converter {
       }
     } else {
       auto log_entry_idx = file->log_mgr.append(
-          allocator, pmem::LogOp::LOG_OVERWRITE, leftover_bytes,
+          allocator, pmem::LogEntry::Op::LOG_OVERWRITE, leftover_bytes,
           /*total_blocks*/ num_blocks - 1, /*begin_vidx*/ 1,
-          /*begin_lidxs*/ {1}, /*fenced*/ false);
-      file->tx_mgr.try_commit(
-          pmem::TxEntryIndirect(num_blocks - 1, 1, log_entry_idx), tx_idx,
-          tx_block);
+          /*begin_lidxs*/ {1});
+      file->tx_mgr.try_commit(pmem::TxEntryIndirect(log_entry_idx), tx_idx,
+                              tx_block);
     }
 
   done:

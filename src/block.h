@@ -101,21 +101,13 @@ class TxBlock : public BaseBlock {
 
 // LogEntryBlock is per-thread to avoid contention
 class LogEntryBlock : public BaseBlock {
-  LogEntry log_entries[NUM_LOG_ENTRY];
+  // a LogEntryBlock is essentially a lightweight heap for transactions
+  // the major abstraction is really just a byte array
+  char pool[BLOCK_SIZE];
 
  public:
-  [[nodiscard]] LogEntry* get(LogLocalUnpackIdx idx) {
-    assert(idx >= 0 && idx < NUM_LOG_ENTRY);
-    return &log_entries[idx];
-  }
-
-  void persist(LogLocalUnpackIdx start_idx, LogLocalUnpackIdx end_idx,
-               bool fenced = true) {
-    size_t len = (end_idx - start_idx) * sizeof(LogEntry);
-    if (fenced)
-      persist_fenced(&log_entries[start_idx], len);
-    else
-      persist_unfenced(&log_entries[start_idx], len);
+  [[nodiscard]] LogEntry* get(LogLocalOffset offset) {
+    return reinterpret_cast<LogEntry*>(&pool[offset]);
   }
 };
 

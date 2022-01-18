@@ -7,6 +7,7 @@
 #include "block.h"
 #include "config.h"
 #include "const.h"
+#include "entry.h"
 #include "idx.h"
 #include "mtable.h"
 #include "posix.h"
@@ -29,22 +30,19 @@ class Allocator {
   // NOTE: this is the index within recent_bitmap_block
   BitmapIdx recent_bitmap_idx;
 
-  // blocks for storing log entries, max 512 entries per block
-  std::vector<LogicalBlockIdx> log_blocks;
-  // pointer to current LogBlock == the one identified by log_blocks.back()
+  // the current in-use log entry block
   pmem::LogEntryBlock* curr_log_block;
-  // local index of the first free entry slot in the last block
-  // might equal NUM_LOCAL_ENTREIS when a new log block is not allocated yet
-  LogLocalUnpackIdx free_log_local_idx;
+  LogicalBlockIdx curr_log_block_idx;
+  LogLocalOffset curr_log_offset;  // offset of the next available byte
 
  public:
   Allocator(File* file, Bitmap* bitmap)
       : file(file),
         bitmap(bitmap),
         recent_bitmap_idx(),
-        log_blocks(),
         curr_log_block(nullptr),
-        free_log_local_idx(NUM_LOG_ENTRY) {}
+        curr_log_block_idx(0),
+        curr_log_offset(0) {}
 
   ~Allocator() { return_free_list(); }
 
@@ -73,48 +71,18 @@ class Allocator {
     for (uint32_t n = 1; n < BITMAP_CAPACITY; ++n)
       for (LogicalBlockIdx lidx : free_lists[n]) Bitmap::free(bitmap, lidx, n);
   }
-  /*
-   * LogEntry allocations
-   */
 
   /**
-   * allocate a log entry, possibly triggering allocating a new LogBlock
+   * Allocate a linked list of log entry that could fit a mapping of the given
+   * length
+   *
+   * @param[in] num_blocks how long this mapping should be
+   * @param[out] first_idx the log entry index of the head of the linked list
+   * @param[out] first_block the log entry block where the head locates
+   * @return the head of the linked list
    */
-  pmem::LogEntry* alloc_log_entry(
-      bool pack_align = false, pmem::LogHeadEntry* prev_head_entry = nullptr);
-
-  // syntax sugar for union dispatching
-  pmem::LogHeadEntry* alloc_head_entry(
-      pmem::LogHeadEntry* prev_head_entry = nullptr) {
-    return &alloc_log_entry(/*pack_align*/ true, prev_head_entry)->head_entry;
-  }
-
-  pmem::LogBodyEntry* alloc_body_entry() {
-    return &alloc_log_entry()->body_entry;
-  }
-
-  /**
-   * get the number of free entries in the current LogBlock
-   */
-  [[nodiscard]] uint16_t num_free_log_entries() const {
-    return NUM_LOG_ENTRY - free_log_local_idx;
-  }
-
-  /**
-   * get the last allocated entry's local index
-   */
-  [[nodiscard]] LogLocalUnpackIdx last_log_local_idx() const {
-    return free_log_local_idx - 1;
-  }
-
-  [[nodiscard]] pmem::LogEntryBlock* get_curr_log_block() const {
-    return curr_log_block;
-  }
-
-  [[nodiscard]] LogEntryIdx get_first_head_idx() {
-    return {log_blocks.back(),
-            static_cast<LogLocalIdx>(last_log_local_idx() >> 1)};
-  }
+  pmem::LogEntry* alloc_log_entry(uint32_t num_blocks, LogEntryIdx& first_idx,
+                                  pmem::LogEntryBlock*& first_block);
 };
 
 }  // namespace ulayfs::dram

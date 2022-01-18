@@ -2,10 +2,13 @@
 
 #include <bit>
 #include <cassert>
+#include <cstdint>
 #include <utility>
 
 #include "bitmap.h"
 #include "block.h"
+#include "const.h"
+#include "entry.h"
 #include "file.h"
 #include "idx.h"
 #include "utils.h"
@@ -137,28 +140,57 @@ void Allocator::free(const LogicalBlockIdx recycle_image[],
   }
 }
 
-pmem::LogEntry* Allocator::alloc_log_entry(
-    bool pack_align, pmem::LogHeadEntry* prev_head_entry) {
-  // if need 16-byte alignment, maybe skip one 8-byte slot
-  if (pack_align) free_log_local_idx = ALIGN_UP(free_log_local_idx, 2);
-
-  if (free_log_local_idx == NUM_LOG_ENTRY) {
-    LogicalBlockIdx idx = alloc(1);
-    log_blocks.push_back(idx);
-    curr_log_block = &file->lidx_to_addr_rw(idx)->log_entry_block;
-    free_log_local_idx = 0;
-    if (prev_head_entry) prev_head_entry->next.next_block_idx = idx;
-  } else {
-    if (prev_head_entry)
-      prev_head_entry->next.next_local_idx = free_log_local_idx;
+pmem::LogEntry* Allocator::alloc_log_entry(uint32_t num_blocks,
+                                           LogEntryIdx& first_idx,
+                                           pmem::LogEntryBlock*& first_block) {
+  // for a log entry with only one logical block index, it takes 16 bytes
+  // if smaller than that, do not try to allocate log entry there
+  constexpr uint32_t min_required_size =
+      pmem::LogEntry::fixed_size + sizeof(LogicalBlockIdx);
+  if (BLOCK_SIZE - curr_log_offset < min_required_size) {
+    // no enough space left, do block allocation
+    curr_log_block_idx = alloc(1);
+    curr_log_block =
+        &file->lidx_to_addr_rw(curr_log_block_idx)->log_entry_block;
+    curr_log_offset = 0;
   }
 
-  assert(curr_log_block != nullptr);
-  pmem::LogEntry* entry = curr_log_block->get(free_log_local_idx);
-  memset(entry, 0, sizeof(pmem::LogEntry));  // zero-out at alloc
+  first_idx = {curr_log_block_idx, curr_log_block_idx};
+  first_block = curr_log_block;
+  pmem::LogEntry* first_entry = curr_log_block->get(curr_log_offset);
+  pmem::LogEntry* curr_entry = first_entry;
+  uint32_t needed_lidxs_cnt =
+      ALIGN_UP(num_blocks, BITMAP_CAPACITY) >> BITMAP_CAPACITY_SHIFT;
+  while (true) {
+    curr_log_offset += pmem::LogEntry::fixed_size;
+    uint32_t avail_lidxs_cnt =
+        (BLOCK_SIZE - curr_log_offset) / sizeof(LogicalBlockIdx);
+    if (needed_lidxs_cnt <= avail_lidxs_cnt) {
+      curr_entry->header.has_next = false;
+      curr_entry->header.num_blocks = num_blocks;
+      curr_log_offset += needed_lidxs_cnt * sizeof(LogicalBlockIdx);
+      return first_entry;
+    }
 
-  free_log_local_idx++;
-  return entry;
+    curr_entry->header.has_next = true;
+    curr_entry->header.num_blocks = avail_lidxs_cnt << BITMAP_CAPACITY_SHIFT;
+    curr_log_offset += avail_lidxs_cnt * sizeof(LogicalBlockIdx);
+    needed_lidxs_cnt -= avail_lidxs_cnt;
+    num_blocks -= curr_entry->header.num_blocks;
+
+    assert(curr_log_offset <= BLOCK_SIZE);
+    if (BLOCK_SIZE - curr_log_offset < min_required_size) {
+      curr_log_block_idx = alloc(1);
+      curr_log_block =
+          &file->lidx_to_addr_rw(curr_log_block_idx)->log_entry_block;
+      curr_log_offset = 0;
+      curr_entry->header.is_next_same_block = false;
+      curr_entry->header.next.block_idx = curr_log_block_idx;
+    } else {
+      curr_entry->header.is_next_same_block = true;
+      curr_entry->header.next.local_offset = curr_log_offset;
+    }
+  }
 }
 
 }  // namespace ulayfs::dram
