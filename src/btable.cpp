@@ -1,5 +1,6 @@
 #include "btable.h"
 
+#include <atomic>
 #include <cstdint>
 
 #include "block.h"
@@ -10,33 +11,40 @@
 namespace ulayfs::dram {
 
 uint64_t BlkTable::update(bool do_alloc, bool init_bitmap) {
+  TxEntryIdx tx_idx_local = tail_tx_idx.load(std::memory_order_relaxed);
+  pmem::TxBlock* tx_block_local = tail_tx_block.load(std::memory_order_relaxed);
+  LogicalBlockIdx prev_tx_block_idx;
+
   // it's possible that the previous update move idx to overflow state
-  if (!tx_mgr->handle_idx_overflow(tail_tx_idx, tail_tx_block, do_alloc)) {
+  if (!tx_mgr->handle_idx_overflow(tx_idx_local, tx_block_local, do_alloc)) {
     // if still overflow, do_alloc must be unset
     assert(!do_alloc);
     // if still overflow, we must have reached the tail already
-    return file_size;
+    goto done;
   }
 
-  LogicalBlockIdx prev_tx_block_idx = 0;
+  prev_tx_block_idx = 0;
   while (true) {
-    auto tx_entry = tx_mgr->get_entry_from_block(tail_tx_idx, tail_tx_block);
+    auto tx_entry = tx_mgr->get_entry_from_block(tx_idx_local, tx_block_local);
     if (!tx_entry.is_valid()) break;
-    if (init_bitmap && tail_tx_idx.block_idx != prev_tx_block_idx)
-      file->set_allocated(tail_tx_idx.block_idx);
+    if (init_bitmap && tx_idx_local.block_idx != prev_tx_block_idx)
+      file->set_allocated(tx_idx_local.block_idx);
     if (tx_entry.is_inline())
       apply_tx(tx_entry.inline_entry);
     else
       apply_tx(tx_entry.indirect_entry, file->get_log_mgr(), init_bitmap);
-    prev_tx_block_idx = tail_tx_idx.block_idx;
-    if (!tx_mgr->advance_tx_idx(tail_tx_idx, tail_tx_block, do_alloc)) break;
+    prev_tx_block_idx = tx_idx_local.block_idx;
+    if (!tx_mgr->advance_tx_idx(tx_idx_local, tx_block_local, do_alloc)) break;
   }
 
   // mark all live data blocks in bitmap
   if (init_bitmap)
     for (const auto logical_idx : table) file->set_allocated(logical_idx);
 
-  return file_size;
+done:
+  tail_tx_idx.store(tx_idx_local, std::memory_order_relaxed);
+  tail_tx_block.store(tx_block_local, std::memory_order_relaxed);
+  return file_size.load(std::memory_order_relaxed);
 }
 
 void BlkTable::resize_to_fit(VirtualBlockIdx idx) {
@@ -77,7 +85,8 @@ void BlkTable::apply_tx(pmem::TxEntryIndirect tx_entry, LogMgr* log_mgr,
   }
 
   uint64_t now_file_size = BLOCK_IDX_TO_SIZE(end_vidx) - leftover_bytes;
-  file_size = std::max(file_size, now_file_size);
+  if (now_file_size > file_size.load(std::memory_order_relaxed))
+    file_size.store(now_file_size, std::memory_order_relaxed);
 }
 
 void BlkTable::apply_tx(pmem::TxEntryInline tx_commit_inline_entry) {
@@ -96,13 +105,15 @@ void BlkTable::apply_tx(pmem::TxEntryInline tx_commit_inline_entry) {
   // update file size if this write exceeds current file size
   // inline tx must be aligned to BLOCK_SIZE boundary
   uint64_t now_file_size = BLOCK_IDX_TO_SIZE(end_vidx);
-  if (now_file_size > file_size) file_size = now_file_size;
+  if (now_file_size > file_size.load(std::memory_order_relaxed))
+    file_size.store(now_file_size, std::memory_order_relaxed);
 }
 
 std::ostream& operator<<(std::ostream& out, const BlkTable& b) {
   out << "BlkTable:\n";
-  out << "\tfile_size: " << b.file_size << "\n";
-  out << "\ttail_tx_idx: " << b.tail_tx_idx << "\n";
+  out << "\tfile_size: " << b.file_size.load(std::memory_order_relaxed) << "\n";
+  out << "\ttail_tx_idx: " << b.tail_tx_idx.load(std::memory_order_relaxed)
+      << "\n";
   for (size_t i = 0; i < b.table.size(); ++i) {
     if (b.table[i] != 0) {
       out << "\t" << i << " -> " << b.table[i] << "\n";
