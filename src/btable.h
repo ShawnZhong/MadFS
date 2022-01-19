@@ -27,13 +27,24 @@ class BlkTable {
   std::atomic<pmem::TxBlock*> tail_tx_block;
   std::atomic_uint64_t file_size;
 
+  /**
+   * Version of the three fields above.
+   * It can only be updated with file->spinlock held. Before a writer (of
+   * BlkTable) tries to update the three fields above, it must increment the
+   * version; after it's done, it must increment it again.
+   * Thus, when this version is odd, it means someone is updating three fields
+   * above and they are in a temporary inconsistent state.
+   */
+  std::atomic_uint64_t version;
+
  public:
   explicit BlkTable(File* file, TxMgr* tx_mgr)
       : file(file),
         tx_mgr(tx_mgr),
         tail_tx_idx({0, 0}),
         tail_tx_block(nullptr),
-        file_size(0) {
+        file_size(0),
+        version(0) {
     table.resize(16);
   }
 
@@ -71,18 +82,14 @@ class BlkTable {
    */
   [[nodiscard]] bool need_update(TxEntryIdx& tx_idx, pmem::TxBlock*& tx_block,
                                  uint64_t& f_size, bool do_alloc) const {
+    uint64_t curr_ver = version.load(std::memory_order_acquire);
+    if (curr_ver & 1) return true;  // old version means inconsistency
+
     tx_idx = tail_tx_idx.load(std::memory_order_relaxed);
     tx_block = tail_tx_block.load(std::memory_order_relaxed);
     f_size = file_size.load(std::memory_order_relaxed);
 
-    std::atomic_thread_fence(std::memory_order_acq_rel);
-
-    TxEntryIdx tx_idx2 = tail_tx_idx.load(std::memory_order_relaxed);
-    pmem::TxBlock* tx_block2 = tail_tx_block.load(std::memory_order_relaxed);
-    uint64_t f_size2 = file_size.load(std::memory_order_relaxed);
-
-    if (tx_idx != tx_idx2 || tx_block != tx_block2 || f_size != f_size2)
-      return true;
+    if (curr_ver != version.load(std::memory_order_release)) return true;
     if (!tx_mgr->handle_idx_overflow(tx_idx, tx_block, do_alloc)) return false;
     // if it's not valid, there is no new tx to the tx history, thus no need to
     // acquire spinlock to update

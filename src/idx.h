@@ -81,9 +81,17 @@ static_assert(sizeof(LogEntryUnpackIdx) == 6,
 /**
  * A transaction entry is identified by the block index and the local index
  */
-struct TxEntryIdx {
-  LogicalBlockIdx block_idx;
-  TxLocalIdx local_idx;
+union TxEntryIdx {
+  struct {
+    LogicalBlockIdx block_idx;
+    TxLocalIdx local_idx;
+  };
+  uint64_t raw_bits;
+
+  TxEntryIdx() = default;
+
+  TxEntryIdx(LogicalBlockIdx block_idx, TxLocalIdx local_idx)
+      : block_idx(block_idx), local_idx(local_idx) {}
 
   [[nodiscard]] bool is_inline() const { return block_idx == 0; }
 
