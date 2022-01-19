@@ -21,13 +21,13 @@ def plot_io_breakdown():
         "append": {
             "memcpy": 900,
             "page fault": 2257,
-            "update mapping": 556,
+            "block table": 556,
             "commit tx": 285,
             "others": 227,
         },
         "overwrite": {
             "memcpy": 834,
-            "update mapping": 632,
+            "block table": 632,
             "commit tx": 309,
             "others": 202,
         }
@@ -44,10 +44,10 @@ def plot_io_breakdown():
 
     df = df.T
     print(df)
-    ax = df.plot.barh(stacked=True, figsize=(5, 2.5))
+    ax = df.plot.barh(stacked=True, figsize=(5, 1))
 
     ax.set_xlabel('Time (us)')
-    ax.legend()
+    ax.legend(ncol=3, loc="upper center", bbox_to_anchor=(0.5, 1.75))
 
     plt.savefig(result_dir / "breakdown_io.pdf", bbox_inches="tight")
 
@@ -169,13 +169,13 @@ def plot_open_file_size_breakdown():
     df = df[plot_columns] / 1000
     # df = df.apply(lambda x: x * 100 / sum(x), axis=1)
     print(df)
-    ax = df.plot.barh(stacked=True, figsize=(5, 3), rot=0, )
+    ax = df.plot.barh(stacked=True, figsize=(5, 2.5), rot=0, )
     ax.set_xlabel('Time (us)')
     ax.set_ylabel('File size')
 
     plt.savefig(result_dir / "open_file_size.pdf", bbox_inches="tight")
 
 
-# plot_io_breakdown()
-# plot_open_tx_breakdown()
+plot_io_breakdown()
+plot_open_tx_breakdown()
 plot_open_file_size_breakdown()

@@ -80,8 +80,6 @@ def plot_single_bm(
     if output_path:
         plt.savefig(output_path, bbox_inches="tight")
 
-    # plt.show()
-
 
 def plot_benchmarks(result_dir, data, **kwargs):
     for name, benchmark in data.groupby("benchmark"):
@@ -160,7 +158,6 @@ def plot_micro_mt(result_dir):
             ax.yaxis.set_major_formatter(plt.FormatStrFormatter('%.1f'))
         else:
             ax.yaxis.set_major_locator(plt.MaxNLocator(steps=[1, 2]))
-            # ax.yaxis.set_major_formatter(plt.FormatStrFormatter('%f'))
         if name == "no_overlap_0R":
             plt.legend()
 
@@ -216,7 +213,7 @@ def plot_ycsb(result_dir):
     df_pivot = df_pivot[df["label"].unique()]
     df_pivot.plot(
         kind="bar",
-        figsize=(5, 4),
+        figsize=(5, 2.5),
         rot=0,
         legend=False,
         ylabel="Throughput (Mops/s)",
@@ -227,7 +224,7 @@ def plot_ycsb(result_dir):
     for c in df_pivot.columns:
         df_pivot[f"{c}%"] = df_pivot["uLayFS"] / df_pivot[c] * 100
     print(df_pivot)
-    with open(result_dir / "tpcc.txt", "w") as f:
+    with open(result_dir / "ycsb.txt", "w") as f:
         print(df_pivot, file=f)
 
 
@@ -268,7 +265,7 @@ def plot_tpcc(result_dir):
     df.plot(
         kind="bar",
         rot=0,
-        figsize=(5, 4),
+        figsize=(5, 2.5),
         legend=False,
         ylabel="Throughput (k txns/s)",
         xlabel="Transaction Type",
