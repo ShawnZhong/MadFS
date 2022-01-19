@@ -18,8 +18,12 @@ uint64_t BlkTable::update(bool do_alloc, bool init_bitmap) {
     // if still overflow, do_alloc must be unset
     assert(!do_alloc);
     // if still overflow, we must have reached the tail already
-    goto done;
+    return file_size.load(std::memory_order_relaxed);
   }
+
+  // inc the version into an odd number to indicate temporarily inconsistency
+  uint64_t old_ver = version.load(std::memory_order_relaxed);
+  version.store(old_ver + 1, std::memory_order_acquire);
 
   prev_tx_block_idx = 0;
   while (true) {
@@ -39,9 +43,12 @@ uint64_t BlkTable::update(bool do_alloc, bool init_bitmap) {
   if (init_bitmap)
     for (const auto logical_idx : table) file->set_allocated(logical_idx);
 
-done:
   tail_tx_idx.store(tx_idx_local, std::memory_order_relaxed);
   tail_tx_block.store(tx_block_local, std::memory_order_relaxed);
+
+  // inc the version into an even number to indicate they are consistent now
+  version.store(old_ver + 2, std::memory_order_release);
+
   return file_size.load(std::memory_order_relaxed);
 }
 
