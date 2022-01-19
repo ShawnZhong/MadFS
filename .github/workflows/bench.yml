@@ -4,7 +4,7 @@ on:
   pull_request:
 
 env:
-  build_type: relwithdebinfo
+  build_type: release
 
 jobs:
   micro:
@@ -41,7 +41,7 @@ jobs:
       - name: leveldb_tests
         run: ./run leveldb_tests ${{env.build_type}}
 
-      - name: ycsb
+      - name: leveldb_ycsb
         run: |
           ./run leveldb_ycsb ${{env.build_type}} -p="-f bench/ycsb-traces/a-load.txt"
           ./run leveldb_ycsb ${{env.build_type}} -p="-f bench/ycsb-traces/a-run.txt"
@@ -62,17 +62,9 @@ jobs:
     steps:
       - uses: actions/checkout@v2
 
-      - name: build
-        run: make ${{env.build_type}} \
-          CMAKE_ARGS='-DULAYFS_BUILD_BENCH=ON' \
-          BUILD_TARGETS='tpcc_load tpcc_start ulayfs'
-
-      - name: create_table
-        run: LD_PRELOAD=./build-${{env.build_type}}/libulayfs.so \
-          sqlite3 tpcc.db '.read bench/tpcc_sqlite/create_table.sql'
-
-      - name: tpcc_load
-        run: ./run tpcc_load ${{env.build_type}} -p="-w 1"
-
-      - name: tpcc_start
-        run: ./run tpcc_start ${{env.build_type}} -p="-w 4 -c 1 -t 10"
+      - name: run
+        run: |
+          LD_PRELOAD=./build-${{env.build_type}}/libulayfs.so \
+            sqlite3 tpcc.db '.read bench/tpcc_sqlite/create_table.sql'
+          ./run tpcc_load ${{env.build_type}} -p="-w 1"
+          ./run tpcc_start ${{env.build_type}} -p="-w 4 -c 1 -t 10"
