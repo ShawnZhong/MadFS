@@ -39,12 +39,17 @@ class File {
   int shm_fd;
   const bool can_read;
   const bool can_write;
-  pthread_spinlock_t spinlock;
   char shm_path[SHM_PATH_LEN];
 
   // each thread tid has its local allocator
   // the allocator is a per-thread per-file data structure
   tbb::concurrent_unordered_map<pid_t, Allocator> allocators;
+
+  // move spinlock into a separated cacheline
+  union {
+    pthread_spinlock_t spinlock;
+    char cl[CACHELINE_SIZE];
+  };
 
  public:
   // only set at debug mode
