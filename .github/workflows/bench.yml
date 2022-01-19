@@ -13,11 +13,6 @@ jobs:
     steps:
       - uses: actions/checkout@v2
 
-      - name: build
-        run: make ${{env.build_type}} \
-          CMAKE_ARGS='-DULAYFS_BUILD_BENCH=ON' \
-          BUILD_TARGETS='micro_st micro_mt micro_meta ulayfs'
-
       - name: micro_st
         run: BENCH_NUM_ITER=10 ./run micro_st ${{env.build_type}}
 
@@ -32,11 +27,6 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v2
-
-      - name: build
-        run: make ${{env.build_type}} \
-          CMAKE_ARGS='-DULAYFS_BUILD_BENCH=ON' \
-          BUILD_TARGETS='leveldb_tests leveldb_ycsb ulayfs'
 
       - name: leveldb_tests
         run: ./run leveldb_tests ${{env.build_type}}
@@ -65,6 +55,6 @@ jobs:
       - name: run
         run: |
           LD_PRELOAD=./build-${{env.build_type}}/libulayfs.so \
-            sqlite3 tpcc.db '.read bench/tpcc_sqlite/create_table.sql'
+            sqlite3 tpcc.db '.read bench/tpcc.sql'
           ./run tpcc_load ${{env.build_type}} -p="-w 1"
           ./run tpcc_start ${{env.build_type}} -p="-w 4 -c 1 -t 10"
