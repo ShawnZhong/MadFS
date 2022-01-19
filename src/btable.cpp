@@ -1,7 +1,9 @@
 #include "btable.h"
 
 #include <atomic>
+#include <cstdint>
 
+#include "block.h"
 #include "const.h"
 #include "file.h"
 #include "idx.h"
@@ -32,9 +34,9 @@ uint64_t BlkTable::update(bool do_alloc, bool init_bitmap) {
     if (init_bitmap && tx_idx_local.block_idx != prev_tx_block_idx)
       file->set_allocated(tx_idx_local.block_idx);
     if (tx_entry.is_inline())
-      apply_tx(tx_entry.commit_inline_entry);
+      apply_tx(tx_entry.inline_entry);
     else
-      apply_tx(tx_entry.commit_entry, file->get_log_mgr(), init_bitmap);
+      apply_tx(tx_entry.indirect_entry, file->get_log_mgr(), init_bitmap);
     prev_tx_block_idx = tx_idx_local.block_idx;
     if (!tx_mgr->advance_tx_idx(tx_idx_local, tx_block_local, do_alloc)) break;
   }
@@ -61,34 +63,31 @@ void BlkTable::resize_to_fit(VirtualBlockIdx idx) {
   table.resize(next_pow2);
 }
 
-void BlkTable::apply_tx(pmem::TxEntryIndirect tx_commit_entry, LogMgr* log_mgr,
+void BlkTable::apply_tx(pmem::TxEntryIndirect tx_entry, LogMgr* log_mgr,
                         bool init_bitmap) {
-  // first get begin_vidx and num_blocks for resizing
-  uint32_t num_blocks;
-  VirtualBlockIdx begin_vidx;
-  log_mgr->get_coverage(tx_commit_entry.log_entry_idx, begin_vidx, num_blocks);
-  VirtualBlockIdx end_vidx = begin_vidx + num_blocks;
-  resize_to_fit(end_vidx);
+  pmem::LogEntryBlock* curr_block;
+  pmem::LogEntry* curr_entry =
+      log_mgr->get_entry(tx_entry.get_log_entry_idx(), curr_block, init_bitmap);
 
-  // then read and populate the actual mappings
-  const pmem::LogHeadEntry* head_entry;
-  LogEntryUnpackIdx unpack_idx =
-      LogEntryUnpackIdx::from_pack_idx(tx_commit_entry.log_entry_idx);
+  uint32_t num_blocks;
+  LogicalBlockIdx begin_vidx, end_vidx;
   uint16_t leftover_bytes;
-  bool has_more;
 
   do {
-    head_entry = log_mgr->read_head(unpack_idx, num_blocks, init_bitmap);
-    LogicalBlockIdx le_begin_lidxs[num_blocks / MAX_BLOCKS_PER_BODY + 1];
-    has_more = log_mgr->read_body(unpack_idx, head_entry, num_blocks,
-                                  &begin_vidx, le_begin_lidxs, &leftover_bytes);
+    assert(curr_entry && curr_block);
+    begin_vidx = curr_entry->begin_vidx;
+    num_blocks = curr_entry->num_blocks;
+    end_vidx = begin_vidx + num_blocks;
+    resize_to_fit(end_vidx);
 
-    for (uint32_t offset = 0; offset < num_blocks; ++offset)
+    for (uint32_t offset = 0; offset < curr_entry->num_blocks; ++offset)
       table[begin_vidx + offset] =
-          le_begin_lidxs[offset / MAX_BLOCKS_PER_BODY] +
-          offset % MAX_BLOCKS_PER_BODY;
-
-  } while (has_more);
+          curr_entry->begin_lidxs[offset / BITMAP_CAPACITY] +
+          offset % BITMAP_CAPACITY;
+    // only the last one matters, so this variable will keep being overwritten
+    leftover_bytes = curr_entry->leftover_bytes;
+    curr_entry = log_mgr->get_next_entry(curr_entry, curr_block, init_bitmap);
+  } while (curr_entry);
 
   uint64_t now_file_size = BLOCK_IDX_TO_SIZE(end_vidx) - leftover_bytes;
   if (now_file_size > file_size.load(std::memory_order_relaxed))

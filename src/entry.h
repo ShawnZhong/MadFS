@@ -11,60 +11,130 @@
 
 namespace ulayfs::pmem {
 
+// NOTE: assume for a linked list of LogEntry is sorted by their virtual index
+// BlkTable uses some assumption to simply implementation
+struct LogEntry {
+  /*** define LogEntry-specific struct ***/
+  enum class Op {
+    LOG_INVALID = 0,
+    // we start the enum from 1 so that a LogOp with value 0 is invalid
+    LOG_OVERWRITE = 1,
+  };
+
+  /*** define actual LogEntry layout ***/
+  // this log entry describles a mapping from virtual range [begin_vidx,
+  // begin_vidx + num_blocks) to several logical blocks
+
+  // op/leftover_bytes are read/written by external caller
+  // has_next/is_next_same_block/next are read/written by allocator
+  // num_blocks are read/written by both
+
+  // the operation code, e.g., LOG_OVERWRITE.
+  enum Op op : 2;
+
+  // whether this log entry has a next entry (as a linked list).
+  // `next` is only meaningful if this bit is set
+  bool has_next : 1;
+  // whether the next entry is in the same block.
+  // if true, `next` shall be interpretted as `local_offset`.
+  // otherwise, `next` shall be interpretted as `block_idx`.
+  bool is_next_same_block : 1;
+
+  // the leftover bytes in the last block that does not below to this file.
+  // this happens in an block-unaligned append where the not all bytes in the
+  // last block belongs to this file.
+  // the maximum number of leftover bytes is BLOCK_SIZE - 1.
+  uint16_t leftover_bytes : 12;
+
+  // the number of blocks describled in this log entry
+  // every 64 blocks corresponds to one entry in body_lidxs
+  uint16_t num_blocks;
+
+  union {
+    LogicalBlockIdx block_idx;
+    uint32_t local_offset : 12;
+  } next;
+
+  VirtualBlockIdx begin_vidx;
+  LogicalBlockIdx begin_lidxs[];
+
+  // this corresponds to the size of all fields except the varying
+  // variable-length array `begin_lidxs`
+  constexpr static uint32_t fixed_size = 12;
+
+  /*** some helper functions ***/
+  [[nodiscard]] constexpr uint32_t get_lidxs_len() const {
+    return ALIGN_UP(static_cast<uint32_t>(num_blocks), BITMAP_CAPACITY) >>
+           BITMAP_CAPACITY_SHIFT;
+  }
+
+  // every element in lidxs corresponds to a mapping of length 64 blocks except
+  // the last one
+  [[nodiscard]] constexpr uint32_t get_last_lidx_num_blocks() const {
+    return num_blocks % BITMAP_CAPACITY;
+  }
+
+  void persist() {
+    persist_unfenced(this,
+                     fixed_size + sizeof(LogicalBlockIdx) * get_lidxs_len());
+  }
+  // more advanced iteration helpers are in LogMgr, since they require MemTable
+
+  friend std::ostream& operator<<(std::ostream& out, const LogEntry& entry) {
+    out << "LogEntry{";
+    out << "n_blk=" << entry.num_blocks << ", ";
+    out << "vidx=" << entry.begin_vidx << ", ";
+    out << "lidxs=[" << entry.begin_lidxs[0];
+    for (uint32_t i = 1; i < entry.get_lidxs_len(); ++i)
+      out << "," << entry.begin_lidxs[i];
+    out << "]}";
+    return out;
+  }
+};
+
+static_assert(sizeof(LogEntry) == LogEntry::fixed_size,
+              "LogEntry::fixed_size must match its actual size");
+
+/**
+ * Points to the head of a linked list of LogEntry
+ */
 struct __attribute__((packed)) TxEntryIndirect {
  private:
-  constexpr static const int NUM_BLOCKS_BITS = 6;
-  constexpr static const int BEGIN_VIRTUAL_IDX_BITS = 17;
-
-  constexpr static const int NUM_BLOCKS_MAX = (1 << NUM_BLOCKS_BITS) - 1;
-  constexpr static const int BEGIN_VIRTUAL_IDX_MAX =
-      (1 << BEGIN_VIRTUAL_IDX_BITS) - 1;
-
   friend union TxEntry;
 
  private:
   bool is_inline : 1 = false;
 
  public:
-  // optionally, set these bits so OCC conflict detection can be done inline
-  uint32_t num_blocks : NUM_BLOCKS_BITS;
-  VirtualBlockIdx begin_virtual_idx : BEGIN_VIRTUAL_IDX_BITS;
+  uint32_t unused : 19 = 0;
+  // we enforce this must be 12-bit to ensure corrupted TxEntry won't cause
+  // buffer-overflow issues
+  LogLocalOffset local_offset : 12 = 0;
+  LogicalBlockIdx block_idx;
 
-  // points to the first LogHeadEntry for the group of log entries for this
-  // transaction
-  LogEntryIdx log_entry_idx;
-
-  // It's an optimization that num_blocks and virtual_block_idx could inline
-  // with TxEntryIndirect, but only if they could fit in.
-  TxEntryIndirect(uint32_t num_blocks, uint32_t begin_virtual_idx,
-                  LogEntryIdx log_entry_idx)
-      : num_blocks(0), begin_virtual_idx(0), log_entry_idx(log_entry_idx) {
-    if (num_blocks <= NUM_BLOCKS_MAX &&
-        begin_virtual_idx <= BEGIN_VIRTUAL_IDX_MAX) {
-      this->num_blocks = num_blocks;
-      this->begin_virtual_idx = begin_virtual_idx;
-    } else {
-      this->num_blocks = 0;
-      this->begin_virtual_idx = 0;
-    }
+  TxEntryIndirect(LogEntryIdx log_entry_idx) {
+    local_offset = log_entry_idx.local_offset;
+    block_idx = log_entry_idx.block_idx;
   }
+
+  LogEntryIdx get_log_entry_idx() { return {block_idx, local_offset}; }
 
   friend std::ostream& operator<<(std::ostream& out,
                                   const TxEntryIndirect& entry) {
-    out << "TxEntryIndirect{";
-    out << "n_blk=" << entry.num_blocks << ", ";
-    out << "vidx=" << entry.begin_virtual_idx << ", ";
-    out << "log_head=" << entry.log_entry_idx;
-    out << "}";
+    out << "TxEntryIndirect{log_head={" << entry.block_idx << ","
+        << entry.local_offset << "}}";
     return out;
   }
 };
 
+static_assert(sizeof(TxEntryIndirect) == TX_ENTRY_SIZE,
+              "TxEntryIndirect must be 64 bits");
+
 struct __attribute__((packed)) TxEntryInline {
  private:
   constexpr static const int NUM_BLOCKS_BITS = 6;
-  constexpr static const int BEGIN_VIRTUAL_IDX_BITS = 29;
-  constexpr static const int BEGIN_LOGICAL_IDX_BITS = 28;
+  constexpr static const int BEGIN_VIRTUAL_IDX_BITS = 28;
+  constexpr static const int BEGIN_LOGICAL_IDX_BITS = 29;
 
   constexpr static const int NUM_BLOCKS_MAX = (1 << NUM_BLOCKS_BITS) - 1;
   constexpr static const int BEGIN_VIRTUAL_IDX_MAX =
@@ -112,11 +182,14 @@ struct __attribute__((packed)) TxEntryInline {
   }
 };
 
+static_assert(sizeof(TxEntryInline) == TX_ENTRY_SIZE,
+              "TxEntryInline must be 64 bits");
+
 union TxEntry {
  public:
   uint64_t raw_bits;
-  TxEntryIndirect commit_entry;
-  TxEntryInline commit_inline_entry;
+  TxEntryIndirect indirect_entry;
+  TxEntryInline inline_entry;
   struct {
     bool is_inline : 1;
     uint64_t payload : 63;
@@ -126,16 +199,15 @@ union TxEntry {
 
   TxEntry(){};
   TxEntry(uint64_t raw_bits) : raw_bits(raw_bits) {}
-  TxEntry(TxEntryIndirect commit_entry) : commit_entry(commit_entry) {}
-  TxEntry(TxEntryInline commit_inline_entry)
-      : commit_inline_entry(commit_inline_entry) {}
+  TxEntry(TxEntryIndirect indirect_entry) : indirect_entry(indirect_entry) {}
+  TxEntry(TxEntryInline inline_entry) : inline_entry(inline_entry) {}
 
   [[nodiscard]] bool is_inline() const { return fields.is_inline; }
 
   [[nodiscard]] bool is_valid() const { return raw_bits != 0; }
 
   [[nodiscard]] bool is_dummy() const {
-    return is_inline() && commit_inline_entry.num_blocks == 0;
+    return is_inline() && inline_entry.num_blocks == 0;
   };
 
   /**
@@ -181,130 +253,10 @@ union TxEntry {
   }
 
   friend std::ostream& operator<<(std::ostream& out, const TxEntry& tx_entry) {
-    if (tx_entry.is_inline())
-      out << tx_entry.commit_inline_entry;
-    else
-      out << tx_entry.commit_entry;
-    return out;
+    return tx_entry.is_inline() ? out << tx_entry.inline_entry
+                                : out << tx_entry.indirect_entry;
   }
 };
 
 static_assert(sizeof(TxEntry) == TX_ENTRY_SIZE, "TxEntry must be 64 bits");
-static_assert(sizeof(TxEntryIndirect) == TX_ENTRY_SIZE,
-              "TxEntryIndirect must be 64 bits");
-static_assert(sizeof(TxEntryInline) == TX_ENTRY_SIZE,
-              "TxEntryInline must be 64 bits");
-
-enum class LogOp {
-  LOG_INVALID = 0,
-  // we start the enum from 1 so that a LogOp with value 0 is invalid
-  LOG_OVERWRITE = 1,
-};
-
-union LogHeadNext {
- private:
-  uint32_t raw_bits;
-
- public:
-  // if saturate, stores block idx of the next LogBlock, and next local idx
-  // must be zero
-  LogicalBlockIdx next_block_idx;
-  // if !saturate, stores local idx of the next head entry since it must be
-  // in the current LogBlock
-  LogLocalUnpackIdx next_local_idx;
-
-  [[nodiscard]] bool is_valid() const { return raw_bits != 0; }
-};
-
-static_assert(sizeof(LogHeadNext) == 4, "LogHeadNext must be 32 bits");
-
-struct LogHeadEntry {
- private:
-  friend union LogEntry;
-
- public:
-  // true if there is an overflow segment in another LogBlock following me
-  bool overflow : 1;
-  // true if my segment fills the current LogBlock; overflow implies saturate
-  bool saturate : 1;
-
-  // the operation code, e.g., LOG_OVERWRITE
-  enum LogOp op : 2;
-
-  // the remaining number of bytes that are not used in this log entry
-  // only the last log entry for a tx can have non-zero value for this field
-  // the maximum number of remaining bytes is BLOCK_SIZE - 1
-  uint16_t leftover_bytes : 12;
-
-  // the number of blocks recorded in my segment (not the entire transaction
-  // if there are overflow segments)
-  // number of blocks per body entry is 64 except for the last body entry,
-  // so num_blocks = 64 * num_local_entries - leftover_blocks
-  uint16_t num_blocks;
-
-  // use 4 bytes to record where is the next LogHeadEntry
-  // if saturate, then next is a LogicalBlockIdx, otherwise a LogLocalIdx
-  // if overflow, then next points to the next overflow segment of the same
-  // transaction; if !overflow and next is not null, then next points to
-  // the next separate request of the same transaction in e.g. writev; if
-  // next is null, then this is the end of a transaction
-  union LogHeadNext next;
-
-  friend std::ostream& operator<<(std::ostream& out,
-                                  const LogHeadEntry& entry) {
-    out << "LogHeadEntry{";
-    out << "overflow=" << (entry.overflow ? "T" : "F") << ", ";
-    out << "saturate=" << (entry.saturate ? "T" : "F") << ", ";
-    out << "op=" << unsigned(entry.op) << ", ";
-    out << "left_bytes=" << entry.leftover_bytes << ", ";
-    out << "n_blk=" << entry.num_blocks << ", ";
-    out << "has_next=" << (entry.next.is_valid() ? "T" : "F");
-    out << "}";
-    return out;
-  }
-};
-
-struct LogBodyEntry {
- private:
-  friend union LogEntry;
-
- public:
-  // represents length of 64 blocks except for the last body entry in a
-  // log segment
-  // we map the logical blocks [logical_idx, logical_idx + length)
-  // to the virtual blocks [virtual_idx, virtual_idx + length)
-  VirtualBlockIdx begin_virtual_idx;
-  LogicalBlockIdx begin_logical_idx;
-
-  friend std::ostream& operator<<(std::ostream& out,
-                                  const LogBodyEntry& entry) {
-    out << "LogBodyEntry{";
-    out << "vidx=" << entry.begin_virtual_idx << ", ";
-    out << "lidx=" << entry.begin_logical_idx;
-    out << "}";
-    return out;
-  }
-};
-
-union LogEntry {
- private:
-  uint64_t raw_bits;
-
- public:
-  LogHeadEntry head_entry;
-  LogBodyEntry body_entry;
-
-  [[nodiscard]] bool is_valid() const { return raw_bits != 0; }
-
-  // subtypes of LogEntry does not have a type field to differentiate
-  // between head and body due to size limit, but the caller must know
-  // which entry is being worked on
-};
-
-static_assert(sizeof(LogEntry) == LOG_ENTRY_SIZE, "LogEntry must be 64 bits");
-static_assert(sizeof(LogHeadEntry) == LOG_ENTRY_SIZE,
-              "LogHeadEntry must be 64 bits");
-static_assert(sizeof(LogBodyEntry) == LOG_ENTRY_SIZE,
-              "LogBodyEntry must be 64 bits");
-
 }  // namespace ulayfs::pmem

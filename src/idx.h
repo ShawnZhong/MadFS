@@ -17,10 +17,7 @@ using BitmapIdx = int32_t;
 // local index within a block; this can be -1 to indicate an error
 using TxLocalIdx = int32_t;
 // Note: LogLocalIdx will persist and the valid range is [0, 255]
-using LogLocalIdx = uint16_t;
-// TODO: this will no longer be needed when we deprecate the head-body design
-// for 8-byte aligned positions, the valid range is [0, 511]
-using LogLocalUnpackIdx = uint16_t;
+using LogLocalOffset = uint32_t;
 
 // this ensure 32-bit idx won't overflow
 #define BLOCK_IDX_TO_SIZE(idx) (static_cast<uint64_t>(idx) << BLOCK_SHIFT)
@@ -30,53 +27,19 @@ using LogLocalUnpackIdx = uint16_t;
 
 /**
  * A log entry is identified by the index of the LogEntryBlock and the local
- * index within the block. Use this to locate log head entries only, since
- * body entries may be on 8-byte boundaries
- *
- * 5 bytes (40 bits) in size
+ * offset within the block.
  */
-struct __attribute__((packed)) LogEntryIdx {
+struct LogEntryIdx {
   LogicalBlockIdx block_idx;
-  LogLocalIdx local_idx : 8;
-
+  LogLocalOffset local_offset;
   friend std::ostream& operator<<(std::ostream& out, const LogEntryIdx& idx) {
-    out << "LogEntryIdx{" << idx.block_idx << "," << unsigned(idx.local_idx)
+    out << "LogEntryIdx{" << idx.block_idx << "," << unsigned(idx.local_offset)
         << "}";
     return out;
   }
 };
 
-// TODO: this will no longer be needed when we deprecate the head-body design
-/**
- * An unpacked log entry index points to 8-byte aligned positions, so can be
- * used to locate both head entries and body entries. Used by the log manager
- */
-struct __attribute__((packed)) LogEntryUnpackIdx {
-  LogicalBlockIdx block_idx;
-  LogLocalUnpackIdx local_idx;
-
-  static LogEntryUnpackIdx from_pack_idx(LogEntryIdx idx) {
-    auto local_idx = LogLocalUnpackIdx(idx.local_idx << 1);
-    return LogEntryUnpackIdx{idx.block_idx, local_idx};
-  }
-
-  static LogEntryIdx to_pack_idx(LogEntryUnpackIdx idx) {
-    assert(idx.local_idx % 2 == 0);
-    auto local_idx = LogLocalIdx(idx.local_idx >> 1);
-    return LogEntryIdx{idx.block_idx, local_idx};
-  }
-
-  friend std::ostream& operator<<(std::ostream& out,
-                                  const LogEntryUnpackIdx& idx) {
-    out << "LogEntryUnpackIdx{" << idx.block_idx << ","
-        << unsigned(idx.local_idx) << "}";
-    return out;
-  }
-};
-
-static_assert(sizeof(LogEntryIdx) == 5, "LogEntryIdx must be 40 bits");
-static_assert(sizeof(LogEntryUnpackIdx) == 6,
-              "LogEntryUnpackIdx must be 48 bits");
+static_assert(sizeof(LogEntryIdx) == 8, "LogEntryIdx must be 8 bytes");
 
 /**
  * A transaction entry is identified by the block index and the local index

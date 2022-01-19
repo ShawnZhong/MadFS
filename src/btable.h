@@ -110,14 +110,14 @@ class BlkTable {
   /**
    * Apply a transaction to the block table
    *
-   * @param tx_commit_entry the entry to be applied
-   * @param log_mgr a thread-local log_mgr to be used
+   * @param tx_entry the entry to be applied
+   * @param log_mgr the log_mgr to be used
    * @param init_bitmap whether we need to initialize the bitmap object
    */
-  void apply_tx(pmem::TxEntryIndirect tx_commit_entry, LogMgr* log_mgr,
+  void apply_tx(pmem::TxEntryIndirect tx_entry, LogMgr* log_mgr,
                 bool init_bitmap);
 
-  void apply_tx(pmem::TxEntryInline tx_commit_inline_entry);
+  void apply_tx(pmem::TxEntryInline tx_entry);
 
   friend std::ostream& operator<<(std::ostream& out, const BlkTable& b);
 };

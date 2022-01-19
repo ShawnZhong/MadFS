@@ -283,9 +283,9 @@ void TxMgr::gc(const LogicalBlockIdx tail_tx_block_idx, uint64_t file_size) {
       // since i - begin <= 63, this can fit into one log entry
       auto begin_lidx = std::vector{file->vidx_to_lidx(begin)};
       auto log_head_idx = file->get_log_mgr()->append(
-          allocator, pmem::LogOp::LOG_OVERWRITE, leftover_bytes, i - begin,
-          begin, begin_lidx);
-      auto commit_entry = pmem::TxEntryIndirect(i - begin, begin, log_head_idx);
+          allocator, pmem::LogEntry::Op::LOG_OVERWRITE, leftover_bytes,
+          i - begin, begin, begin_lidx);
+      auto commit_entry = pmem::TxEntryIndirect(log_head_idx);
       new_tx_block->store(commit_entry, tx_idx.local_idx);
     }
   }
@@ -341,31 +341,13 @@ std::ostream& operator<<(std::ostream& out, const TxMgr& tx_mgr) {
 
     // print log entries if the tx is not inlined
     if (!tx_entry.is_inline()) {
-      LogEntryUnpackIdx unpack_idx =
-          LogEntryUnpackIdx::from_pack_idx(tx_entry.commit_entry.log_entry_idx);
-      const pmem::LogHeadEntry* head_entry;
-      VirtualBlockIdx le_first_vidx;
-      uint32_t num_blocks;
-      bool has_more;
+      pmem::LogEntryBlock* curr_block;
+      pmem::LogEntry* curr_entry = log_mgr->get_entry(
+          tx_entry.indirect_entry.get_log_entry_idx(), curr_block);
+      assert(curr_entry && curr_block);
 
-      do {
-        head_entry = log_mgr->read_head(unpack_idx, num_blocks);
-        out << "\t\t" << *head_entry << "\n";
-
-        LogicalBlockIdx le_begin_lidxs[num_blocks / MAX_BLOCKS_PER_BODY + 1];
-        has_more = log_mgr->read_body(unpack_idx, head_entry, num_blocks,
-                                      &le_first_vidx, le_begin_lidxs);
-
-        out << "\t\tLogCoverage{";
-        out << "n_blk=" << num_blocks << ", ";
-        out << "vidx=" << le_first_vidx << ", ";
-        out << "begin_lidxs=[";
-        uint32_t seg_blocks, len;
-        for (seg_blocks = 0, len = 0; seg_blocks < num_blocks;
-             seg_blocks += MAX_BLOCKS_PER_BODY, ++len)
-          out << le_begin_lidxs[len] << ", ";
-        out << "]}\n";
-      } while (has_more);
+      do out << "\t\t" << *curr_entry;
+      while ((curr_entry = log_mgr->get_next_entry(curr_entry, curr_block)));
     }
   next:
     if (!tx_mgr.advance_tx_idx(tx_idx, tx_block, /*do_alloc*/ false)) break;
@@ -404,55 +386,30 @@ bool TxMgr::Tx::handle_conflict(pmem::TxEntry curr_entry,
   do {
     if (curr_entry.is_inline()) {  // inline tx entry
       has_conflict |= get_conflict_image(
-          first_vidx, last_vidx,
-          curr_entry.commit_inline_entry.begin_virtual_idx,
-          curr_entry.commit_inline_entry.begin_logical_idx,
-          curr_entry.commit_inline_entry.num_blocks, conflict_image);
+          first_vidx, last_vidx, curr_entry.inline_entry.begin_virtual_idx,
+          curr_entry.inline_entry.begin_logical_idx,
+          curr_entry.inline_entry.num_blocks, conflict_image);
     } else {  // non-inline tx entry
-      // `le` prefix stands for "log entry", meaning read from log entry
-      uint32_t num_blocks = curr_entry.commit_entry.num_blocks;
-      VirtualBlockIdx le_first_vidx;
-
-      // this if/else-statement will initialize le_first_vidx
-      if (num_blocks)  // some info in log entries is partially inline
-        le_first_vidx = curr_entry.commit_entry.begin_virtual_idx;
-      else  // dereference log_entry_idx
-        log_mgr->get_coverage(curr_entry.commit_entry.log_entry_idx,
-                              le_first_vidx, num_blocks);
-
-      if (last_vidx < le_first_vidx ||
-          first_vidx > le_first_vidx + num_blocks - 1)
-        goto next;
-      // it is known for sure it will conflict
-      has_conflict = true;
-
-      // lazy dereference log idx; potentially multiple le_begin_lidx
-      const pmem::LogHeadEntry* head_entry;
-      LogEntryUnpackIdx unpack_idx = LogEntryUnpackIdx::from_pack_idx(
-          curr_entry.commit_entry.log_entry_idx);
-      bool has_more;
+      pmem::LogEntryBlock* curr_le_block;
+      pmem::LogEntry* curr_le_entry = log_mgr->get_entry(
+          curr_entry.indirect_entry.get_log_entry_idx(), curr_le_block);
 
       do {
-        head_entry = log_mgr->read_head(unpack_idx, num_blocks);
-        // technically, it should be ALIGN_UP(num_blocks, 64) / 64
-        // but it won't hurt to just make it slightly larger
-        LogicalBlockIdx le_begin_lidxs[num_blocks / MAX_BLOCKS_PER_BODY + 1];
-        has_more = log_mgr->read_body(unpack_idx, head_entry, num_blocks,
-                                      &le_first_vidx, le_begin_lidxs);
-        // get conflict segment-by-segment
-        uint32_t seg_blocks, len;
-        for (seg_blocks = 0, len = 0; seg_blocks < num_blocks;
-             seg_blocks += MAX_BLOCKS_PER_BODY, ++len) {
-          get_conflict_image(
-              first_vidx, last_vidx, le_first_vidx, le_begin_lidxs[len],
-              std::min(num_blocks - seg_blocks, MAX_BLOCKS_PER_BODY),
-              conflict_image);
+        uint32_t i;
+        for (i = 0; i < curr_le_entry->get_lidxs_len() - 1; ++i) {
+          has_conflict |= get_conflict_image(
+              first_vidx, last_vidx,
+              curr_le_entry->begin_vidx + (i << BITMAP_CAPACITY_SHIFT),
+              curr_le_entry->begin_lidxs[i], BITMAP_CAPACITY, conflict_image);
         }
-        assert(len ==
-               ALIGN_UP(num_blocks, MAX_BLOCKS_PER_BODY) / MAX_BLOCKS_PER_BODY);
-      } while (has_more);
+        has_conflict |= get_conflict_image(
+            first_vidx, last_vidx,
+            curr_le_entry->begin_vidx + (i << BITMAP_CAPACITY_SHIFT),
+            curr_le_entry->begin_lidxs[i],
+            curr_le_entry->get_last_lidx_num_blocks(), conflict_image);
+      } while ((curr_le_entry =
+                    log_mgr->get_next_entry(curr_le_entry, curr_le_block)));
     }
-  next:
     if (!tx_mgr->advance_tx_idx(tail_tx_idx, tail_tx_block, /*do_alloc*/ false))
       break;
     curr_entry = tx_mgr->get_entry_from_block(tail_tx_idx, tail_tx_block);
@@ -574,11 +531,9 @@ TxMgr::WriteTx::WriteTx(File* file, TxMgr* tx_mgr, const char* buf,
   // for overwrite, "leftover_bytes" is zero; only in append we care
   // append log without fence because we only care flush completion
   // before try_commit
-  size_t rest_num_blocks = num_blocks;
+  uint32_t rest_num_blocks = num_blocks;
   while (rest_num_blocks > 0) {
-    size_t chunk_num_blocks = rest_num_blocks > MAX_BLOCKS_PER_BODY
-                                  ? MAX_BLOCKS_PER_BODY
-                                  : rest_num_blocks;
+    uint32_t chunk_num_blocks = std::min(rest_num_blocks, BITMAP_CAPACITY);
     dst_lidxs.push_back(allocator->alloc(chunk_num_blocks));
     rest_num_blocks -= chunk_num_blocks;
   }
@@ -594,14 +549,13 @@ TxMgr::WriteTx::WriteTx(File* file, TxMgr* tx_mgr, const char* buf,
   } else {
     // it's fine that we append log first as long we don't publish it by tx
     auto log_entry_idx =
-        log_mgr->append(allocator, pmem::LogOp::LOG_OVERWRITE,  // op
+        log_mgr->append(allocator, pmem::LogEntry::Op::LOG_OVERWRITE,  // op
                         leftover_bytes,  // leftover_bytes
                         num_blocks,      // total_blocks
                         begin_vidx,      // begin_virtual_idx
-                        dst_lidxs,       // begin_logical_idxs
-                        false            // fenced
+                        dst_lidxs        // begin_logical_idxs
         );
-    commit_entry = pmem::TxEntryIndirect(num_blocks, begin_vidx, log_entry_idx);
+    commit_entry = pmem::TxEntryIndirect(log_entry_idx);
   }
 }
 
@@ -616,8 +570,7 @@ ssize_t TxMgr::AlignedTx::do_write() {
   const char* rest_buf = buf;
   size_t rest_count = count;
   for (auto block : dst_blocks) {
-    size_t num_bytes =
-        rest_count > MAX_BYTES_PER_BODY ? MAX_BYTES_PER_BODY : rest_count;
+    size_t num_bytes = std::min(rest_count, BITMAP_CAPACITY_IN_BYTES);
     pmem::memcpy_persist(block->data_rw(), rest_buf, num_bytes);
     rest_buf += num_bytes;
     rest_count -= num_bytes;
@@ -721,9 +674,9 @@ ssize_t TxMgr::MultiBlockTx::do_write() {
       size_t num_bytes = rest_full_count;
       if (dst_blocks.size() > 1) {
         if (i == 0 && need_copy_first)
-          num_bytes = MAX_BYTES_PER_BODY - BLOCK_SIZE;
+          num_bytes = BITMAP_CAPACITY_IN_BYTES - BLOCK_SIZE;
         else if (i < dst_blocks.size() - 1)
-          num_bytes = MAX_BYTES_PER_BODY;
+          num_bytes = BITMAP_CAPACITY_IN_BYTES;
       }
       // actual memcpy
       pmem::memcpy_persist(full_blocks->data_rw(), rest_buf, num_bytes);
@@ -746,7 +699,7 @@ ssize_t TxMgr::MultiBlockTx::do_write() {
 
   // write data from the buf to the last block
   pmem::Block* last_dst_block = dst_blocks.back() + end_full_vidx - begin_vidx -
-                                MAX_BLOCKS_PER_BODY * (dst_blocks.size() - 1);
+                                BITMAP_CAPACITY * (dst_blocks.size() - 1);
   const char* buf_src = buf + (count - last_block_overlap_size);
   pmem::memcpy_persist(last_dst_block->data_rw(), buf_src,
                        last_block_overlap_size);
