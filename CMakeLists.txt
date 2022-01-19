@@ -110,34 +110,19 @@ if (ULAYFS_BUILD_BENCH)
         PATCH_COMMAND git apply --reject ${CMAKE_SOURCE_DIR}/bench/leveldb.patch || true
     )
     FetchContent_Declare(cxxopts URL https://github.com/jarro2783/cxxopts/archive/refs/tags/v2.2.0.zip)
-    FetchContent_MakeAvailable(leveldb cxxopts)
+    FetchContent_Declare(
+        tpcc_sqlite
+        GIT_REPOSITORY https://github.com/ShawnZhong/tpcc_sqlite.git
+    )
+    FetchContent_MakeAvailable(leveldb cxxopts tpcc_sqlite)
 
     add_executable(leveldb_ycsb bench/leveldb_ycsb.cpp)
     add_executable(micro_st bench/micro_st.cpp bench/common.h)
     add_executable(micro_mt bench/micro_mt.cpp bench/common.h)
     add_executable(micro_meta bench/micro_meta.cpp bench/common.h)
 
-    add_executable(tpcc_load bench/tpcc_sqlite/load.c bench/tpcc_sqlite/support.c)
-    add_executable(
-        tpcc_start
-        bench/tpcc_sqlite/main.c
-        bench/tpcc_sqlite/spt_proc.c
-        bench/tpcc_sqlite/driver.c
-        bench/tpcc_sqlite/support.c
-        bench/tpcc_sqlite/sequence.c
-        bench/tpcc_sqlite/rthist.c
-        bench/tpcc_sqlite/sb_percentile.c
-        bench/tpcc_sqlite/neword.c
-        bench/tpcc_sqlite/payment.c
-        bench/tpcc_sqlite/ordstat.c
-        bench/tpcc_sqlite/delivery.c
-        bench/tpcc_sqlite/slev.c
-    )
-
     target_link_libraries(leveldb_ycsb cxxopts leveldb)
     target_link_libraries(micro_st benchmark::benchmark)
     target_link_libraries(micro_mt benchmark::benchmark)
     target_link_libraries(micro_meta benchmark::benchmark)
-    target_link_libraries(tpcc_load sqlite3)
-    target_link_libraries(tpcc_start sqlite3 m pthread)
 endif ()

@@ -16,7 +16,7 @@ def run_tpcc(build_type, fs_names):
 
     init(configure=True)
     result_dir = root_dir / "results" / "bench_tpcc" / get_timestamp()
-    sql_path = root_dir / "bench" / "tpcc_sqlite" / "create_table.sql"
+    sql_path = root_dir / "bench" / "tpcc.sql"
 
     for fs in get_fs_configs(fs_names):
         db_path = fs.pmem_path / "tpcc.db"
@@ -25,23 +25,15 @@ def run_tpcc(build_type, fs_names):
         runner = Runner("tpcc_create", result_dir=result_dir / fs.name / "create")
         if fs.load_ulayfs:
             runner.build("ulayfs")
-        runner.run(
-            cmd=f"sqlite3 {db_path} '.read {sql_path}'", load_ulayfs=fs.load_ulayfs
-        )
+        runner.run(cmd=f"sqlite3 {db_path} '.read {sql_path}'", load_ulayfs=fs.load_ulayfs)
 
         runner = Runner("tpcc_load", result_dir=result_dir / fs.name / "load")
         runner.build()
-        runner.run(
-            additional_args="-w 4", load_ulayfs=fs.load_ulayfs, pmem_path=fs.pmem_path
-        )
+        runner.run(additional_args=f"-w 4 -d {db_path}", load_ulayfs=fs.load_ulayfs)
 
         runner = Runner("tpcc_start", result_dir=result_dir / fs.name / "start", build_type=build_type)
         runner.build()
-        runner.run(
-            additional_args="-w 4 -c 1 -t 200000",
-            load_ulayfs=fs.load_ulayfs,
-            pmem_path=fs.pmem_path,
-        )
+        runner.run(additional_args=f"-w 4 -c 1 -t 200000 -d {db_path}", load_ulayfs=fs.load_ulayfs)
 
     return result_dir
 
