@@ -400,13 +400,13 @@ bool TxMgr::Tx::handle_conflict(pmem::TxEntry curr_entry,
           has_conflict |= get_conflict_image(
               first_vidx, last_vidx,
               curr_le_entry->begin_vidx + (i << BITMAP_CAPACITY_SHIFT),
-              curr_le_entry->lidxs[i], BITMAP_CAPACITY, conflict_image);
+              curr_le_entry->begin_lidxs[i], BITMAP_CAPACITY, conflict_image);
         }
         has_conflict |= get_conflict_image(
             first_vidx, last_vidx,
             curr_le_entry->begin_vidx + (i << BITMAP_CAPACITY_SHIFT),
-            curr_le_entry->lidxs[i], curr_le_entry->get_last_lidx_num_blocks(),
-            conflict_image);
+            curr_le_entry->begin_lidxs[i],
+            curr_le_entry->get_last_lidx_num_blocks(), conflict_image);
       } while ((curr_le_entry =
                     log_mgr->get_next_entry(curr_le_entry, curr_le_block)));
     }

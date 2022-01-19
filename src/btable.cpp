@@ -76,15 +76,16 @@ void BlkTable::apply_tx(pmem::TxEntryIndirect tx_entry, LogMgr* log_mgr,
   do {
     assert(curr_entry && curr_block);
     begin_vidx = curr_entry->begin_vidx;
-    num_blocks = curr_entry->header.num_blocks;
+    num_blocks = curr_entry->num_blocks;
     end_vidx = begin_vidx + num_blocks;
     resize_to_fit(end_vidx);
 
-    for (uint32_t offset = 0; offset < curr_entry->header.num_blocks; ++offset)
-      table[begin_vidx + offset] = curr_entry->lidxs[offset / BITMAP_CAPACITY] +
-                                   offset % BITMAP_CAPACITY;
+    for (uint32_t offset = 0; offset < curr_entry->num_blocks; ++offset)
+      table[begin_vidx + offset] =
+          curr_entry->begin_lidxs[offset / BITMAP_CAPACITY] +
+          offset % BITMAP_CAPACITY;
     // only the last one matters, so this variable will keep being overwritten
-    leftover_bytes = curr_entry->header.leftover_bytes;
+    leftover_bytes = curr_entry->leftover_bytes;
     curr_entry = log_mgr->get_next_entry(curr_entry, curr_block, init_bitmap);
   } while (curr_entry);
 

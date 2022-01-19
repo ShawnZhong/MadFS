@@ -21,60 +21,57 @@ struct LogEntry {
     LOG_OVERWRITE = 1,
   };
 
+  /*** define actual LogEntry layout ***/
+  // this log entry describles a mapping from virtual range [begin_vidx,
+  // begin_vidx + num_blocks) to several logical blocks
+
   // op/leftover_bytes are read/written by external caller
   // has_next/is_next_same_block/next are read/written by allocator
   // num_blocks are read/written by both
-  struct Header {
-    // the operation code, e.g., LOG_OVERWRITE.
-    enum Op op : 2;
 
-    // whether this log entry has a next entry (as a linked list).
-    // `next` is only meaningful if this bit is set
-    bool has_next : 1;
-    // whether the next entry is in the same block.
-    // if true, `next` shall be interpretted as `local_offset`.
-    // otherwise, `next` shall be interpretted as `block_idx`.
-    bool is_next_same_block : 1;
+  // the operation code, e.g., LOG_OVERWRITE.
+  enum Op op : 2;
 
-    // the leftover bytes in the last block that does not below to this file.
-    // this happens in an block-unaligned append where the not all bytes in the
-    // last block belongs to this file.
-    // the maximum number of leftover bytes is BLOCK_SIZE - 1.
-    uint16_t leftover_bytes : 12;
+  // whether this log entry has a next entry (as a linked list).
+  // `next` is only meaningful if this bit is set
+  bool has_next : 1;
+  // whether the next entry is in the same block.
+  // if true, `next` shall be interpretted as `local_offset`.
+  // otherwise, `next` shall be interpretted as `block_idx`.
+  bool is_next_same_block : 1;
 
-    // the number of blocks describled in this log entry
-    // every 64 blocks corresponds to one entry in body_lidxs
-    uint16_t num_blocks;
+  // the leftover bytes in the last block that does not below to this file.
+  // this happens in an block-unaligned append where the not all bytes in the
+  // last block belongs to this file.
+  // the maximum number of leftover bytes is BLOCK_SIZE - 1.
+  uint16_t leftover_bytes : 12;
 
-    union {
-      LogicalBlockIdx block_idx;
-      uint32_t local_offset : 12;
-    } next;
-  };
+  // the number of blocks describled in this log entry
+  // every 64 blocks corresponds to one entry in body_lidxs
+  uint16_t num_blocks;
 
-  static_assert(sizeof(Header) == 8, "LogHeader must be 8 bytes");
+  union {
+    LogicalBlockIdx block_idx;
+    uint32_t local_offset : 12;
+  } next;
 
-  /*** define actual LogEntry layout ***/
-  // this log entry describles a mapping from virtual range [begin_vidx,
-  // begin_vidx + header.num_blocks) to several logical blocks
-  Header header;
   VirtualBlockIdx begin_vidx;
-  LogicalBlockIdx lidxs[];
+  LogicalBlockIdx begin_lidxs[];
 
-  constexpr static uint32_t fixed_size =
-      sizeof(Header) + sizeof(VirtualBlockIdx);
+  // this corresponds to the size of all fields except the varying
+  // variable-length array `begin_lidxs`
+  constexpr static uint32_t fixed_size = 12;
 
   /*** some helper functions ***/
   [[nodiscard]] constexpr uint32_t get_lidxs_len() const {
-    return ALIGN_UP(static_cast<uint32_t>(header.num_blocks),
-                    BITMAP_CAPACITY) >>
+    return ALIGN_UP(static_cast<uint32_t>(num_blocks), BITMAP_CAPACITY) >>
            BITMAP_CAPACITY_SHIFT;
   }
 
   // every element in lidxs corresponds to a mapping of length 64 blocks except
   // the last one
   [[nodiscard]] constexpr uint32_t get_last_lidx_num_blocks() const {
-    return header.num_blocks % BITMAP_CAPACITY;
+    return num_blocks % BITMAP_CAPACITY;
   }
 
   void persist() {
@@ -85,15 +82,18 @@ struct LogEntry {
 
   friend std::ostream& operator<<(std::ostream& out, const LogEntry& entry) {
     out << "LogEntry{";
-    out << "n_blk=" << entry.header.num_blocks << ", ";
+    out << "n_blk=" << entry.num_blocks << ", ";
     out << "vidx=" << entry.begin_vidx << ", ";
-    out << "lidxs=[" << entry.lidxs[0];
+    out << "lidxs=[" << entry.begin_lidxs[0];
     for (uint32_t i = 1; i < entry.get_lidxs_len(); ++i)
-      out << "," << entry.lidxs[i];
+      out << "," << entry.begin_lidxs[i];
     out << "]}";
     return out;
   }
 };
+
+static_assert(sizeof(LogEntry) == LogEntry::fixed_size,
+              "LogEntry::fixed_size must match its actual size");
 
 /**
  * Points to the head of a linked list of LogEntry

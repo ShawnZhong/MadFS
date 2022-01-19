@@ -168,17 +168,17 @@ pmem::LogEntry* Allocator::alloc_log_entry(uint32_t num_blocks,
         (BLOCK_SIZE - curr_log_offset) / sizeof(LogicalBlockIdx);
     assert(avail_lidxs_cnt > 0);
     if (needed_lidxs_cnt <= avail_lidxs_cnt) {
-      curr_entry->header.has_next = false;
-      curr_entry->header.num_blocks = num_blocks;
+      curr_entry->has_next = false;
+      curr_entry->num_blocks = num_blocks;
       curr_log_offset += needed_lidxs_cnt * sizeof(LogicalBlockIdx);
       return first_entry;
     }
 
-    curr_entry->header.has_next = true;
-    curr_entry->header.num_blocks = avail_lidxs_cnt << BITMAP_CAPACITY_SHIFT;
+    curr_entry->has_next = true;
+    curr_entry->num_blocks = avail_lidxs_cnt << BITMAP_CAPACITY_SHIFT;
     curr_log_offset += avail_lidxs_cnt * sizeof(LogicalBlockIdx);
     needed_lidxs_cnt -= avail_lidxs_cnt;
-    num_blocks -= curr_entry->header.num_blocks;
+    num_blocks -= curr_entry->num_blocks;
 
     assert(curr_log_offset <= BLOCK_SIZE);
     if (BLOCK_SIZE - curr_log_offset < min_required_size) {
@@ -186,11 +186,11 @@ pmem::LogEntry* Allocator::alloc_log_entry(uint32_t num_blocks,
       curr_log_block =
           &file->lidx_to_addr_rw(curr_log_block_idx)->log_entry_block;
       curr_log_offset = 0;
-      curr_entry->header.is_next_same_block = false;
-      curr_entry->header.next.block_idx = curr_log_block_idx;
+      curr_entry->is_next_same_block = false;
+      curr_entry->next.block_idx = curr_log_block_idx;
     } else {
-      curr_entry->header.is_next_same_block = true;
-      curr_entry->header.next.local_offset = curr_log_offset;
+      curr_entry->is_next_same_block = true;
+      curr_entry->next.local_offset = curr_log_offset;
     }
     curr_entry = curr_log_block->get(curr_log_offset);
   }

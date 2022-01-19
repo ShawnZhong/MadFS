@@ -23,13 +23,13 @@ pmem::LogEntry* LogMgr::get_entry(LogEntryIdx idx,
 [[nodiscard]] pmem::LogEntry* LogMgr::get_next_entry(
     const pmem::LogEntry* curr_entry, pmem::LogEntryBlock*& curr_block,
     bool init_bitmap) {
-  if (!curr_entry->header.has_next) return nullptr;
-  if (curr_entry->header.is_next_same_block)
-    return curr_block->get(curr_entry->header.next.local_offset);
-  if (init_bitmap) file->set_allocated(curr_entry->header.next.block_idx);
+  if (!curr_entry->has_next) return nullptr;
+  if (curr_entry->is_next_same_block)
+    return curr_block->get(curr_entry->next.local_offset);
+  if (init_bitmap) file->set_allocated(curr_entry->next.block_idx);
   // if the next entry is on another block, it must be from the first byte
-  curr_block = &file->lidx_to_addr_rw(curr_entry->header.next.block_idx)
-                    ->log_entry_block;
+  curr_block =
+      &file->lidx_to_addr_rw(curr_entry->next.block_idx)->log_entry_block;
   return curr_block->get(0);
 }
 
@@ -49,19 +49,19 @@ LogEntryIdx LogMgr::append(Allocator* allocator, pmem::LogEntry::Op op,
   uint32_t i, j;
   i = 0;
   while (true) {
-    curr_entry->header.op = op;
+    curr_entry->op = op;
     curr_entry->begin_vidx = begin_vidx;
     for (j = 0; j < curr_entry->get_lidxs_len(); ++j)
-      curr_entry->lidxs[j] = begin_lidxs[i + j];
+      curr_entry->begin_lidxs[j] = begin_lidxs[i + j];
     auto next_entry = get_next_entry(curr_entry, curr_block);
     if (next_entry) {
-      curr_entry->header.leftover_bytes = 0;
+      curr_entry->leftover_bytes = 0;
       curr_entry->persist();
       curr_entry = next_entry;
       i += j;
       begin_vidx += (j << BITMAP_CAPACITY_SHIFT);
     } else {
-      curr_entry->header.leftover_bytes = leftover_bytes;
+      curr_entry->leftover_bytes = leftover_bytes;
       curr_entry->persist();
       break;
     }
