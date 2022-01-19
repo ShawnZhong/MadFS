@@ -52,7 +52,7 @@ endif ()
 
 if (${CMAKE_BUILD_TYPE} STREQUAL "profile")
     set(CMAKE_CXX_FLAGS_PROFILE
-        "${CMAKE_CXX_FLAGS_RELWITHDEBINFO}" CACHE STRING
+        "${CMAKE_CXX_FLAGS_RELWITHDEBINFO} -fno-omit-frame-pointer" CACHE STRING
         "Flags used by the C++ compiler during Profile build." FORCE)
 
     FetchContent_Declare(flamegraph GIT_REPOSITORY https://github.com/brendangregg/FlameGraph)

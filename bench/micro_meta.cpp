@@ -3,48 +3,45 @@
 #include "common.h"
 
 int fd;
-int num_iter = get_num_iter(1000);
+int num_iter = get_num_iter(10000);
 
 enum class Mode {
-  OPEN_CLOSE,
-  STAT,
-  FSTAT,
+  OPEN_TX_LEN,
+  OPEN_FILE_SIZE,
 };
 
 template <Mode mode>
 void bench(benchmark::State& state) {
-  const auto num_tx = state.range(0);
-
   unlink(filepath);
 
   fd = open(filepath, O_CREAT | O_RDWR, S_IRUSR | S_IWUSR);
   if (fd < 0) state.SkipWithError("open failed");
 
-  char buf[8];
-  for (int i = 0; i < num_tx; ++i) {
-    [[maybe_unused]] ssize_t res = write(fd, buf, sizeof(buf));
-    assert(res == sizeof(buf));
+  if constexpr (mode == Mode::OPEN_TX_LEN) {
+    char buf[4096];
+    for (int i = 0; i < state.range(0); ++i) {
+      [[maybe_unused]] ssize_t res = pwrite(fd, buf, sizeof(buf), 0);
+      assert(res == sizeof(buf));
+    }
+  } else if constexpr (mode == Mode::OPEN_FILE_SIZE) {
+    auto target_file_size = state.range(0);
+    int num_ops = static_cast<int>(target_file_size / 4096 * 0.998);
+    append_file(fd, 4096, num_ops);
+    struct stat st;  // NOLINT(cppcoreguidelines-pro-type-member-init)
+    fstat(fd, &st);
+    state.counters["file_size"] =
+        benchmark::Counter(st.st_blocks * 512, benchmark::Counter::kDefaults,
+                           benchmark::Counter::OneK::kIs1024);
   }
+
   close(fd);
 
-  if constexpr (mode == Mode::OPEN_CLOSE) {
-    for (auto _ : state) {
-      fd = open(filepath, O_RDONLY);
-      assert(fd >= 0);
-      close(fd);
-    }
-  } else if constexpr (mode == Mode::STAT) {
-    struct stat st;  // NOLINT(cppcoreguidelines-pro-type-member-init)
-    for (auto _ : state) {
-      stat(filepath, &st);
-    }
-  } else if constexpr (mode == Mode::FSTAT) {
+  for (auto _ : state) {
     fd = open(filepath, O_RDONLY);
-    struct stat st;  // NOLINT(cppcoreguidelines-pro-type-member-init)
-    for (auto _ : state) {
-      fstat(fd, &st);
-    }
+    assert(fd >= 0);
+    close(fd);
   }
+
   state.SetItemsProcessed(static_cast<int64_t>(state.iterations()));
 }
 
@@ -52,11 +49,13 @@ int main(int argc, char** argv) {
   benchmark::Initialize(&argc, argv);
   if (benchmark::ReportUnrecognizedArguments(argc, argv)) return 1;
 
-  for (auto& bm : {RegisterBenchmark("open_close", bench<Mode::OPEN_CLOSE>),
-                   RegisterBenchmark("stat", bench<Mode::STAT>),
-                   RegisterBenchmark("fstat", bench<Mode::FSTAT>)}) {
-    bm->DenseRange(100, 1000, 100)->Iterations(num_iter);
-  }
+  RegisterBenchmark("open_tx_len", bench<Mode::OPEN_TX_LEN>)
+      ->DenseRange(0, 1000, 200)
+      ->Iterations(num_iter);
+  RegisterBenchmark("open_file_size", bench<Mode::OPEN_FILE_SIZE>)
+      ->RangeMultiplier(2)
+      ->Range(2 * 1024 * 1024, 1024 * 1024 * 1024)
+      ->Iterations(num_iter);
 
   benchmark::RunSpecifiedBenchmarks();
   return 0;

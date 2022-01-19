@@ -28,13 +28,7 @@ void bench(benchmark::State& state) {
   fd = open(filepath, O_CREAT | O_RDWR | O_APPEND, S_IRUSR | S_IWUSR);
   if (fd < 0) state.SkipWithError("open failed");
   if constexpr (mode != Mode::APPEND) {
-    auto len = num_bytes * num_iter;
-    auto buf = new char[len];
-    std::fill(buf, buf + len, 'x');
-    [[maybe_unused]] ssize_t res = write(fd, buf, len);
-    assert(res == len);
-    fsync(fd);
-    delete[] buf;
+    append_file(fd, num_bytes * num_iter);
   }
   close(fd);
 
