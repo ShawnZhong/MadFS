@@ -88,7 +88,7 @@ struct LogEntry {
     out << "n_blk=" << entry.header.num_blocks << ", ";
     out << "vidx=" << entry.begin_vidx << ", ";
     out << "lidxs=[" << entry.lidxs[0];
-    for (uint32_t i = 0; i < entry.get_lidxs_len(); ++i)
+    for (uint32_t i = 1; i < entry.get_lidxs_len(); ++i)
       out << "," << entry.lidxs[i];
     out << "]}";
     return out;
