@@ -61,13 +61,13 @@ void BlkTable::apply_tx(pmem::TxEntryIndirect tx_entry, LogMgr* log_mgr,
   pmem::LogEntryBlock* curr_block;
   pmem::LogEntry* curr_entry =
       log_mgr->get_entry(tx_entry.get_log_entry_idx(), curr_block, init_bitmap);
-  assert(curr_entry && curr_block);
 
   uint32_t num_blocks;
   LogicalBlockIdx begin_vidx, end_vidx;
   uint16_t leftover_bytes;
 
-  while (true) {
+  do {
+    assert(curr_entry && curr_block);
     begin_vidx = curr_entry->begin_vidx;
     num_blocks = curr_entry->header.num_blocks;
     end_vidx = begin_vidx + num_blocks;
@@ -76,13 +76,10 @@ void BlkTable::apply_tx(pmem::TxEntryIndirect tx_entry, LogMgr* log_mgr,
     for (uint32_t offset = 0; offset < curr_entry->header.num_blocks; ++offset)
       table[begin_vidx + offset] = curr_entry->lidxs[offset / BITMAP_CAPACITY] +
                                    offset % BITMAP_CAPACITY;
-
+    // only the last one matters, so this variable will keep being overwritten
+    leftover_bytes = curr_entry->header.leftover_bytes;
     curr_entry = log_mgr->get_next_entry(curr_entry, curr_block, init_bitmap);
-    if (!curr_entry) {
-      leftover_bytes = curr_entry->header.leftover_bytes;
-      break;
-    }
-  }
+  } while (curr_entry);
 
   uint64_t now_file_size = BLOCK_IDX_TO_SIZE(end_vidx) - leftover_bytes;
   if (now_file_size > file_size.load(std::memory_order_relaxed))
