@@ -196,4 +196,30 @@ pmem::LogEntry* Allocator::alloc_log_entry(uint32_t num_blocks,
   }
 }
 
+LogicalBlockIdx Allocator::alloc_tx_block(uint32_t seq,
+                                          pmem::Block*& tx_block) {
+  if (avail_tx_block) {
+    tx_block = avail_tx_block;
+    avail_tx_block = nullptr;
+    tx_block->tx_block.set_tx_seq(seq);
+    pmem::persist_cl_fenced(&tx_block->cache_lines[NUM_CL_PER_BLOCK - 1]);
+    return avail_tx_block_idx;
+  }
+
+  LogicalBlockIdx new_block_idx = alloc(1);
+  tx_block = file->lidx_to_addr_rw(new_block_idx);
+  memset(&tx_block->cache_lines[NUM_CL_PER_BLOCK - 1], 0, CACHELINE_SIZE);
+  tx_block->tx_block.set_tx_seq(seq);
+  pmem::persist_cl_unfenced(&tx_block->cache_lines[NUM_CL_PER_BLOCK - 1]);
+  tx_block->zero_init(0, NUM_CL_PER_BLOCK - 1);
+  return new_block_idx;
+}
+
+void Allocator::free_tx_block(LogicalBlockIdx tx_block_idx,
+                              pmem::Block* tx_block) {
+  assert(!avail_tx_block);
+  avail_tx_block_idx = tx_block_idx;
+  avail_tx_block = tx_block;
+}
+
 }  // namespace ulayfs::dram
