@@ -39,12 +39,17 @@ class File {
   int shm_fd;
   const bool can_read;
   const bool can_write;
-  pthread_spinlock_t spinlock;
   char shm_path[SHM_PATH_LEN];
 
   // each thread tid has its local allocator
   // the allocator is a per-thread per-file data structure
   tbb::concurrent_unordered_map<pid_t, Allocator> allocators;
+
+  // move spinlock into a separated cacheline
+  union {
+    pthread_spinlock_t spinlock;
+    char cl[CACHELINE_SIZE];
+  };
 
  public:
   // only set at debug mode
@@ -80,8 +85,11 @@ class File {
    * exported interface for update; init_bitmap is always false
    */
   uint64_t update(TxEntryIdx& tx_idx, pmem::TxBlock*& tx_block, bool do_alloc) {
+    uint64_t new_file_size;
+    if (!blk_table.need_update(tx_idx, tx_block, new_file_size, do_alloc))
+      return new_file_size;
     pthread_spin_lock(&spinlock);
-    uint64_t new_file_size = blk_table.update(do_alloc);
+    new_file_size = blk_table.update(do_alloc);
     tx_idx = blk_table.get_tx_idx();
     tx_block = blk_table.get_tx_block();
     pthread_spin_unlock(&spinlock);

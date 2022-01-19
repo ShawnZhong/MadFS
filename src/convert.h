@@ -18,7 +18,7 @@ class Converter {
  public:
   // convert a normal file to a uLayFS file
   // fd must be opened with both read and write permission
-  static dram::File* convert_to(int fd) {
+  static dram::File* convert_to(int fd, const char* pathname) {
     if (!flock::try_acquire(fd)) {
       WARN("Target file locked, cannot perform conversion");
       return nullptr;
@@ -30,7 +30,7 @@ class Converter {
     PANIC_IF(ret, "Fail to fstat");
 
     if (stat_buf.st_size == 0) {
-      dram::File* file = new dram::File(fd, stat_buf, O_RDWR, false);
+      dram::File* file = new dram::File(fd, stat_buf, O_RDWR, pathname, false);
       // release exclusive lock and acquire shared lock
       flock::release(fd);
       flock::flock_guard(fd);
@@ -62,7 +62,7 @@ class Converter {
 
     // first mark all these blocks as used, so that they won't be occupied by
     // allocator when preparing log entries
-    dram::File* file = new dram::File(fd, stat_buf, O_RDWR, false);
+    dram::File* file = new dram::File(fd, stat_buf, O_RDWR, pathname, false);
     dram::Allocator* allocator = file->get_local_allocator();
     allocator->return_free_list();
     uint32_t num_bitmaps_full = (num_blocks + 1) >> BITMAP_CAPACITY_SHIFT;
