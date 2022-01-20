@@ -11,7 +11,8 @@
 namespace ulayfs::dram {
 
 uint64_t BlkTable::update(bool do_alloc, bool init_bitmap) {
-  TxEntryIdx tx_idx_local = tail_tx_idx.load(std::memory_order_relaxed);
+  TxEntryIdx tx_idx_local =
+      tail_tx_idx.load(std::memory_order_relaxed).tx_entry_idx;
   pmem::TxBlock* tx_block_local = tail_tx_block.load(std::memory_order_relaxed);
   LogicalBlockIdx prev_tx_block_idx;
 
@@ -117,8 +118,8 @@ void BlkTable::apply_tx(pmem::TxEntryInline tx_commit_inline_entry) {
 std::ostream& operator<<(std::ostream& out, const BlkTable& b) {
   out << "BlkTable:\n";
   out << "\tfile_size: " << b.file_size.load(std::memory_order_relaxed) << "\n";
-  out << "\ttail_tx_idx: " << b.tail_tx_idx.load(std::memory_order_relaxed)
-      << "\n";
+  out << "\ttail_tx_idx: "
+      << b.tail_tx_idx.load(std::memory_order_relaxed).tx_entry_idx << "\n";
   for (size_t i = 0; i < b.table.size(); ++i) {
     if (b.table[i] != 0) {
       out << "\t" << i << " -> " << b.table[i] << "\n";
