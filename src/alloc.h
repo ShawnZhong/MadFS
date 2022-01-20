@@ -35,6 +35,12 @@ class Allocator {
   LogicalBlockIdx curr_log_block_idx;
   LogLocalOffset curr_log_offset;  // offset of the next available byte
 
+  // a tx block may be allocated but unused when another thread does that first
+  // this tx block will then be saved here for future use
+  // a tx block candidate must have all bytes zero except the sequence number
+  pmem::Block* avail_tx_block;
+  LogicalBlockIdx avail_tx_block_idx;
+
  public:
   Allocator(File* file, Bitmap* bitmap)
       : file(file),
@@ -42,7 +48,9 @@ class Allocator {
         recent_bitmap_idx(),
         curr_log_block(nullptr),
         curr_log_block_idx(0),
-        curr_log_offset(0) {}
+        curr_log_offset(0),
+        avail_tx_block(nullptr),
+        avail_tx_block_idx(0) {}
 
   ~Allocator() { return_free_list(); }
 
@@ -83,6 +91,10 @@ class Allocator {
    */
   pmem::LogEntry* alloc_log_entry(uint32_t num_blocks, LogEntryIdx& first_idx,
                                   pmem::LogEntryBlock*& first_block);
+
+  LogicalBlockIdx alloc_tx_block(uint32_t seq, pmem::Block*& tx_block);
+
+  void free_tx_block(LogicalBlockIdx tx_block_idx, pmem::Block* tx_block);
 };
 
 }  // namespace ulayfs::dram

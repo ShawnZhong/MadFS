@@ -87,11 +87,13 @@ class TxMgr {
 
   /**
    * @tparam B MetaBlock or TxBlock
-   * @param block the block that needs a next block to be allocated
+   * @param[in] block the block that needs a next block to be allocated
+   * @param[out] new_tx_block the new tx block allocated (can be same as block)
    * @return the block id of the allocated block
    */
   template <class B>
-  LogicalBlockIdx alloc_next_block(B* block) const;
+  LogicalBlockIdx alloc_next_block(B* block,
+                                   pmem::TxBlock*& new_tx_block) const;
 
   /**
    * If the given idx is in an overflow state, update it if allowed.
@@ -136,7 +138,7 @@ class TxMgr {
  private:
   /**
    * Move along the linked list of TxBlock and find the tail. The returned
-   * tail may not be up-to-date due to race conditon. No new blocks will be
+   * tail may not be up-to-date due to race condition. No new blocks will be
    * allocated. If the end of TxBlock is reached, just return NUM_TX_ENTRY as
    * the TxLocalIdx.
    */
