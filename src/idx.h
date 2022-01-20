@@ -6,13 +6,7 @@
 
 namespace ulayfs {
 
-enum class IdxType {
-  LOGICAL_BLOCK_IDX,
-  VIRTUAL_BLOCK_IDX,
-  BITMAP_IDX,
-  TX_LOCAL_IDX,
-  LOG_LOCAL_OFFSET,
-};
+enum class IdxType { LOGICAL_BLOCK_IDX, VIRTUAL_BLOCK_IDX };
 
 /**
  * Base class for index.
