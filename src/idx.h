@@ -75,7 +75,6 @@ class BaseIdx {
   bool operator>=(BaseIdx rhs) const { return idx >= rhs.idx; }
 
   [[nodiscard]] T get() const { return idx; }
-  [[nodiscard]] uint64_t get_u64() const { return idx; }
 
   friend std::ostream& operator<<(std::ostream& out, const BaseIdx& base_idx) {
     return out << base_idx.idx;
@@ -109,7 +108,8 @@ static_assert(std::is_trivial<VirtualBlockIdx>::value,
               "VirtualBlockIdx must be a trival type");
 
 // this ensure 32-bit idx won't overflow
-#define BLOCK_IDX_TO_SIZE(idx) ((idx).get_u64() << BLOCK_SHIFT)
+#define BLOCK_IDX_TO_SIZE(idx) \
+  (static_cast<uint64_t>((idx).get()) << BLOCK_SHIFT)
 #define BLOCK_NUM_TO_SIZE(num) (static_cast<uint64_t>((num)) << BLOCK_SHIFT)
 // this is applied for some signed type
 #define BLOCK_SIZE_TO_IDX(size) \
