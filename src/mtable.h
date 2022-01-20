@@ -70,7 +70,7 @@ class MemTable {
   pmem::Block* get(LogicalBlockIdx idx) {
     if (unlikely(idx == 0)) return nullptr;
     // super fast path: within first_region, no need touch concurrent vector
-    if (idx < first_region_num_blocks) return &first_region[idx];
+    if (idx < first_region_num_blocks) return &first_region[idx.get()];
 
     // fast path: just look up
     uint32_t chunk_idx =

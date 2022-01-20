@@ -23,7 +23,7 @@ class BlkTable {
   tbb::concurrent_vector<LogicalBlockIdx> table;
 
   // keep track of the next TxEntry to apply
-  std::atomic<TxEntryIdx> tail_tx_idx;
+  std::atomic<TxEntryIdx64> tail_tx_idx;
   std::atomic<pmem::TxBlock*> tail_tx_block;
   std::atomic_uint64_t file_size;
 
@@ -41,7 +41,7 @@ class BlkTable {
   explicit BlkTable(File* file, TxMgr* tx_mgr)
       : file(file),
         tx_mgr(tx_mgr),
-        tail_tx_idx({0, 0}),
+        tail_tx_idx(TxEntryIdx{0, 0}),
         tail_tx_block(nullptr),
         file_size(0),
         version(0) {
@@ -56,7 +56,7 @@ class BlkTable {
    */
   [[nodiscard]] LogicalBlockIdx get(VirtualBlockIdx virtual_block_idx) const {
     if (virtual_block_idx >= table.size()) return 0;
-    return table[virtual_block_idx];
+    return table[virtual_block_idx.get()];
   }
 
   /**
@@ -85,7 +85,7 @@ class BlkTable {
     uint64_t curr_ver = version.load(std::memory_order_acquire);
     if (curr_ver & 1) return true;  // old version means inconsistency
 
-    tx_idx = tail_tx_idx.load(std::memory_order_relaxed);
+    tx_idx = tail_tx_idx.load(std::memory_order_relaxed).tx_entry_idx;
     tx_block = tail_tx_block.load(std::memory_order_relaxed);
     f_size = file_size.load(std::memory_order_relaxed);
 
@@ -97,7 +97,7 @@ class BlkTable {
   }
 
   [[nodiscard]] TxEntryIdx get_tx_idx() const {
-    return tail_tx_idx.load(std::memory_order_relaxed);
+    return tail_tx_idx.load(std::memory_order_relaxed).tx_entry_idx;
   }
   [[nodiscard]] pmem::TxBlock* get_tx_block() const {
     return tail_tx_block.load(std::memory_order_relaxed);

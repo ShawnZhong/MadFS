@@ -110,11 +110,11 @@ struct __attribute__((packed)) TxEntryIndirect {
   // we enforce this must be 12-bit to ensure corrupted TxEntry won't cause
   // buffer-overflow issues
   LogLocalOffset local_offset : 12 = 0;
-  LogicalBlockIdx block_idx;
+  uint32_t block_idx;
 
   TxEntryIndirect(LogEntryIdx log_entry_idx) {
     local_offset = log_entry_idx.local_offset;
-    block_idx = log_entry_idx.block_idx;
+    block_idx = log_entry_idx.block_idx.get();
   }
 
   LogEntryIdx get_log_entry_idx() { return {block_idx, local_offset}; }
@@ -149,11 +149,11 @@ struct __attribute__((packed)) TxEntryInline {
 
  public:
   uint32_t num_blocks : NUM_BLOCKS_BITS;
-  VirtualBlockIdx begin_virtual_idx : BEGIN_VIRTUAL_IDX_BITS;
-  LogicalBlockIdx begin_logical_idx : BEGIN_LOGICAL_IDX_BITS;
+  uint32_t begin_virtual_idx : BEGIN_VIRTUAL_IDX_BITS;
+  uint32_t begin_logical_idx : BEGIN_LOGICAL_IDX_BITS;
 
-  static bool can_inline(uint32_t num_blocks, uint32_t begin_virtual_idx,
-                         uint32_t begin_logical_idx,
+  static bool can_inline(uint32_t num_blocks, VirtualBlockIdx begin_virtual_idx,
+                         LogicalBlockIdx begin_logical_idx,
                          uint16_t leftover_bytes = 0) {
     return leftover_bytes == 0 && num_blocks <= NUM_BLOCKS_MAX &&
            begin_virtual_idx <= BEGIN_VIRTUAL_IDX_MAX &&
@@ -163,11 +163,11 @@ struct __attribute__((packed)) TxEntryInline {
   constexpr TxEntryInline()
       : num_blocks(0), begin_virtual_idx(0), begin_logical_idx(0) {}
 
-  TxEntryInline(uint32_t num_blocks, uint32_t begin_virtual_idx,
-                uint32_t begin_logical_idx)
+  TxEntryInline(uint32_t num_blocks, VirtualBlockIdx begin_virtual_idx,
+                LogicalBlockIdx begin_logical_idx)
       : num_blocks(num_blocks),
-        begin_virtual_idx(begin_virtual_idx),
-        begin_logical_idx(begin_logical_idx) {
+        begin_virtual_idx(begin_virtual_idx.get()),
+        begin_logical_idx(begin_logical_idx.get()) {
     assert(can_inline(num_blocks, begin_virtual_idx, begin_logical_idx));
   }
 

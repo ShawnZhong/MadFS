@@ -170,8 +170,8 @@ void TxMgr::find_tail(TxEntryIdx& tx_idx, pmem::TxBlock*& tx_block) const {
   LogicalBlockIdx next_block_idx;
   assert((tx_idx.block_idx == 0) == (tx_block == nullptr));
 
-  if (!tx_idx.block_idx) {  // search from meta
-    if (!(next_block_idx = meta->get_next_tx_block())) {
+  if (tx_idx.block_idx == 0) {  // search from meta
+    if ((next_block_idx = meta->get_next_tx_block()) != 0) {
       tx_idx.local_idx = meta->find_tail(tx_idx.local_idx);
       return;
     } else {
@@ -181,7 +181,7 @@ void TxMgr::find_tail(TxEntryIdx& tx_idx, pmem::TxBlock*& tx_block) const {
     }
   }
 
-  while ((next_block_idx = tx_block->get_next_tx_block())) {
+  while ((next_block_idx = tx_block->get_next_tx_block()) != 0) {
     tx_idx.block_idx = next_block_idx;
     tx_block = &(file->lidx_to_addr_rw(next_block_idx)->tx_block);
   }
@@ -214,7 +214,7 @@ void TxMgr::gc(const LogicalBlockIdx tail_tx_block_idx, uint64_t file_size) {
   // skip if tail_tx_block is meta block, it directly follows meta or there is
   // only one tx block between meta and tail_tx_block
   LogicalBlockIdx orig_tx_block_idx = meta->get_next_tx_block();
-  if (0 == tail_tx_block_idx || orig_tx_block_idx == tail_tx_block_idx ||
+  if (tail_tx_block_idx == 0 || orig_tx_block_idx == tail_tx_block_idx ||
       file->lidx_to_addr_ro(orig_tx_block_idx)->tx_block.get_next_tx_block() ==
           tail_tx_block_idx)
     return;
@@ -336,8 +336,9 @@ std::ostream& operator<<(std::ostream& out, const TxMgr& tx_mgr) {
           tx_entry.indirect_entry.get_log_entry_idx(), curr_block);
       assert(curr_entry && curr_block);
 
-      do out << "\t\t" << *curr_entry;
-      while ((curr_entry = log_mgr->get_next_entry(curr_entry, curr_block)));
+      do {
+        out << "\t\t" << *curr_entry;
+      } while ((curr_entry = log_mgr->get_next_entry(curr_entry, curr_block)));
     }
   next:
     if (!tx_mgr.advance_tx_idx(tx_idx, tx_block, /*do_alloc*/ false)) break;
@@ -468,7 +469,7 @@ redo:
 
     // first handle the first block (which might not be full block)
     redo_lidx = redo_image[0];
-    if (redo_lidx) {
+    if (redo_lidx != 0) {
       curr_block = file->lidx_to_addr_ro(redo_lidx);
       memcpy(buf, curr_block->data_ro() + first_block_overlap_size,
              first_block_size);
@@ -479,7 +480,7 @@ redo:
     // then handle middle full blocks (which might not exist)
     for (curr_vidx = begin_vidx + 1; curr_vidx < end_vidx - 1; ++curr_vidx) {
       redo_lidx = redo_image[curr_vidx - begin_vidx];
-      if (redo_lidx) {
+      if (redo_lidx != 0) {
         curr_block = file->lidx_to_addr_ro(redo_lidx);
         memcpy(buf + buf_offset, curr_block->data_ro(), BLOCK_SIZE);
         redo_image[curr_vidx - begin_vidx] = 0;
@@ -490,7 +491,7 @@ redo:
     // if we have multiple blocks to read
     if (begin_vidx != end_vidx - 1) {
       redo_lidx = redo_image[curr_vidx - begin_vidx];
-      if (redo_lidx) {
+      if (redo_lidx != 0) {
         curr_block = file->lidx_to_addr_ro(redo_lidx);
         memcpy(buf + buf_offset, curr_block->data_ro(), count - buf_offset);
         redo_image[curr_vidx - begin_vidx] = 0;
@@ -650,7 +651,7 @@ ssize_t TxMgr::MultiBlockTx::do_write() {
   // copy full blocks first
   if (num_full_blocks > 0) {
     const char* rest_buf = buf;
-    size_t rest_full_count = BLOCK_IDX_TO_SIZE(num_full_blocks);
+    size_t rest_full_count = BLOCK_NUM_TO_SIZE(num_full_blocks);
     for (size_t i = 0; i < dst_blocks.size(); ++i) {
       // get logical block pointer for this iter
       // first block in first chunk could start from partial
@@ -688,7 +689,8 @@ ssize_t TxMgr::MultiBlockTx::do_write() {
   pmem::memcpy_persist(dst, buf, first_block_overlap_size);
 
   // write data from the buf to the last block
-  pmem::Block* last_dst_block = dst_blocks.back() + end_full_vidx - begin_vidx -
+  pmem::Block* last_dst_block = dst_blocks.back() +
+                                (end_full_vidx - begin_vidx) -
                                 BITMAP_CAPACITY * (dst_blocks.size() - 1);
   const char* buf_src = buf + (count - last_block_overlap_size);
   pmem::memcpy_persist(last_dst_block->data_rw(), buf_src,

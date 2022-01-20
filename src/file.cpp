@@ -175,10 +175,11 @@ void* File::mmap(void* addr_hint, size_t length, int prot, int mmap_flags,
   //  new_addr results in kernel panic
 
   auto remap = [&old_addr, &new_addr](LogicalBlockIdx lidx,
-                                      LogicalBlockIdx vidx, int num_blocks) {
+                                      VirtualBlockIdx vidx,
+                                      uint32_t num_blocks) {
     char* old_block_addr = old_addr + BLOCK_IDX_TO_SIZE(lidx);
     char* new_block_addr = new_addr + BLOCK_IDX_TO_SIZE(vidx);
-    size_t len = BLOCK_IDX_TO_SIZE(num_blocks);
+    size_t len = BLOCK_NUM_TO_SIZE(num_blocks);
     int flag = MREMAP_MAYMOVE | MREMAP_FIXED;
 
     void* ret = posix::mremap(old_block_addr, len, len, flag, new_block_addr);
@@ -190,10 +191,10 @@ void* File::mmap(void* addr_hint, size_t length, int prot, int mmap_flags,
       BLOCK_SIZE_TO_IDX(ALIGN_UP(offset + length, BLOCK_SIZE));
   VirtualBlockIdx vidx_group_begin = BLOCK_SIZE_TO_IDX(offset);
   LogicalBlockIdx lidx_group_begin = blk_table.get(vidx_group_begin);
-  int num_blocks = 0;
-  for (size_t vidx = vidx_group_begin; vidx < vidx_end; vidx++) {
+  uint32_t num_blocks = 0;
+  for (VirtualBlockIdx vidx = vidx_group_begin; vidx < vidx_end; ++vidx) {
     LogicalBlockIdx lidx = blk_table.get(vidx);
-    if (lidx == 0) PANIC("hole vidx=%ld in mmap", vidx);
+    if (lidx == 0) PANIC("hole vidx=%d in mmap", vidx.get());
 
     if (lidx == lidx_group_begin + num_blocks) {
       num_blocks++;
