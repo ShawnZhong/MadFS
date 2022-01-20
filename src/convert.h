@@ -117,9 +117,11 @@ class Converter {
     if (!need_le_block) {
       for (VirtualBlockIdx begin_vidx = 1; begin_vidx < num_blocks;
            begin_vidx += BITMAP_CAPACITY) {
-        uint32_t len = std::min(num_blocks - begin_vidx, BITMAP_CAPACITY);
+        uint32_t len = std::min(num_blocks - begin_vidx.get(), BITMAP_CAPACITY);
         file->tx_mgr.try_commit(
-            pmem::TxEntryInline(len, begin_vidx, begin_vidx), tx_idx, tx_block);
+            pmem::TxEntryInline(len, begin_vidx,
+                                LogicalBlockIdx(begin_vidx.get())),
+            tx_idx, tx_block);
         file->tx_mgr.advance_tx_idx(tx_idx, tx_block, true);
       }
     } else {
@@ -154,7 +156,7 @@ class Converter {
         BLOCK_SIZE_TO_IDX(ALIGN_UP(virtual_size_aligned, BLOCK_SIZE));
 
     uint32_t logical_num_blocks = file->meta->get_num_blocks();
-    uint32_t new_begin_lidx =
+    LogicalBlockIdx new_begin_lidx =
         ALIGN_UP(logical_num_blocks + 1, dram::NUM_BLOCKS_PER_GROW);
     ret = posix::fallocate(fd, 0, BLOCK_IDX_TO_SIZE(new_begin_lidx),
                            virtual_size_aligned);
@@ -168,7 +170,7 @@ class Converter {
 
     // copy data to the new region
     for (VirtualBlockIdx vidx = 0; vidx < virtual_num_blocks; ++vidx)
-      pmem::memcpy_persist(new_region[vidx].data_rw(),
+      pmem::memcpy_persist(new_region[vidx.get()].data_rw(),
                            file->vidx_to_addr_ro(vidx), BLOCK_SIZE,
                            /*fenced*/ true);
 

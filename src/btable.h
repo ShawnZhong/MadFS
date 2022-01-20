@@ -56,7 +56,7 @@ class BlkTable {
    */
   [[nodiscard]] LogicalBlockIdx get(VirtualBlockIdx virtual_block_idx) const {
     if (virtual_block_idx >= table.size()) return 0;
-    return table[virtual_block_idx];
+    return table[virtual_block_idx.get()];
   }
 
   /**

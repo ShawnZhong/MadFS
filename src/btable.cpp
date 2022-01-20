@@ -55,11 +55,11 @@ uint64_t BlkTable::update(bool do_alloc, bool init_bitmap) {
 }
 
 void BlkTable::resize_to_fit(VirtualBlockIdx idx) {
-  if (table.size() > idx) return;
+  if (table.size() > idx.get()) return;
   // countl_zero counts the number of leading 0-bits
   // if idx is already a pow of 2, it will be rounded to the next pow of 2
   // so that the table has enough space to hold this index
-  int next_pow2 = 1 << (sizeof(idx) * 8 - std::countl_zero(idx));
+  int next_pow2 = 1 << (sizeof(idx) * 8 - std::countl_zero(idx.get()));
   table.resize(next_pow2);
 }
 
@@ -70,7 +70,7 @@ void BlkTable::apply_tx(pmem::TxEntryIndirect tx_entry, LogMgr* log_mgr,
       log_mgr->get_entry(tx_entry.get_log_entry_idx(), curr_block, init_bitmap);
 
   uint32_t num_blocks;
-  LogicalBlockIdx begin_vidx, end_vidx;
+  VirtualBlockIdx begin_vidx, end_vidx;
   uint16_t leftover_bytes;
 
   do {
@@ -81,7 +81,7 @@ void BlkTable::apply_tx(pmem::TxEntryIndirect tx_entry, LogMgr* log_mgr,
     resize_to_fit(end_vidx);
 
     for (uint32_t offset = 0; offset < curr_entry->num_blocks; ++offset)
-      table[begin_vidx + offset] =
+      table[begin_vidx.get() + offset] =
           curr_entry->begin_lidxs[offset / BITMAP_CAPACITY] +
           offset % BITMAP_CAPACITY;
     // only the last one matters, so this variable will keep being overwritten
@@ -105,7 +105,7 @@ void BlkTable::apply_tx(pmem::TxEntryInline tx_commit_inline_entry) {
 
   // update block table mapping
   for (uint32_t i = 0; i < num_blocks; ++i)
-    table[begin_vidx + i] = begin_lidx + i;
+    table[begin_vidx.get() + i] = begin_lidx + i;
 
   // update file size if this write exceeds current file size
   // inline tx must be aligned to BLOCK_SIZE boundary
