@@ -173,7 +173,8 @@ static_assert(std::is_trivial<TxEntryIdx>::value,
 /**
  * Due to some unfortunate clang-implementation problems,
  * std::atomic<TxEntryIdx> can not be treated like a 64-bit value, which
- * complicates atomic read/write. We have to wrap a union to make it explict.
+ * complicates atomic read/write and upsets msan with use-of-uninitialized
+ * problems. We have to wrap a union to make it explicit.
  *
  * [Reference](https://stackoverflow.com/questions/60445848/clang-doesnt-inline-stdatomicload-for-loading-64-bit-structs)
  */
