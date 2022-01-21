@@ -170,7 +170,7 @@ class TxMgr::Tx {
    */
   bool handle_conflict(pmem::TxEntry curr_entry, VirtualBlockIdx first_vidx,
                        VirtualBlockIdx last_vidx,
-                       LogicalBlockIdx conflict_image[]);
+                       std::vector<LogicalBlockIdx>& conflict_image);
 
   /**
    * Check if [first_vidx, last_vidx] has any overlap with [le_first_vidx,
@@ -192,7 +192,7 @@ class TxMgr::Tx {
                                  VirtualBlockIdx le_first_vidx,
                                  LogicalBlockIdx le_begin_lidx,
                                  uint32_t num_blocks,
-                                 LogicalBlockIdx conflict_image[]) {
+                                 std::vector<LogicalBlockIdx>& conflict_image) {
     VirtualBlockIdx le_last_vidx = le_first_vidx + num_blocks - 1;
     if (last_vidx < le_first_vidx || first_vidx > le_last_vidx) return false;
 
@@ -301,6 +301,8 @@ class TxMgr::WriteTx : public TxMgr::Tx {
   const char* const buf;
 
   Allocator* allocator;
+
+  std::vector<LogicalBlockIdx>& recycle_image;
 
   // the logical index of the destination data block
   std::vector<LogicalBlockIdx> dst_lidxs;
