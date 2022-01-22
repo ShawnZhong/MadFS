@@ -16,10 +16,18 @@
 namespace ulayfs::dram {
 
 /**
- * temporary store for a sequence of LogicalBlockIdx.
- * compared to variable-length array on the stack, it's less likely to overflow.
+ * Temporary, thread-local store for a sequence of objects.
+ * Compared to variable-length array on the stack, it's less likely to overflow.
+ * By reusing the same vector, it avoids the overhead of memory allocation from
+ * the globally shared heap.
  */
-thread_local std::vector<LogicalBlockIdx> local_buf_lidxs;
+
+// This one is used for redo_image in ReadTx and recycle_image in WriteTx
+thread_local std::vector<LogicalBlockIdx> local_buf_image_lidxs;
+
+// These are are used in WriteTx for dst blocks
+thread_local std::vector<LogicalBlockIdx> local_buf_dst_lidxs;
+thread_local std::vector<pmem::Block*> local_buf_dst_blocks;
 
 /*
  * TxMgr
@@ -426,7 +434,7 @@ ssize_t TxMgr::ReadTx::do_read() {
   pmem::TxEntry curr_entry;
   size_t buf_offset;
 
-  std::vector<LogicalBlockIdx>& redo_image = local_buf_lidxs;
+  std::vector<LogicalBlockIdx>& redo_image = local_buf_image_lidxs;
   redo_image.clear();
   redo_image.resize(num_blocks, 0);
 
@@ -523,12 +531,14 @@ TxMgr::WriteTx::WriteTx(File* file, TxMgr* tx_mgr, const char* buf,
     : Tx(file, tx_mgr, count, offset),
       buf(buf),
       allocator(file->get_local_allocator()),
-      recycle_image(local_buf_lidxs),
-      dst_lidxs(),
-      dst_blocks() {
+      recycle_image(local_buf_image_lidxs),
+      dst_lidxs(local_buf_dst_lidxs),
+      dst_blocks(local_buf_dst_blocks) {
   // reset recycle_image
   recycle_image.clear();
   recycle_image.resize(num_blocks);
+  local_buf_dst_lidxs.clear();
+  local_buf_dst_blocks.clear();
 
   // TODO: handle writev requests
   // for overwrite, "leftover_bytes" is zero; only in append we care

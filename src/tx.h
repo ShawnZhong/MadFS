@@ -305,9 +305,9 @@ class TxMgr::WriteTx : public TxMgr::Tx {
   std::vector<LogicalBlockIdx>& recycle_image;
 
   // the logical index of the destination data block
-  std::vector<LogicalBlockIdx> dst_lidxs;
+  std::vector<LogicalBlockIdx>& dst_lidxs;
   // the pointer to the destination data block
-  std::vector<pmem::Block*> dst_blocks;
+  std::vector<pmem::Block*>& dst_blocks;
 
   // the tx entry to be committed (may or may not inline)
   pmem::TxEntry commit_entry;
