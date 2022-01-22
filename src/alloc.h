@@ -73,7 +73,7 @@ class Allocator {
    * Free an array of blocks, but the logical block indexes are not necessary
    * continuous
    */
-  void free(const LogicalBlockIdx recycle_image[], uint32_t image_size);
+  void free(const std::vector<LogicalBlockIdx>& recycle_image);
 
   void return_free_list() {
     for (uint32_t n = 1; n < BITMAP_CAPACITY; ++n)

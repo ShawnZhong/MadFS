@@ -15,6 +15,12 @@
 
 namespace ulayfs::dram {
 
+/**
+ * temporary store for a sequence of LogicalBlockIdx.
+ * compared to variable-length array on the stack, it's less likely to overflow.
+ */
+thread_local std::vector<LogicalBlockIdx> local_buf_lidxs;
+
 /*
  * TxMgr
  */
@@ -370,7 +376,7 @@ TxMgr::Tx::Tx(File* file, TxMgr* tx_mgr, size_t count, size_t offset)
 bool TxMgr::Tx::handle_conflict(pmem::TxEntry curr_entry,
                                 VirtualBlockIdx first_vidx,
                                 VirtualBlockIdx last_vidx,
-                                LogicalBlockIdx conflict_image[]) {
+                                std::vector<LogicalBlockIdx>& conflict_image) {
   bool has_conflict = false;
 
   // TODO: handle writev requests
@@ -420,8 +426,9 @@ ssize_t TxMgr::ReadTx::do_read() {
   pmem::TxEntry curr_entry;
   size_t buf_offset;
 
-  LogicalBlockIdx redo_image[num_blocks];
-  memset(redo_image, 0, sizeof(LogicalBlockIdx) * num_blocks);
+  std::vector<LogicalBlockIdx>& redo_image = local_buf_lidxs;
+  redo_image.clear();
+  redo_image.resize(num_blocks, 0);
 
   if (!is_offset_depend)
     file_size = file->update(tail_tx_idx, tail_tx_block, /*do_alloc*/ false);
@@ -516,8 +523,13 @@ TxMgr::WriteTx::WriteTx(File* file, TxMgr* tx_mgr, const char* buf,
     : Tx(file, tx_mgr, count, offset),
       buf(buf),
       allocator(file->get_local_allocator()),
+      recycle_image(local_buf_lidxs),
       dst_lidxs(),
       dst_blocks() {
+  // reset recycle_image
+  recycle_image.clear();
+  recycle_image.resize(num_blocks);
+
   // TODO: handle writev requests
   // for overwrite, "leftover_bytes" is zero; only in append we care
   // append log without fence because we only care flush completion
@@ -555,7 +567,6 @@ TxMgr::WriteTx::WriteTx(File* file, TxMgr* tx_mgr, const char* buf,
  */
 ssize_t TxMgr::AlignedTx::do_write() {
   pmem::TxEntry conflict_entry;
-  LogicalBlockIdx recycle_image[num_blocks];
 
   // since everything is block-aligned, we can copy data directly
   const char* rest_buf = buf;
@@ -586,13 +597,12 @@ retry:
 
 done:
   // recycle the data blocks being overwritten
-  allocator->free(recycle_image, num_blocks);
+  allocator->free(recycle_image);
   return static_cast<ssize_t>(count);
 }
 
 ssize_t TxMgr::SingleBlockTx::do_write() {
   pmem::TxEntry conflict_entry;
-  LogicalBlockIdx recycle_image[1];
 
   // must acquire the tx tail before any get
   if (!is_offset_depend)
@@ -627,7 +637,7 @@ retry:
     goto redo;
 
 done:
-  allocator->free(recycle_image[0]);
+  allocator->free(recycle_image[0]);  // it has only single block
   return static_cast<ssize_t>(count);
 }
 
@@ -646,7 +656,6 @@ ssize_t TxMgr::MultiBlockTx::do_write() {
   bool do_copy_last = true;
   pmem::TxEntry conflict_entry;
   LogicalBlockIdx src_first_lidx, src_last_lidx;
-  LogicalBlockIdx recycle_image[num_blocks];
 
   // copy full blocks first
   if (num_full_blocks > 0) {
@@ -738,7 +747,7 @@ retry:
 
 done:
   // recycle the data blocks being overwritten
-  allocator->free(recycle_image, num_blocks);
+  allocator->free(recycle_image);
   return static_cast<ssize_t>(count);
 }
 
