@@ -20,7 +20,7 @@ class Filesystem:
     load_ulayfs: bool = False
 
 
-def get_ext4_dax_path():
+def _get_ext4_dax_path():
     for path in ["/mnt/pmem0-ext4-dax", "/mnt/pmem0", "/mnt/pmem1"]:
         if Path(path).exists():
             return Path(path)
@@ -29,7 +29,7 @@ def get_ext4_dax_path():
     return Path(".")
 
 
-ext4_dax_path = get_ext4_dax_path()
+ext4_dax_path = _get_ext4_dax_path()
 _fs_configs = [
     ("uLayFS", ext4_dax_path, True),
     ("ext4", ext4_dax_path, False),
