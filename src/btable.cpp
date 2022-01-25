@@ -61,7 +61,7 @@ void BlkTable::resize_to_fit(VirtualBlockIdx idx) {
   // if idx is already a pow of 2, it will be rounded to the next pow of 2
   // so that the table has enough space to hold this index
   int next_pow2 = 1 << (sizeof(idx) * 8 - std::countl_zero(idx.get()));
-  table.resize(next_pow2);
+  table.grow_to_at_least(next_pow2);
 }
 
 void BlkTable::apply_tx(pmem::TxEntryIndirect tx_entry, LogMgr* log_mgr,
