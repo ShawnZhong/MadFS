@@ -547,7 +547,8 @@ TxMgr::WriteTx::WriteTx(File* file, TxMgr* tx_mgr, const char* buf,
   uint32_t rest_num_blocks = num_blocks;
   while (rest_num_blocks > 0) {
     uint32_t chunk_num_blocks = std::min(rest_num_blocks, BITMAP_CAPACITY);
-    dst_lidxs.push_back(allocator->alloc(chunk_num_blocks));
+    auto lidx = allocator->alloc(chunk_num_blocks);
+    dst_lidxs.push_back(lidx);
     rest_num_blocks -= chunk_num_blocks;
   }
   assert(!dst_lidxs.empty());

@@ -27,6 +27,7 @@ constexpr static uint32_t GROW_UNIT_SIZE = 1 << GROW_UNIT_SHIFT;
 // preallocate must be multiple of grow_unit
 constexpr static uint32_t PREALLOC_SHIFT = 1 * GROW_UNIT_SHIFT;
 constexpr static uint32_t PREALLOC_SIZE = 1 * GROW_UNIT_SIZE;
+constexpr static uint32_t NUM_BLOCKS_PER_GROW = GROW_UNIT_SIZE >> BLOCK_SHIFT;
 
 /*
  * tx entry

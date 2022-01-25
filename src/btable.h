@@ -15,12 +15,31 @@
 
 namespace ulayfs::dram {
 
+template <typename T>
+class zero_allocator : public tbb::cache_aligned_allocator<T> {
+ public:
+  using value_type = T;
+  using propagate_on_container_move_assignment = std::true_type;
+  using is_always_equal = std::true_type;
+
+  zero_allocator() = default;
+  template <typename U>
+  explicit zero_allocator(const zero_allocator<U>&) noexcept {};
+
+  T* allocate(std::size_t n) {
+    T* ptr = tbb::cache_aligned_allocator<T>::allocate(n);
+    std::memset(static_cast<void*>(ptr), 0, n * sizeof(value_type));
+    return ptr;
+  }
+};
+
 // read logs and update mapping from virtual blocks to logical blocks
 class BlkTable {
   File* file;
   TxMgr* tx_mgr;
 
-  tbb::concurrent_vector<LogicalBlockIdx> table;
+  tbb::concurrent_vector<LogicalBlockIdx, zero_allocator<LogicalBlockIdx>>
+      table;
 
   // keep track of the next TxEntry to apply
   std::atomic<TxEntryIdx64> tail_tx_idx;
@@ -45,7 +64,7 @@ class BlkTable {
         tail_tx_block(nullptr),
         file_size(0),
         version(0) {
-    table.resize(16);
+    table.grow_to_at_least(NUM_BLOCKS_PER_GROW);
   }
 
   ~BlkTable() = default;
@@ -104,7 +123,7 @@ class BlkTable {
   }
 
  private:
-  void resize_to_fit(VirtualBlockIdx idx);
+  void grow_to_fit(VirtualBlockIdx idx);
 
   // TODO: handle writev requests
   /**

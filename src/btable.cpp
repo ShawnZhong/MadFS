@@ -55,7 +55,7 @@ uint64_t BlkTable::update(bool do_alloc, bool init_bitmap) {
   return file_size.load(std::memory_order_relaxed);
 }
 
-void BlkTable::resize_to_fit(VirtualBlockIdx idx) {
+void BlkTable::grow_to_fit(VirtualBlockIdx idx) {
   if (table.size() > idx.get()) return;
   // countl_zero counts the number of leading 0-bits
   // if idx is already a pow of 2, it will be rounded to the next pow of 2
@@ -79,7 +79,7 @@ void BlkTable::apply_tx(pmem::TxEntryIndirect tx_entry, LogMgr* log_mgr,
     begin_vidx = curr_entry->begin_vidx;
     num_blocks = curr_entry->num_blocks;
     end_vidx = begin_vidx + num_blocks;
-    resize_to_fit(end_vidx);
+    grow_to_fit(end_vidx);
 
     for (uint32_t offset = 0; offset < curr_entry->num_blocks; ++offset)
       table[begin_vidx.get() + offset] =
@@ -102,7 +102,7 @@ void BlkTable::apply_tx(pmem::TxEntryInline tx_commit_inline_entry) {
   VirtualBlockIdx begin_vidx = tx_commit_inline_entry.begin_virtual_idx;
   LogicalBlockIdx begin_lidx = tx_commit_inline_entry.begin_logical_idx;
   VirtualBlockIdx end_vidx = begin_vidx + num_blocks;
-  resize_to_fit(end_vidx);
+  grow_to_fit(end_vidx);
 
   // update block table mapping
   for (uint32_t i = 0; i < num_blocks; ++i)

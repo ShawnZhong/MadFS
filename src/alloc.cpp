@@ -23,19 +23,20 @@ LogicalBlockIdx Allocator::alloc(uint32_t num_blocks) {
     free_lists[num_blocks - 1].pop_back();
     TRACE(
         "Allocator::alloc: allocating from free list (fully consumed): "
-        "[n_blk: %d, lidx: %d]",
-        lidx.get(), num_blocks);
+        "[n_blk: %d, lidx: %u]",
+        num_blocks, lidx.get());
     return lidx;
   }
 
   for (uint32_t n = num_blocks + 1; n <= BITMAP_CAPACITY; ++n) {
     if (!free_lists[n - 1].empty()) {
       LogicalBlockIdx lidx = free_lists[n - 1].back();
+
       free_lists[n - 1].pop_back();
       free_lists[n - num_blocks - 1].push_back(lidx + num_blocks);
       TRACE(
           "Allocator::alloc: allocating from free list (partially consumed): "
-          "[n_blk: %d, lidx: %d] -> [n_blk: %d, lidx: %d]",
+          "[n_blk: %d, lidx: %u] -> [n_blk: %d, lidx: %u]",
           n, lidx.get(), n - num_blocks, lidx.get() + num_blocks);
       return lidx;
     }
@@ -74,19 +75,19 @@ retry:
     if (!is_found && num_right_zeros >= num_blocks) {
       is_found = true;
       allocated_block_idx = allocated_idx + BITMAP_CAPACITY - num_bits_left;
-      TRACE("Allocator::alloc: allocated blocks: [n_blk: %d, lidx: %d]",
+      TRACE("Allocator::alloc: allocated blocks: [n_blk: %d, lidx: %u]",
             num_right_zeros, allocated_block_idx.get());
       if (num_right_zeros > num_blocks) {
         free_lists[num_right_zeros - num_blocks - 1].emplace_back(
             allocated_idx + BITMAP_CAPACITY - num_bits_left + num_blocks);
-        TRACE("Allocator::alloc: unused blocks saved: [n_blk: %d, lidx: %d]",
+        TRACE("Allocator::alloc: unused blocks saved: [n_blk: %d, lidx: %u]",
               num_right_zeros - num_blocks,
               allocated_idx + BITMAP_CAPACITY - num_bits_left + num_blocks);
       }
     } else {
       free_lists[num_right_zeros - 1].emplace_back(
           allocated_idx + BITMAP_CAPACITY - num_bits_left);
-      TRACE("Allocator::alloc: unused blocks saved: [n_blk: %d, lidx: %d]",
+      TRACE("Allocator::alloc: unused blocks saved: [n_blk: %d, lidx: %u]",
             num_right_zeros, allocated_idx + BITMAP_CAPACITY - num_bits_left);
     }
     allocated_bits >>= num_right_zeros;
