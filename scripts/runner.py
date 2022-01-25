@@ -116,6 +116,10 @@ class Runner:
             f"{cmd}",
             log_path=log_path,
         )
+        with open(log_path, "r") as f:
+            if "ERROR SUMMARY: 0 errors" not in f.read():
+                logger.error(f"pmemcheck failed. See {log_path}")
+                exit(1)
 
     def _run_profile(self, cmd, log_path):
         perf_data = self.result_dir / "perf.data"
