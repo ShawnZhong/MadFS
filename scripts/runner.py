@@ -20,6 +20,20 @@ build_types = [
 ]
 
 
+def is_ulayfs_linked(prog_path):
+    import subprocess
+    import re
+
+    output = subprocess.check_output(['ldd', prog_path]).decode("utf-8")
+    for line in output.splitlines():
+        match = re.match(r'\t(.*) => (.*) \(0x', line)
+        if match and match.group(1) == 'libulayfs.so':
+            logger.info(f"`{prog_path}` is already linked with uLayFS ({match.group(2)})")
+            return True
+    logger.info(f"`{prog_path}` is not linked with uLayFS by default. Need to run with `env LD_PRELOAD=...`")
+    return False
+
+
 class Runner:
     def __init__(self, name, build_type=None, result_dir=None):
         self.is_micro = name.startswith("micro")
@@ -85,7 +99,7 @@ class Runner:
 
         # setup envs
         env = {}
-        if load_ulayfs:
+        if load_ulayfs and not is_ulayfs_linked(self.prog_path):
             assert self.ulayfs_path is not None
             env["LD_PRELOAD"] = self.ulayfs_path
         if pmem_path:
