@@ -3,6 +3,7 @@
 #include <atomic>
 #include <cstdint>
 #include <cstring>
+#include <iosfwd>
 
 #include "block.h"
 #include "config.h"

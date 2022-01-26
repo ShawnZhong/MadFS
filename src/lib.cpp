@@ -1,14 +1,23 @@
 #include "lib.h"
 
+#include <fcntl.h>
+#include <sys/file.h>
+#include <sys/mman.h>
+#include <sys/stat.h>
 #include <sys/xattr.h>
 #include <tbb/concurrent_unordered_map.h>
+#include <unistd.h>
 
+#include <cassert>
 #include <cstdarg>
 #include <cstdio>
+#include <iostream>
 
 #include "config.h"
+#include "const.h"
 #include "file.h"
 #include "posix.h"
+#include "utils.h"
 
 #if ULAYFS_USE_LIBPMEM2
 #include <libpmem2/persist.h>

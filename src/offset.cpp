@@ -2,11 +2,10 @@
 
 #include <atomic>
 #include <cstdint>
-#include <cstring>
+#include <ostream>
 
-#include "block.h"
+#include "config.h"
 #include "const.h"
-#include "entry.h"
 #include "file.h"
 #include "idx.h"
 

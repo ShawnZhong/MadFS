@@ -1,7 +1,9 @@
 #include "mtable.h"
 
+#include <cstdint>
+#include <ostream>
+
 #include "const.h"
-#include "file.h"
 #include "idx.h"
 
 namespace ulayfs::dram {

@@ -1,4 +1,8 @@
+#include <iostream>
+
+#include "file.h"
 #include "lib.h"
+#include "utils.h"
 
 namespace ulayfs {
 
