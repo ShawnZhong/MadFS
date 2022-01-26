@@ -1,9 +1,10 @@
 #include "alloc.h"
 
+#include <algorithm>
 #include <bit>
 #include <cassert>
 #include <cstdint>
-#include <utility>
+#include <cstring>
 
 #include "bitmap.h"
 #include "block.h"

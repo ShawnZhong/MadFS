@@ -1,10 +1,15 @@
 #pragma once
 
-#include <linux/mman.h>
+#include <sys/mman.h>
 #include <tbb/concurrent_vector.h>
 
+#include <bit>
+#include <cerrno>
 #include <cstddef>
+#include <cstdint>
+#include <iosfwd>
 #include <stdexcept>
+#include <tuple>
 
 #include "block.h"
 #include "config.h"

@@ -1,15 +1,23 @@
 #pragma once
 
+#include <fcntl.h>
+#include <pthread.h>
+#include <sys/stat.h>
+#include <sys/types.h>
 #include <sys/xattr.h>
 #include <tbb/concurrent_unordered_map.h>
 
+#include <cstdint>
+#include <ctime>
 #include <iostream>
 #include <stdexcept>
 
 #include "alloc.h"
+#include "bitmap.h"
 #include "block.h"
 #include "btable.h"
 #include "config.h"
+#include "const.h"
 #include "entry.h"
 #include "idx.h"
 #include "log.h"

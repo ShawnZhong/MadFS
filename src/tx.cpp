@@ -10,7 +10,6 @@
 #include "entry.h"
 #include "file.h"
 #include "idx.h"
-#include "offset.h"
 #include "utils.h"
 
 namespace ulayfs::dram {

@@ -1,9 +1,11 @@
 #pragma once
 
 #include <array>
+#include <cstdint>
 #include <stdexcept>
 #include <vector>
 
+#include "bitmap.h"
 #include "block.h"
 #include "config.h"
 #include "const.h"

@@ -1,6 +1,7 @@
 #pragma once
 
 #include <algorithm>
+#include <cassert>
 #include <cstddef>
 #include <cstdint>
 #include <ostream>
@@ -9,6 +10,7 @@
 
 #include "alloc.h"
 #include "block.h"
+#include "const.h"
 #include "entry.h"
 #include "idx.h"
 #include "log.h"

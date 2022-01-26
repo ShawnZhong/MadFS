@@ -1,13 +1,18 @@
 #pragma once
 
 #include <pthread.h>
+#include <tbb/cache_aligned_allocator.h>
 #include <tbb/concurrent_vector.h>
 
 #include <atomic>
 #include <cstdint>
+#include <cstring>
 #include <ostream>
+#include <type_traits>
 
 #include "block.h"
+#include "const.h"
+#include "entry.h"
 #include "idx.h"
 #include "log.h"
 #include "tx.h"

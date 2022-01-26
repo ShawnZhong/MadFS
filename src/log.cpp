@@ -1,9 +1,9 @@
 #include "log.h"
 
 #include <cstdint>
-#include <ostream>
 #include <vector>
 
+#include "alloc.h"
 #include "block.h"
 #include "const.h"
 #include "entry.h"

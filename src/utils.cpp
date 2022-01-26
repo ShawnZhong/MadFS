@@ -1,5 +1,7 @@
 #include "utils.h"
 
+#include <syscall.h>
+
 // The following variables are declared as `extern` in the header file, and
 // defined here, so that we don't need to have a private (i.e., static) variable
 // for every translation unit.

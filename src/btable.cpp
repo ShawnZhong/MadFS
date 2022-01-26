@@ -1,12 +1,15 @@
 #include "btable.h"
 
 #include <atomic>
+#include <bit>
+#include <cassert>
+#include <cstddef>
 #include <cstdint>
 
-#include "block.h"
 #include "const.h"
 #include "file.h"
 #include "idx.h"
+#include "log.h"
 
 namespace ulayfs::dram {
 
