@@ -130,7 +130,7 @@ pmem::TxEntry TxMgr::try_commit(pmem::TxEntry entry, TxEntryIdx& tx_idx,
 bool TxMgr::handle_idx_overflow(TxEntryIdx& tx_idx, pmem::TxBlock*& tx_block,
                                 bool do_alloc) const {
   const bool is_inline = tx_idx.is_inline();
-  uint16_t capacity = is_inline ? NUM_INLINE_TX_ENTRY : NUM_TX_ENTRY;
+  uint16_t capacity = tx_idx.get_capacity();
   if (unlikely(tx_idx.local_idx >= capacity)) {
     LogicalBlockIdx block_idx =
         is_inline ? meta->get_next_tx_block() : tx_block->get_next_tx_block();

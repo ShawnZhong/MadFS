@@ -236,8 +236,7 @@ int File::fsync() {
   // (and thus not flushed) yet, so we cannot assume it is equivalent to the
   // first index of the next block
   // here we use the last index of the block to enforce reflush later
-  uint16_t capacity =
-      tail_tx_idx.block_idx == 0 ? NUM_INLINE_TX_ENTRY : NUM_TX_ENTRY;
+  uint16_t capacity = tail_tx_idx.get_capacity();
   if (unlikely(tail_tx_idx.local_idx >= capacity))
     tail_tx_idx.local_idx = capacity - 1;
   meta->set_tx_tail(tail_tx_idx);
