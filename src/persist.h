@@ -14,13 +14,19 @@
 #else
 #define VALGRIND_PMC_REMOVE_PMEM_MAPPING(...) ({})
 #define VALGRIND_PMC_REGISTER_PMEM_MAPPING(...) ({})
+#define VALGRIND_PMC_DO_FLUSH(...) ({})
 #endif
 
 #if ULAYFS_USE_LIBPMEM2
-#include <libpmem2.h>
-extern pmem2_memcpy_fn pmem2_memcpy;
-#else
-#define pmem2_memcpy(...) ({})
+extern "C" {
+// https://github.com/pmem/pmdk/blob/master/src/libpmem2/x86_64/memcpy_memset.h
+void memmove_movnt_avx512f_clflush(char *, const char *, size_t);
+void memmove_movnt_avx512f_clflushopt(char *, const char *, size_t);
+void memmove_movnt_avx512f_clwb(char *, const char *, size_t);
+void memmove_movnt_avx_clflush_wcbarrier(char *, const char *, size_t);
+void memmove_movnt_avx_clflushopt_wcbarrier(char *, const char *, size_t);
+void memmove_movnt_avx_clwb_wcbarrier(char *, const char *, size_t);
+}
 #endif
 
 namespace ulayfs::pmem {
@@ -157,7 +163,25 @@ static inline void memcpy_persist(void *dst, const void *src, size_t size,
   if constexpr (BuildOptions::persist == BuildOptions::Persist::KERNEL) {
     internal::memcpy_kernel(dst, src, size);
   } else if constexpr (BuildOptions::persist == BuildOptions::Persist::PMDK) {
-    pmem2_memcpy(dst, src, size, PMEM2_F_MEM_NONTEMPORAL);
+    auto dst_char = (char *)dst;
+    auto src_char = (const char *)src;
+
+    if constexpr (BuildOptions::support_avx512f) {
+      if constexpr (BuildOptions::support_clwb)
+        memmove_movnt_avx512f_clwb(dst_char, src_char, size);
+      else if constexpr (BuildOptions::support_clflushopt)
+        memmove_movnt_avx512f_clflushopt(dst_char, src_char, size);
+      else
+        memmove_movnt_avx512f_clflush(dst_char, src_char, size);
+    } else {
+      if constexpr (BuildOptions::support_clwb)
+        memmove_movnt_avx_clwb_wcbarrier(dst_char, src_char, size);
+      else if constexpr (BuildOptions::support_clflushopt)
+        memmove_movnt_avx_clflushopt_wcbarrier(dst_char, src_char, size);
+      else
+        memmove_movnt_avx_clflush_wcbarrier(dst_char, src_char, size);
+      VALGRIND_PMC_DO_FLUSH(dst_char, size);
+    }
   } else if constexpr (BuildOptions::persist == BuildOptions::Persist::NATIVE) {
     internal::memcpy_native(dst, src, size);
   }
