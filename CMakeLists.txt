@@ -21,6 +21,7 @@ add_library(ulayfs SHARED
     src/offset.h src/offset.cpp
     src/posix.h src/posix.cpp
     src/convert.h
+    src/tbb.h
     src/tx.h src/tx.cpp
     src/utils.h src/utils.cpp
     )

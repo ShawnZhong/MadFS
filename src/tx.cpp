@@ -552,7 +552,10 @@ TxMgr::WriteTx::WriteTx(File* file, TxMgr* tx_mgr, const char* buf,
   }
   assert(!dst_lidxs.empty());
 
-  for (auto lidx : dst_lidxs) dst_blocks.push_back(file->lidx_to_addr_rw(lidx));
+  for (auto lidx : dst_lidxs) {
+    pmem::Block* dst_block = file->lidx_to_addr_rw(lidx);
+    dst_blocks.push_back(dst_block);
+  }
   assert(!dst_blocks.empty());
 
   uint16_t leftover_bytes = ALIGN_UP(end_offset, BLOCK_SIZE) - end_offset;

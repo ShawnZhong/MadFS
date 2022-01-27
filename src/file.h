@@ -143,7 +143,9 @@ class File {
    * A nullptr is returned if the block is not allocated yet (e.g., a hole)
    */
   [[nodiscard]] pmem::Block* lidx_to_addr_rw(LogicalBlockIdx lidx) {
-    return mem_table.get(lidx);
+    pmem::Block* block = mem_table.get(lidx);
+    assert(IS_ALIGNED(reinterpret_cast<uintptr_t>(block), BLOCK_SIZE));
+    return block;
   }
 
   /**
@@ -151,9 +153,10 @@ class File {
    * An empty block is returned if the block is not allocated yet (e.g., a hole)
    */
   [[nodiscard]] const pmem::Block* lidx_to_addr_ro(LogicalBlockIdx lidx) {
-    constexpr static const char empty_block[BLOCK_SIZE]{};
+    constexpr static const char __attribute__((aligned(BLOCK_SIZE)))
+    empty_block[BLOCK_SIZE]{};
     if (lidx == 0) return reinterpret_cast<const pmem::Block*>(&empty_block);
-    return mem_table.get(lidx);
+    return lidx_to_addr_rw(lidx);
   }
 
   /**
