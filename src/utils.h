@@ -1,18 +1,12 @@
 #pragma once
 
-#include <immintrin.h>
-#include <sys/syscall.h>
-#include <unistd.h>
-
 #include <cassert>
 #include <chrono>
-#include <cstdint>
 #include <cstdio>
 #include <cstring>
 #include <exception>
 
 #include "config.h"
-#include "const.h"
 
 #ifndef __has_feature
 #define __has_feature(x) 0
@@ -26,14 +20,6 @@
 #define __msan_unpoison(...) ({})
 #define __msan_scoped_disable_interceptor_checks(...) ({})
 #define __msan_scoped_enable_interceptor_checks(...) ({})
-#endif
-
-#if ULAYFS_USE_PMEMCHECK == 1
-#include <valgrind/pmemcheck.h>
-// ref: https://pmem.io/valgrind/generated/pmc-manual.html
-#else
-#define VALGRIND_PMC_REMOVE_PMEM_MAPPING(...) ({})
-#define VALGRIND_PMC_REGISTER_PMEM_MAPPING(...) ({})
 #endif
 
 #define likely(x) __builtin_expect(!!(x), 1)
@@ -102,56 +88,4 @@ struct FileInitException : public std::exception {
 };
 
 struct FatalException : public std::exception {};
-
-namespace pmem {
-/**
- * persist the cache line that contains p from any level of the cache
- * hierarchy using the appropriate instruction
- *
- * Note that the this instruction might be reordered
- */
-static inline void persist_cl_unfenced(void *p) {
-  if constexpr (BuildOptions::support_clwb)
-    return _mm_clwb(p);
-  else if constexpr (BuildOptions::support_clflushopt)
-    return _mm_clflushopt(p);
-  else
-    return _mm_clflush(p);
-}
-
-/**
- * persist the cache line that contains p without reordering
- */
-static inline void persist_cl_fenced(void *p) {
-  persist_cl_unfenced(p);
-  _mm_sfence();
-}
-
-/**
- * same as persist_cl above but take `fenced` argument
- */
-static inline void persist_cl(void *p, bool fenced) {
-  persist_cl_unfenced(p);
-  if (fenced) _mm_sfence();
-}
-
-/**
- * persist the range [buf, buf + len) with possibly reordering
- */
-static inline void persist_unfenced(void *buf, uint64_t len) {
-  // adjust for cacheline alignment
-  len += (uint64_t)buf & (CACHELINE_SIZE - 1);
-  for (uint64_t i = 0; i < len; i += CACHELINE_SIZE)
-    persist_cl_unfenced((char *)buf + i);
-}
-
-/**
- * persist the range [buf, buf + len) without reordering
- */
-static inline void persist_fenced(void *buf, uint64_t len) {
-  persist_unfenced(buf, len);
-  _mm_sfence();
-}
-
-}  // namespace pmem
 }  // namespace ulayfs

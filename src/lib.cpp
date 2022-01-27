@@ -19,10 +19,6 @@
 #include "posix.h"
 #include "utils.h"
 
-#if ULAYFS_USE_LIBPMEM2
-#include <libpmem2/persist.h>
-#endif
-
 namespace ulayfs {
 
 // mapping between fd and in-memory file handle
@@ -350,9 +346,6 @@ void __attribute__((constructor)) ulayfs_ctor() {
   if (runtime_options.log_file) {
     log_file = fopen(runtime_options.log_file, "a");
   }
-#if ULAYFS_USE_LIBPMEM2
-  pmem2_persist_init();
-#endif
 }
 
 /**

@@ -4,11 +4,11 @@
 #include "bitmap.h"
 #include "block.h"
 #include "const.h"
-#include "copy.h"
 #include "entry.h"
 #include "file.h"
 #include "flock.h"
 #include "idx.h"
+#include "persist.h"
 #include "posix.h"
 #include "utils.h"
 
