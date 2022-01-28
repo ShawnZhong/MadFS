@@ -46,7 +46,7 @@ uint64_t BlkTable::update(bool do_alloc, bool init_bitmap) {
 
   // mark all live data blocks in bitmap
   if (init_bitmap)
-    for (const auto logical_idx : table) file->set_allocated(logical_idx);
+    for (const auto& logical_idx : table) file->set_allocated(logical_idx);
 
   tail_tx_idx.store(tx_idx_local, std::memory_order_relaxed);
   tail_tx_block.store(tx_block_local, std::memory_order_relaxed);
@@ -119,7 +119,7 @@ std::ostream& operator<<(std::ostream& out, const BlkTable& b) {
   out << "\ttail_tx_idx: "
       << b.tail_tx_idx.load(std::memory_order_relaxed).tx_entry_idx << "\n";
   for (size_t i = 0; i < b.table.size(); ++i) {
-    if (b.table[i] != 0) {
+    if (b.table[i].load() != 0) {
       out << "\t" << i << " -> " << b.table[i] << "\n";
     }
   }

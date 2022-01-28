@@ -35,7 +35,7 @@ MemTable::MemTable(int fd, off_t init_file_size, bool read_only)
 std::ostream& operator<<(std::ostream& out, const MemTable& m) {
   out << "MemTable:\n";
   uint32_t chunk_idx = 0;
-  for (const auto mem_addr : m.table) {
+  for (const auto& mem_addr : m.table) {
     LogicalBlockIdx chunk_begin_lidx = chunk_idx << GROW_UNIT_IN_BLOCK_SHIFT;
     out << "\t" << chunk_begin_lidx << " - "
         << chunk_begin_lidx + NUM_BLOCKS_PER_GROW << ": ";
