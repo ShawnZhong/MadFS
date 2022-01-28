@@ -33,12 +33,16 @@ file(
     ${pmdk_SOURCE_DIR}/libpmem2/x86_64/init.c
     ${pmdk_SOURCE_DIR}/libpmem2/x86_64/cpu.c
     ${pmdk_SOURCE_DIR}/libpmem2/x86_64/memcpy/memcpy_nt_avx.c
+    ${pmdk_SOURCE_DIR}/libpmem2/x86_64/memcpy/memcpy_nt_avx512f.c
     ${pmdk_SOURCE_DIR}/libpmem2/x86_64/memcpy/memcpy_nt_sse2.c
     ${pmdk_SOURCE_DIR}/libpmem2/x86_64/memset/memset_nt_avx.c
+    ${pmdk_SOURCE_DIR}/libpmem2/x86_64/memset/memset_nt_avx512f.c
     ${pmdk_SOURCE_DIR}/libpmem2/x86_64/memset/memset_nt_sse2.c
     ${pmdk_SOURCE_DIR}/libpmem2/x86_64/memcpy/memcpy_t_avx.c
+    ${pmdk_SOURCE_DIR}/libpmem2/x86_64/memcpy/memcpy_t_avx512f.c
     ${pmdk_SOURCE_DIR}/libpmem2/x86_64/memcpy/memcpy_t_sse2.c
     ${pmdk_SOURCE_DIR}/libpmem2/x86_64/memset/memset_t_avx.c
+    ${pmdk_SOURCE_DIR}/libpmem2/x86_64/memset/memset_t_avx512f.c
     ${pmdk_SOURCE_DIR}/libpmem2/x86_64/memset/memset_t_sse2.c
     ${pmdk_SOURCE_DIR}/core/alloc.c
     ${pmdk_SOURCE_DIR}/core/fs_posix.c
@@ -51,32 +55,10 @@ file(
     ${pmdk_SOURCE_DIR}/core/util_posix.c
 )
 
-include(CheckCXXSourceCompiles)
-check_cxx_source_compiles("
-#include <immintrin.h>
-#include <stdint.h>
-int main(){ uint64_t v[8]; __m512i zmm0 = _mm512_loadu_si512((__m512i *)&v); return 0;}
-" AVX512F_AVAILABLE)
-
-if (AVX512F_AVAILABLE)
-    list(
-        APPEND libpmem2_SRC
-        ${pmdk_SOURCE_DIR}/libpmem2/x86_64/memcpy/memcpy_nt_avx512f.c
-        ${pmdk_SOURCE_DIR}/libpmem2/x86_64/memset/memset_nt_avx512f.c
-        ${pmdk_SOURCE_DIR}/libpmem2/x86_64/memcpy/memcpy_t_avx512f.c
-        ${pmdk_SOURCE_DIR}/libpmem2/x86_64/memset/memset_t_avx512f.c
-    )
-endif ()
-
 add_library(pmem2 STATIC ${libpmem2_SRC})
 set_property(TARGET pmem2 PROPERTY POSITION_INDEPENDENT_CODE ON)
-target_compile_options(pmem2 PRIVATE -march=native)
-target_compile_definitions(pmem2 PRIVATE -DSRCVERSION="0.2")
-if (AVX512F_AVAILABLE)
-    target_compile_definitions(pmem2 PRIVATE -DAVX512F_AVAILABLE=1)
-else ()
-    target_compile_definitions(pmem2 PRIVATE -DAVX512F_AVAILABLE=0)
-endif ()
+target_compile_options(pmem2 PRIVATE -mavx512f)
+target_compile_definitions(pmem2 PRIVATE -DSRCVERSION="0.2" -DAVX512F_AVAILABLE=1)
 target_include_directories(
     pmem2
     PUBLIC ${pmdk_SOURCE_DIR}

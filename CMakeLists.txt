@@ -19,6 +19,7 @@ add_library(ulayfs SHARED
     src/log.h src/log.cpp
     src/mtable.h src/mtable.cpp
     src/offset.h src/offset.cpp
+    src/persist.h
     src/posix.h src/posix.cpp
     src/convert.h
     src/tbb.h
