@@ -71,7 +71,7 @@ class TxMgr {
   [[nodiscard]] pmem::TxEntry get_entry_from_block(
       TxEntryIdx idx, pmem::TxBlock* tx_block) const {
     assert(idx.local_idx <
-           (idx.block_idx == 0 ? NUM_INLINE_TX_ENTRY : NUM_TX_ENTRY));
+           (idx.block_idx == 0 ? NUM_INLINE_TX_ENTRY : NUM_TX_ENTRY_PER_BLOCK));
     if (idx.block_idx == 0) return meta->get_tx_entry(idx.local_idx);
     return tx_block->get(idx.local_idx);
   }

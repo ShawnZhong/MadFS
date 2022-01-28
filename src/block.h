@@ -28,7 +28,7 @@ class BaseBlock {
 };
 
 class TxBlock : public BaseBlock {
-  std::atomic<TxEntry> tx_entries[NUM_TX_ENTRY];
+  std::atomic<TxEntry> tx_entries[NUM_TX_ENTRY_PER_BLOCK];
   // next is placed after tx_entires so that it could be flushed with tx_entries
   std::atomic<LogicalBlockIdx> next;
   // seq is used to construct total order between tx entries, so it must
@@ -40,7 +40,7 @@ class TxBlock : public BaseBlock {
 
  public:
   TxLocalIdx find_tail(TxLocalIdx hint = 0) const {
-    return TxEntry::find_tail<NUM_TX_ENTRY>(tx_entries, hint);
+    return TxEntry::find_tail<NUM_TX_ENTRY_PER_BLOCK>(tx_entries, hint);
   }
 
   TxEntry try_append(TxEntry entry, TxLocalIdx idx) {
@@ -53,7 +53,7 @@ class TxBlock : public BaseBlock {
   }
 
   [[nodiscard]] TxEntry get(TxLocalIdx idx) const {
-    assert(idx >= 0 && idx < NUM_TX_ENTRY);
+    assert(idx >= 0 && idx < NUM_TX_ENTRY_PER_BLOCK);
     return tx_entries[idx].load(std::memory_order_acquire);
   }
 
@@ -83,7 +83,7 @@ class TxBlock : public BaseBlock {
    */
   void flush_tx_block(TxLocalIdx begin_idx = 0) {
     persist_unfenced(&tx_entries[begin_idx],
-                     sizeof(TxEntry) * (NUM_TX_ENTRY - begin_idx) +
+                     sizeof(TxEntry) * (NUM_TX_ENTRY_PER_BLOCK - begin_idx) +
                          2 * sizeof(LogicalBlockIdx));
   }
 

@@ -3,8 +3,6 @@
 #include <cstdint>
 #include <limits>
 
-#include "idx.h"
-
 namespace ulayfs {
 /*
  * hardware
@@ -30,13 +28,17 @@ constexpr static uint32_t PREALLOC_SIZE = 1 * GROW_UNIT_SIZE;
 constexpr static uint32_t NUM_BLOCKS_PER_GROW = GROW_UNIT_SIZE >> BLOCK_SHIFT;
 
 /*
+ * block index
+ */
+constexpr static uint16_t VIRTUAL_BLOCK_IDX_SIZE = 4;
+constexpr static uint16_t LOGICAL_BLOCK_IDX_SIZE = 4;
+
+/*
  * tx entry
  */
 constexpr static uint16_t TX_ENTRY_SIZE = 8;
-constexpr static uint16_t NUM_TX_ENTRY =
-    (BLOCK_SIZE - 2 * sizeof(LogicalBlockIdx)) / TX_ENTRY_SIZE;
-static_assert(NUM_TX_ENTRY - 1 <= std::numeric_limits<TxLocalIdx>::max(),
-              "NUM_TX_ENTRY - 1 should be representable with TxLocalIdx");
+constexpr static uint16_t NUM_TX_ENTRY_PER_BLOCK =
+    (BLOCK_SIZE - 2 * LOGICAL_BLOCK_IDX_SIZE) / TX_ENTRY_SIZE;
 
 // inline data structure count in meta block
 constexpr static uint16_t NUM_TX_ENTRY_PER_CL = CACHELINE_SIZE / TX_ENTRY_SIZE;
@@ -60,9 +62,6 @@ constexpr static uint64_t BITMAP_CAPACITY_IN_BYTES = BITMAP_CAPACITY
 // total number of bitmaps in DRAM
 // TODO: enable dynamic growing of bitmap
 constexpr static uint16_t NUM_BITMAP_PER_BLOCK = BLOCK_SIZE / BITMAP_SIZE;
-static_assert(
-    NUM_BITMAP_PER_BLOCK - 1 <= std::numeric_limits<BitmapIdx>::max(),
-    "NUM_BITMAP_PER_BLOCK - 1 should be representable with BitmapIdx");
 
 // we use one hugepage of bitmap, which is sufficient for a 64GB file
 // TODO: extend bitmap dynamically

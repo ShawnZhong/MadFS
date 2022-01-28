@@ -7,7 +7,7 @@
 
 using ulayfs::BLOCK_SIZE;
 using ulayfs::NUM_INLINE_TX_ENTRY;
-using ulayfs::NUM_TX_ENTRY;
+using ulayfs::NUM_TX_ENTRY_PER_BLOCK;
 
 struct TestOpt {
   int num_bytes_per_iter = BLOCK_SIZE;
@@ -104,7 +104,7 @@ int main() {
   test({.num_bytes_per_iter = BLOCK_SIZE - 8, .init_offset = 8});
   test({.num_bytes_per_iter = BLOCK_SIZE / 2, .init_offset = BLOCK_SIZE / 2});
   test({.num_bytes_per_iter = 8,
-        .num_iter = NUM_INLINE_TX_ENTRY + NUM_TX_ENTRY + 1});
+        .num_iter = NUM_INLINE_TX_ENTRY + NUM_TX_ENTRY_PER_BLOCK + 1});
   test({.num_bytes_per_iter = 8, .num_iter = BLOCK_SIZE / 8});
   test({.num_bytes_per_iter = 8, .num_iter = BLOCK_SIZE * 2 / 8});
   test({.num_bytes_per_iter = 9, .num_iter = BLOCK_SIZE / 9});

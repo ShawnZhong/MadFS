@@ -6,6 +6,8 @@
 #include <iostream>
 #include <type_traits>
 
+#include "const.h"
+
 namespace ulayfs {
 
 enum class IdxType { LOGICAL_BLOCK_IDX, VIRTUAL_BLOCK_IDX };
@@ -90,7 +92,6 @@ using VirtualBlockIdx = BaseIdx<uint32_t, IdxType::VIRTUAL_BLOCK_IDX>;
 
 // each bit in the bitmap corresponds to a logical block
 using BitmapIdx = int32_t;
-// TODO: this may be helpful for dynamically growing DRAM bitmap
 
 // local index within a block; this can be -1 to indicate an error
 using TxLocalIdx = int32_t;
@@ -98,14 +99,24 @@ using TxLocalIdx = int32_t;
 // Note: LogLocalOffset will persist and the valid range is [0, 4096]
 using LogLocalOffset = uint32_t;
 
+static_assert(sizeof(LogicalBlockIdx) == LOGICAL_BLOCK_IDX_SIZE,
+              "LogicalBlockIdx should be of size LOGICAL_BLOCK_IDX_SIZE");
+static_assert(sizeof(VirtualBlockIdx) == VIRTUAL_BLOCK_IDX_SIZE,
+              "VirtualBlockIdx should be of size VIRTUAL_BLOCK_IDX_SIZE");
 static_assert(std::is_standard_layout<LogicalBlockIdx>::value,
               "LogicalBlockIdx must be a standard layout type");
 static_assert(std::is_standard_layout<VirtualBlockIdx>::value,
               "VirtualBlockIdx must be a standard layout type");
 static_assert(std::is_trivial<LogicalBlockIdx>::value,
-              "LogicalBlockIdx must be a trival type");
+              "LogicalBlockIdx must be a trivial type");
 static_assert(std::is_trivial<VirtualBlockIdx>::value,
-              "VirtualBlockIdx must be a trival type");
+              "VirtualBlockIdx must be a trivial type");
+static_assert(NUM_TX_ENTRY_PER_BLOCK - 1 <=
+                  std::numeric_limits<TxLocalIdx>::max(),
+              "NUM_TX_ENTRY - 1 should be representable with TxLocalIdx");
+static_assert(
+    NUM_BITMAP_PER_BLOCK - 1 <= std::numeric_limits<BitmapIdx>::max(),
+    "NUM_BITMAP_PER_BLOCK - 1 should be representable with BitmapIdx");
 
 // this ensure 32-bit idx won't overflow
 #define BLOCK_IDX_TO_SIZE(idx) \
@@ -146,6 +157,9 @@ struct TxEntryIdx {
       : block_idx(block_idx), local_idx(local_idx) {}
 
   [[nodiscard]] bool is_inline() const { return block_idx == 0; }
+  [[nodiscard]] uint16_t get_capacity() const {
+    return is_inline() ? NUM_INLINE_TX_ENTRY : NUM_TX_ENTRY_PER_BLOCK;
+  }
 
   bool operator==(const TxEntryIdx& rhs) const {
     return block_idx == rhs.block_idx && local_idx == rhs.local_idx;
