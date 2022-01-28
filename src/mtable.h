@@ -3,7 +3,6 @@
 #include <sys/mman.h>
 #include <tbb/concurrent_vector.h>
 
-#include <bit>
 #include <cerrno>
 #include <cstddef>
 #include <cstdint>
@@ -16,6 +15,7 @@
 #include "const.h"
 #include "idx.h"
 #include "posix.h"
+#include "tbb.h"
 #include "utils.h"
 
 namespace ulayfs::dram {
@@ -45,7 +45,7 @@ class MemTable {
 
   // map a chunk_idx to addr, where chunk_idx =
   // (lidx - first_region_num_blocks) >> GROW_UNIT_IN_BLOCK_SHIFT
-  tbb::concurrent_vector<pmem::Block*> table;
+  tbb::concurrent_vector<pmem::Block*, zero_allocator<pmem::Block*>> table;
 
   // a vector of <addr, length> pairs
   tbb::concurrent_vector<std::tuple<void*, size_t>> mmap_regions;
@@ -84,9 +84,7 @@ class MemTable {
       pmem::Block* chunk_addr = table[chunk_idx];
       if (chunk_addr) return chunk_addr + chunk_local_idx;
     } else {
-      int next_pow2 =
-          1 << (sizeof(chunk_idx) * 8 - std::countl_zero(chunk_idx));
-      table.resize(next_pow2);
+      table.grow_to_at_least(next_pow2(chunk_idx));
     }
 
     // ensure this idx has real blocks allocated; do allocation if not

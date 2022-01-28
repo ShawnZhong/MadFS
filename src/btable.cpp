@@ -1,7 +1,6 @@
 #include "btable.h"
 
 #include <atomic>
-#include <bit>
 #include <cassert>
 #include <cstddef>
 #include <cstdint>
@@ -60,11 +59,7 @@ uint64_t BlkTable::update(bool do_alloc, bool init_bitmap) {
 
 void BlkTable::grow_to_fit(VirtualBlockIdx idx) {
   if (table.size() > idx.get()) return;
-  // countl_zero counts the number of leading 0-bits
-  // if idx is already a pow of 2, it will be rounded to the next pow of 2
-  // so that the table has enough space to hold this index
-  int next_pow2 = 1 << (sizeof(idx) * 8 - std::countl_zero(idx.get()));
-  table.grow_to_at_least(next_pow2);
+  table.grow_to_at_least(next_pow2(idx.get()));
 }
 
 void BlkTable::apply_tx(pmem::TxEntryIndirect tx_entry, LogMgr* log_mgr,
