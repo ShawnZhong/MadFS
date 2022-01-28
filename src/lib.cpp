@@ -193,7 +193,7 @@ off64_t lseek64(int fd, off64_t offset, int whence) {
 
 int fsync(int fd) {
   if (auto file = get_file(fd)) {
-    DEBUG("ulayfs::fsync(%d)", fd);
+    DEBUG("ulayfs::fsync(%s)", file->path);
     return file->fsync();
   } else {
     DEBUG("posix::fsync(%d)", fd);

@@ -7,7 +7,7 @@
 #include "common.h"
 
 constexpr auto NUM_THREAD = 32;
-constexpr auto NUM_ITER_PER_THREAD = 10;
+constexpr auto NUM_ITER_PER_THREAD = 100;
 constexpr auto BYTES_PER_ITER = 4;
 
 int main() {

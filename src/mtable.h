@@ -91,9 +91,8 @@ class MemTable {
     grow_to_fit(idx);
 
     LogicalBlockIdx chunk_begin_lidx = idx & ~GROW_UNIT_IN_BLOCK_MASK;
-    pmem::Block* chunk_addr = mmap_file(
-        GROW_UNIT_SIZE, static_cast<off_t>(BLOCK_IDX_TO_SIZE(chunk_begin_lidx)),
-        MAP_POPULATE);
+    auto offset = static_cast<off_t>(BLOCK_IDX_TO_SIZE(chunk_begin_lidx));
+    pmem::Block* chunk_addr = mmap_file(GROW_UNIT_SIZE, offset, MAP_POPULATE);
     table[chunk_idx] = chunk_addr;
     return chunk_addr + chunk_local_idx;
   }

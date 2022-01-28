@@ -29,7 +29,7 @@ endif ()
 
 if (${CMAKE_BUILD_TYPE} STREQUAL "tsan")
     set(CMAKE_CXX_FLAGS_TSAN
-        "${CMAKE_CXX_FLAGS_DEBUG} -fsanitize=thread" CACHE STRING
+        "${CMAKE_CXX_FLAGS_DEBUG} -fsanitize=thread -fno-omit-frame-pointer" CACHE STRING
         "Flags used by the C++ compiler during ThreadSanitizer build." FORCE)
 endif ()
 
