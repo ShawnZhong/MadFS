@@ -6,6 +6,7 @@
 #include <cstdint>
 #include <ostream>
 
+#include "const.h"
 #include "idx.h"
 #include "utils.h"
 

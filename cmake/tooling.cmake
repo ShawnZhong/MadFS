@@ -42,11 +42,6 @@ if (${CMAKE_BUILD_TYPE} STREQUAL "pmemcheck")
     FetchContent_Declare(pmemcheck URL https://github.com/ShawnZhong/pmemcheck/releases/download/v3.17/pmemcheck.tgz)
     FetchContent_MakeAvailable(pmemcheck)
     include_directories(${pmemcheck_SOURCE_DIR}/include)
-
-    if (${ULAYFS_PERSIST} STREQUAL "PMDK")
-        message(WARNING "pmemcheck is not compatible with ULAYFS_PERSIST == PMDK. Use native instead.")
-        set(ULAYFS_PERSIST "NATIVE")
-    endif ()
 endif ()
 
 
