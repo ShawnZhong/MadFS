@@ -1,5 +1,6 @@
 #pragma once
 
+#include <bit>
 #include <cassert>
 #include <chrono>
 #include <cstdio>
@@ -88,4 +89,14 @@ struct FileInitException : public std::exception {
 };
 
 struct FatalException : public std::exception {};
+
+/**
+ * @return the next power of 2 greater than x. If x is already a power of 2,
+ * the next power of 2 is returned.
+ */
+template <typename T>
+T next_pow2(T x) {
+  // countl_zero counts the number of leading 0-bits in x
+  return T(1) << (sizeof(T) * 8 - std::countl_zero(x));
+}
 }  // namespace ulayfs
