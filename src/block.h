@@ -39,7 +39,7 @@ class TxBlock : public BaseBlock {
   uint32_t tx_seq;
 
  public:
-  TxLocalIdx find_tail(TxLocalIdx hint = 0) const {
+  [[nodiscard]] TxLocalIdx find_tail(TxLocalIdx hint = 0) const {
     return TxEntry::find_tail<NUM_TX_ENTRY_PER_BLOCK>(tx_entries, hint);
   }
 
@@ -297,7 +297,7 @@ class MetaBlock : public BaseBlock {
   /*
    * Methods for inline metadata
    */
-  TxLocalIdx find_tail(TxLocalIdx hint = 0) const {
+  [[nodiscard]] TxLocalIdx find_tail(TxLocalIdx hint = 0) const {
     return TxEntry::find_tail<NUM_INLINE_TX_ENTRY>(inline_tx_entries, hint);
   }
 
@@ -325,7 +325,6 @@ class MetaBlock : public BaseBlock {
   }
 };
 
-// TODO: we no longer have bitmap_block in PMEM
 union Block {
   MetaBlock meta_block;
   TxBlock tx_block;

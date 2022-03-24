@@ -97,7 +97,7 @@ using BitmapIdx = int32_t;
 using TxLocalIdx = int32_t;
 
 // Note: LogLocalOffset will persist and the valid range is [0, 4096]
-using LogLocalOffset = uint32_t;
+using LogLocalOffset = uint16_t;
 
 static_assert(sizeof(LogicalBlockIdx) == LOGICAL_BLOCK_IDX_SIZE,
               "LogicalBlockIdx should be of size LOGICAL_BLOCK_IDX_SIZE");
@@ -118,7 +118,7 @@ static_assert(
     NUM_BITMAP_PER_BLOCK - 1 <= std::numeric_limits<BitmapIdx>::max(),
     "NUM_BITMAP_PER_BLOCK - 1 should be representable with BitmapIdx");
 
-// this ensure 32-bit idx won't overflow
+// this ensures 32-bit idx won't overflow
 #define BLOCK_IDX_TO_SIZE(idx) \
   (static_cast<uint64_t>((idx).get()) << BLOCK_SHIFT)
 #define BLOCK_NUM_TO_SIZE(num) (static_cast<uint64_t>((num)) << BLOCK_SHIFT)
@@ -176,7 +176,7 @@ static_assert(sizeof(TxEntryIdx) == 8, "TxEntryIdx must be 64 bits");
 static_assert(std::is_standard_layout<TxEntryIdx>::value,
               "TxEntryIdx must be a standard layout type");
 static_assert(std::is_trivial<TxEntryIdx>::value,
-              "TxEntryIdx must be a trival type");
+              "TxEntryIdx must be a trivial type");
 
 /**
  * Due to some unfortunate clang-implementation problems,

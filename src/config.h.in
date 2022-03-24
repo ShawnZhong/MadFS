@@ -50,7 +50,7 @@ constexpr static struct BuildOptions {
 #endif
 
 #ifdef __AVX512F__
-  constexpr static bool support_avx512f = true && !use_pmemcheck;
+  constexpr static bool support_avx512f = !use_pmemcheck;
 #else
   constexpr static bool support_avx512f = false;
 #endif

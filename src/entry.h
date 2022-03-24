@@ -36,17 +36,17 @@ struct LogEntry {
   // `next` is only meaningful if this bit is set
   bool has_next : 1;
   // whether the next entry is in the same block.
-  // if true, `next` shall be interpretted as `local_offset`.
-  // otherwise, `next` shall be interpretted as `block_idx`.
+  // if true, `next` shall be interpreted as `local_offset`.
+  // otherwise, `next` shall be interpreted as `block_idx`.
   bool is_next_same_block : 1;
 
   // the leftover bytes in the last block that does not below to this file.
-  // this happens in an block-unaligned append where the not all bytes in the
+  // this happens in a block-unaligned append where the not all bytes in the
   // last block belongs to this file.
   // the maximum number of leftover bytes is BLOCK_SIZE - 1.
   uint16_t leftover_bytes : 12;
 
-  // the number of blocks describled in this log entry
+  // the number of blocks described in this log entry
   // every 64 blocks corresponds to one entry in body_lidxs
   uint16_t num_blocks;
 
@@ -60,7 +60,7 @@ struct LogEntry {
 
   // this corresponds to the size of all fields except the varying
   // variable-length array `begin_lidxs`
-  constexpr static uint32_t fixed_size = 12;
+  constexpr static uint32_t FIXED_SIZE = 12;
 
   /*** some helper functions ***/
   [[nodiscard]] constexpr uint32_t get_lidxs_len() const {
@@ -75,8 +75,8 @@ struct LogEntry {
   }
 
   void persist() {
-    persist_unfenced(this,
-                     fixed_size + sizeof(LogicalBlockIdx) * get_lidxs_len());
+    auto size = FIXED_SIZE + sizeof(LogicalBlockIdx) * get_lidxs_len();
+    persist_unfenced(this, size);
   }
   // more advanced iteration helpers are in LogMgr, since they require MemTable
 
@@ -92,8 +92,8 @@ struct LogEntry {
   }
 };
 
-static_assert(sizeof(LogEntry) == LogEntry::fixed_size,
-              "LogEntry::fixed_size must match its actual size");
+static_assert(sizeof(LogEntry) == LogEntry::FIXED_SIZE,
+              "LogEntry::FIXED_SIZE must match its actual size");
 
 /**
  * Points to the head of a linked list of LogEntry
