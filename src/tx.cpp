@@ -449,14 +449,14 @@ ssize_t TxMgr::ReadTx::do_read() {
 
   // first handle the first block (which might not be full block)
   curr_block = file->vidx_to_addr_ro(begin_vidx);
-  memcpy(buf, curr_block->data_ro() + first_block_overlap_size,
-         first_block_size);
+  dram::memcpy(buf, curr_block->data_ro() + first_block_overlap_size,
+               first_block_size);
   buf_offset = first_block_size;
 
   // then handle middle full blocks (which might not exist)
   for (curr_vidx = begin_vidx + 1; curr_vidx < end_vidx - 1; ++curr_vidx) {
     curr_block = file->vidx_to_addr_ro(curr_vidx);
-    memcpy(buf + buf_offset, curr_block->data_ro(), BLOCK_SIZE);
+    dram::memcpy(buf + buf_offset, curr_block->data_ro(), BLOCK_SIZE);
     buf_offset += BLOCK_SIZE;
   }
 
@@ -464,7 +464,7 @@ ssize_t TxMgr::ReadTx::do_read() {
   if (begin_vidx != end_vidx - 1) {
     assert(curr_vidx == end_vidx - 1);
     curr_block = file->vidx_to_addr_ro(curr_vidx);
-    memcpy(buf + buf_offset, curr_block->data_ro(), count - buf_offset);
+    dram::memcpy(buf + buf_offset, curr_block->data_ro(), count - buf_offset);
   }
 
 redo:
@@ -485,8 +485,8 @@ redo:
     redo_lidx = redo_image[0];
     if (redo_lidx != 0) {
       curr_block = file->lidx_to_addr_ro(redo_lidx);
-      memcpy(buf, curr_block->data_ro() + first_block_overlap_size,
-             first_block_size);
+      dram::memcpy(buf, curr_block->data_ro() + first_block_overlap_size,
+                   first_block_size);
       redo_image[0] = 0;
     }
     buf_offset = first_block_size;
@@ -496,7 +496,7 @@ redo:
       redo_lidx = redo_image[curr_vidx - begin_vidx];
       if (redo_lidx != 0) {
         curr_block = file->lidx_to_addr_ro(redo_lidx);
-        memcpy(buf + buf_offset, curr_block->data_ro(), BLOCK_SIZE);
+        dram::memcpy(buf + buf_offset, curr_block->data_ro(), BLOCK_SIZE);
         redo_image[curr_vidx - begin_vidx] = 0;
       }
       buf_offset += BLOCK_SIZE;
@@ -507,7 +507,8 @@ redo:
       redo_lidx = redo_image[curr_vidx - begin_vidx];
       if (redo_lidx != 0) {
         curr_block = file->lidx_to_addr_ro(redo_lidx);
-        memcpy(buf + buf_offset, curr_block->data_ro(), count - buf_offset);
+        dram::memcpy(buf + buf_offset, curr_block->data_ro(),
+                     count - buf_offset);
         redo_image[curr_vidx - begin_vidx] = 0;
       }
     }
