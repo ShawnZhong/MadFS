@@ -3,9 +3,6 @@ name: Bench
 on:
   pull_request:
 
-env:
-  build_type: release
-
 jobs:
   micro:
     name: Microbenchmarks
@@ -14,13 +11,13 @@ jobs:
       - uses: actions/checkout@v2
 
       - name: micro_st
-        run: BENCH_NUM_ITER=10 ./run micro_st ${{env.build_type}}
+        run: BENCH_NUM_ITER=10 ./run micro_st
 
       - name: micro_mt
-        run: BENCH_NUM_ITER=10 ./run micro_mt ${{env.build_type}}
+        run: BENCH_NUM_ITER=10 ./run micro_mt
 
       - name: micro_meta
-        run: BENCH_NUM_ITER=10 ./run micro_meta ${{env.build_type}}
+        run: BENCH_NUM_ITER=10 ./run micro_meta
 
   leveldb:
     name: LevelDB
@@ -29,22 +26,22 @@ jobs:
       - uses: actions/checkout@v2
 
       - name: leveldb_tests
-        run: ./run leveldb_tests ${{env.build_type}}
+        run: ./run leveldb_tests
 
       - name: leveldb_ycsb
         run: |
-          ./run leveldb_ycsb ${{env.build_type}} -p="-f bench/ycsb-traces/a-load.txt"
-          ./run leveldb_ycsb ${{env.build_type}} -p="-f bench/ycsb-traces/a-run.txt"
-          ./run leveldb_ycsb ${{env.build_type}} -p="-f bench/ycsb-traces/b-load.txt"
-          ./run leveldb_ycsb ${{env.build_type}} -p="-f bench/ycsb-traces/b-run.txt"
-          ./run leveldb_ycsb ${{env.build_type}} -p="-f bench/ycsb-traces/c-load.txt"
-          ./run leveldb_ycsb ${{env.build_type}} -p="-f bench/ycsb-traces/c-run.txt"
-          ./run leveldb_ycsb ${{env.build_type}} -p="-f bench/ycsb-traces/d-load.txt"
-          ./run leveldb_ycsb ${{env.build_type}} -p="-f bench/ycsb-traces/d-run.txt"
-          ./run leveldb_ycsb ${{env.build_type}} -p="-f bench/ycsb-traces/e-load.txt"
-          ./run leveldb_ycsb ${{env.build_type}} -p="-f bench/ycsb-traces/e-run.txt"
-          ./run leveldb_ycsb ${{env.build_type}} -p="-f bench/ycsb-traces/f-load.txt"
-          ./run leveldb_ycsb ${{env.build_type}} -p="-f bench/ycsb-traces/f-run.txt"
+          ./run leveldb_ycsb -- -f bench/ycsb-traces/a-load.txt
+          ./run leveldb_ycsb -- -f bench/ycsb-traces/a-run.txt
+          ./run leveldb_ycsb -- -f bench/ycsb-traces/b-load.txt
+          ./run leveldb_ycsb -- -f bench/ycsb-traces/b-run.txt
+          ./run leveldb_ycsb -- -f bench/ycsb-traces/c-load.txt
+          ./run leveldb_ycsb -- -f bench/ycsb-traces/c-run.txt
+          ./run leveldb_ycsb -- -f bench/ycsb-traces/d-load.txt
+          ./run leveldb_ycsb -- -f bench/ycsb-traces/d-run.txt
+          ./run leveldb_ycsb -- -f bench/ycsb-traces/e-load.txt
+          ./run leveldb_ycsb -- -f bench/ycsb-traces/e-run.txt
+          ./run leveldb_ycsb -- -f bench/ycsb-traces/f-load.txt
+          ./run leveldb_ycsb -- -f bench/ycsb-traces/f-run.txt
 
   tpcc:
     name: SQLite
@@ -54,7 +51,7 @@ jobs:
 
       - name: run
         run: |
-          LD_PRELOAD=./build-${{env.build_type}}/libulayfs.so \
+          LD_PRELOAD=./build-release/libulayfs.so \
             sqlite3 tpcc.db '.read bench/tpcc.sql'
-          ./run tpcc_load ${{env.build_type}} -p="-w 1"
-          ./run tpcc_start ${{env.build_type}} -p="-w 4 -c 1 -t 10"
+          ./run tpcc_load -- -w 1
+          ./run tpcc_start -- -w 4 -c 1 -t 10

@@ -23,21 +23,30 @@
 - <details>
   <summary>Configure persistent memory</summary>
 
-  ```shell
-  # replace pmem0 with the name of your pmem device
-  PMEM="pmem0"
-  
-  # create ext4 filesystem
-  sudo mkfs.ext4 /dev/${PMEM}
-  
-  # mount the filesystem
-  sudo mkdir -p /mnt/${PMEM} 
-  sudo mount -o dax /dev/${PMEM} /mnt/${PMEM} 
-  sudo mount -v | grep /mnt/${PMEM}
-  
-  # change permission
-  sudo chmod a+w /mnt/${PMEM}
-  ```
+    - Initialize namespaces (optional)
+      ```shell
+      sudo ndctl destroy-namespace all --region=region0 --force # remove existing namespaces
+      sudo ndctl create-namespace --region=region0 --size=20G   # create new namespace
+      ndctl list --region=0 --namespaces --human --idle         # list namespaces
+      ```
+
+    - Use `/dev/pmem0` to mount ext4-DAX at `/mnt/pmem0-ext4-dax`
+      ```shell
+      sudo mkfs.ext4 /dev/pmem0               # create filesystem
+      sudo mkdir -p /mnt/pmem0-ext4-dax       # create mount point
+      sudo mount -o dax /dev/pmem0 /mnt/pmem0-ext4-dax # mount filesystem
+      sudo chmod a+w /mnt/pmem0-ext4-dax      # make the mount point writable
+      mount -v | grep /mnt/pmem0-ext4-dax     # check mount status
+      ```
+
+    - Use `/dev/pmem0.1` to mount NOVA at `/mnt/pmem0-nova` (optional)
+      ```shell
+      sudo modprobe nova                       # load NOVA module
+      sudo mkdir -p /mnt/pmem0-nova            # create mount point
+      sudo mount -t NOVA -o init /dev/pmem0.1 /mnt/pmem0-nova # mount filesystem
+      sudo chmod a+w /mnt/pmem0-nova           # make the mount point writable
+      mount -v | grep /mnt/pmem0-nova          # check mount status
+      ```
 
   </details>
 
@@ -46,7 +55,7 @@
 - Build the uLayFS shared library
 
   ```shell
-  make release BUILD_TARGETS="ulayfs"
+  make BUILD_TARGETS="ulayfs"
   ```
 
 - Run your program with uLayFS
@@ -57,9 +66,9 @@
 - Run benchmarks
 
   ```shell
-  ./scripts/bench_micro st       # run and plot single-threaded microbenchmark
-  ./scripts/bench_micro mt       # run and plot multi-threaded microbenchmark
-  ./scripts/bench_micro meta     # run and plot microbenchmark with metadata
+  ./scripts/bench st       # run and plot single-threaded microbenchmark
+  ./scripts/bench mt       # run and plot multi-threaded microbenchmark
+  ./scripts/bench meta     # run and plot microbenchmark with metadata
   ./scripts/bench_ycsb           # run YCSB benchmark
   ```
 
@@ -73,7 +82,7 @@
   #             [BUILD_TARGETS="target1 target2 ..."] 
   #             [BUILD_ARGS="..."]
   
-  # build the uLayFS shared library and tests in debug mode
+  # build the uLayFS shared library and tests
   make
   ```
 

@@ -1,7 +1,7 @@
 import logging
 import pprint
-import shutil
 
+from fs import process_cmd
 from utils import get_timestamp, system, root_dir
 
 logging.basicConfig(level=logging.INFO)
@@ -20,27 +20,11 @@ build_types = [
 ]
 
 
-def is_ulayfs_linked(prog_path):
-    import subprocess
-    import re
-
-    output = subprocess.check_output(['ldd', prog_path]).decode("utf-8")
-    for line in output.splitlines():
-        match = re.match(r'\t(.*) => (.*) \(0x', line)
-        if match and match.group(1) == 'libulayfs.so':
-            logger.info(f"`{prog_path}` is already linked with uLayFS ({match.group(2)})")
-            return True
-    logger.info(f"`{prog_path}` is not linked with uLayFS by default. Need to run with `env LD_PRELOAD=...`")
-    return False
-
-
 class Runner:
-    def __init__(self, name, build_type=None, result_dir=None):
+    def __init__(self, name, build_type="release", result_dir=None):
         self.is_micro = name.startswith("micro")
         self.is_bench = any(name.startswith(x) for x in ["micro", "leveldb", "tpcc"])
 
-        if build_type is None:
-            build_type = "release" if self.is_bench else "debug"
         if result_dir is None:
             result_dir = root_dir / "results" / name / build_type / get_timestamp()
 
@@ -49,7 +33,6 @@ class Runner:
         self.build_path = root_dir / f"build-{build_type}"
         self.result_dir = result_dir
         self.prog_path = None
-        self.ulayfs_path = None
 
         self.result_dir.mkdir(parents=True, exist_ok=True)
 
@@ -74,17 +57,14 @@ class Runner:
             pprint.pprint(locals(), stream=fout)
         system(f"cmake -LA -N {self.build_path} >> {config_log_path}")
 
-        self.ulayfs_path = self.build_path / "libulayfs.so"
         self.prog_path = self.build_path / cmake_target
 
     def run(
             self,
             cmd=None,
-            additional_args="",
-            load_ulayfs=True,
-            numa=0,
-            pmem_path=None,
+            additional_args=None,
             prog_log_name="prog.log",
+            fs="uLayFS",
     ):
         if cmd is None:
             assert self.prog_path is not None
@@ -95,22 +75,8 @@ class Runner:
             cmd += f" --benchmark_counters_tabular=true "
             cmd += f" --benchmark_out={json_path} "
 
-        cmd = f"{cmd} {additional_args}"
-
-        # setup envs
-        env = {}
-        if load_ulayfs and not is_ulayfs_linked(self.prog_path):
-            assert self.ulayfs_path is not None
-            env["LD_PRELOAD"] = self.ulayfs_path
-        if pmem_path:
-            env["PMEM_PATH"] = pmem_path
-        if env:
-            cmd = f"env {' '.join(f'{k}={v}' for k, v in env.items())} {cmd}"
-
-        if shutil.which("numactl"):
-            cmd = f"numactl --cpunodebind={numa} --membind={numa} {cmd}"
-        else:
-            logger.warning("numactl not found, NUMA not enabled")
+        cmd = f"{cmd} {' '.join(additional_args)}" if additional_args else cmd
+        cmd = process_cmd(fs, cmd, self.build_type)
 
         # execute
         prog_log_path = self.result_dir / prog_log_name
