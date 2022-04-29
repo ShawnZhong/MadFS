@@ -40,4 +40,5 @@ if __name__ == "__main__":
     runner.run(
         additional_args=args.additional_args,
         fs=args.fs,
+        trace=args.trace,
     )

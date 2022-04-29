@@ -86,6 +86,11 @@ def add_common_args(argparser):
         choices=build_types,
     )
     argparser.add_argument(
+        "--trace",
+        action="store_true",
+        help="Run with tracing enabled",
+    )
+    argparser.add_argument(
         "additional_args",
         nargs="*",
         help="additional arguments to be passed to the program during execution",

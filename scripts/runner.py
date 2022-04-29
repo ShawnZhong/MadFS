@@ -65,6 +65,7 @@ class Runner:
             additional_args=None,
             prog_log_name="prog.log",
             fs="uLayFS",
+            trace=False,
     ):
         if cmd is None:
             assert self.prog_path is not None
@@ -84,6 +85,8 @@ class Runner:
             self._run_pmemcheck(cmd, log_path=prog_log_path)
         elif self.build_type == "profile":
             self._run_profile(cmd, log_path=prog_log_path)
+        elif trace:
+            self._run_trace(cmd, log_path=prog_log_path)
         else:
             system(cmd, log_path=prog_log_path)
 
@@ -124,3 +127,18 @@ class Runner:
             f"{flamegraph_dir}/flamegraph.pl > {flamegraph_output}"
         )
         logger.info(f"The flamegraph is available at `{flamegraph_output}`")
+
+    def _run_trace(self, cmd, log_path):
+        trace_output = self.result_dir / "trace.fxt"
+        prog = cmd.split(" ")[0]
+        args = cmd.split(" ")[1:]
+        # system(
+        #     f"sudo PATH=$PATH magic-trace run -trace-include-kernel -o {trace_output}"
+        #     f" {prog} -- {' '.join(args)}",
+        #     log_path=log_path,
+        # )
+        system(
+            f"magic-trace run -o {trace_output}"
+            f" {prog} -- {' '.join(args)}",
+            log_path=log_path,
+        )
