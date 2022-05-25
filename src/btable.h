@@ -112,7 +112,6 @@ class BlkTable {
  private:
   void grow_to_fit(VirtualBlockIdx idx);
 
-  // TODO: handle writev requests
   /**
    * Apply a transaction to the block table
    *

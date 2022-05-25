@@ -350,7 +350,7 @@ std::ostream& operator<<(std::ostream& out, const TxMgr& tx_mgr) {
       assert(curr_entry && curr_block);
 
       do {
-        out << "\t\t" << *curr_entry;
+        out << "\t\t" << *curr_entry << "\n";
       } while ((curr_entry = log_mgr->get_next_entry(curr_entry, curr_block)));
     }
   next:
