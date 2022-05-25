@@ -134,7 +134,7 @@ void test_stat() {
   int fd = open(filepath, O_CREAT | O_RDWR, S_IRUSR | S_IWUSR);
   assert(fd >= 0);
 
-  struct stat stat_buf{};
+  struct stat stat_buf {};
   rc = fstat(fd, &stat_buf);
   assert(rc == 0);
   assert(stat_buf.st_size == 0);
