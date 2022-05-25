@@ -422,18 +422,12 @@ bool TxMgr::Tx::handle_conflict(pmem::TxEntry curr_entry,
   return has_conflict;
 }
 
-// TODO: more fancy handle_conflict strategy
 ssize_t TxMgr::ReadTx::do_read() {
-  size_t first_block_overlap_size = offset & (BLOCK_SIZE - 1);
-  size_t first_block_size = BLOCK_SIZE - first_block_overlap_size;
+  size_t first_block_offset = offset & (BLOCK_SIZE - 1);
+  size_t first_block_size = BLOCK_SIZE - first_block_offset;
   if (first_block_size > count) first_block_size = count;
 
-  VirtualBlockIdx curr_vidx;
-  const pmem::Block* curr_block;
-  pmem::TxEntry curr_entry;
-  size_t buf_offset;
-
-  std::vector<LogicalBlockIdx>& redo_image = local_buf_image_lidxs;
+  std::vector<PhysicalBlockIdx>& redo_image = local_buf_image_lidxs;
   redo_image.clear();
   redo_image.resize(num_blocks, 0);
 
@@ -447,31 +441,34 @@ ssize_t TxMgr::ReadTx::do_read() {
     end_vidx = BLOCK_SIZE_TO_IDX(ALIGN_UP(end_offset, BLOCK_SIZE));
   }
 
-  // first handle the first block (which might not be full block)
-  curr_block = file->vidx_to_addr_ro(begin_vidx);
-  memcpy(buf, curr_block->data_ro() + first_block_overlap_size,
-         first_block_size);
-  buf_offset = first_block_size;
+  // copy the blocks
+  {
+    const char* addr = file->vidx_to_addr_ro(begin_vidx)->data_ro();
+    addr += first_block_offset;
+    size_t contiguous_bytes = first_block_size;
+    size_t buf_offset = 0;
 
-  // then handle middle full blocks (which might not exist)
-  for (curr_vidx = begin_vidx + 1; curr_vidx < end_vidx - 1; ++curr_vidx) {
-    curr_block = file->vidx_to_addr_ro(curr_vidx);
-    memcpy(buf + buf_offset, curr_block->data_ro(), BLOCK_SIZE);
-    buf_offset += BLOCK_SIZE;
-  }
-
-  // if we have multiple blocks to read
-  if (begin_vidx != end_vidx - 1) {
-    assert(curr_vidx == end_vidx - 1);
-    curr_block = file->vidx_to_addr_ro(curr_vidx);
-    memcpy(buf + buf_offset, curr_block->data_ro(), count - buf_offset);
+    for (VirtualBlockIdx vidx = begin_vidx + 1; vidx < end_vidx; ++vidx) {
+      const pmem::Block* curr_block = file->vidx_to_addr_ro(vidx);
+      if (addr + contiguous_bytes == curr_block->data_ro()) {
+        contiguous_bytes += BLOCK_SIZE;
+        continue;
+      }
+      dram::memcpy(buf + buf_offset, addr, contiguous_bytes);
+      buf_offset += contiguous_bytes;
+      contiguous_bytes = BLOCK_SIZE;
+      addr = curr_block->data_ro();
+    }
+    dram::memcpy(buf + buf_offset, addr,
+                 std::min(contiguous_bytes, count - buf_offset));
   }
 
 redo:
   while (true) {
     // check the tail is still tail
     if (!tx_mgr->handle_idx_overflow(tail_tx_idx, tail_tx_block, false)) break;
-    curr_entry = tx_mgr->get_entry_from_block(tail_tx_idx, tail_tx_block);
+    pmem::TxEntry curr_entry =
+        tx_mgr->get_entry_from_block(tail_tx_idx, tail_tx_block);
     if (!curr_entry.is_valid()) break;
 
     // then scan the log and build redo_image; if no redo needed, we are done
@@ -479,35 +476,37 @@ redo:
       break;
 
     // redo:
-    LogicalBlockIdx redo_lidx;
+    PhysicalBlockIdx redo_lidx;
 
     // first handle the first block (which might not be full block)
     redo_lidx = redo_image[0];
     if (redo_lidx != 0) {
-      curr_block = file->lidx_to_addr_ro(redo_lidx);
-      memcpy(buf, curr_block->data_ro() + first_block_overlap_size,
-             first_block_size);
+      const pmem::Block* curr_block = file->lidx_to_addr_ro(redo_lidx);
+      dram::memcpy(buf, curr_block->data_ro() + first_block_offset,
+                   first_block_size);
       redo_image[0] = 0;
     }
-    buf_offset = first_block_size;
+    size_t buf_offset = first_block_size;
 
     // then handle middle full blocks (which might not exist)
+    VirtualBlockIdx curr_vidx;
     for (curr_vidx = begin_vidx + 1; curr_vidx < end_vidx - 1; ++curr_vidx) {
       redo_lidx = redo_image[curr_vidx - begin_vidx];
       if (redo_lidx != 0) {
-        curr_block = file->lidx_to_addr_ro(redo_lidx);
-        memcpy(buf + buf_offset, curr_block->data_ro(), BLOCK_SIZE);
+        const pmem::Block* curr_block = file->lidx_to_addr_ro(redo_lidx);
+        dram::memcpy(buf + buf_offset, curr_block->data_ro(), BLOCK_SIZE);
         redo_image[curr_vidx - begin_vidx] = 0;
       }
       buf_offset += BLOCK_SIZE;
     }
 
-    // if we have multiple blocks to read
+    // last handle the last block (which might not be full block)
     if (begin_vidx != end_vidx - 1) {
       redo_lidx = redo_image[curr_vidx - begin_vidx];
       if (redo_lidx != 0) {
-        curr_block = file->lidx_to_addr_ro(redo_lidx);
-        memcpy(buf + buf_offset, curr_block->data_ro(), count - buf_offset);
+        const pmem::Block* curr_block = file->lidx_to_addr_ro(redo_lidx);
+        dram::memcpy(buf + buf_offset, curr_block->data_ro(),
+                     count - buf_offset);
         redo_image[curr_vidx - begin_vidx] = 0;
       }
     }
