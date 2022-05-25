@@ -427,7 +427,7 @@ ssize_t TxMgr::ReadTx::do_read() {
   size_t first_block_size = BLOCK_SIZE - first_block_offset;
   if (first_block_size > count) first_block_size = count;
 
-  std::vector<PhysicalBlockIdx>& redo_image = local_buf_image_lidxs;
+  std::vector<LogicalBlockIdx>& redo_image = local_buf_image_lidxs;
   redo_image.clear();
   redo_image.resize(num_blocks, 0);
 
@@ -476,7 +476,7 @@ redo:
       break;
 
     // redo:
-    PhysicalBlockIdx redo_lidx;
+    LogicalBlockIdx redo_lidx;
 
     // first handle the first block (which might not be full block)
     redo_lidx = redo_image[0];
