@@ -78,9 +78,9 @@ class Allocator {
   void free(const std::vector<LogicalBlockIdx>& recycle_image);
 
   void return_free_list() {
-    for (uint32_t n = 1; n < BITMAP_CAPACITY; ++n)
+    for (uint32_t n = 0; n < BITMAP_CAPACITY; ++n)
       for (LogicalBlockIdx lidx : free_lists[n])
-        Bitmap::free(bitmap, static_cast<BitmapIdx>(lidx.get()), n);
+        Bitmap::free(bitmap, static_cast<BitmapIdx>(lidx.get()), n + 1);
   }
 
   /**

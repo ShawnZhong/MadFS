@@ -45,19 +45,10 @@ option(ULAYFS_USE_MAP_SYNC "Use MAP_SYNC for mmap" ON)
 option(ULAYFS_FORCE_MAP_POPULATE "Always use MAP_POPULATE for mmap" ON)
 option(ULAYFS_TX_FLUSH_ONLY_FSYNC "Only flush transaction entries in fsync" OFF)
 option(ULAYFS_USE_PMEMCHECK "Enable pmemcheck macros" OFF)
-option(ULAYFS_USE_LIBPMEM2 "Enable PMDK libpmem2" OFF)
 
-set(ULAYFS_PERSIST "PMDK"
-    CACHE STRING "Persist Implementation for memcpy and memset")
-set_property(CACHE ULAYFS_PERSIST PROPERTY STRINGS "NATIVE" "KERNEL" "PMDK")
 
 include(cmake/tooling.cmake)
-
-if (${ULAYFS_PERSIST} STREQUAL "PMDK")
-    set(ULAYFS_USE_LIBPMEM2 ON)
-    include(cmake/libpmem2.cmake)
-    target_link_libraries(ulayfs pmem2)
-endif ()
+include(cmake/libpmem2.cmake)
 
 configure_file("src/config.h.in" "config.h" @ONLY)
 include_directories(${CMAKE_CURRENT_BINARY_DIR})
@@ -70,7 +61,7 @@ FetchContent_Declare(tbb URL https://github.com/oneapi-src/oneTBB/releases/downl
 FetchContent_MakeAvailable(tbb)
 
 find_package(TBB REQUIRED HINTS ${tbb_SOURCE_DIR}/lib/cmake/tbb)
-target_link_libraries(ulayfs dl pthread atomic TBB::tbb)
+target_link_libraries(ulayfs pmem2 dl pthread atomic TBB::tbb)
 
 #[[
 tests, benchmarks, and tools

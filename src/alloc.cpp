@@ -149,7 +149,7 @@ pmem::LogEntry* Allocator::alloc_log_entry(uint32_t num_blocks,
   // for a log entry with only one logical block index, it takes 16 bytes
   // if smaller than that, do not try to allocate log entry there
   constexpr uint32_t min_required_size =
-      pmem::LogEntry::fixed_size + sizeof(LogicalBlockIdx);
+      pmem::LogEntry::FIXED_SIZE + sizeof(LogicalBlockIdx);
   if (curr_log_block_idx == 0 ||
       BLOCK_SIZE - curr_log_offset < min_required_size) {
     // no enough space left, do block allocation
@@ -167,7 +167,7 @@ pmem::LogEntry* Allocator::alloc_log_entry(uint32_t num_blocks,
       ALIGN_UP(num_blocks, BITMAP_CAPACITY) >> BITMAP_CAPACITY_SHIFT;
   while (true) {
     assert(curr_entry);
-    curr_log_offset += pmem::LogEntry::fixed_size;
+    curr_log_offset += pmem::LogEntry::FIXED_SIZE;
     uint32_t avail_lidxs_cnt =
         (BLOCK_SIZE - curr_log_offset) / sizeof(LogicalBlockIdx);
     assert(avail_lidxs_cnt > 0);
