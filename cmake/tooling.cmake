@@ -46,6 +46,9 @@ endif ()
 
 
 if (${CMAKE_BUILD_TYPE} STREQUAL "profile")
+    set(CMAKE_C_FLAGS_PROFILE
+        "${CMAKE_C_FLAGS_RELWITHDEBINFO} -fno-omit-frame-pointer" CACHE STRING
+        "Flags used by the C compiler during Profile build." FORCE)
     set(CMAKE_CXX_FLAGS_PROFILE
         "${CMAKE_CXX_FLAGS_RELWITHDEBINFO} -fno-omit-frame-pointer" CACHE STRING
         "Flags used by the C++ compiler during Profile build." FORCE)
