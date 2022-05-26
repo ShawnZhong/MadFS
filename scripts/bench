@@ -3,7 +3,7 @@ import argparse
 import logging
 from pathlib import Path
 
-from fs import fs_paths
+from fs import available_filesystems
 from runner import Runner
 from utils import root_dir, get_timestamp, add_common_args, system, drop_cache, init
 
@@ -52,7 +52,7 @@ class YcsbBenchmark(Benchmark):
         return "leveldb_ycsb"
 
     def run_single_config(self, fs, runner):
-        dbdir = fs_paths[fs] / "bench-dbdir"
+        dbdir = available_filesystems[fs] / "bench-dbdir"
         for w in self.workloads:
             system(f"rm -rf {dbdir} && mkdir -p {dbdir}")
             for load in [True, False]:
@@ -96,8 +96,8 @@ if __name__ == "__main__":
         subparser.add_argument(
             "-f",
             "--fs_names",
-            default=fs_paths.keys(),
-            choices=fs_paths.keys(),
+            default=available_filesystems.keys(),
+            choices=available_filesystems.keys(),
             nargs="+",
             help="Filesystems to benchmark",
         )
