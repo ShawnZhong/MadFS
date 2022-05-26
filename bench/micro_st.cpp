@@ -35,9 +35,11 @@ void bench(benchmark::State& state) {
   close(fd);
 
   int open_flags = 0;
-  if constexpr (mode == Mode::SEQ_READ || mode == Mode::SEQ_PREAD || mode == Mode::RND_PREAD)
+  if constexpr (mode == Mode::SEQ_READ || mode == Mode::SEQ_PREAD ||
+                mode == Mode::RND_PREAD)
     open_flags = O_RDONLY;
-  else if constexpr (mode == Mode::SEQ_WRITE || mode == Mode::SEQ_PWRITE || mode == Mode::RND_PWRITE)
+  else if constexpr (mode == Mode::SEQ_WRITE || mode == Mode::SEQ_PWRITE ||
+                     mode == Mode::RND_PWRITE)
     open_flags = O_RDWR;
   else if constexpr (mode == Mode::APPEND)
     open_flags = O_RDWR | O_APPEND;
