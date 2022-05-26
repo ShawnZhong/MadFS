@@ -1,4 +1,4 @@
-gcc_targets := debug release relwithdebinfo profile pmemcheck
+gcc_targets := release debug relwithdebinfo profile pmemcheck
 clang_targets := asan ubsan msan tsan
 
 .PHONY: $(gcc_targets) $(clang_targets) clean

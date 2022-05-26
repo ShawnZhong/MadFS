@@ -2,9 +2,9 @@
 
 import argparse
 import logging
+import sys
 
-from init import init
-from utils import check_any_args_passed
+from utils import init
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger("init")
@@ -14,7 +14,9 @@ if __name__ == "__main__":
     parser.add_argument("--install_build_deps", action="store_true")
     parser.add_argument("--install_dev_deps", action="store_true")
     parser.add_argument("--configure", action="store_true")
-    check_any_args_passed(parser)
+    if len(sys.argv) == 1:
+        parser.print_help()
+        sys.exit()
     args = parser.parse_args()
     logger.info(f"args={args}")
     init(**vars(args))

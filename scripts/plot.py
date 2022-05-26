@@ -93,8 +93,9 @@ def export_results(result_dir, data):
     with open(result_dir / f"result.txt", "w") as f:
         for name, benchmark in data[["benchmark", "label", "x", "y"]].groupby(["benchmark"], sort=False):
             pt = pd.pivot_table(benchmark, values="y", index="x", columns="label", sort=False)
-            for c in pt.columns:
-                pt[f"{c}%"] = pt["uLayFS"] / pt[c] * 100
+            if "uLayFS" in pt.columns:
+                for c in pt.columns:
+                    pt[f"{c}%"] = pt["uLayFS"] / pt[c] * 100
             print(name)
             print(pt)
             print(name, file=f)
@@ -221,8 +222,9 @@ def plot_ycsb(result_dir):
     )
     plt.legend()
     plt.savefig(result_dir / "ycsb.pdf", bbox_inches="tight")
-    for c in df_pivot.columns:
-        df_pivot[f"{c}%"] = df_pivot["uLayFS"] / df_pivot[c] * 100
+    if "uLayFS" in df_pivot.columns:
+        for c in df_pivot.columns:
+            df_pivot[f"{c}%"] = df_pivot["uLayFS"] / df_pivot[c] * 100
     print(df_pivot)
     with open(result_dir / "ycsb.txt", "w") as f:
         print(df_pivot, file=f)
