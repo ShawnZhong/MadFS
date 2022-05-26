@@ -90,6 +90,8 @@ def plot_benchmarks(result_dir, data, **kwargs):
 
 
 def export_results(result_dir, data):
+    with open(result_dir / f"result.csv", "w") as f:
+        data.to_csv(f)
     with open(result_dir / f"result.txt", "w") as f:
         for name, benchmark in data[["benchmark", "label", "x", "y"]].groupby(["benchmark"], sort=False):
             pt = pd.pivot_table(benchmark, values="y", index="x", columns="label", sort=False)
