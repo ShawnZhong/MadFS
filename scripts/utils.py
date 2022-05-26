@@ -4,8 +4,6 @@ import os
 import sys
 from pathlib import Path
 
-import psutil
-
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger("utils")
 
@@ -29,7 +27,7 @@ sudo sysctl -w vm.max_map_count=131072              # increase max number of mma
 
     configure_cmds += " &&\n".join(
         f"echo performance | sudo tee /sys/devices/system/cpu/cpu{i}/cpufreq/scaling_governor >/dev/null"
-        for i in range(psutil.cpu_count())
+        for i in range(os.cpu_count())
     )
 
     if install_build_deps or install_dev_deps:
