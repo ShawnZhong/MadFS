@@ -10,8 +10,10 @@ enum class Mode {
   APPEND,
   SEQ_READ,
   SEQ_WRITE,
-  RND_READ,
-  RND_WRITE,
+  SEQ_PREAD,
+  SEQ_PWRITE,
+  RND_PREAD,
+  RND_PWRITE,
 };
 
 template <Mode mode>
@@ -33,9 +35,11 @@ void bench(benchmark::State& state) {
   close(fd);
 
   int open_flags = 0;
-  if constexpr (mode == Mode::SEQ_READ || mode == Mode::RND_READ)
+  if constexpr (mode == Mode::SEQ_READ || mode == Mode::SEQ_PREAD ||
+                mode == Mode::RND_PREAD)
     open_flags = O_RDONLY;
-  else if constexpr (mode == Mode::SEQ_WRITE || mode == Mode::RND_WRITE)
+  else if constexpr (mode == Mode::SEQ_WRITE || mode == Mode::SEQ_PWRITE ||
+                     mode == Mode::RND_PWRITE)
     open_flags = O_RDWR;
   else if constexpr (mode == Mode::APPEND)
     open_flags = O_RDWR | O_APPEND;
@@ -50,20 +54,36 @@ void bench(benchmark::State& state) {
       assert(res == num_bytes);
       fsync(fd);
     }
+  } else if constexpr (mode == Mode::SEQ_PWRITE) {
+    off_t offset = 0;
+    for (auto _ : state) {
+      [[maybe_unused]] ssize_t res = pwrite(fd, src_buf, num_bytes, offset);
+      assert(res == num_bytes);
+      fsync(fd);
+      offset += num_bytes;
+    }
   } else if constexpr (mode == Mode::SEQ_READ) {
     for (auto _ : state) {
       [[maybe_unused]] ssize_t res = read(fd, dst_buf, num_bytes);
       assert(res == num_bytes);
       assert(memcmp(dst_buf, src_buf, num_bytes) == 0);
     }
-  } else if constexpr (mode == Mode::RND_READ || mode == Mode::RND_WRITE) {
+  } else if constexpr (mode == Mode::SEQ_PREAD) {
+    off_t offset = 0;
+    for (auto _ : state) {
+      [[maybe_unused]] ssize_t res = pread(fd, dst_buf, num_bytes, offset);
+      assert(res == num_bytes);
+      assert(memcmp(dst_buf, src_buf, num_bytes) == 0);
+      offset += num_bytes;
+    }
+  } else if constexpr (mode == Mode::RND_PREAD || mode == Mode::RND_PWRITE) {
     // prepare random offset
     int rand_off[num_iter];
     std::generate(rand_off, rand_off + num_iter,
                   [&]() { return rand() % num_iter * num_bytes; });
 
     int i = 0;
-    if constexpr (mode == Mode::RND_READ) {
+    if constexpr (mode == Mode::RND_PREAD) {
       for (auto _ : state) {
         [[maybe_unused]] ssize_t res =
             pread(fd, dst_buf, num_bytes, rand_off[i++]);
@@ -71,7 +91,7 @@ void bench(benchmark::State& state) {
         assert(res == num_bytes);
         assert(memcmp(dst_buf, src_buf, num_bytes) == 0);
       }
-    } else if constexpr (mode == Mode::RND_WRITE) {
+    } else if constexpr (mode == Mode::RND_PWRITE) {
       for (auto _ : state) {
         [[maybe_unused]] ssize_t res =
             pwrite(fd, src_buf, num_bytes, rand_off[i++]);
@@ -101,9 +121,11 @@ int main(int argc, char** argv) {
 
   for (auto& bm : {
            RegisterBenchmark("seq_read", bench<Mode::SEQ_READ>),
-           RegisterBenchmark("rnd_read", bench<Mode::RND_READ>),
+           RegisterBenchmark("seq_pread", bench<Mode::SEQ_PREAD>),
+           RegisterBenchmark("rnd_pread", bench<Mode::RND_PREAD>),
            RegisterBenchmark("seq_write", bench<Mode::SEQ_WRITE>),
-           RegisterBenchmark("rnd_write", bench<Mode::RND_WRITE>),
+           RegisterBenchmark("seq_pwrite", bench<Mode::SEQ_PWRITE>),
+           RegisterBenchmark("rnd_pwrite", bench<Mode::RND_PWRITE>),
            RegisterBenchmark("append", bench<Mode::APPEND>),
        }) {
     bm->RangeMultiplier(2)->Range(MIN_SIZE, MAX_SIZE)->Iterations(num_iter);
