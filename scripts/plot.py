@@ -10,6 +10,7 @@ from matplotlib import pyplot as plt
 
 pd.options.display.max_rows = 100
 pd.options.display.max_columns = 100
+pd.options.display.width = 100
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger("plot")
