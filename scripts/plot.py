@@ -125,10 +125,7 @@ def plot_micro_st(result_dir):
         ax.yaxis.set_major_locator(plt.MaxNLocator(steps=[1, 5, 10]))
         ax.yaxis.set_major_formatter(plt.FormatStrFormatter('%.1f'))
         ax.set_ylim(bottom=0)
-        if name == "seq_write":
-            plt.legend()
-        if name == "append":
-            ax.set_ylim(top=2)
+        plt.legend()
 
     data = read_files(result_dir, post_process)
     export_results(result_dir, data)
@@ -156,13 +153,8 @@ def plot_micro_mt(result_dir):
         labels = df["x"].unique()
         plt.xticks(ticks=labels, labels=labels)
         ax.set_ylim(bottom=0)
-        if name != "no_overlap_100R":
-            ax.yaxis.set_major_locator(plt.MaxNLocator(steps=[1, 10]))
-            ax.yaxis.set_major_formatter(plt.FormatStrFormatter('%.1f'))
-        else:
-            ax.yaxis.set_major_locator(plt.MaxNLocator(steps=[1, 2]))
-        if name == "no_overlap_0R":
-            plt.legend()
+        ax.yaxis.set_major_locator(plt.MaxNLocator(steps=[1, 2]))
+        plt.legend()
 
     data = read_files(result_dir, post_process)
     export_results(result_dir, data)
