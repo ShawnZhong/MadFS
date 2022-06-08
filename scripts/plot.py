@@ -10,6 +10,7 @@ from matplotlib import pyplot as plt
 
 pd.options.display.max_rows = 100
 pd.options.display.max_columns = 100
+pd.options.display.width = None
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger("plot")
@@ -126,6 +127,7 @@ def plot_micro_st(result_dir):
         ax.yaxis.set_major_formatter(plt.FormatStrFormatter('%.1f'))
         ax.set_ylim(bottom=0)
         plt.legend()
+        plt.title(name)
 
     data = read_files(result_dir, post_process)
     export_results(result_dir, data)
@@ -155,6 +157,7 @@ def plot_micro_mt(result_dir):
         ax.set_ylim(bottom=0)
         ax.yaxis.set_major_locator(plt.MaxNLocator(steps=[1, 2]))
         plt.legend()
+        plt.title(name)
 
     data = read_files(result_dir, post_process)
     export_results(result_dir, data)
