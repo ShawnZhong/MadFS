@@ -49,7 +49,8 @@ class Converter {
     char block_buf[BLOCK_SIZE];
     ret = posix::pread(fd, block_buf, BLOCK_SIZE, 0);
     PANIC_IF(ret != BLOCK_SIZE, "Fail to pread");
-    posix::pwrite(fd, block_buf, BLOCK_SIZE, block_align_size);
+    ret = posix::pwrite(fd, block_buf, BLOCK_SIZE, block_align_size);
+    PANIC_IF(ret != BLOCK_SIZE, "Fail to pwrite");
 
     void* addr = posix::mmap(nullptr, BLOCK_SIZE, PROT_READ | PROT_WRITE,
                              MAP_SHARED | MAP_POPULATE, fd, 0);
@@ -171,7 +172,7 @@ class Converter {
     // copy data to the new region
     for (VirtualBlockIdx vidx = 0; vidx < virtual_num_blocks; ++vidx)
       pmem::memcpy_persist(new_region[vidx.get()].data_rw(),
-                           file->vidx_to_addr_ro(vidx), BLOCK_SIZE,
+                           file->vidx_to_addr_ro(vidx)->data_ro(), BLOCK_SIZE,
                            /*fenced*/ true);
 
     // unmap the new region
