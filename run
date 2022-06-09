@@ -3,7 +3,7 @@
 import argparse
 import logging
 
-from scripts.fs import available_filesystems
+from scripts.fs import available_fs
 from scripts.runner import Runner
 from scripts.utils import add_common_args, parse_args
 
@@ -26,7 +26,7 @@ if __name__ == "__main__":
         "-f",
         "--fs",
         default="uLayFS",
-        choices=available_filesystems.keys(),
+        choices=available_fs.keys(),
         help="filesystem type to be used",
     )
     add_common_args(parser)
