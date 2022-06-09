@@ -1,5 +1,11 @@
 #include "common.h"
 
+#ifdef NDEBUG
+constexpr static bool debug = false;
+#else
+constexpr static bool debug = true;
+#endif
+
 constexpr int MAX_SIZE = 4096;
 constexpr int MAX_NUM_THREAD = 16;
 
@@ -41,6 +47,19 @@ void bench(benchmark::State& state) {
       [[maybe_unused]] ssize_t res = write(fd, src_buf, num_bytes);
       assert(res == num_bytes);
       fsync(fd);
+    }
+    if constexpr (debug) {
+      if (state.thread_index == 0) {
+        [[maybe_unused]] ssize_t res = lseek(fd, 0, SEEK_SET);
+        for (int i = 0; i < num_iter; i++) {
+          res = read(fd, dst_buf, num_bytes);
+          if (res != num_bytes) {
+            fprintf(stderr, "expected = %ld, actual = %ld\n",
+                    num_iter * num_bytes, i * num_bytes);
+            break;
+          }
+        }
+      }
     }
   } else if constexpr (mode == Mode::CONTENDED_WRITE) {
     for (auto _ : state) {
