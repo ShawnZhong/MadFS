@@ -1,3 +1,4 @@
+import argparse
 import datetime
 import logging
 import os
@@ -78,7 +79,7 @@ def get_timestamp():
     return datetime.datetime.now().strftime("%Y%m%d-%H%M%S")
 
 
-def add_common_args(argparser):
+def add_common_args(argparser: argparse.ArgumentParser):
     from runner import build_types
     argparser.add_argument(
         "-b",
@@ -91,7 +92,21 @@ def add_common_args(argparser):
         help="Run with tracing enabled",
     )
     argparser.add_argument(
+        "--filter",
+        "--benchmark_filter",
+        dest="benchmark_filter",
+        help="filters to be passed to Google Benchmark"
+    )
+    argparser.add_argument(
         "additional_args",
         nargs="*",
         help="additional arguments to be passed to the program during execution",
     )
+
+
+def parse_args(argparser: argparse.ArgumentParser):
+    args = argparser.parse_intermixed_args()
+    if args.benchmark_filter:
+        args.additional_args += [f"--benchmark_filter={args.benchmark_filter}"]
+        del args.benchmark_filter
+    return args

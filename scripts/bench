@@ -118,7 +118,7 @@ if __name__ == "__main__":
                 choices=all_workloads,
             )
 
-    args = argparser.parse_args()
+    args = argparser.parse_intermixed_args()
     if args.build_type is None:
         args.build_type = "release"
     logger.info(f"args={args}")
