@@ -15,7 +15,7 @@
 #include "idx.h"
 #include "log.h"
 #include "tbb.h"
-#include "tx.h"
+#include "tx/mgr.h"
 #include "utils.h"
 
 namespace ulayfs::dram {
