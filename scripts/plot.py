@@ -155,7 +155,7 @@ def plot_micro_mt(result_dir):
         plt.xticks(ticks=labels, labels=labels)
         ax.set_ylim(bottom=0)
         ax.yaxis.set_major_locator(plt.MaxNLocator(steps=[1, 2]))
-        plt.legend(fontsize="small")
+        plt.legend()
         plt.title(name)
 
     data = read_files(result_dir, post_process)
