@@ -127,11 +127,14 @@ ssize_t read(int fd, void* buf, size_t count) {
 
 ssize_t pread(int fd, void* buf, size_t count, off_t offset) {
   if (auto file = get_file(fd)) {
-    DEBUG("ulayfs::pread(%s, buf, %zu, %ld)", file->path, count, offset);
-    return file->pread(buf, count, offset);
+    auto res = file->pread(buf, count, offset);
+    DEBUG("ulayfs::pread(%s, buf, %zu, %ld) = %zu", file->path, count, offset,
+          res);
+    return res;
   } else {
-    DEBUG("posix::pread(%d, buf, %zu, %ld)", fd, count, offset);
-    return posix::pread(fd, buf, count, offset);
+    auto res = posix::pread(fd, buf, count, offset);
+    DEBUG("posix::pread(%d, buf, %zu, %ld) = %zu", fd, count, offset, res);
+    return res;
   }
 }
 

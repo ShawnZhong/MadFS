@@ -1,7 +1,7 @@
 import logging
 import shutil
 from pathlib import Path
-from typing import Dict
+from typing import Dict, Optional, List
 
 from utils import root_dir, is_ulayfs_linked
 
@@ -9,36 +9,7 @@ logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger("fs")
 
 
-def get_ext4_dax_path():
-    for path in ["/mnt/pmem0-ext4-dax", "/mnt/pmem0", "/mnt/pmem1", "/mnt/pmem_emul"]:
-        if Path(path).is_mount():
-            return Path(path)
-
-    logger.warning(f"Cannot find ext4-dax path, use current directory")
-    return Path(".")
-
-
-def get_available_filesystems() -> Dict[str, Path]:
-    ext4_dax_path = get_ext4_dax_path()
-    result = {
-        "uLayFS": ext4_dax_path,
-        "ext4-dax": ext4_dax_path,
-    }
-
-    splitfs_path = Path("/mnt/pmem_emul")
-    if splitfs_path.is_mount():
-        result["SplitFS"] = splitfs_path
-
-    nova_path = Path("/mnt/pmem0-nova")
-    if nova_path.is_mount():
-        result["NOVA"] = nova_path
-
-    return result
-
-
-available_filesystems = get_available_filesystems()
-
-def infer_numa_node(pmem_path):
+def infer_numa_node(pmem_path: Path):
     if "pmem" in pmem_path.name:
         numa_str = pmem_path.name.partition("pmem")[2][0]
         if numa_str.isnumeric():
@@ -48,31 +19,111 @@ def infer_numa_node(pmem_path):
     return 0
 
 
+class Filesystem:
+    name: str
 
-def process_cmd(fs: str, cmd, build_type):
-    if fs == "uLayFS" and not is_ulayfs_linked(cmd.split(" ")[0]):
+    @property
+    def path(self) -> Optional[Path]:
+        raise NotImplementedError()
+
+    def is_available(self) -> bool:
+        return self.path is not None
+
+    @staticmethod
+    def get_env(**kwargs):
+        return {}
+
+    def process_cmd(self, cmd: List[str], env: Dict[str, str], **kwargs) -> List[str]:
+        env = {
+            **env,
+            **self.get_env(cmd=cmd, **kwargs),
+            "PMEM_PATH": str(self.path),
+        }
+
+        cmd = ["env"] + [f"{k}={v}" for k, v in env.items()] + cmd
+
+        numa = infer_numa_node(self.path)
+        if shutil.which("numactl"):
+            cmd = ["numactl", f"--cpunodebind={numa}", f"--membind={numa}"] + cmd
+        else:
+            logger.warning("numactl not found, NUMA not enabled")
+
+        return cmd
+
+
+class Ext4DAX(Filesystem):
+    name = "ext4-DAX"
+
+    @property
+    def path(self) -> Optional[Path]:
+        for path in ["/mnt/pmem0-ext4-dax", "/mnt/pmem0", "/mnt/pmem1", "/mnt/pmem_emul"]:
+            if Path(path).is_mount():
+                return Path(path)
+
+        logger.warning(f"Cannot find ext4-dax path, use current directory")
+        return Path(".")
+
+
+class ULAYFS(Ext4DAX):
+    name = "uLayFS"
+
+    @staticmethod
+    def get_env(cmd, build_type):
+        if not is_ulayfs_linked(cmd[0]):
+            return {}
         ulayfs_path = root_dir / f"build-{build_type}" / "libulayfs.so"
         if not ulayfs_path.exists():
             logger.warning(f"Cannot find ulayfs path: {ulayfs_path}")
-        cmd = f"env LD_PRELOAD={ulayfs_path} {cmd}"
+            return {}
+        env = {"LD_PRELOAD": ulayfs_path}
+        return env
 
-    if fs == "SplitFS":
-        splitfs_path = Path.home() / "SplitFS" / "splitfs"
-        if not splitfs_path.exists():
-            logger.warning(f"Cannot find SplitFS path: {splitfs_path}")
-        cmd = (
-            f"env LD_LIBRARY_PATH={splitfs_path} "
-            f"NVP_TREE_FILE={splitfs_path}/bin/nvp_nvp.tree "
-            f"LD_PRELOAD={splitfs_path}/libnvp.so {cmd}"
-        )
 
-    pmem_path = available_filesystems[fs]
-    cmd = f"env PMEM_PATH={pmem_path} {cmd}"
+class NOVA(Filesystem):
+    name = "NOVA"
 
-    numa = infer_numa_node(pmem_path)
-    if shutil.which("numactl"):
-        cmd = f"numactl --cpunodebind={numa} --membind={numa} {cmd}"
-    else:
-        logger.warning("numactl not found, NUMA not enabled")
+    @property
+    def path(self) -> Optional[Path]:
+        path = Path("/mnt/pmem0-nova")
+        if path.is_mount():
+            return path
+        return None
 
-    return cmd
+
+class SplitFS(Filesystem):
+    name = "SplitFS"
+    build_path = Path.home() / "SplitFS" / "splitfs"
+
+    @property
+    def path(self) -> Optional[Path]:
+        path = Path("/mnt/pmem_emul")
+        if path.is_mount():
+            return path
+        return None
+
+    def is_available(self) -> bool:
+        if self.path is None:
+            return False
+
+        if not self.build_path.exists():
+            logger.warning(f"Cannot find SplitFS path: {self.build_path}")
+            return False
+
+        return True
+
+    @staticmethod
+    def get_env(**kwargs):
+        env = {
+            "LD_LIBRARY_PATH": SplitFS.build_path,
+            "NVP_TREE_FILE": SplitFS.build_path / "bin" / "nvp_nvp.tree",
+            "LD_PRELOAD": SplitFS.build_path / "libnvp.so"
+        }
+        return env
+
+
+def get_available_fs() -> Dict[str, Filesystem]:
+    all_fs = [ULAYFS(), Ext4DAX(), NOVA(), SplitFS()]
+    return {fs.name: fs for fs in all_fs if fs.is_available()}
+
+
+available_fs = get_available_fs()

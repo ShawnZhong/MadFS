@@ -1,6 +1,6 @@
 #include "common.h"
 
-constexpr int MIN_SIZE = 128;
+constexpr int MIN_SIZE = 512;
 constexpr int MAX_SIZE = 128 * 1024;
 
 int fd;

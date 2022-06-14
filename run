@@ -3,9 +3,9 @@
 import argparse
 import logging
 
-from scripts.fs import available_filesystems
+from scripts.fs import available_fs
 from scripts.runner import Runner
-from scripts.utils import add_common_args
+from scripts.utils import add_common_args, parse_args
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger("run")
@@ -26,11 +26,11 @@ if __name__ == "__main__":
         "-f",
         "--fs",
         default="uLayFS",
-        choices=available_filesystems.keys(),
+        choices=available_fs.keys(),
         help="filesystem type to be used",
     )
     add_common_args(parser)
-    args = parser.parse_args()
+    args = parse_args(parser)
     if args.build_type is None:
         args.build_type = "debug" if args.cmake_target.startswith("test") else "release"
     logger.info(f"args={args}")

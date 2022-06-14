@@ -10,7 +10,7 @@ from matplotlib import pyplot as plt
 
 pd.options.display.max_rows = 100
 pd.options.display.max_columns = 100
-pd.options.display.width = 100
+pd.options.display.width = None
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger("plot")
@@ -54,12 +54,12 @@ def read_files(result_dir, post_process_fn):
 
 def plot_single_bm(
         df,
+        result_dir,
         barchart=False,
         xlabel=None,
         ylabel=None,
         title=None,
         name=None,
-        output_path=None,
         post_plot=None,
         figsize=(3, 3),
 ):
@@ -78,15 +78,14 @@ def plot_single_bm(
     if post_plot:
         post_plot(ax=ax, name=name, df=df)
 
-    if output_path:
-        plt.savefig(output_path, bbox_inches="tight")
+    plt.savefig(result_dir / f"{name}.png", bbox_inches="tight", dpi=300)
+    plt.savefig(result_dir / f"{name}.pdf", bbox_inches="tight")
 
 
-def plot_benchmarks(result_dir, data, **kwargs):
+def plot_benchmarks(data, **kwargs):
     for name, benchmark in data.groupby("benchmark"):
-        output_path = result_dir / f"{name}.pdf"
         plot_single_bm(
-            benchmark, name=name, output_path=output_path, **kwargs,
+            benchmark, name=name, **kwargs,
         )
 
 
@@ -127,12 +126,13 @@ def plot_micro_st(result_dir):
         ax.yaxis.set_major_formatter(plt.FormatStrFormatter('%.1f'))
         ax.set_ylim(bottom=0)
         plt.legend()
+        plt.title(name)
 
     data = read_files(result_dir, post_process)
     export_results(result_dir, data)
     plot_benchmarks(
-        result_dir,
         data,
+        result_dir=result_dir,
         post_plot=post_plot,
         figsize=(2.75, 2.75),
         xlabel="I/O Size (Bytes)",
@@ -155,12 +155,14 @@ def plot_micro_mt(result_dir):
         plt.xticks(ticks=labels, labels=labels)
         ax.set_ylim(bottom=0)
         ax.yaxis.set_major_locator(plt.MaxNLocator(steps=[1, 2]))
+        plt.legend()
+        plt.title(name)
 
     data = read_files(result_dir, post_process)
     export_results(result_dir, data)
     plot_benchmarks(
-        result_dir,
         data,
+        result_dir=result_dir,
         post_plot=post_plot,
         xlabel="Number of Threads",
         ylabel="Throughput (Mops/sec)",
@@ -176,8 +178,8 @@ def plot_micro_meta(result_dir):
     data = read_files(result_dir, post_process)
     export_results(result_dir, data)
     plot_benchmarks(
-        result_dir,
         data,
+        result_dir=result_dir,
         xlabel="Transaction History Length",
         ylabel="Latency (us)",
     )

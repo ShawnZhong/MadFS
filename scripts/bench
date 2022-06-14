@@ -3,9 +3,9 @@ import argparse
 import logging
 from pathlib import Path
 
-from fs import available_filesystems
+from fs import available_fs
 from runner import Runner
-from utils import root_dir, get_timestamp, add_common_args, system, drop_cache, init
+from utils import root_dir, get_timestamp, add_common_args, system, drop_cache, init, parse_args
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger("bench")
@@ -27,11 +27,11 @@ class Benchmark:
     def run_single_config(self, **kwargs):
         raise NotImplementedError()
 
-    def run(self, **kwargs):
+    def run(self, trace, **kwargs):
         for fs in self.fs_names:
             runner = Runner(self.cmake_target, result_dir=self.result_dir / fs, build_type=self.build_type)
             runner.build()
-            self.run_single_config(fs=fs, runner=runner, **kwargs)
+            self.run_single_config(fs=fs, runner=runner, trace=trace, **kwargs)
         return self.result_dir
 
 
@@ -39,28 +39,28 @@ class MicroBenchmark(Benchmark):
     def get_cmake_target(self, benchmark, **kwargs):
         return f"micro_{benchmark}"
 
-    def run_single_config(self, fs, runner):
-        runner.run(fs=fs, additional_args=self.additional_args)
+    def run_single_config(self, fs, runner, trace, **kwargs):
+        runner.run(fs=fs, additional_args=self.additional_args, trace=trace)
 
 
 class YcsbBenchmark(Benchmark):
-    def __init__(self, workloads, **kwargs):
+    def __init__(self, **kwargs):
         super().__init__(**kwargs)
-        self.workloads = workloads
+        self.workloads = ("a", "b", "c", "d", "e", "f")
 
     def get_cmake_target(self, **kwargs):
         return "leveldb_ycsb"
 
-    def run_single_config(self, fs, runner):
-        dbdir = available_filesystems[fs] / "bench-dbdir"
+    def run_single_config(self, fs, runner, trace):
+        dbdir = available_fs[fs].path / "bench-dbdir"
         for w in self.workloads:
             system(f"rm -rf {dbdir} && mkdir -p {dbdir}")
             for load in [True, False]:
                 drop_cache()
                 trace_name = f"{w}-{'load' if load else 'run'}"
                 trace_path = root_dir / "bench" / "ycsb-traces-large" / f"{trace_name}.txt"
-                cmd = f"{runner.prog_path} -f {trace_path} -d {dbdir}"
-                runner.run(cmd=cmd, fs=fs, prog_log_name=f"{trace_name}.log", additional_args=self.additional_args)
+                cmd = f"{runner.prog_path} -f {trace_path} -d {dbdir}".split()
+                runner.run(cmd=cmd, fs=fs, prog_log_name=f"{trace_name}.log", additional_args=self.additional_args, trace=trace)
             system(f"rm -rf {dbdir}")
 
 
@@ -74,7 +74,7 @@ def main(benchmark, result_dir, **kwargs):
             "meta": MicroBenchmark,
             "ycsb": YcsbBenchmark,
         }
-        result_dir = bm_classes[benchmark](benchmark=benchmark, **kwargs).run()
+        result_dir = bm_classes[benchmark](benchmark=benchmark, **kwargs).run(**kwargs)
 
     plot_fns = {
         "st": plot_micro_st,
@@ -89,36 +89,27 @@ def main(benchmark, result_dir, **kwargs):
 
 if __name__ == "__main__":
     argparser = argparse.ArgumentParser()
-    subparsers = argparser.add_subparsers(dest="benchmark", required=True)
-    for bm in ["st", "mt", "meta", "ycsb"]:
-        subparser = subparsers.add_parser(bm)
-        add_common_args(subparser)
-        subparser.add_argument(
-            "-f",
-            "--fs_names",
-            default=available_filesystems.keys(),
-            choices=available_filesystems.keys(),
-            nargs="+",
-            help="Filesystems to benchmark",
-        )
-        subparser.add_argument(
-            "-p",
-            "--result_dir",
-            type=Path,
-            help="If set, plot the results in the given directory w/o running the benchmark",
-        )
-        if bm == "ycsb":
-            all_workloads = ("a", "b", "c", "d", "e", "f")
-            subparser.add_argument(
-                "-w",
-                "--workloads",
-                type=str,
-                nargs="+",
-                default=all_workloads,
-                choices=all_workloads,
-            )
+    argparser.add_argument(
+        "benchmark",
+        choices=["st", "mt", "meta", "ycsb"]
+    )
+    argparser.add_argument(
+        "-f",
+        "--fs_names",
+        default=available_fs.keys(),
+        choices=available_fs.keys(),
+        nargs="+",
+        help="Filesystems to benchmark",
+    )
+    argparser.add_argument(
+        "-p",
+        "--result_dir",
+        type=Path,
+        help="If set, plot the results in the given directory w/o running the benchmark",
+    )
+    add_common_args(argparser)
 
-    args = argparser.parse_args()
+    args = parse_args(argparser)
     if args.build_type is None:
         args.build_type = "release"
     logger.info(f"args={args}")

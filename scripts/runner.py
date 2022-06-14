@@ -1,7 +1,9 @@
 import logging
 import pprint
+from pathlib import Path
+from typing import Optional, List
 
-from fs import process_cmd
+from fs import available_fs
 from utils import get_timestamp, system, root_dir
 
 logging.basicConfig(level=logging.INFO)
@@ -32,7 +34,7 @@ class Runner:
         self.build_type = build_type
         self.build_path = root_dir / f"build-{build_type}"
         self.result_dir = result_dir
-        self.prog_path = None
+        self.prog_path: Optional[Path] = None
 
         self.result_dir.mkdir(parents=True, exist_ok=True)
 
@@ -61,7 +63,7 @@ class Runner:
 
     def run(
             self,
-            cmd=None,
+            cmd: Optional[List[str]] = None,
             additional_args=None,
             prog_log_name="prog.log",
             fs="uLayFS",
@@ -69,15 +71,18 @@ class Runner:
     ):
         if cmd is None:
             assert self.prog_path is not None
-            cmd = f"{self.prog_path} "
+            cmd = [str(self.prog_path)]
 
         if self.is_micro:
             json_path = self.result_dir / "result.json"
-            cmd += f" --benchmark_counters_tabular=true "
-            cmd += f" --benchmark_out={json_path} "
+            cmd += [f"--benchmark_counters_tabular=true"]
+            cmd += [f"--benchmark_out={json_path}"]
 
-        cmd = f"{cmd} {' '.join(additional_args)}" if additional_args else cmd
-        cmd = process_cmd(fs, cmd, self.build_type)
+        if additional_args is not None:
+            cmd += additional_args
+
+        cmd = available_fs[fs].process_cmd(cmd, env={}, build_type=self.build_type)
+        cmd = " ".join(cmd)
 
         # execute
         prog_log_path = self.result_dir / prog_log_name
@@ -111,7 +116,7 @@ class Runner:
 
         # record perf data
         system(
-            f"perf record --freq=997 "
+            f"perf record --freq=10000 "
             f"--call-graph dwarf "  # options: fp, lbr, dwarf
             f"-o {perf_data} {cmd}",
             log_path=log_path,

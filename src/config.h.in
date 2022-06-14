@@ -70,7 +70,7 @@ constexpr static struct BuildOptions {
 
 static struct RuntimeOptions {
   bool show_config{true};
-  bool strict_offset_serial{true};
+  bool strict_offset_serial{false};
   const char* log_file{};
   int log_level{1};
 
