@@ -3,7 +3,7 @@ import shutil
 from pathlib import Path
 from typing import Dict, Optional, List
 
-from utils import root_dir
+from utils import root_dir, is_ulayfs_linked
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger("fs")
@@ -34,8 +34,11 @@ class Filesystem:
         return {}
 
     def process_cmd(self, cmd: List[str], env: Dict[str, str], **kwargs) -> List[str]:
-        env["PMEM_PATH"] = str(self.path)
-        env |= self.get_env(**kwargs)
+        env = {
+            **env,
+            **self.get_env(cmd=cmd, **kwargs),
+            ["PMEM_PATH"]: str(self.path),
+        }
 
         cmd = ["env"] + [f"{k}={v}" for k, v in env.items()] + cmd
 
@@ -65,7 +68,9 @@ class ULAYFS(Ext4DAX):
     name = "uLayFS"
 
     @staticmethod
-    def get_env(build_type):
+    def get_env(cmd, build_type):
+        if not is_ulayfs_linked(cmd[0]):
+            return {}
         ulayfs_path = root_dir / f"build-{build_type}" / "libulayfs.so"
         if not ulayfs_path.exists():
             logger.warning(f"Cannot find ulayfs path: {ulayfs_path}")
