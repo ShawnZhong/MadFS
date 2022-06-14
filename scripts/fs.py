@@ -37,7 +37,7 @@ class Filesystem:
         env = {
             **env,
             **self.get_env(cmd=cmd, **kwargs),
-            ["PMEM_PATH"]: str(self.path),
+            "PMEM_PATH": str(self.path),
         }
 
         cmd = ["env"] + [f"{k}={v}" for k, v in env.items()] + cmd
