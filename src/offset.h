@@ -77,7 +77,7 @@ class OffsetMgr {
    * @param[in] curr_block the tx tail block seen by the current operation
    * @return whether the ordering is fine (prev <= curr)
    */
-  bool validate_offset(uint64_t ticket, const TxEntryIdx curr_idx,
+  bool validate_offset(uint64_t ticket, TxEntryIdx curr_idx,
                        const pmem::TxBlock* curr_block);
 
   /**
@@ -87,7 +87,7 @@ class OffsetMgr {
    * @param[in] curr_idx the tx tail idx seen by the current operation
    * @param[in] curr_block the tx tail block seen by the current operation
    */
-  void release_offset(uint64_t ticket, const TxEntryIdx curr_idx,
+  void release_offset(uint64_t ticket, TxEntryIdx curr_idx,
                       const pmem::TxBlock* curr_block);
 
   friend std::ostream& operator<<(std::ostream& out, const OffsetMgr& o);

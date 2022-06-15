@@ -23,8 +23,6 @@ class WriteTx : public Tx {
   // the tx entry to be committed (may or may not inline)
   pmem::TxEntry commit_entry;
 
-  friend TxMgr;
-
   WriteTx(File* file, TxMgr* tx_mgr, const char* buf, size_t count,
           size_t offset)
       : Tx(file, tx_mgr, count, offset),
@@ -82,6 +80,7 @@ class WriteTx : public Tx {
     this->ticket = ticket;
   }
 
+ public:
   template <typename TX>
   static ssize_t do_write_and_validate_offset(
       File* file, TxMgr* tx_mgr, const char* buf, size_t count, size_t offset,

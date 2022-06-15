@@ -32,12 +32,10 @@ ssize_t TxMgr::do_read(char* buf, size_t count) {
   uint64_t offset = file->update_with_offset(tail_tx_idx, tail_tx_block, count,
                                              true, ticket, &file_size,
                                              /*do_alloc*/ false);
-  ReadTx tx(file, this, buf, count, offset, tail_tx_idx, tail_tx_block,
-            file_size, ticket);
-  ssize_t ret = tx.do_read();
 
-  file->release_offset(ticket, tx.tail_tx_idx, tx.tail_tx_block);
-  return ret;
+  return ReadTx(file, this, buf, count, offset, tail_tx_idx, tail_tx_block,
+                file_size, ticket)
+      .do_read();
 }
 
 ssize_t TxMgr::do_pwrite(const char* buf, size_t count, size_t offset) {

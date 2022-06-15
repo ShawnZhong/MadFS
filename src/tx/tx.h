@@ -78,7 +78,6 @@ class Tx {
         end_vidx(BLOCK_SIZE_TO_IDX(ALIGN_UP(end_offset, BLOCK_SIZE))),
         num_blocks(end_vidx - begin_vidx),
         is_offset_depend(false) {}
-  friend TxMgr;
 
   /**
    * Move to the real tx and update first/last_src_block to indicate whether to

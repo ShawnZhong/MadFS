@@ -7,8 +7,8 @@ class ReadTx : public Tx {
  protected:
   char* const buf;
   uint64_t file_size;
-  friend TxMgr;
 
+ public:
   ReadTx(File* file, TxMgr* tx_mgr, char* buf, size_t count, size_t offset)
       : Tx(file, tx_mgr, count, offset), buf(buf) {}
   ReadTx(File* file, TxMgr* tx_mgr, char* buf, size_t count, size_t offset,
@@ -114,12 +114,14 @@ class ReadTx : public Tx {
 
     // we actually don't care what's the previous tx's tail, because we will
     // need to validate against the latest tail anyway
-    if (is_offset_depend)
+    if (is_offset_depend) {
       if (!file->validate_offset(ticket, tail_tx_idx, tail_tx_block)) {
         // we don't need to revalidate after redo
         is_offset_depend = false;
         goto redo;
       }
+      file->release_offset(ticket, tail_tx_idx, tail_tx_block);
+    }
 
     return static_cast<ssize_t>(count);
   }
