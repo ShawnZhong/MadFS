@@ -34,8 +34,8 @@ class WriteTx : public Tx {
     // reset recycle_image
     recycle_image.clear();
     recycle_image.resize(num_blocks);
-    local_buf_dst_lidxs.clear();
-    local_buf_dst_blocks.clear();
+    dst_lidxs.clear();
+    dst_blocks.clear();
 
     // TODO: handle writev requests
     // for overwrite, "leftover_bytes" is zero; only in append we care
@@ -55,8 +55,8 @@ class WriteTx : public Tx {
     assert(!dst_blocks.empty());
 
     uint16_t leftover_bytes = ALIGN_UP(end_offset, BLOCK_SIZE) - end_offset;
-    if (pmem::TxEntryInline::can_inline(num_blocks, begin_vidx, dst_lidxs[0],
-                                        leftover_bytes)) {
+    if (leftover_bytes != 0 &&
+        pmem::TxEntryInline::can_inline(num_blocks, begin_vidx, dst_lidxs[0])) {
       commit_entry = pmem::TxEntryInline(num_blocks, begin_vidx, dst_lidxs[0]);
     } else {
       // it's fine that we append log first as long we don't publish it by tx
