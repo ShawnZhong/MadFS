@@ -97,10 +97,10 @@ class Bitmap {
   static BitmapIdx alloc_one(Bitmap bitmaps[], uint32_t num_bitmaps,
                              BitmapIdx hint) {
     BitmapIdx ret;
-    uint32_t idx = static_cast<uint32_t>(hint) >> BITMAP_CAPACITY_SHIFT;
+    uint32_t idx = static_cast<uint32_t>(hint) >> BITMAP_BLOCK_CAPACITY_SHIFT;
     for (; idx < num_bitmaps; ++idx) {
       ret = bitmaps[idx].alloc_one();
-      if (ret >= 0) return (idx << BITMAP_CAPACITY_SHIFT) + ret;
+      if (ret >= 0) return (idx << BITMAP_BLOCK_CAPACITY_SHIFT) + ret;
     }
     return -1;
   }
@@ -117,10 +117,10 @@ class Bitmap {
   static BitmapIdx alloc_batch(Bitmap bitmaps[], uint32_t num_bitmaps,
                                BitmapIdx hint) {
     BitmapIdx ret;
-    uint32_t idx = static_cast<uint32_t>(hint) >> BITMAP_CAPACITY_SHIFT;
+    uint32_t idx = static_cast<uint32_t>(hint) >> BITMAP_BLOCK_CAPACITY_SHIFT;
     for (; idx < num_bitmaps; ++idx) {
       ret = bitmaps[idx].alloc_all();
-      if (ret >= 0) return idx << BITMAP_CAPACITY_SHIFT;
+      if (ret >= 0) return idx << BITMAP_BLOCK_CAPACITY_SHIFT;
     }
     return -1;
   }
@@ -138,11 +138,11 @@ class Bitmap {
    */
   static BitmapIdx try_alloc(Bitmap bitmaps[], uint32_t num_bitmaps,
                              BitmapIdx hint, uint64_t& allocated_bits) {
-    uint32_t idx = static_cast<uint32_t>(hint) >> BITMAP_CAPACITY_SHIFT;
+    uint32_t idx = static_cast<uint32_t>(hint) >> BITMAP_BLOCK_CAPACITY_SHIFT;
     for (; idx < num_bitmaps; ++idx) {
       allocated_bits = bitmaps[idx].alloc_rest();
       if (allocated_bits != BITMAP_ALL_USED)
-        return idx << BITMAP_CAPACITY_SHIFT;
+        return idx << BITMAP_BLOCK_CAPACITY_SHIFT;
     }
     return -1;
   }
@@ -158,12 +158,12 @@ class Bitmap {
   static void free(Bitmap bitmaps[], BitmapIdx begin, uint8_t len) {
     TRACE("Freeing [%d, %d)", begin, begin + len);
 
-    bitmaps[static_cast<uint32_t>(begin) >> BITMAP_CAPACITY_SHIFT].free(
-        static_cast<uint32_t>(begin) & (BITMAP_CAPACITY - 1), len);
+    bitmaps[static_cast<uint32_t>(begin) >> BITMAP_BLOCK_CAPACITY_SHIFT].free(
+        static_cast<uint32_t>(begin) & (BITMAP_BLOCK_CAPACITY - 1), len);
   }
 
   friend std::ostream& operator<<(std::ostream& out, const Bitmap& b) {
-    for (size_t i = 0; i < BITMAP_CAPACITY; ++i) {
+    for (size_t i = 0; i < BITMAP_BLOCK_CAPACITY; ++i) {
       out << (b.bitmap.load(std::memory_order_relaxed) & (1l << i) ? "1" : "0");
     }
     return out;

@@ -180,8 +180,8 @@ class File {
    * only be used on startup if the bitmap is newly created.
    */
   void set_allocated(LogicalBlockIdx block_idx) {
-    bitmap[block_idx >> BITMAP_CAPACITY_SHIFT].set_allocated(
-        block_idx & (BITMAP_CAPACITY - 1));
+    bitmap[block_idx >> BITMAP_BLOCK_CAPACITY_SHIFT].set_allocated(
+        block_idx & (BITMAP_BLOCK_CAPACITY - 1));
   }
 
   /**

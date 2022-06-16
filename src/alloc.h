@@ -23,7 +23,7 @@ class Allocator {
   Bitmap* bitmap;
 
   // free_lists[n-1] means a free list of size n beginning from LogicalBlockIdx
-  std::array<std::vector<LogicalBlockIdx>, BITMAP_CAPACITY> free_lists;
+  std::array<std::vector<LogicalBlockIdx>, BITMAP_BLOCK_CAPACITY> free_lists;
 
   // used as a hint for search; recent is defined to be "the next one to search"
   // keep id for idx translation
@@ -78,7 +78,7 @@ class Allocator {
   void free(const std::vector<LogicalBlockIdx>& recycle_image);
 
   void return_free_list() {
-    for (uint32_t n = 0; n < BITMAP_CAPACITY; ++n)
+    for (uint32_t n = 0; n < BITMAP_BLOCK_CAPACITY; ++n)
       for (LogicalBlockIdx lidx : free_lists[n])
         Bitmap::free(bitmap, static_cast<BitmapIdx>(lidx.get()), n + 1);
   }

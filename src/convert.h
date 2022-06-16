@@ -66,8 +66,8 @@ class Converter {
     dram::File* file = new dram::File(fd, stat_buf, O_RDWR, pathname, false);
     dram::Allocator* allocator = file->get_local_allocator();
     allocator->return_free_list();
-    uint32_t num_bitmaps_full = (num_blocks + 1) >> BITMAP_CAPACITY_SHIFT;
-    uint32_t num_bits_left = (num_blocks + 1) % BITMAP_CAPACITY;
+    uint32_t num_bitmaps_full = (num_blocks + 1) >> BITMAP_BLOCK_CAPACITY_SHIFT;
+    uint32_t num_bits_left = (num_blocks + 1) % BITMAP_BLOCK_CAPACITY;
     for (uint32_t i = 0; i < num_bitmaps_full; ++i)
       file->bitmap[i].set_allocated_all();
     for (uint32_t i = 0; i < num_bits_left; ++i)
@@ -112,13 +112,14 @@ class Converter {
     // if it's not full block or MetaBlock does not have the capacity, we still
     // need LogEntryBlock
     need_le_block |= (leftover_bytes != 0) |
-                     ((num_blocks - 1) >
-                      ((NUM_INLINE_TX_ENTRY - 1) << BITMAP_CAPACITY_SHIFT));
+                     ((num_blocks - 1) > ((NUM_INLINE_TX_ENTRY - 1)
+                                          << BITMAP_BLOCK_CAPACITY_SHIFT));
 
     if (!need_le_block) {
       for (VirtualBlockIdx begin_vidx = 1; begin_vidx < num_blocks;
-           begin_vidx += BITMAP_CAPACITY) {
-        uint32_t len = std::min(num_blocks - begin_vidx.get(), BITMAP_CAPACITY);
+           begin_vidx += BITMAP_BLOCK_CAPACITY) {
+        uint32_t len =
+            std::min(num_blocks - begin_vidx.get(), BITMAP_BLOCK_CAPACITY);
         file->tx_mgr.try_commit(
             pmem::TxEntryInline(len, begin_vidx,
                                 LogicalBlockIdx(begin_vidx.get())),
