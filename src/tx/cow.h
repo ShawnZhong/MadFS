@@ -64,14 +64,25 @@ class SingleBlockTx : public CoWTx {
 
   redo:
     debug::counter.count("SingleBlockTx copy");
-    // copy original data
-    const pmem::Block* src_block = file->lidx_to_addr_ro(recycle_image[0]);
     assert(dst_blocks.size() == 1);
-    pmem::memcpy_persist(dst_blocks[0]->data_rw(), src_block->data_ro(),
-                         local_offset);
-    pmem::memcpy_persist(dst_blocks[0]->data_rw() + local_offset + count,
-                         src_block->data_ro() + local_offset + count,
-                         BLOCK_SIZE - (local_offset + count));
+
+    // copy original data
+    {
+      char* dst_block = dst_blocks[0]->data_rw();
+      const char* src_block = file->lidx_to_addr_ro(recycle_image[0])->data_ro();
+
+      // copy the left part of the block
+      if (local_offset != 0) {
+        pmem::memcpy_persist(dst_block, src_block, local_offset);
+      }
+
+      // copy the right part of the block
+      if (size_t len = BLOCK_SIZE - (local_offset + count); len != 0) {
+        char* dst = dst_block + local_offset + count;
+        const char* src = src_block + local_offset + count;
+        pmem::memcpy_persist(dst, src, len);
+      }
+    }
 
     if (is_offset_depend) file->wait_offset(ticket);
 
