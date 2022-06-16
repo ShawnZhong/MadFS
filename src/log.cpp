@@ -59,7 +59,7 @@ LogEntryIdx LogMgr::append(Allocator* allocator, pmem::LogEntry::Op op,
       curr_entry->persist();
       curr_entry = next_entry;
       i += j;
-      begin_vidx += (j << BITMAP_CAPACITY_SHIFT);
+      begin_vidx += (j << BITMAP_BLOCK_CAPACITY_SHIFT);
     } else {
       curr_entry->leftover_bytes = leftover_bytes;
       curr_entry->persist();

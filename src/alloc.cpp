@@ -17,7 +17,7 @@
 namespace ulayfs::dram {
 
 LogicalBlockIdx Allocator::alloc(uint32_t num_blocks) {
-  assert(num_blocks <= BITMAP_CAPACITY);
+  assert(num_blocks <= BITMAP_BLOCK_CAPACITY);
 
   if (!free_lists[num_blocks - 1].empty()) {
     LogicalBlockIdx lidx = free_lists[num_blocks - 1].back();
@@ -29,7 +29,7 @@ LogicalBlockIdx Allocator::alloc(uint32_t num_blocks) {
     return lidx;
   }
 
-  for (uint32_t n = num_blocks + 1; n <= BITMAP_CAPACITY; ++n) {
+  for (uint32_t n = num_blocks + 1; n <= BITMAP_BLOCK_CAPACITY; ++n) {
     if (!free_lists[n - 1].empty()) {
       LogicalBlockIdx lidx = free_lists[n - 1].back();
 
@@ -59,7 +59,7 @@ retry:
         allocated_bits);
 
   // add available bits to the local free list
-  num_bits_left = BITMAP_CAPACITY;
+  num_bits_left = BITMAP_BLOCK_CAPACITY;
   while (num_bits_left > 0) {
     // first remove all trailing ones
     uint32_t num_right_ones =
@@ -75,27 +75,30 @@ retry:
 
     if (!is_found && num_right_zeros >= num_blocks) {
       is_found = true;
-      allocated_block_idx = allocated_idx + BITMAP_CAPACITY - num_bits_left;
+      allocated_block_idx =
+          allocated_idx + BITMAP_BLOCK_CAPACITY - num_bits_left;
       TRACE("Allocator::alloc: allocated blocks: [n_blk: %d, lidx: %u]",
             num_right_zeros, allocated_block_idx.get());
       if (num_right_zeros > num_blocks) {
         free_lists[num_right_zeros - num_blocks - 1].emplace_back(
-            allocated_idx + BITMAP_CAPACITY - num_bits_left + num_blocks);
-        TRACE("Allocator::alloc: unused blocks saved: [n_blk: %d, lidx: %u]",
-              num_right_zeros - num_blocks,
-              allocated_idx + BITMAP_CAPACITY - num_bits_left + num_blocks);
+            allocated_idx + BITMAP_BLOCK_CAPACITY - num_bits_left + num_blocks);
+        TRACE(
+            "Allocator::alloc: unused blocks saved: [n_blk: %d, lidx: %u]",
+            num_right_zeros - num_blocks,
+            allocated_idx + BITMAP_BLOCK_CAPACITY - num_bits_left + num_blocks);
       }
     } else {
       free_lists[num_right_zeros - 1].emplace_back(
-          allocated_idx + BITMAP_CAPACITY - num_bits_left);
+          allocated_idx + BITMAP_BLOCK_CAPACITY - num_bits_left);
       TRACE("Allocator::alloc: unused blocks saved: [n_blk: %d, lidx: %u]",
-            num_right_zeros, allocated_idx + BITMAP_CAPACITY - num_bits_left);
+            num_right_zeros,
+            allocated_idx + BITMAP_BLOCK_CAPACITY - num_bits_left);
     }
     allocated_bits >>= num_right_zeros;
     num_bits_left -= num_right_zeros;
   }
   // this recent is not useful because we have taken all bits; move on
-  recent_bitmap_idx = allocated_idx + BITMAP_CAPACITY;
+  recent_bitmap_idx = allocated_idx + BITMAP_BLOCK_CAPACITY;
 
   // don't have the right size, retry
   if (!is_found) goto retry;
@@ -163,8 +166,8 @@ pmem::LogEntry* Allocator::alloc_log_entry(uint32_t num_blocks,
   first_block = curr_log_block;
   pmem::LogEntry* first_entry = curr_log_block->get(curr_log_offset);
   pmem::LogEntry* curr_entry = first_entry;
-  uint32_t needed_lidxs_cnt =
-      ALIGN_UP(num_blocks, BITMAP_CAPACITY) >> BITMAP_CAPACITY_SHIFT;
+  uint32_t needed_lidxs_cnt = ALIGN_UP(num_blocks, BITMAP_BLOCK_CAPACITY) >>
+                              BITMAP_BLOCK_CAPACITY_SHIFT;
   while (true) {
     assert(curr_entry);
     curr_log_offset += pmem::LogEntry::FIXED_SIZE;
@@ -179,7 +182,7 @@ pmem::LogEntry* Allocator::alloc_log_entry(uint32_t num_blocks,
     }
 
     curr_entry->has_next = true;
-    curr_entry->num_blocks = avail_lidxs_cnt << BITMAP_CAPACITY_SHIFT;
+    curr_entry->num_blocks = avail_lidxs_cnt << BITMAP_BLOCK_CAPACITY_SHIFT;
     curr_log_offset += avail_lidxs_cnt * sizeof(LogicalBlockIdx);
     needed_lidxs_cnt -= avail_lidxs_cnt;
     num_blocks -= curr_entry->num_blocks;

@@ -51,20 +51,18 @@ constexpr static uint16_t NUM_INLINE_TX_ENTRY =
  * bitmap
  */
 constexpr static uint16_t BITMAP_SIZE = 8;
+constexpr static uint32_t BITMAP_BLOCK_CAPACITY_SHIFT = 6;
 // how many blocks a bitmap can manage
-// (that's why call it "capacity" instead of "size")
-constexpr static uint32_t BITMAP_CAPACITY_SHIFT = 6;
-constexpr static uint32_t BITMAP_CAPACITY = 1 << BITMAP_CAPACITY_SHIFT;
-// how many bytes are covered by a single 64-bit bitmap
-constexpr static uint64_t BITMAP_CAPACITY_IN_BYTES = BITMAP_CAPACITY
-                                                     << BLOCK_SHIFT;
+constexpr static uint32_t BITMAP_BLOCK_CAPACITY =
+    1 << BITMAP_BLOCK_CAPACITY_SHIFT;
+// how many bytes a bitmap can manage
+constexpr static uint64_t BITMAP_BYTES_CAPACITY = BITMAP_BLOCK_CAPACITY
+                                                  << BLOCK_SHIFT;
 
 // total number of bitmaps in DRAM
-// TODO: enable dynamic growing of bitmap
 constexpr static uint16_t NUM_BITMAP_PER_BLOCK = BLOCK_SIZE / BITMAP_SIZE;
 
 // we use one hugepage of bitmap, which is sufficient for a 64GB file
-// TODO: extend bitmap dynamically
 constexpr static uint32_t NUM_BITMAP_BLOCKS = 512;
 constexpr static uint32_t SHM_SIZE = NUM_BITMAP_BLOCKS << BLOCK_SHIFT;
 constexpr static uint32_t NUM_BITMAP = NUM_BITMAP_BLOCKS * NUM_BITMAP_PER_BLOCK;
