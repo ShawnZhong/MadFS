@@ -67,7 +67,7 @@ extern thread_local class Counter {
  public:
   Counter() = default;
   ~Counter() {
-//    if constexpr (!BuildOptions::debug) return;
+    if constexpr (!BuildOptions::debug) return;
     std::lock_guard<std::mutex> guard(print_mutex);
     fprintf(log_file, "[%d] Counters:\n", tid);
     for (auto &[name, size] : std::map{counter.begin(), counter.end()}) {
@@ -76,12 +76,12 @@ extern thread_local class Counter {
   }
 
   void count(const std::string &name) {
-//    if constexpr (!BuildOptions::debug) return;
+    if constexpr (!BuildOptions::debug) return;
     counter[name]++;
   }
 
   void count(const std::string &name, size_t size) {
-//    if constexpr (!BuildOptions::debug) return;
+    if constexpr (!BuildOptions::debug) return;
     counter[name + "::size"] += size;
     counter[name + "::count"]++;
   }
