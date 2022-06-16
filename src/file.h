@@ -24,7 +24,7 @@
 #include "mtable.h"
 #include "offset.h"
 #include "posix.h"
-#include "tx.h"
+#include "tx/mgr.h"
 #include "utils.h"
 
 namespace ulayfs::utility {

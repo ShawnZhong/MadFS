@@ -23,7 +23,12 @@ add_library(ulayfs SHARED
     src/posix.h src/posix.cpp
     src/convert.h
     src/tbb.h
-    src/tx.h src/tx.cpp
+    src/tx/mgr.h src/tx/mgr.cpp
+    src/tx/tx.h
+    src/tx/read.h
+    src/tx/write.h
+    src/tx/aligned.h
+    src/tx/cow.h
     src/utils.h src/utils.cpp
     )
 
