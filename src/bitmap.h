@@ -7,6 +7,7 @@
 #include <ostream>
 
 #include "const.h"
+#include "debug.h"
 #include "idx.h"
 #include "utils.h"
 

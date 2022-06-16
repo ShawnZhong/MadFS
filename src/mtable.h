@@ -13,6 +13,7 @@
 #include "block.h"
 #include "config.h"
 #include "const.h"
+#include "debug.h"
 #include "idx.h"
 #include "posix.h"
 #include "tbb.h"

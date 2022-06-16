@@ -1,6 +1,7 @@
 #include "lib.h"
 
 #include <fcntl.h>
+#include <pthread.h>
 #include <sys/file.h>
 #include <sys/mman.h>
 #include <sys/stat.h>
@@ -12,6 +13,7 @@
 #include <cstdarg>
 #include <cstdio>
 #include <iostream>
+#include <map>
 
 #include "config.h"
 #include "const.h"
@@ -54,6 +56,7 @@ int open(const char* pathname, int flags, ...) {
     files.emplace(fd,
                   std::make_shared<dram::File>(fd, stat_buf, flags, pathname));
     INFO("ulayfs::open(%s, %x, %x) = %d", pathname, flags, mode, fd);
+    debug::counter.count("ulayfs::open");
   } catch (const FileInitException& e) {
     WARN("File \"%s\": ulayfs::open failed: %s. Fallback to syscall", pathname,
          e.what());
@@ -94,6 +97,7 @@ int close(int fd) {
   if (auto file = get_file(fd)) {
     DEBUG("ulayfs::close(%s)", file->path);
     files.unsafe_erase(fd);
+    debug::counter.count("ulayfs::close");
     return 0;
   } else {
     DEBUG("posix::close(%d)", fd);
@@ -106,6 +110,7 @@ int fclose(FILE* stream) {
   if (auto file = get_file(fd)) {
     DEBUG("ulayfs::fclose(%s)", file->path);
     files.unsafe_erase(fd);
+    debug::counter.count("ulayfs::fclose");
     return 0;
   } else {
     DEBUG("posix::fclose(%d)", fd);
@@ -117,6 +122,7 @@ ssize_t read(int fd, void* buf, size_t count) {
   if (auto file = get_file(fd)) {
     auto res = file->read(buf, count);
     DEBUG("ulayfs::read(%s, buf, %zu) = %zu", file->path, count, res);
+    debug::counter.count("ulayfs::read", count);
     return res;
   } else {
     auto res = posix::read(fd, buf, count);
@@ -130,6 +136,7 @@ ssize_t pread(int fd, void* buf, size_t count, off_t offset) {
     auto res = file->pread(buf, count, offset);
     DEBUG("ulayfs::pread(%s, buf, %zu, %ld) = %zu", file->path, count, offset,
           res);
+    debug::counter.count("ulayfs::pread", count);
     return res;
   } else {
     auto res = posix::pread(fd, buf, count, offset);
@@ -158,6 +165,7 @@ ssize_t write(int fd, const void* buf, size_t count) {
   if (auto file = get_file(fd)) {
     ssize_t res = file->write(buf, count);
     DEBUG("ulayfs::write(%s, buf, %zu) = %zu", file->path, count, res);
+    debug::counter.count("ulayfs::write", count);
     return res;
   } else {
     ssize_t res = posix::write(fd, buf, count);
@@ -169,6 +177,7 @@ ssize_t write(int fd, const void* buf, size_t count) {
 ssize_t pwrite(int fd, const void* buf, size_t count, off_t offset) {
   if (auto file = get_file(fd)) {
     DEBUG("ulayfs::pwrite(%s, buf, %zu, %ld)", file->path, count, offset);
+    debug::counter.count("ulayfs::pwrite", count);
     return file->pwrite(buf, count, offset);
   } else {
     DEBUG("posix::pwrite(%d, buf, %zu, %ld)", fd, count, offset);
@@ -342,10 +351,8 @@ int fcntl64(int fd, int cmd, ... /* arg */) {
  * e.g., all the functions in the ulayfs::posix namespace
  */
 void __attribute__((constructor)) ulayfs_ctor() {
-  if (runtime_options.show_config) {
-    std::cerr << build_options << std::endl;
-    std::cerr << runtime_options << std::endl;
-  }
+  std::cerr << build_options << std::endl;
+  std::cerr << runtime_options << std::endl;
   if (runtime_options.log_file) {
     log_file = fopen(runtime_options.log_file, "a");
   }

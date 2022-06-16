@@ -29,7 +29,7 @@ add_library(ulayfs SHARED
     src/tx/write.h
     src/tx/aligned.h
     src/tx/cow.h
-    src/utils.h src/utils.cpp
+    src/utils.h
     )
 
 #[[
