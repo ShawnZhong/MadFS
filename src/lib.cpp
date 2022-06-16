@@ -1,13 +1,13 @@
 #include "lib.h"
 
 #include <fcntl.h>
+#include <pthread.h>
 #include <sys/file.h>
 #include <sys/mman.h>
 #include <sys/stat.h>
 #include <sys/xattr.h>
 #include <tbb/concurrent_unordered_map.h>
 #include <unistd.h>
-#include <pthread.h>
 
 #include <cassert>
 #include <cstdarg>
@@ -344,7 +344,6 @@ int fcntl64(int fd, int cmd, ... /* arg */) {
   return res;
 }
 
-
 /**
  * Called when the shared library is first loaded
  *
@@ -359,12 +358,9 @@ void __attribute__((constructor)) ulayfs_ctor() {
   }
 }
 
-
 /**
  * Called when the shared library is unloaded
  */
-void __attribute__((destructor)) ulayfs_dtor() {
-  INFO("ulayfs_dtor called");
-}
+void __attribute__((destructor)) ulayfs_dtor() { INFO("ulayfs_dtor called"); }
 }  // extern "C"
 }  // namespace ulayfs
