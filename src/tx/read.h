@@ -11,6 +11,7 @@ class ReadTx : public Tx {
  public:
   ReadTx(File* file, TxMgr* tx_mgr, char* buf, size_t count, size_t offset)
       : Tx(file, tx_mgr, count, offset), buf(buf) {}
+
   ReadTx(File* file, TxMgr* tx_mgr, char* buf, size_t count, size_t offset,
          TxEntryIdx tail_tx_idx, pmem::TxBlock* tail_tx_block,
          uint64_t file_size, uint64_t ticket)
@@ -21,7 +22,8 @@ class ReadTx : public Tx {
     this->file_size = file_size;
     this->ticket = ticket;
   }
-  ssize_t do_read() {
+
+  ssize_t exec() override {
     size_t first_block_offset = offset & (BLOCK_SIZE - 1);
     size_t first_block_size = BLOCK_SIZE - first_block_offset;
     if (first_block_size > count) first_block_size = count;
@@ -120,7 +122,6 @@ class ReadTx : public Tx {
         is_offset_depend = false;
         goto redo;
       }
-      file->release_offset(ticket, tail_tx_idx, tail_tx_block);
     }
 
     return static_cast<ssize_t>(count);

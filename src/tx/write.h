@@ -79,16 +79,5 @@ class WriteTx : public Tx {
     this->tail_tx_block = tail_tx_block;
     this->ticket = ticket;
   }
-
- public:
-  template <typename TX>
-  static ssize_t do_write_and_validate_offset(
-      File* file, TxMgr* tx_mgr, const char* buf, size_t count, size_t offset,
-      TxEntryIdx tail_tx_idx, pmem::TxBlock* tail_tx_block, uint64_t ticket) {
-    TX tx(file, tx_mgr, buf, count, offset, tail_tx_idx, tail_tx_block, ticket);
-    ssize_t ret = tx.do_write();
-    tx.file->release_offset(ticket, tx.tail_tx_idx, tx.tail_tx_block);
-    return ret;
-  }
 };
 }  // namespace ulayfs::dram

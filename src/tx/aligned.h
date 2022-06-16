@@ -13,7 +13,7 @@ class AlignedTx : public WriteTx {
       : WriteTx(file, tx_mgr, buf, count, offset, tail_tx_idx, tail_tx_block,
                 ticket) {}
 
-  ssize_t do_write() {
+  ssize_t exec() override {
     pmem::TxEntry conflict_entry;
 
     // since everything is block-aligned, we can copy data directly

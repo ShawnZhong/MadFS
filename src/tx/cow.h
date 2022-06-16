@@ -39,6 +39,7 @@ class SingleBlockTx : public CoWTx {
         local_offset(offset - BLOCK_IDX_TO_SIZE(begin_vidx)) {
     assert(num_blocks == 1);
   }
+
   SingleBlockTx(File* file, TxMgr* tx_mgr, const char* buf, size_t count,
                 size_t offset, TxEntryIdx tail_tx_idx,
                 pmem::TxBlock* tail_tx_block, uint64_t ticket)
@@ -47,7 +48,8 @@ class SingleBlockTx : public CoWTx {
         local_offset(offset - BLOCK_IDX_TO_SIZE(begin_vidx)) {
     assert(num_blocks == 1);
   }
-  ssize_t do_write() {
+
+  ssize_t exec() override {
     pmem::TxEntry conflict_entry;
 
     // must acquire the tx tail before any get
@@ -114,7 +116,7 @@ class MultiBlockTx : public CoWTx {
         first_block_overlap_size(ALIGN_UP(offset, BLOCK_SIZE) - offset),
         last_block_overlap_size(end_offset -
                                 ALIGN_DOWN(end_offset, BLOCK_SIZE)) {}
-  ssize_t do_write() {
+  ssize_t exec() override {
     // if need_copy_first/last is false, this means it is handled by the full
     // block copy and never need redo
     const bool need_copy_first = begin_full_vidx != begin_vidx;

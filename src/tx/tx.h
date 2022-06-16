@@ -79,6 +79,19 @@ class Tx {
         num_blocks(end_vidx - begin_vidx),
         is_offset_depend(false) {}
 
+ public:
+  virtual ssize_t exec() = 0;
+
+ public:
+  template <typename TX, typename... Params>
+  static ssize_t exec_and_release_offset(Params&&... params) {
+    TX tx(std::forward<Params>(params)...);
+    ssize_t ret = tx.exec();
+    tx.file->release_offset(tx.ticket, tx.tail_tx_idx, tx.tail_tx_block);
+    return ret;
+  }
+
+ protected:
   /**
    * Move to the real tx and update first/last_src_block to indicate whether to
    * redo
@@ -133,6 +146,7 @@ class Tx {
     return has_conflict;
   }
 
+ private:
   /**
    * Check if [first_vidx, last_vidx] has any overlap with [le_first_vidx,
    * le_first_vidx + num_blocks - 1]; populate overlapped mapping if any
