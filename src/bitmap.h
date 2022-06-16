@@ -9,6 +9,7 @@
 #include "const.h"
 #include "idx.h"
 #include "utils.h"
+#include "debug.h"
 
 namespace ulayfs::dram {
 // All member functions are thread-safe and require no locks
