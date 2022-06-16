@@ -69,7 +69,7 @@ class ULAYFS(Ext4DAX):
 
     @staticmethod
     def get_env(cmd, build_type):
-        if not is_ulayfs_linked(cmd[0]):
+        if is_ulayfs_linked(cmd[0]):
             return {}
         ulayfs_path = root_dir / f"build-{build_type}" / "libulayfs.so"
         if not ulayfs_path.exists():
