@@ -20,7 +20,7 @@ class LogMgr {
   File* file;
 
  public:
-  LogMgr(File* file) : file(file) {}
+  explicit LogMgr(File* file) : file(file) {}
 
   /**
    * get the given entry
