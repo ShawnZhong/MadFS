@@ -126,12 +126,13 @@ class Tx {
           for (i = 0; i < curr_le_entry->get_lidxs_len() - 1; ++i) {
             has_conflict |= get_conflict_image(
                 first_vidx, last_vidx,
-                curr_le_entry->begin_vidx + (i << BITMAP_CAPACITY_SHIFT),
-                curr_le_entry->begin_lidxs[i], BITMAP_CAPACITY, conflict_image);
+                curr_le_entry->begin_vidx + (i << BITMAP_BLOCK_CAPACITY_SHIFT),
+                curr_le_entry->begin_lidxs[i], BITMAP_BLOCK_CAPACITY,
+                conflict_image);
           }
           has_conflict |= get_conflict_image(
               first_vidx, last_vidx,
-              curr_le_entry->begin_vidx + (i << BITMAP_CAPACITY_SHIFT),
+              curr_le_entry->begin_vidx + (i << BITMAP_BLOCK_CAPACITY_SHIFT),
               curr_le_entry->begin_lidxs[i],
               curr_le_entry->get_last_lidx_num_blocks(), conflict_image);
         } while ((curr_le_entry =
