@@ -56,7 +56,7 @@ class WriteTx : public Tx {
     assert(!dst_blocks.empty());
 
     uint16_t leftover_bytes = ALIGN_UP(end_offset, BLOCK_SIZE) - end_offset;
-    if (leftover_bytes != 0 &&
+    if (leftover_bytes == 0 &&
         pmem::TxEntryInline::can_inline(num_blocks, begin_vidx, dst_lidxs[0])) {
       commit_entry = pmem::TxEntryInline(num_blocks, begin_vidx, dst_lidxs[0]);
     } else {
