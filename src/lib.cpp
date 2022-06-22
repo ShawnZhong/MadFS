@@ -108,7 +108,7 @@ int close(int fd) {
   }
 }
 
-FILE *fopen(const char *filename, const char *mode){
+FILE* fopen(const char* filename, const char* mode) {
   static INIT_FN(fopen);
 
   FILE* file = fopen(filename, mode);
