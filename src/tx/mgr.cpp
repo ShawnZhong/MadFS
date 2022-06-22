@@ -141,7 +141,6 @@ bool TxMgr::handle_idx_overflow(TxEntryIdx& tx_idx, pmem::TxBlock*& tx_block,
 
 void TxMgr::flush_tx_entries(TxEntryIdx tx_idx_begin, TxEntryIdx tx_idx_end,
                              pmem::TxBlock* tx_block_end) {
-  if (!tx_idx_greater(tx_idx_end, tx_idx_begin)) return;
   pmem::TxBlock* tx_block_begin;
   // handle special case of inline tx
   if (tx_idx_begin.block_idx == 0) {

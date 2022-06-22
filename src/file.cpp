@@ -230,7 +230,10 @@ int File::fsync() {
   TxEntryIdx tail_tx_idx;
   pmem::TxBlock* tail_tx_block;
   update(tail_tx_idx, tail_tx_block, /*do_alloc*/ false);
-  tx_mgr.flush_tx_entries(meta->get_tx_tail(), tail_tx_idx, tail_tx_block);
+  TxEntryIdx old_tail_tx_idx = meta->get_tx_tail();
+  if (!tx_idx_greater(old_tail_tx_idx, tail_tx_idx, nullptr, tail_tx_block))
+    return 0;
+  tx_mgr.flush_tx_entries(old_tail_tx_idx, tail_tx_idx, tail_tx_block);
   // we keep an invariant that tx_tail must be a valid (non-overflow) idx
   // an overflow index implies that the `next` pointer of the block is not set
   // (and thus not flushed) yet, so we cannot assume it is equivalent to the
