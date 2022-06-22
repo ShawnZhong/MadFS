@@ -8,7 +8,6 @@
 #include "const.h"
 #include "file.h"
 #include "idx.h"
-#include "log.h"
 
 namespace ulayfs::dram {
 
@@ -32,14 +31,14 @@ uint64_t BlkTable::update(bool do_alloc, bool init_bitmap) {
 
   prev_tx_block_idx = 0;
   while (true) {
-    auto tx_entry = tx_mgr->get_entry_from_block(tx_idx_local, tx_block_local);
+    auto tx_entry = tx_mgr->get_tx_entry(tx_idx_local, tx_block_local);
     if (!tx_entry.is_valid()) break;
     if (init_bitmap && tx_idx_local.block_idx != prev_tx_block_idx)
       file->set_allocated(tx_idx_local.block_idx);
     if (tx_entry.is_inline())
-      apply_tx(tx_entry.inline_entry);
+      apply_inline_tx(tx_entry.inline_entry);
     else
-      apply_tx(tx_entry.indirect_entry, file->get_log_mgr(), init_bitmap);
+      apply_indirect_tx(tx_entry.indirect_entry, init_bitmap);
     prev_tx_block_idx = tx_idx_local.block_idx;
     if (!tx_mgr->advance_tx_idx(tx_idx_local, tx_block_local, do_alloc)) break;
   }
@@ -62,17 +61,16 @@ void BlkTable::grow_to_fit(VirtualBlockIdx idx) {
   table.grow_to_at_least(next_pow2(idx.get()));
 }
 
-void BlkTable::apply_tx(pmem::TxEntryIndirect tx_entry, LogMgr* log_mgr,
-                        bool init_bitmap) {
-  pmem::LogEntryBlock* curr_block;
-  pmem::LogEntry* curr_entry =
-      log_mgr->get_entry(tx_entry.get_log_entry_idx(), curr_block, init_bitmap);
+void BlkTable::apply_indirect_tx(pmem::TxEntryIndirect tx_entry,
+                                 bool init_bitmap) {
+  auto [curr_entry, curr_block] =
+      tx_mgr->get_log_entry(tx_entry.get_log_entry_idx(), init_bitmap);
 
   uint32_t num_blocks;
   VirtualBlockIdx begin_vidx, end_vidx;
   uint16_t leftover_bytes;
 
-  do {
+  while (true) {
     assert(curr_entry && curr_block);
     begin_vidx = curr_entry->begin_vidx;
     num_blocks = curr_entry->num_blocks;
@@ -85,20 +83,24 @@ void BlkTable::apply_tx(pmem::TxEntryIndirect tx_entry, LogMgr* log_mgr,
           offset % BITMAP_BLOCK_CAPACITY;
     // only the last one matters, so this variable will keep being overwritten
     leftover_bytes = curr_entry->leftover_bytes;
-    curr_entry = log_mgr->get_next_entry(curr_entry, curr_block, init_bitmap);
-  } while (curr_entry);
+    const auto& [next_entry, next_block] =
+        tx_mgr->get_next_log_entry(curr_entry, curr_block, init_bitmap);
+    if (next_entry == nullptr) break;
+    curr_entry = next_entry;
+    curr_block = next_block;
+  }
 
   uint64_t now_file_size = BLOCK_IDX_TO_SIZE(end_vidx) - leftover_bytes;
   if (now_file_size > file_size.load(std::memory_order_relaxed))
     file_size.store(now_file_size, std::memory_order_relaxed);
 }
 
-void BlkTable::apply_tx(pmem::TxEntryInline tx_commit_inline_entry) {
-  uint32_t num_blocks = tx_commit_inline_entry.num_blocks;
+void BlkTable::apply_inline_tx(pmem::TxEntryInline tx_entry) {
+  uint32_t num_blocks = tx_entry.num_blocks;
   // for dummy entry, do nothing
   if (num_blocks == 0) return;
-  VirtualBlockIdx begin_vidx = tx_commit_inline_entry.begin_virtual_idx;
-  LogicalBlockIdx begin_lidx = tx_commit_inline_entry.begin_logical_idx;
+  VirtualBlockIdx begin_vidx = tx_entry.begin_virtual_idx;
+  LogicalBlockIdx begin_lidx = tx_entry.begin_logical_idx;
   VirtualBlockIdx end_vidx = begin_vidx + num_blocks;
   grow_to_fit(end_vidx);
 

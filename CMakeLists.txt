@@ -16,7 +16,6 @@ add_library(ulayfs SHARED
     src/gc.h
     src/idx.h
     src/lib.h src/lib.cpp
-    src/log.h src/log.cpp
     src/mtable.h src/mtable.cpp
     src/offset.h src/offset.cpp
     src/persist.h

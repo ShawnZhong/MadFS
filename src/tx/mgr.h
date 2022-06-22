@@ -5,6 +5,7 @@
 #include <ostream>
 #include <vector>
 
+#include "alloc.h"
 #include "block.h"
 #include "entry.h"
 #include "idx.h"
@@ -48,10 +49,57 @@ class TxMgr {
                       bool do_alloc) const;
 
   /**
-   * Read the entry from the MetaBlock or TxBlock
+   * Read the tx entry from the MetaBlock or TxBlock
+   *
+   * @param idx the index of the entry
+   * @param tx_block the TxBlock to read from
+   * @return the tx entry
    */
-  [[nodiscard]] pmem::TxEntry get_entry_from_block(
-      TxEntryIdx idx, pmem::TxBlock* tx_block) const;
+  [[nodiscard]] pmem::TxEntry get_tx_entry(TxEntryIdx idx,
+                                           pmem::TxBlock* tx_block) const;
+
+  /**
+   * Get log entry given the index
+   *
+   * @param idx the log entry index
+   * @param init_bitmap whether to initialize the bitmap
+   * @return a tuple of (log entry, the block containing the entry)
+   */
+  [[nodiscard]] std::tuple<pmem::LogEntry*, pmem::LogEntryBlock*> get_log_entry(
+      LogEntryIdx idx, bool init_bitmap = false) const;
+
+  /**
+   * get the next log entry
+   *
+   * @param curr_entry the current log entry
+   * @param curr_block the current log entry block; will be updated if
+   * move on to the next block
+   * @param init_bitmap whether set related LogEntryBlock as used in bitmap
+   * @return a tuple of (next_log_entry, next_log_entry_block)
+   */
+  [[nodiscard]] std::tuple<pmem::LogEntry*, pmem::LogEntryBlock*>
+  get_next_log_entry(const pmem::LogEntry* curr_entry,
+                     pmem::LogEntryBlock* curr_block,
+                     bool init_bitmap = false) const;
+
+  /**
+   * populate log entries required by a single transaction; do persist but not
+   * fenced
+   *
+   * @param allocator allocator to use for allocating log entries
+   * @param op operation code, e.g., LOG_OVERWRITE
+   * @param leftover_bytes remaining empty bytes in the last block
+   * @param num_blocks total number blocks touched
+   * @param begin_vidx start of virtual index
+   * @param begin_lidxs ordered list of logical indices for each chunk of
+   * virtual index
+   * @return index of the first LogHeadEntry for later retrival of the whole
+   *         group of entries
+   */
+  LogEntryIdx append_log_entry(Allocator* allocator, pmem::LogEntry::Op op,
+                               uint16_t leftover_bytes, uint32_t num_blocks,
+                               VirtualBlockIdx begin_vidx,
+                               const std::vector<LogicalBlockIdx>& begin_lidxs) const;
 
   /**
    * Try to commit an entry

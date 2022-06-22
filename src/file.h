@@ -20,7 +20,6 @@
 #include "const.h"
 #include "entry.h"
 #include "idx.h"
-#include "log.h"
 #include "mtable.h"
 #include "offset.h"
 #include "posix.h"
@@ -40,7 +39,6 @@ class File {
   MemTable mem_table;
   pmem::MetaBlock* meta;
   TxMgr tx_mgr;
-  LogMgr log_mgr;
   BlkTable blk_table;
   OffsetMgr offset_mgr;
 
@@ -87,7 +85,6 @@ class File {
    * Getters
    */
   [[nodiscard]] Allocator* get_local_allocator();
-  [[nodiscard]] LogMgr* get_log_mgr() { return &log_mgr; };
 
   /*
    * exported interface for update; init_bitmap is always false

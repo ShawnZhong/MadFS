@@ -146,9 +146,8 @@ void Allocator::free(const std::vector<LogicalBlockIdx>& recycle_image) {
   }
 }
 
-pmem::LogEntry* Allocator::alloc_log_entry(uint32_t num_blocks,
-                                           LogEntryIdx& first_idx,
-                                           pmem::LogEntryBlock*& first_block) {
+std::tuple<pmem::LogEntry*, LogEntryIdx, pmem::LogEntryBlock*>
+Allocator::alloc_log_entry(uint32_t num_blocks) {
   // for a log entry with only one logical block index, it takes 16 bytes
   // if smaller than that, do not try to allocate log entry there
   constexpr uint32_t min_required_size =
@@ -162,8 +161,8 @@ pmem::LogEntry* Allocator::alloc_log_entry(uint32_t num_blocks,
     curr_log_offset = 0;
   }
 
-  first_idx = {curr_log_block_idx, curr_log_offset};
-  first_block = curr_log_block;
+  LogEntryIdx first_idx = {curr_log_block_idx, curr_log_offset};
+  pmem::LogEntryBlock* first_block = curr_log_block;
   pmem::LogEntry* first_entry = curr_log_block->get(curr_log_offset);
   pmem::LogEntry* curr_entry = first_entry;
   uint32_t needed_lidxs_cnt = ALIGN_UP(num_blocks, BITMAP_BLOCK_CAPACITY) >>
@@ -178,7 +177,7 @@ pmem::LogEntry* Allocator::alloc_log_entry(uint32_t num_blocks,
       curr_entry->has_next = false;
       curr_entry->num_blocks = num_blocks;
       curr_log_offset += needed_lidxs_cnt * sizeof(LogicalBlockIdx);
-      return first_entry;
+      return {first_entry, first_idx, first_block};
     }
 
     curr_entry->has_next = true;

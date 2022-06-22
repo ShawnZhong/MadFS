@@ -70,7 +70,7 @@ class ReadTx : public Tx {
       if (!tx_mgr->handle_idx_overflow(tail_tx_idx, tail_tx_block, false))
         break;
       pmem::TxEntry curr_entry =
-          tx_mgr->get_entry_from_block(tail_tx_idx, tail_tx_block);
+          tx_mgr->get_tx_entry(tail_tx_idx, tail_tx_block);
       if (!curr_entry.is_valid()) break;
 
       // then scan the log and build redo_image; if no redo needed, we are done

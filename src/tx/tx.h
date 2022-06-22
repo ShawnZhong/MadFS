@@ -26,7 +26,6 @@ class Tx {
   // pointer to the outer class
   File* file;
   TxMgr* tx_mgr;
-  LogMgr* log_mgr;
 
   /*
    * Input properties
@@ -66,7 +65,6 @@ class Tx {
   Tx(File* file, TxMgr* tx_mgr, size_t count, size_t offset)
       : file(file),
         tx_mgr(tx_mgr),
-        log_mgr(file->get_log_mgr()),
 
         // input properties
         count(count),
@@ -117,11 +115,10 @@ class Tx {
             curr_entry.inline_entry.begin_logical_idx,
             curr_entry.inline_entry.num_blocks, conflict_image);
       } else {  // non-inline tx entry
-        pmem::LogEntryBlock* curr_le_block;
-        pmem::LogEntry* curr_le_entry = log_mgr->get_entry(
-            curr_entry.indirect_entry.get_log_entry_idx(), curr_le_block);
+        auto [curr_le_entry, curr_le_block] = tx_mgr->get_log_entry(
+            curr_entry.indirect_entry.get_log_entry_idx());
 
-        do {
+        while (true) {
           uint32_t i;
           for (i = 0; i < curr_le_entry->get_lidxs_len() - 1; ++i) {
             has_conflict |= get_conflict_image(
@@ -135,13 +132,17 @@ class Tx {
               curr_le_entry->begin_vidx + (i << BITMAP_BLOCK_CAPACITY_SHIFT),
               curr_le_entry->begin_lidxs[i],
               curr_le_entry->get_last_lidx_num_blocks(), conflict_image);
-        } while ((curr_le_entry =
-                      log_mgr->get_next_entry(curr_le_entry, curr_le_block)));
+          const auto& [next_le_entry, next_le_block] =
+              tx_mgr->get_next_log_entry(curr_le_entry, curr_le_block);
+          if (next_le_entry == nullptr) break;
+          curr_le_entry = next_le_entry;
+          curr_le_block = next_le_block;
+        }
       }
       if (!tx_mgr->advance_tx_idx(tail_tx_idx, tail_tx_block,
                                   /*do_alloc*/ false))
         break;
-      curr_entry = tx_mgr->get_entry_from_block(tail_tx_idx, tail_tx_block);
+      curr_entry = tx_mgr->get_tx_entry(tail_tx_idx, tail_tx_block);
     } while (curr_entry.is_valid());
 
     return has_conflict;

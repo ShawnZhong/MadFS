@@ -35,6 +35,7 @@ struct LogEntry {
   // whether this log entry has a next entry (as a linked list).
   // `next` is only meaningful if this bit is set
   bool has_next : 1;
+
   // whether the next entry is in the same block.
   // if true, `next` shall be interpreted as `local_offset`.
   // otherwise, `next` shall be interpreted as `block_idx`.
@@ -78,7 +79,7 @@ struct LogEntry {
     auto size = FIXED_SIZE + sizeof(LogicalBlockIdx) * get_lidxs_len();
     persist_unfenced(this, size);
   }
-  // more advanced iteration helpers are in LogMgr, since they require MemTable
+  // more advanced iteration helpers are in TxMgr, since they require MemTable
 
   friend std::ostream& operator<<(std::ostream& out, const LogEntry& entry) {
     out << "LogEntry{";
