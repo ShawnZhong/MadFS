@@ -198,6 +198,12 @@ class File {
    */
   void unlink_shm();
 
+  /**
+   * Remove the shared memory object associated for a given file
+   * @param filepath the path of the file
+   */
+  static void unlink_shm(const char* filepath);
+
   void tx_gc();
 
   bool tx_idx_greater(const TxEntryIdx lhs_idx, const TxEntryIdx rhs_idx,

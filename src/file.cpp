@@ -327,9 +327,19 @@ void File::open_shm(const struct stat& stat) {
   bitmap = static_cast<Bitmap*>(shm);
 }
 
-void File::unlink_shm() {
+static void unlink_shm_impl(const char* shm_path) {
   int ret = posix::unlink(shm_path);
-  if (ret != 0) INFO("Fail to unlink bitmaps on shared memory: %m");
+  TRACE("posix::unlink(%s) = %d", shm_path, ret);
+  if (unlikely(ret < 0)) WARN("Could not unlink shm file \"%s\": %m", shm_path);
+}
+
+void File::unlink_shm() { unlink_shm_impl(shm_path); }
+
+void File::unlink_shm(const char* filepath) {
+  char shm_path[SHM_PATH_LEN];
+  if (getxattr(filepath, SHM_XATTR_NAME, &shm_path, sizeof(shm_path)) <= 0)
+    return;
+  unlink_shm_impl(shm_path);
 }
 
 void File::tx_gc() {
