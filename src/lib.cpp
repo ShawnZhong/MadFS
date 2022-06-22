@@ -1,7 +1,6 @@
 #include "lib.h"
 
 #include <fcntl.h>
-#include <pthread.h>
 #include <sys/file.h>
 #include <sys/mman.h>
 #include <sys/stat.h>
@@ -13,7 +12,6 @@
 #include <cstdarg>
 #include <cstdio>
 #include <iostream>
-#include <map>
 
 #include "config.h"
 #include "const.h"
@@ -27,7 +25,7 @@ static bool initialized = false;
 
 // mapping between fd and in-memory file handle
 // shared across threads within the same process
-tbb::concurrent_unordered_map<int, std::shared_ptr<dram::File>> files;
+static tbb::concurrent_unordered_map<int, std::shared_ptr<dram::File>> files;
 
 std::shared_ptr<dram::File> get_file(int fd) {
   if (!initialized) return {};
@@ -300,23 +298,15 @@ int __xstat64([[maybe_unused]] int ver, const char* pathname,
   return __xstat(ver, pathname, reinterpret_cast<struct stat*>(buf));
 }
 
-void unlink_shm(const char* path) {
-  char shm_path[SHM_PATH_LEN];
-  if (getxattr(path, SHM_XATTR_NAME, &shm_path, sizeof(shm_path)) <= 0) return;
-  int ret = posix::unlink(shm_path);
-  TRACE("posix::unlink(%s) = %d", shm_path, ret);
-  if (unlikely(ret < 0)) WARN("Could not unlink shm file \"%s\": %m", shm_path);
-}
-
 int unlink(const char* path) {
-  unlink_shm(path);
+  dram::File::unlink_shm(path);
   int rc = posix::unlink(path);
   DEBUG("posix::unlink(%s) = %d", path, rc);
   return rc;
 }
 
 int rename(const char* oldpath, const char* newpath) {
-  if (access(newpath, F_OK) == 0) unlink_shm(newpath);
+  if (access(newpath, F_OK) == 0) dram::File::unlink_shm(newpath);
   int rc = posix::rename(oldpath, newpath);
   DEBUG("posix::rename(%s, %s) = %d", oldpath, newpath, rc);
   return rc;
