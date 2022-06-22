@@ -62,22 +62,12 @@ DECL_FN(flock);
 DECL_FN(fcntl);
 DECL_FN(unlink);
 DECL_FN(rename);
-DECL_FN(__xstat);
-DECL_FN(__lxstat);
 DECL_FN(__fxstat);
 
 #undef DECL_FN
 
 // [lf]stat are wrappers to internal functions in glibc, so we need to hook the
 // actual functions instead
-static int stat(const char *filename, struct stat *buf) {
-  __msan_unpoison(buf, sizeof(struct stat));
-  return posix::__xstat(_STAT_VER, filename, buf);
-}
-static int lstat(const char *filename, struct stat *buf) {
-  __msan_unpoison(buf, sizeof(struct stat));
-  return posix::__lxstat(_STAT_VER, filename, buf);
-}
 static int fstat(int fd, struct stat *buf) {
   __msan_unpoison(buf, sizeof(struct stat));
   return posix::__fxstat(_STAT_VER, fd, buf);
