@@ -49,6 +49,7 @@ extern FILE *log_file;
         "[\u001b[31mWARN\u001b[0m] ",                       \
     };                                                      \
     constexpr const char *level_str = level_str_arr[level]; \
+    if (log_file == nullptr) log_file = stderr;             \
     FPRINTF(log_file, "%s " msg, level_str, ##__VA_ARGS__); \
   } while (0)
 #endif
