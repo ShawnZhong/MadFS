@@ -275,17 +275,18 @@ int __fxstat64([[maybe_unused]] int ver, int fd, struct stat64* buf) {
 }
 
 int __xstat([[maybe_unused]] int ver, const char* pathname, struct stat* buf) {
-  if (int rc = posix::stat(pathname, buf); unlikely(rc < 0)) {
-    WARN("stat failed for pathname = %s: %m", pathname);
+  static INIT_FN(__xstat);
+
+  if (int rc = __xstat(ver, pathname, buf); unlikely(rc < 0)) {
+    WARN("posix::stat(%s) = %d: %m", pathname, rc);
     return rc;
   }
 
   if (ssize_t rc = getxattr(pathname, SHM_XATTR_NAME, nullptr, 0); rc > 0) {
     int fd = ulayfs::open(pathname, O_RDONLY);
     get_file(fd)->stat(buf);
-    WARN("ulayfs::stat(%s) = {.st_size = %ld}", pathname, buf->st_size);
     ulayfs::close(fd);
-    DEBUG("ulayfs::stat(%s)", pathname);
+    DEBUG("ulayfs::stat(%s) = {.st_size = %ld}", pathname, buf->st_size);
   } else {
     DEBUG("posix::stat(%s)", pathname);
   }
