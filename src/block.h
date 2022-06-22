@@ -251,9 +251,8 @@ class MetaBlock : public BaseBlock {
    * @param tx_tail tail value to set
    * @param fenced whether use fence
    */
-  void set_tx_tail(TxEntryIdx tx_tail, bool fenced = false) {
+  void set_tx_tail(TxEntryIdx tx_tail) {
     cl1_meta.tx_tail.store(tx_tail, std::memory_order_relaxed);
-    persist_cl(&cl1, fenced);
   }
 
   /**
