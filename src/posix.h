@@ -1,5 +1,6 @@
 #pragma once
 
+#include <dlfcn.h>
 #include <fcntl.h>
 #include <sys/file.h>
 #include <sys/mman.h>
@@ -36,6 +37,13 @@ namespace ulayfs::posix {
 
 #define DECL_FN(fn) extern const decltype(&::fn) fn
 
+#define INIT_FN(fn)                                                      \
+  const decltype(&::fn) fn = []() noexcept {                             \
+    auto res = reinterpret_cast<decltype(&::fn)>(dlsym(RTLD_NEXT, #fn)); \
+    assert(res != nullptr);                                              \
+    return res;                                                          \
+  }()
+
 DECL_FN(lseek);
 DECL_FN(write);
 DECL_FN(pwrite);
@@ -43,7 +51,6 @@ DECL_FN(read);
 DECL_FN(pread);
 DECL_FN(open);
 DECL_FN(close);
-DECL_FN(fclose);
 DECL_FN(mmap);
 DECL_FN(mremap);
 DECL_FN(munmap);

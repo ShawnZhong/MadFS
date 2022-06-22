@@ -23,11 +23,14 @@
 
 namespace ulayfs {
 
+static bool initialized = false;
+
 // mapping between fd and in-memory file handle
 // shared across threads within the same process
 tbb::concurrent_unordered_map<int, std::shared_ptr<dram::File>> files;
 
 std::shared_ptr<dram::File> get_file(int fd) {
+  if (!initialized) return {};
   if (fd < 0) return {};
   auto it = files.find(fd);
   if (it != files.end()) return it->second;
@@ -105,7 +108,17 @@ int close(int fd) {
   }
 }
 
+FILE *fopen(const char *filename, const char *mode){
+  static INIT_FN(fopen);
+
+  FILE* file = fopen(filename, mode);
+  DEBUG("posix::fopen(%s, %s) = %p", filename, mode, file);
+  return file;
+}
+
 int fclose(FILE* stream) {
+  static INIT_FN(fclose);
+
   int fd = fileno(stream);
   if (auto file = get_file(fd)) {
     DEBUG("ulayfs::fclose(%s)", file->path);
@@ -113,8 +126,8 @@ int fclose(FILE* stream) {
     debug::counter.count("ulayfs::fclose");
     return 0;
   } else {
-    DEBUG("posix::fclose(%d)", fd);
-    return posix::fclose(stream);
+    DEBUG("posix::fclose(%p)", stream);
+    return fclose(stream);
   }
 }
 
@@ -351,6 +364,7 @@ int fcntl64(int fd, int cmd, ... /* arg */) {
  * e.g., all the functions in the ulayfs::posix namespace
  */
 void __attribute__((constructor)) ulayfs_ctor() {
+  initialized = true;
   std::cerr << build_options << std::endl;
   std::cerr << runtime_options << std::endl;
   if (runtime_options.log_file) {
