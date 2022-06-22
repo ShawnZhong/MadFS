@@ -1,5 +1,7 @@
 #pragma once
 
+#include <memory>
+
 #include "file.h"
 
 namespace ulayfs {

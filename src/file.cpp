@@ -251,11 +251,11 @@ void File::stat(struct stat* buf) {
  */
 
 Allocator* File::get_local_allocator() {
-  if (auto it = allocators.find(tid); it != allocators.end()) {
+  if (auto it = allocators.find(debug::tid); it != allocators.end()) {
     return &it->second;
   }
 
-  auto [it, ok] = allocators.emplace(tid, Allocator(this, bitmap));
+  auto [it, ok] = allocators.emplace(debug::tid, Allocator(this, bitmap));
   PANIC_IF(!ok, "insert to thread-local allocators failed");
   return &it->second;
 }

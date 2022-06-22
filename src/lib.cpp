@@ -358,7 +358,7 @@ void __attribute__((constructor)) ulayfs_ctor() {
   std::cerr << build_options << std::endl;
   std::cerr << runtime_options << std::endl;
   if (runtime_options.log_file) {
-    log_file = fopen(runtime_options.log_file, "a");
+    debug::log_file = fopen(runtime_options.log_file, "a");
   }
 }
 
