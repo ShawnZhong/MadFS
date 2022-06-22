@@ -13,7 +13,6 @@
 #include "const.h"
 #include "entry.h"
 #include "idx.h"
-#include "log.h"
 #include "tbb.h"
 #include "tx/mgr.h"
 #include "utils.h"
@@ -99,7 +98,7 @@ class BlkTable {
     if (!tx_mgr->handle_idx_overflow(tx_idx, tx_block, do_alloc)) return false;
     // if it's not valid, there is no new tx to the tx history, thus no need to
     // acquire spinlock to update
-    return tx_mgr->get_entry_from_block(tx_idx, tx_block).is_valid();
+    return tx_mgr->get_tx_entry(tx_idx, tx_block).is_valid();
   }
 
   [[nodiscard]] TxEntryIdx get_tx_idx() const {
@@ -113,16 +112,18 @@ class BlkTable {
   void grow_to_fit(VirtualBlockIdx idx);
 
   /**
-   * Apply a transaction to the block table
+   * Apply an indirect transaction to the block table
    *
    * @param tx_entry the entry to be applied
-   * @param log_mgr the log_mgr to be used
    * @param init_bitmap whether we need to initialize the bitmap object
    */
-  void apply_tx(pmem::TxEntryIndirect tx_entry, LogMgr* log_mgr,
-                bool init_bitmap);
+  void apply_indirect_tx(pmem::TxEntryIndirect tx_entry, bool init_bitmap);
 
-  void apply_tx(pmem::TxEntryInline tx_entry);
+  /**
+   * Apply an inline transaction to the block table
+   * @param tx_entry the entry to be applied
+   */
+  void apply_inline_tx(pmem::TxEntryInline tx_entry);
 
   friend std::ostream& operator<<(std::ostream& out, const BlkTable& b);
 };

@@ -26,7 +26,6 @@ File::File(int fd, const struct stat& stat, int flags, const char* pathname,
       mem_table(fd, stat.st_size, (flags & O_ACCMODE) == O_RDONLY),
       meta(mem_table.get_meta()),
       tx_mgr(this, meta),
-      log_mgr(this),
       blk_table(this, &tx_mgr),
       offset_mgr(this),
       can_read((flags & O_ACCMODE) == O_RDONLY ||

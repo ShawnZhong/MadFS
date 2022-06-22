@@ -85,7 +85,7 @@ class Converter {
                                 /*begin_lidx*/ 1),
             tx_idx, tx_block);
       else {
-        auto log_entry_idx = file->log_mgr.append(
+        auto log_entry_idx = file->tx_mgr.append_log_entry(
             allocator, pmem::LogEntry::Op::LOG_OVERWRITE, leftover_bytes,
             /*total_blocks*/ 1, /*begin_vidx*/ 0, /*begin_lidxs*/ {1});
         file->tx_mgr.try_commit(pmem::TxEntryIndirect(log_entry_idx), tx_idx,
@@ -101,7 +101,7 @@ class Converter {
                               tx_block);
     } else {
       need_le_block = true;
-      auto log_entry_idx = file->log_mgr.append(
+      auto log_entry_idx = file->tx_mgr.append_log_entry(
           allocator, pmem::LogEntry::Op::LOG_OVERWRITE, /*leftover_bytes*/ 0,
           /*total_blocks*/ 1, /*begin_vidx*/ 0, /*begin_lidxs*/ {num_blocks});
       file->tx_mgr.try_commit(pmem::TxEntryIndirect(log_entry_idx), tx_idx,
@@ -127,7 +127,7 @@ class Converter {
         file->tx_mgr.advance_tx_idx(tx_idx, tx_block, true);
       }
     } else {
-      auto log_entry_idx = file->log_mgr.append(
+      auto log_entry_idx = file->tx_mgr.append_log_entry(
           allocator, pmem::LogEntry::Op::LOG_OVERWRITE, leftover_bytes,
           /*total_blocks*/ num_blocks - 1, /*begin_vidx*/ 1,
           /*begin_lidxs*/ {1});

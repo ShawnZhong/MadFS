@@ -11,7 +11,6 @@
 #include "entry.h"
 #include "file.h"
 #include "idx.h"
-#include "log.h"
 #include "persist.h"
 #include "tx/aligned.h"
 #include "tx/cow.h"
@@ -29,9 +28,10 @@ ssize_t TxMgr::do_read(char* buf, size_t count) {
   pmem::TxBlock* tail_tx_block;
   uint64_t file_size;
   uint64_t ticket;
-  uint64_t offset = file->update_with_offset(tail_tx_idx, tail_tx_block, count,
-                                             /*stop_at_boundary*/true, ticket, &file_size,
-                                             /*do_alloc*/ false);
+  uint64_t offset =
+      file->update_with_offset(tail_tx_idx, tail_tx_block, count,
+                               /*stop_at_boundary*/ true, ticket, &file_size,
+                               /*do_alloc*/ false);
 
   return Tx::exec_and_release_offset<ReadTx>(file, this, buf, count, offset,
                                              tail_tx_idx, tail_tx_block,
@@ -55,9 +55,10 @@ ssize_t TxMgr::do_write(const char* buf, size_t count) {
   TxEntryIdx tail_tx_idx;
   pmem::TxBlock* tail_tx_block;
   uint64_t ticket;
-  uint64_t offset = file->update_with_offset(tail_tx_idx, tail_tx_block, count,
-                                             /*stop_at_boundary*/false, ticket, nullptr,
-                                             /*do_alloc*/ false);
+  uint64_t offset =
+      file->update_with_offset(tail_tx_idx, tail_tx_block, count,
+                               /*stop_at_boundary*/ false, ticket, nullptr,
+                               /*do_alloc*/ false);
 
   // special case that we have everything aligned, no OCC
   if (count % BLOCK_SIZE == 0 && offset % BLOCK_SIZE == 0)
@@ -74,19 +75,84 @@ ssize_t TxMgr::do_write(const char* buf, size_t count) {
       file, this, buf, count, offset, tail_tx_idx, tail_tx_block, ticket);
 }
 
-pmem::TxEntry TxMgr::get_entry_from_block(TxEntryIdx idx,
-                                          pmem::TxBlock* tx_block) const {
+bool TxMgr::advance_tx_idx(TxEntryIdx& tx_idx, pmem::TxBlock*& tx_block,
+                           bool do_alloc) const {
+  assert(tx_idx.local_idx >= 0);
+  tx_idx.local_idx++;
+  return handle_idx_overflow(tx_idx, tx_block, do_alloc);
+}
+
+pmem::TxEntry TxMgr::get_tx_entry(TxEntryIdx idx,
+                                  pmem::TxBlock* tx_block) const {
   assert(idx.local_idx <
          (idx.block_idx == 0 ? NUM_INLINE_TX_ENTRY : NUM_TX_ENTRY_PER_BLOCK));
   if (idx.block_idx == 0) return meta->get_tx_entry(idx.local_idx);
   return tx_block->get(idx.local_idx);
 }
 
-bool TxMgr::advance_tx_idx(TxEntryIdx& tx_idx, pmem::TxBlock*& tx_block,
-                           bool do_alloc) const {
-  assert(tx_idx.local_idx >= 0);
-  tx_idx.local_idx++;
-  return handle_idx_overflow(tx_idx, tx_block, do_alloc);
+std::tuple<pmem::LogEntry*, pmem::LogEntryBlock*> TxMgr::get_log_entry(
+    LogEntryIdx idx, bool init_bitmap) const {
+  if (init_bitmap) file->set_allocated(idx.block_idx);
+  pmem::LogEntryBlock* curr_block =
+      &file->lidx_to_addr_rw(idx.block_idx)->log_entry_block;
+  return {curr_block->get(idx.local_offset), curr_block};
+}
+
+[[nodiscard]] std::tuple<pmem::LogEntry*, pmem::LogEntryBlock*>
+TxMgr::get_next_log_entry(const pmem::LogEntry* curr_entry,
+                          pmem::LogEntryBlock* curr_block,
+                          bool init_bitmap) const {
+  // check if we are at the end of the linked list
+  if (!curr_entry->has_next) return {nullptr, nullptr};
+
+  // next entry is in the same block
+  if (curr_entry->is_next_same_block)
+    return {curr_block->get(curr_entry->next.local_offset), curr_block};
+
+  // move to the next block
+  LogicalBlockIdx next_block_idx = curr_entry->next.block_idx;
+  if (init_bitmap) file->set_allocated(next_block_idx);
+  const auto next_block =
+      &file->lidx_to_addr_rw(next_block_idx)->log_entry_block;
+  // if the next entry is on another block, it must be from the first byte
+  return {next_block->get(0), next_block};
+}
+
+LogEntryIdx TxMgr::append_log_entry(
+    Allocator* allocator, pmem::LogEntry::Op op, uint16_t leftover_bytes,
+    uint32_t num_blocks, VirtualBlockIdx begin_vidx,
+    const std::vector<LogicalBlockIdx>& begin_lidxs) const {
+  const auto& [first_entry, first_idx, first_block] =
+      allocator->alloc_log_entry(num_blocks);
+
+  pmem::LogEntry* curr_entry = first_entry;
+  pmem::LogEntryBlock* curr_block = first_block;
+
+  // i to iterate through begin_lidxs across entries
+  // j to iterate within each entry
+  uint32_t i, j;
+  i = 0;
+  while (true) {
+    curr_entry->op = op;
+    curr_entry->begin_vidx = begin_vidx;
+    for (j = 0; j < curr_entry->get_lidxs_len(); ++j)
+      curr_entry->begin_lidxs[j] = begin_lidxs[i + j];
+    const auto& [next_entry, next_block] =
+        get_next_log_entry(curr_entry, curr_block);
+    if (next_entry != nullptr) {
+      curr_entry->leftover_bytes = 0;
+      curr_entry->persist();
+      curr_entry = next_entry;
+      curr_block = next_block;
+      i += j;
+      begin_vidx += (j << BITMAP_BLOCK_CAPACITY_SHIFT);
+    } else {  // last entry
+      curr_entry->leftover_bytes = leftover_bytes;
+      curr_entry->persist();
+      break;
+    }
+  }
+  return first_idx;
 }
 
 bool TxMgr::tx_idx_greater(const TxEntryIdx lhs_idx, const TxEntryIdx rhs_idx,
@@ -274,9 +340,9 @@ void TxMgr::gc(const LogicalBlockIdx tail_tx_block_idx, uint64_t file_size) {
     } else {
       // since i - begin <= 63, this can fit into one log entry
       auto begin_lidx = std::vector{file->vidx_to_lidx(begin)};
-      auto log_head_idx = file->get_log_mgr()->append(
-          allocator, pmem::LogEntry::Op::LOG_OVERWRITE, leftover_bytes,
-          i - begin, begin, begin_lidx);
+      auto log_head_idx =
+          append_log_entry(allocator, pmem::LogEntry::Op::LOG_OVERWRITE,
+                           leftover_bytes, i - begin, begin, begin_lidx);
       auto commit_entry = pmem::TxEntryIndirect(log_head_idx);
       new_tx_block->store(commit_entry, tx_idx.local_idx);
     }
@@ -320,13 +386,11 @@ template LogicalBlockIdx TxMgr::alloc_next_block(
 std::ostream& operator<<(std::ostream& out, const TxMgr& tx_mgr) {
   out << "Transactions: \n";
 
-  auto log_mgr = tx_mgr.file->get_log_mgr();
-
   TxEntryIdx tx_idx = {0, 0};
   pmem::TxBlock* tx_block = nullptr;
 
   while (true) {
-    auto tx_entry = tx_mgr.get_entry_from_block(tx_idx, tx_block);
+    auto tx_entry = tx_mgr.get_tx_entry(tx_idx, tx_block);
     if (!tx_entry.is_valid()) break;
     if (tx_entry.is_dummy()) goto next;
 
@@ -335,14 +399,18 @@ std::ostream& operator<<(std::ostream& out, const TxMgr& tx_mgr) {
 
     // print log entries if the tx is not inlined
     if (!tx_entry.is_inline()) {
-      pmem::LogEntryBlock* curr_block;
-      pmem::LogEntry* curr_entry = log_mgr->get_entry(
-          tx_entry.indirect_entry.get_log_entry_idx(), curr_block);
+      auto [curr_entry, curr_block] =
+          tx_mgr.get_log_entry(tx_entry.indirect_entry.get_log_entry_idx());
       assert(curr_entry && curr_block);
 
-      do {
+      while (true) {
         out << "\t\t" << *curr_entry << "\n";
-      } while ((curr_entry = log_mgr->get_next_entry(curr_entry, curr_block)));
+        const auto& [next_entry, next_block] =
+            tx_mgr.get_next_log_entry(curr_entry, curr_block);
+        if (!next_entry) break;
+        curr_entry = next_entry;
+        curr_block = next_block;
+      }
     }
   next:
     if (!tx_mgr.advance_tx_idx(tx_idx, tx_block, /*do_alloc*/ false)) break;

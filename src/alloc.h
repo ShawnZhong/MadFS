@@ -87,13 +87,14 @@ class Allocator {
    * Allocate a linked list of log entry that could fit a mapping of the given
    * length
    *
-   * @param[in] num_blocks how long this mapping should be
-   * @param[out] first_idx the log entry index of the head of the linked list
-   * @param[out] first_block the log entry block where the head locates
-   * @return the head of the linked list
+   * @param num_blocks how long this mapping should be
+   * @return a tuple containing
+   *    1. the head of the linked list,
+   *    2. the log entry index of the head of the linked list, and
+   *    3. the log entry block where the head locates
    */
-  pmem::LogEntry* alloc_log_entry(uint32_t num_blocks, LogEntryIdx& first_idx,
-                                  pmem::LogEntryBlock*& first_block);
+  std::tuple<pmem::LogEntry*, LogEntryIdx, pmem::LogEntryBlock*>
+  alloc_log_entry(uint32_t num_blocks);
 
   LogicalBlockIdx alloc_tx_block(uint32_t seq, pmem::Block*& tx_block);
 
