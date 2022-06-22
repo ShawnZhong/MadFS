@@ -6,6 +6,8 @@
 
 #include "config.h"
 
+namespace ulayfs::debug {
+
 /*
  * The following macros used for assertion and logging
  * Defined as macros since we want to have access to __FILE__ and __LINE__
@@ -14,14 +16,14 @@
 __attribute__((tls_model("initial-exec"))) extern thread_local const pid_t tid;
 extern FILE *log_file;
 
-#define FPRINTF(file, fmt, ...)                                             \
-  do {                                                                      \
-    auto now = std::chrono::high_resolution_clock::now();                   \
-    std::chrono::duration<double> sec = now.time_since_epoch();             \
-    const char *s = strrchr(__FILE__, '/');                                 \
-    const char *caller_filename = s ? s + 1 : __FILE__;                     \
-    fprintf(file, "[Thread %d] %f [%14s:%-3d] " fmt "\n", tid, sec.count(), \
-            caller_filename, __LINE__, ##__VA_ARGS__);                      \
+#define FPRINTF(file, fmt, ...)                                       \
+  do {                                                                \
+    auto now = std::chrono::high_resolution_clock::now();             \
+    std::chrono::duration<double> sec = now.time_since_epoch();       \
+    const char *s = strrchr(__FILE__, '/');                           \
+    const char *caller_filename = s ? s + 1 : __FILE__;               \
+    fprintf(file, "[Thread %d] %f [%14s:%-3d] " fmt "\n", debug::tid, \
+            sec.count(), caller_filename, __LINE__, ##__VA_ARGS__);   \
   } while (0)
 
 // PANIC_IF is active for both debug and release modes
@@ -38,19 +40,19 @@ extern FILE *log_file;
 #ifdef NDEBUG
 #define LOG(...) ({})
 #else
-#define LOG(level, msg, ...)                                \
-  do {                                                      \
-    if constexpr (!BuildOptions::debug) break;              \
-    if (level < runtime_options.log_level) break;           \
-    constexpr const char *level_str_arr[] = {               \
-        "[\u001b[37mTRACE\u001b[0m]",                       \
-        "[\u001b[32mDEBUG\u001b[0m]",                       \
-        "[\u001b[34mINFO\u001b[0m] ",                       \
-        "[\u001b[31mWARN\u001b[0m] ",                       \
-    };                                                      \
-    constexpr const char *level_str = level_str_arr[level]; \
-    if (log_file == nullptr) log_file = stderr;             \
-    FPRINTF(log_file, "%s " msg, level_str, ##__VA_ARGS__); \
+#define LOG(level, msg, ...)                                       \
+  do {                                                             \
+    if constexpr (!BuildOptions::debug) break;                     \
+    if (level < runtime_options.log_level) break;                  \
+    constexpr const char *level_str_arr[] = {                      \
+        "[\u001b[37mTRACE\u001b[0m]",                              \
+        "[\u001b[32mDEBUG\u001b[0m]",                              \
+        "[\u001b[34mINFO\u001b[0m] ",                              \
+        "[\u001b[31mWARN\u001b[0m] ",                              \
+    };                                                             \
+    constexpr const char *level_str = level_str_arr[level];        \
+    if (debug::log_file == nullptr) debug::log_file = stderr;      \
+    FPRINTF(debug::log_file, "%s " msg, level_str, ##__VA_ARGS__); \
   } while (0)
 #endif
 
@@ -58,8 +60,6 @@ extern FILE *log_file;
 #define DEBUG(msg, ...) LOG(1, msg, ##__VA_ARGS__)
 #define INFO(msg, ...) LOG(2, msg, ##__VA_ARGS__)
 #define WARN(msg, ...) LOG(3, msg, ##__VA_ARGS__)
-
-namespace ulayfs::debug {
 
 extern thread_local class Counter {
   static std::mutex print_mutex;
