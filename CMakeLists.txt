@@ -61,11 +61,12 @@ include_directories(${CMAKE_CURRENT_BINARY_DIR})
 dependencies
 ]]
 
+FetchContent_Declare(magic-enum GIT_REPOSITORY https://github.com/Neargye/magic_enum.git)
 FetchContent_Declare(tbb URL https://github.com/oneapi-src/oneTBB/releases/download/v2021.5.0/oneapi-tbb-2021.5.0-lin.tgz)
-FetchContent_MakeAvailable(tbb)
+FetchContent_MakeAvailable(magic-enum tbb)
 
 find_package(TBB REQUIRED HINTS ${tbb_SOURCE_DIR}/lib/cmake/tbb)
-target_link_libraries(ulayfs pmem2 dl pthread atomic TBB::tbb)
+target_link_libraries(ulayfs pmem2 dl pthread atomic TBB::tbb magic_enum::magic_enum)
 
 #[[
 tests, benchmarks, and tools

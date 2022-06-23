@@ -50,7 +50,7 @@ class SingleBlockTx : public CoWTx {
   }
 
   ssize_t exec() override {
-    debug::counter.count("SingleBlockTx exec");
+    debug::count(debug::SINGLE_BLOCK_TX_START);
     pmem::TxEntry conflict_entry;
 
     // must acquire the tx tail before any get
@@ -63,13 +63,14 @@ class SingleBlockTx : public CoWTx {
     pmem::memcpy_persist(dst_blocks[0]->data_rw() + local_offset, buf, count);
 
   redo:
-    debug::counter.count("SingleBlockTx copy");
+    debug::count(debug::SINGLE_BLOCK_TX_COPY);
     assert(dst_blocks.size() == 1);
 
     // copy original data
     {
       char* dst_block = dst_blocks[0]->data_rw();
-      const char* src_block = file->lidx_to_addr_ro(recycle_image[0])->data_ro();
+      const char* src_block =
+          file->lidx_to_addr_ro(recycle_image[0])->data_ro();
 
       // copy the left part of the block
       if (local_offset != 0) {
@@ -87,7 +88,7 @@ class SingleBlockTx : public CoWTx {
     if (is_offset_depend) file->wait_offset(ticket);
 
   retry:
-    debug::counter.count("SingleBlockTx commit");
+    debug::count(debug::SINGLE_BLOCK_TX_COMMIT);
     // try to commit the tx entry
     conflict_entry =
         tx_mgr->try_commit(commit_entry, tail_tx_idx, tail_tx_block);
@@ -131,7 +132,7 @@ class MultiBlockTx : public CoWTx {
         last_block_overlap_size(end_offset -
                                 ALIGN_DOWN(end_offset, BLOCK_SIZE)) {}
   ssize_t exec() override {
-    debug::counter.count("MultiBlockTx exec");
+    debug::count(debug::MULTI_BLOCK_TX_START);
     // if need_copy_first/last is false, this means it is handled by the full
     // block copy and never need redo
     const bool need_copy_first = begin_full_vidx != begin_vidx;
@@ -193,7 +194,7 @@ class MultiBlockTx : public CoWTx {
                          last_block_overlap_size);
 
   redo:
-    debug::counter.count("MultiBlockTx copy");
+    debug::count(debug::MULTI_BLOCK_TX_COPY);
     // copy first block
     if (need_copy_first && do_copy_first) {
       // copy the data from the first source block if exists
@@ -215,7 +216,7 @@ class MultiBlockTx : public CoWTx {
     if (is_offset_depend) file->wait_offset(ticket);
 
   retry:
-    debug::counter.count("MultiBlockTx commit");
+    debug::count(debug::MULTI_BLOCK_TX_COMMIT);
     // try to commit the transaction
     conflict_entry =
         tx_mgr->try_commit(commit_entry, tail_tx_idx, tail_tx_block);
