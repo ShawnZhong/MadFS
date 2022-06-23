@@ -1,5 +1,6 @@
 #pragma once
 
+#include <magic_enum.hpp>
 #include <map>
 #include <mutex>
 #include <unordered_map>
@@ -37,9 +38,6 @@ extern FILE *log_file;
 #define PANIC(msg, ...) PANIC_IF(true, msg, ##__VA_ARGS__)
 
 // TRACE, DEBUG, INFO, and WARN are not active in release mode
-#ifdef NDEBUG
-#define LOG(...) ({})
-#else
 #define LOG(level, msg, ...)                                       \
   do {                                                             \
     if constexpr (!BuildOptions::debug) break;                     \
@@ -54,39 +52,64 @@ extern FILE *log_file;
     if (debug::log_file == nullptr) debug::log_file = stderr;      \
     FPRINTF(debug::log_file, "%s " msg, level_str, ##__VA_ARGS__); \
   } while (0)
-#endif
 
 #define TRACE(msg, ...) LOG(0, msg, ##__VA_ARGS__)
 #define DEBUG(msg, ...) LOG(1, msg, ##__VA_ARGS__)
 #define INFO(msg, ...) LOG(2, msg, ##__VA_ARGS__)
 #define WARN(msg, ...) LOG(3, msg, ##__VA_ARGS__)
 
+enum Event {
+  READ,
+  WRITE,
+  PREAD,
+  PWRITE,
+  OPEN,
+  CLOSE,
+  SINGLE_BLOCK_TX_START,
+  SINGLE_BLOCK_TX_COPY,
+  SINGLE_BLOCK_TX_COMMIT,
+  MULTI_BLOCK_TX_START,
+  MULTI_BLOCK_TX_COPY,
+  MULTI_BLOCK_TX_COMMIT,
+};
+
 extern thread_local class Counter {
   static std::mutex print_mutex;
-  std::unordered_map<std::string, size_t> counter;
+  std::array<size_t, magic_enum::enum_count<Event>()> counts;
+  std::array<size_t, magic_enum::enum_count<Event>()> sizes;
 
  public:
   Counter() = default;
   ~Counter() {
     if constexpr (!BuildOptions::debug) return;
     std::lock_guard<std::mutex> guard(print_mutex);
-    fprintf(log_file, "[%d] Counters:\n", tid);
-    for (auto &[name, size] : std::map{counter.begin(), counter.end()}) {
-      fprintf(log_file, "\t%-25s %12zu\n", name.c_str(), size);
-    }
+    fprintf(log_file, "    [Thread %d] Counters:\n", tid);
+    magic_enum::enum_for_each<Event>([&](Event event) {
+      auto val = magic_enum::enum_integer(event);
+      size_t count = counts[val];
+      if (count == 0) return;
+      size_t size = sizes[val];
+      fprintf(log_file, "        %-25s: %zu",
+              magic_enum::enum_name(event).data(), count);
+      if (size != 0) {
+        double total_mb = (double)size / 1024.0 / 1024.0;
+        double avg_kb = (double)size / 1024.0 / (double)count;
+        fprintf(log_file, " (%.2f MB, avg = %.2f KB) ", total_mb, avg_kb);
+      }
+      fprintf(log_file, "\n");
+    });
   }
 
-  void count(const std::string &name) {
+  void count(Event event, size_t size) {
     if constexpr (!BuildOptions::debug) return;
-    counter[name]++;
-  }
-
-  void count(const std::string &name, size_t size) {
-    if constexpr (!BuildOptions::debug) return;
-    counter[name + "::size"] += size;
-    counter[name + "::count"]++;
+    counts[magic_enum::enum_integer(event)]++;
+    sizes[magic_enum::enum_integer(event)] += size;
   }
 } counter;
+
+static inline void count(Event event, size_t size = 0) {
+  counter.count(event, size);
+}
 
 void print_file(int fd) __attribute__((weak));
 }  // namespace ulayfs::debug
