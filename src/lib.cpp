@@ -282,14 +282,16 @@ int __xstat([[maybe_unused]] int ver, const char* pathname, struct stat* buf) {
   }
 
   if (ssize_t rc = getxattr(pathname, SHM_XATTR_NAME, nullptr, 0); rc > 0) {
-    int fd = ulayfs::open(pathname, O_RDONLY);
-    get_file(fd)->stat(buf);
-    ulayfs::close(fd);
-    DEBUG("ulayfs::stat(%s) = {.st_size = %ld}", pathname, buf->st_size);
-  } else {
-    DEBUG("posix::stat(%s)", pathname);
+    int fd = open(pathname, O_RDONLY);
+    if (auto file = get_file(fd)) {
+      file->stat(buf);
+      DEBUG("ulayfs::stat(%s, {.st_size = %ld})", pathname, buf->st_size);
+      close(fd);
+      return 0;
+    }
   }
 
+  DEBUG("posix::stat(%s, {.st_size = %ld})", pathname, buf->st_size);
   return 0;
 }
 
