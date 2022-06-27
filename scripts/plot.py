@@ -5,12 +5,16 @@ import logging
 import re
 from pathlib import Path
 
+import matplotlib
 import pandas as pd
 from matplotlib import pyplot as plt
 
 pd.options.display.max_rows = 100
 pd.options.display.max_columns = 100
 pd.options.display.width = None
+
+matplotlib.rcParams["legend.columnspacing"] = 0.5
+matplotlib.rcParams["legend.fontsize"] = 6
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger("plot")
@@ -128,7 +132,7 @@ def plot_micro_st(result_dir):
             ax.yaxis.set_major_formatter(plt.FormatStrFormatter('%.1f'))
             ax.set_ylim(bottom=0)
 
-            ax.legend(fontsize=6, ncol=2)
+            ax.legend(ncol=2)
             plt.title(name)
 
         plot_single_bm(
@@ -156,7 +160,7 @@ def plot_micro_mt(result_dir):
         export_results(result_dir, benchmark, name=name)
 
         def post_plot(ax, **kwargs):
-            if name.startswith("zipf"):
+            if name.startswith("zipf") and "uLayFS" in df["label"].unique():
                 ax2 = ax.twinx()
                 ax2.plot(df["x"], df["tx_commit"] - 1, ":", label="tx_commit")
                 ax2.set_ylabel("uLayFS commit conflicts per Tx")
@@ -170,7 +174,7 @@ def plot_micro_mt(result_dir):
 
             ax.set_ylim(bottom=0)
 
-            ax.legend(fontsize=6, ncol=2)
+            ax.legend(ncol=2, loc="lower left")
             plt.title(name)
 
         plot_single_bm(
