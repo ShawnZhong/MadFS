@@ -12,9 +12,6 @@ constexpr int MAX_NUM_THREAD = 16;
 constexpr int ZIPF_NUM_BLOCKS = 256 * 1024;
 constexpr double ZIPF_THETA = 0.9;
 
-std::default_random_engine generator;
-zipfian_int_distribution<int> zipf(1, ZIPF_NUM_BLOCKS, ZIPF_THETA);
-
 int fd;
 int num_iter = get_num_iter();
 
@@ -28,6 +25,8 @@ enum class Mode {
 template <Mode mode, int READ_PERCENT = -1>
 void bench(benchmark::State& state) {
   const auto num_bytes = state.range(0);
+
+  pin_core(state.thread_index);
 
   [[maybe_unused]] char dst_buf[BLOCK_SIZE * MAX_NUM_THREAD];
   [[maybe_unused]] char src_buf[BLOCK_SIZE * MAX_NUM_THREAD];
@@ -47,6 +46,8 @@ void bench(benchmark::State& state) {
       }
     }
   }
+
+  if (is_ulayfs_linked()) ulayfs::debug::clear_count();
 
   // run benchmark
   if constexpr (mode == Mode::APPEND) {
@@ -92,6 +93,9 @@ void bench(benchmark::State& state) {
       }
     }
   } else if constexpr (mode == Mode::ZIPF) {
+    std::default_random_engine generator;
+    zipfian_int_distribution<int> zipf(1, ZIPF_NUM_BLOCKS, ZIPF_THETA);
+
     off_t offset[num_iter];
     std::generate(offset, offset + num_iter, [&]() { return zipf(generator); });
     int i = 0;
@@ -101,20 +105,12 @@ void bench(benchmark::State& state) {
       assert(res == num_bytes);
       fsync(fd);
     }
+  }
 
-    if (is_ulayfs_linked()) {
-      double start_cnt =
-          ulayfs::debug::get_count(ulayfs::debug::SINGLE_BLOCK_TX_START);
-      double copy_cnt =
-          ulayfs::debug::get_count(ulayfs::debug::SINGLE_BLOCK_TX_COPY);
-      double commit_cnt =
-          ulayfs::debug::get_count(ulayfs::debug::SINGLE_BLOCK_TX_COMMIT);
-
-      if (start_cnt != 0) {
-        state.counters["tx_copy"] = copy_cnt / start_cnt / state.threads;
-        state.counters["tx_commit"] = commit_cnt / start_cnt / state.threads;
-      }
-    }
+  // tear down
+  if (state.thread_index == 0) {
+    close(fd);
+    unlink(filepath);
   }
 
   // report result
@@ -123,12 +119,23 @@ void bench(benchmark::State& state) {
   state.SetBytesProcessed(bytes_processed);
   state.SetItemsProcessed(items_processed);
 
-  // tear down
-  if (state.thread_index == 0) {
-    close(fd);
-    unlink(filepath);
+  if (is_ulayfs_linked()) {
+    double start_cnt =
+        ulayfs::debug::get_count(ulayfs::debug::SINGLE_BLOCK_TX_START) +
+        ulayfs::debug::get_count(ulayfs::debug::ALIGNED_TX_START);
+    double copy_cnt =
+        ulayfs::debug::get_count(ulayfs::debug::SINGLE_BLOCK_TX_COPY);
+    double commit_cnt =
+        ulayfs::debug::get_count(ulayfs::debug::SINGLE_BLOCK_TX_COMMIT) +
+        ulayfs::debug::get_count(ulayfs::debug::ALIGNED_TX_COMMIT);
+
+    if (start_cnt != 0) {
+      state.counters["tx_copy"] = copy_cnt / start_cnt / state.threads;
+      state.counters["tx_commit"] = commit_cnt / start_cnt / state.threads;
+    }
+
+    ulayfs::debug::clear_count();
   }
-  if (is_ulayfs_linked()) ulayfs::debug::clear_count();
 }
 
 template <class F>

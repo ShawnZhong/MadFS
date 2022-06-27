@@ -43,3 +43,22 @@ void append_file(int fd, long num_bytes, int num_iter = 1) {
 }
 
 bool is_ulayfs_linked() { return ulayfs::debug::print_file != nullptr; }
+
+void pin_core(int thread_index) {
+  cpu_set_t cpuset;
+  CPU_ZERO(&cpuset);
+  // node0: 0-7,16-23
+  // node1: 8-15,24-31
+  if (thread_index <= 7) {
+    CPU_SET(thread_index, &cpuset);
+  } else if (thread_index <= 15) {
+    CPU_SET(thread_index + 8, &cpuset);
+  } else {
+    fprintf(stderr, "thread_index %d is out of range on node 0.\n",
+            thread_index);
+  }
+  if (sched_setaffinity(0, sizeof(cpuset), &cpuset) == -1) {
+    fprintf(stderr, "sched_setaffinity failed for thread_index %d.\n",
+            thread_index);
+  }
+}
