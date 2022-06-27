@@ -133,7 +133,8 @@ class MemTable {
     if (unlikely(addr == MAP_FAILED)) {
       if constexpr (BuildOptions::use_map_sync) {
         if (errno == EOPNOTSUPP) {
-          WARN("MAP_SYNC not supported for fd = %d. Retry w/o MAP_SYNC", fd);
+          LOG_WARN("MAP_SYNC not supported for fd = %d. Retry w/o MAP_SYNC",
+                   fd);
           flags &= ~(MAP_SHARED_VALIDATE | MAP_SYNC);
           flags |= MAP_SHARED;
           addr = posix::mmap(nullptr, length, prot, flags, fd, offset);

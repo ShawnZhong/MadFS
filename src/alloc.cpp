@@ -22,7 +22,7 @@ LogicalBlockIdx Allocator::alloc(uint32_t num_blocks) {
   if (!free_lists[num_blocks - 1].empty()) {
     LogicalBlockIdx lidx = free_lists[num_blocks - 1].back();
     free_lists[num_blocks - 1].pop_back();
-    TRACE(
+    LOG_TRACE(
         "Allocator::alloc: allocating from free list (fully consumed): "
         "[n_blk: %d, lidx: %u]",
         num_blocks, lidx.get());
@@ -35,7 +35,7 @@ LogicalBlockIdx Allocator::alloc(uint32_t num_blocks) {
 
       free_lists[n - 1].pop_back();
       free_lists[n - num_blocks - 1].push_back(lidx + num_blocks);
-      TRACE(
+      LOG_TRACE(
           "Allocator::alloc: allocating from free list (partially consumed): "
           "[n_blk: %d, lidx: %u] -> [n_blk: %d, lidx: %u]",
           n, lidx.get(), n - num_blocks, lidx.get() + num_blocks);
@@ -55,8 +55,8 @@ retry:
   allocated_idx =
       Bitmap::try_alloc(bitmap, NUM_BITMAP, recent_bitmap_idx, allocated_bits);
   PANIC_IF(allocated_idx < 0, "Allocator::alloc: failed to alloc from Bitmap");
-  TRACE("Allocator::alloc: allocating from bitmap %d: 0x%lx", allocated_idx,
-        allocated_bits);
+  LOG_TRACE("Allocator::alloc: allocating from bitmap %d: 0x%lx", allocated_idx,
+            allocated_bits);
 
   // add available bits to the local free list
   num_bits_left = BITMAP_BLOCK_CAPACITY;
@@ -77,12 +77,12 @@ retry:
       is_found = true;
       allocated_block_idx =
           allocated_idx + BITMAP_BLOCK_CAPACITY - num_bits_left;
-      TRACE("Allocator::alloc: allocated blocks: [n_blk: %d, lidx: %u]",
-            num_right_zeros, allocated_block_idx.get());
+      LOG_TRACE("Allocator::alloc: allocated blocks: [n_blk: %d, lidx: %u]",
+                num_right_zeros, allocated_block_idx.get());
       if (num_right_zeros > num_blocks) {
         free_lists[num_right_zeros - num_blocks - 1].emplace_back(
             allocated_idx + BITMAP_BLOCK_CAPACITY - num_bits_left + num_blocks);
-        TRACE(
+        LOG_TRACE(
             "Allocator::alloc: unused blocks saved: [n_blk: %d, lidx: %u]",
             num_right_zeros - num_blocks,
             allocated_idx + BITMAP_BLOCK_CAPACITY - num_bits_left + num_blocks);
@@ -90,9 +90,9 @@ retry:
     } else {
       free_lists[num_right_zeros - 1].emplace_back(
           allocated_idx + BITMAP_BLOCK_CAPACITY - num_bits_left);
-      TRACE("Allocator::alloc: unused blocks saved: [n_blk: %d, lidx: %u]",
-            num_right_zeros,
-            allocated_idx + BITMAP_BLOCK_CAPACITY - num_bits_left);
+      LOG_TRACE("Allocator::alloc: unused blocks saved: [n_blk: %d, lidx: %u]",
+                num_right_zeros,
+                allocated_idx + BITMAP_BLOCK_CAPACITY - num_bits_left);
     }
     allocated_bits >>= num_right_zeros;
     num_bits_left -= num_right_zeros;
@@ -107,8 +107,8 @@ retry:
 
 void Allocator::free(LogicalBlockIdx block_idx, uint32_t num_blocks) {
   if (block_idx == 0) return;
-  TRACE("Allocator::alloc: adding to free list: [%u, %u)", block_idx.get(),
-        num_blocks + block_idx.get());
+  LOG_TRACE("Allocator::alloc: adding to free list: [%u, %u)", block_idx.get(),
+            num_blocks + block_idx.get());
   free_lists[num_blocks - 1].emplace_back(block_idx);
 }
 
@@ -130,18 +130,18 @@ void Allocator::free(const std::vector<LogicalBlockIdx>& recycle_image) {
       // continue the group if it matches the expectation
       if (recycle_image[curr] == group_begin_lidx + (curr - group_begin))
         continue;
-      TRACE("Allocator::free: adding to free list: [%u, %u)",
-            group_begin_lidx.get(),
-            curr - group_begin + group_begin_lidx.get());
+      LOG_TRACE("Allocator::free: adding to free list: [%u, %u)",
+                group_begin_lidx.get(),
+                curr - group_begin + group_begin_lidx.get());
       free_lists[curr - group_begin - 1].emplace_back(group_begin_lidx);
       group_begin_lidx = recycle_image[curr];
       if (group_begin_lidx != 0) group_begin = curr;
     }
   }
   if (group_begin_lidx != 0) {
-    TRACE("Allocator::free: adding to free list: [%u, %u)",
-          group_begin_lidx.get(),
-          group_begin_lidx.get() + image_size - group_begin);
+    LOG_TRACE("Allocator::free: adding to free list: [%u, %u)",
+              group_begin_lidx.get(),
+              group_begin_lidx.get() + image_size - group_begin);
     free_lists[image_size - group_begin - 1].emplace_back(group_begin_lidx);
   }
 }

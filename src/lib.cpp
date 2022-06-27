@@ -49,21 +49,21 @@ int open(const char* pathname, int flags, ...) {
   struct stat stat_buf;
   bool is_valid = dram::File::try_open(fd, stat_buf, pathname, flags, mode);
   if (!is_valid) {
-    DEBUG("posix::open(%s, %x, %x) = %d", pathname, flags, mode, fd);
+    LOG_DEBUG("posix::open(%s, %x, %x) = %d", pathname, flags, mode, fd);
     return fd;
   }
 
   try {
     files.emplace(fd,
                   std::make_shared<dram::File>(fd, stat_buf, flags, pathname));
-    INFO("ulayfs::open(%s, %x, %x) = %d", pathname, flags, mode, fd);
+    LOG_INFO("ulayfs::open(%s, %x, %x) = %d", pathname, flags, mode, fd);
     debug::count(debug::OPEN);
   } catch (const FileInitException& e) {
-    WARN("File \"%s\": ulayfs::open failed: %s. Fallback to syscall", pathname,
-         e.what());
-    DEBUG("posix::open(%s, %x, %x) = %d", pathname, flags, mode, fd);
+    LOG_WARN("File \"%s\": ulayfs::open failed: %s. Fallback to syscall",
+             pathname, e.what());
+    LOG_DEBUG("posix::open(%s, %x, %x) = %d", pathname, flags, mode, fd);
   } catch (const FatalException& e) {
-    WARN("File \"%s\": ulayfs::open failed with fatal error.", pathname);
+    LOG_WARN("File \"%s\": ulayfs::open failed with fatal error.", pathname);
     return -1;
   }
   return fd;
@@ -96,12 +96,12 @@ int openat64([[maybe_unused]] int dirfd, const char* pathname, int flags, ...) {
 
 int close(int fd) {
   if (auto file = get_file(fd)) {
-    DEBUG("ulayfs::close(%s)", file->path);
+    LOG_DEBUG("ulayfs::close(%s)", file->path);
     files.unsafe_erase(fd);
     debug::count(debug::CLOSE);
     return 0;
   } else {
-    DEBUG("posix::close(%d)", fd);
+    LOG_DEBUG("posix::close(%d)", fd);
     return posix::close(fd);
   }
 }
@@ -110,7 +110,7 @@ FILE* fopen(const char* filename, const char* mode) {
   static INIT_FN(fopen);
 
   FILE* file = fopen(filename, mode);
-  DEBUG("posix::fopen(%s, %s) = %p", filename, mode, file);
+  LOG_DEBUG("posix::fopen(%s, %s) = %p", filename, mode, file);
   return file;
 }
 
@@ -119,11 +119,11 @@ int fclose(FILE* stream) {
 
   int fd = fileno(stream);
   if (auto file = get_file(fd)) {
-    DEBUG("ulayfs::fclose(%s)", file->path);
+    LOG_DEBUG("ulayfs::fclose(%s)", file->path);
     files.unsafe_erase(fd);
     return 0;
   } else {
-    DEBUG("posix::fclose(%p)", stream);
+    LOG_DEBUG("posix::fclose(%p)", stream);
     return fclose(stream);
   }
 }
@@ -131,12 +131,12 @@ int fclose(FILE* stream) {
 ssize_t read(int fd, void* buf, size_t count) {
   if (auto file = get_file(fd)) {
     auto res = file->read(buf, count);
-    DEBUG("ulayfs::read(%s, buf, %zu) = %zu", file->path, count, res);
+    LOG_DEBUG("ulayfs::read(%s, buf, %zu) = %zu", file->path, count, res);
     debug::count(debug::READ, count);
     return res;
   } else {
     auto res = posix::read(fd, buf, count);
-    DEBUG("posix::read(%d, buf, %zu) = %zu", fd, count, res);
+    LOG_DEBUG("posix::read(%d, buf, %zu) = %zu", fd, count, res);
     return res;
   }
 }
@@ -144,13 +144,13 @@ ssize_t read(int fd, void* buf, size_t count) {
 ssize_t pread(int fd, void* buf, size_t count, off_t offset) {
   if (auto file = get_file(fd)) {
     auto res = file->pread(buf, count, offset);
-    DEBUG("ulayfs::pread(%s, buf, %zu, %ld) = %zu", file->path, count, offset,
-          res);
+    LOG_DEBUG("ulayfs::pread(%s, buf, %zu, %ld) = %zu", file->path, count,
+              offset, res);
     debug::count(debug::PREAD, count);
     return res;
   } else {
     auto res = posix::pread(fd, buf, count, offset);
-    DEBUG("posix::pread(%d, buf, %zu, %ld) = %zu", fd, count, offset, res);
+    LOG_DEBUG("posix::pread(%d, buf, %zu, %ld) = %zu", fd, count, offset, res);
     return res;
   }
 }
@@ -174,23 +174,23 @@ ssize_t __pread_chk(int fd, void* buf, size_t count, off_t offset,
 ssize_t write(int fd, const void* buf, size_t count) {
   if (auto file = get_file(fd)) {
     ssize_t res = file->write(buf, count);
-    DEBUG("ulayfs::write(%s, buf, %zu) = %zu", file->path, count, res);
+    LOG_DEBUG("ulayfs::write(%s, buf, %zu) = %zu", file->path, count, res);
     debug::count(debug::WRITE, count);
     return res;
   } else {
     ssize_t res = posix::write(fd, buf, count);
-    DEBUG("posix::write(%d, buf, %zu) = %zu", fd, count, res);
+    LOG_DEBUG("posix::write(%d, buf, %zu) = %zu", fd, count, res);
     return res;
   }
 }
 
 ssize_t pwrite(int fd, const void* buf, size_t count, off_t offset) {
   if (auto file = get_file(fd)) {
-    DEBUG("ulayfs::pwrite(%s, buf, %zu, %ld)", file->path, count, offset);
+    LOG_DEBUG("ulayfs::pwrite(%s, buf, %zu, %ld)", file->path, count, offset);
     debug::count(debug::PWRITE, count);
     return file->pwrite(buf, count, offset);
   } else {
-    DEBUG("posix::pwrite(%d, buf, %zu, %ld)", fd, count, offset);
+    LOG_DEBUG("posix::pwrite(%d, buf, %zu, %ld)", fd, count, offset);
     return posix::pwrite(fd, buf, count, offset);
   }
 }
@@ -201,10 +201,10 @@ ssize_t pwrite64(int fd, const void* buf, size_t count, off64_t offset) {
 
 off_t lseek(int fd, off_t offset, int whence) {
   if (auto file = get_file(fd)) {
-    DEBUG("ulayfs::lseek(%d, %ld, %d)", fd, offset, whence);
+    LOG_DEBUG("ulayfs::lseek(%d, %ld, %d)", fd, offset, whence);
     return file->lseek(offset, whence);
   } else {
-    DEBUG("posix::lseek(%d, %ld, %d)", fd, offset, whence);
+    LOG_DEBUG("posix::lseek(%d, %ld, %d)", fd, offset, whence);
     return posix::lseek(fd, offset, whence);
   }
 }
@@ -215,20 +215,20 @@ off64_t lseek64(int fd, off64_t offset, int whence) {
 
 int fsync(int fd) {
   if (auto file = get_file(fd)) {
-    DEBUG("ulayfs::fsync(%d)", fd);
+    LOG_DEBUG("ulayfs::fsync(%d)", fd);
     return file->fsync();
   } else {
-    DEBUG("posix::fsync(%d)", fd);
+    LOG_DEBUG("posix::fsync(%d)", fd);
     return posix::fsync(fd);
   }
 }
 
 int fdatasync(int fd) {
   if (auto file = get_file(fd)) {
-    DEBUG("ulayfs::fdatasync(%s)", file->path);
+    LOG_DEBUG("ulayfs::fdatasync(%s)", file->path);
     return file->fsync();
   } else {
-    DEBUG("posix::fdatasync(%d)", fd);
+    LOG_DEBUG("posix::fdatasync(%d)", fd);
     return posix::fdatasync(fd);
   }
 }
@@ -236,13 +236,13 @@ void* mmap(void* addr, size_t length, int prot, int flags, int fd,
            off_t offset) {
   if (auto file = get_file(fd)) {
     void* ret = file->mmap(addr, length, prot, flags, offset);
-    DEBUG("ulayfs::mmap(%p, %zu, %x, %x, %d, %ld) = %p", addr, length, prot,
-          flags, fd, offset, ret);
+    LOG_DEBUG("ulayfs::mmap(%p, %zu, %x, %x, %d, %ld) = %p", addr, length, prot,
+              flags, fd, offset, ret);
     return ret;
   } else {
     void* ret = posix::mmap(addr, length, prot, flags, fd, offset);
-    DEBUG("posix::mmap(%p, %zu, %x, %x, %d, %ld) = %p", addr, length, prot,
-          flags, fd, offset, ret);
+    LOG_DEBUG("posix::mmap(%p, %zu, %x, %x, %d, %ld) = %p", addr, length, prot,
+              flags, fd, offset, ret);
     return ret;
   }
 }
@@ -255,15 +255,15 @@ void* mmap64(void* addr, size_t length, int prot, int flags, int fd,
 int __fxstat([[maybe_unused]] int ver, int fd, struct stat* buf) {
   int rc = posix::fstat(fd, buf);
   if (unlikely(rc < 0)) {
-    WARN("fstat failed for fd = %d: %m", fd);
+    LOG_WARN("fstat failed for fd = %d: %m", fd);
     return rc;
   }
 
   if (auto file = get_file(fd)) {
     file->stat(buf);
-    DEBUG("ulayfs::fstat(%d, {.st_size = %ld})", fd, buf->st_size);
+    LOG_DEBUG("ulayfs::fstat(%d, {.st_size = %ld})", fd, buf->st_size);
   } else {
-    DEBUG("posix::fstat(%d)", fd);
+    LOG_DEBUG("posix::fstat(%d)", fd);
   }
 
   return 0;
@@ -277,7 +277,7 @@ int __xstat([[maybe_unused]] int ver, const char* pathname, struct stat* buf) {
   static INIT_FN(__xstat);
 
   if (int rc = __xstat(ver, pathname, buf); unlikely(rc < 0)) {
-    WARN("posix::stat(%s) = %d: %m", pathname, rc);
+    LOG_WARN("posix::stat(%s) = %d: %m", pathname, rc);
     return rc;
   }
 
@@ -285,13 +285,13 @@ int __xstat([[maybe_unused]] int ver, const char* pathname, struct stat* buf) {
     int fd = open(pathname, O_RDONLY);
     if (auto file = get_file(fd)) {
       file->stat(buf);
-      DEBUG("ulayfs::stat(%s, {.st_size = %ld})", pathname, buf->st_size);
+      LOG_DEBUG("ulayfs::stat(%s, {.st_size = %ld})", pathname, buf->st_size);
       close(fd);
       return 0;
     }
   }
 
-  DEBUG("posix::stat(%s, {.st_size = %ld})", pathname, buf->st_size);
+  LOG_DEBUG("posix::stat(%s, {.st_size = %ld})", pathname, buf->st_size);
   return 0;
 }
 
@@ -303,14 +303,14 @@ int __xstat64([[maybe_unused]] int ver, const char* pathname,
 int unlink(const char* path) {
   dram::File::unlink_shm(path);
   int rc = posix::unlink(path);
-  DEBUG("posix::unlink(%s) = %d", path, rc);
+  LOG_DEBUG("posix::unlink(%s) = %d", path, rc);
   return rc;
 }
 
 int rename(const char* oldpath, const char* newpath) {
   if (access(newpath, F_OK) == 0) dram::File::unlink_shm(newpath);
   int rc = posix::rename(oldpath, newpath);
-  DEBUG("posix::rename(%s, %s) = %d", oldpath, newpath, rc);
+  LOG_DEBUG("posix::rename(%s, %s) = %d", oldpath, newpath, rc);
   return rc;
 }
 
@@ -335,7 +335,7 @@ int fcntl(int fd, int cmd, ... /* arg */) {
   va_start(arg, cmd);
   auto res = posix::fcntl(fd, cmd, arg);
   va_end(arg);
-  DEBUG("posix::fcntl(%d, %d, ...) = %d", fd, cmd, res);
+  LOG_DEBUG("posix::fcntl(%d, %d, ...) = %d", fd, cmd, res);
   return res;
 }
 
@@ -345,7 +345,7 @@ int fcntl64(int fd, int cmd, ... /* arg */) {
   va_start(arg, cmd);
   auto res = posix::fcntl(fd, cmd, arg);
   va_end(arg);
-  DEBUG("posix::fcntl(%d, %d, ...) = %d", fd, cmd, res);
+  LOG_DEBUG("posix::fcntl(%d, %d, ...) = %d", fd, cmd, res);
   return res;
 }
 
@@ -367,6 +367,8 @@ void __attribute__((constructor)) ulayfs_ctor() {
 /**
  * Called when the shared library is unloaded
  */
-void __attribute__((destructor)) ulayfs_dtor() { INFO("ulayfs_dtor called"); }
+void __attribute__((destructor)) ulayfs_dtor() {
+  LOG_INFO("ulayfs_dtor called");
+}
 }  // extern "C"
 }  // namespace ulayfs
