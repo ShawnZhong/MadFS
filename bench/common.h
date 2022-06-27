@@ -2,10 +2,12 @@
 
 #include <benchmark/benchmark.h>
 #include <fcntl.h>
+#include <numa.h>  // sudo apt install libnuma-dev
 #include <unistd.h>
 
 #include <climits>
 #include <cstring>
+#include <thread>
 
 #include "debug.h"
 
@@ -44,21 +46,35 @@ void append_file(int fd, long num_bytes, int num_iter = 1) {
 
 bool is_ulayfs_linked() { return ulayfs::debug::print_file != nullptr; }
 
-void pin_core(int thread_index) {
+std::vector<int> get_cpu_list(int target_node) {
+  std::vector<int> res;
+  int num_cpus = std::thread::hardware_concurrency();
+  for (int cpu = 0; cpu < num_cpus; ++cpu) {
+    if (numa_node_of_cpu(cpu) == target_node) {
+      res.push_back(cpu);
+    }
+  }
+  return res;
+}
+
+std::vector<int> get_cpu_list() {
+  int cpu = sched_getcpu();
+  int node = numa_node_of_cpu(cpu);
+  return get_cpu_list(node);
+}
+
+void pin_core(size_t thread_index) {
+  static std::vector<int> cpu_list = get_cpu_list();
+  if (thread_index >= cpu_list.size()) {
+    fprintf(stderr, "thread_index: %ld is out of range\n", thread_index);
+    return;
+  }
+
   cpu_set_t cpuset;
   CPU_ZERO(&cpuset);
-  // node0: 0-7,16-23
-  // node1: 8-15,24-31
-  if (thread_index <= 7) {
-    CPU_SET(thread_index, &cpuset);
-  } else if (thread_index <= 15) {
-    CPU_SET(thread_index + 8, &cpuset);
-  } else {
-    fprintf(stderr, "thread_index %d is out of range on node 0.\n",
-            thread_index);
-  }
+  CPU_SET(cpu_list[thread_index], &cpuset);
   if (sched_setaffinity(0, sizeof(cpuset), &cpuset) == -1) {
-    fprintf(stderr, "sched_setaffinity failed for thread_index %d.\n",
+    fprintf(stderr, "sched_setaffinity failed for thread_index %ld.\n",
             thread_index);
   }
 }

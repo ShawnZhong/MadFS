@@ -12,6 +12,11 @@ jobs:
     steps:
       - uses: actions/checkout@v2
 
+      - name: install deps
+        run: |
+          sudo apt update -y
+          sudo apt install libnuma-dev
+
       - name: micro_st
         run: BENCH_NUM_ITER=10 ./run micro_st
 
