@@ -2,7 +2,6 @@
 
 #include <benchmark/benchmark.h>
 #include <fcntl.h>
-#include <numa.h>  // sudo apt install libnuma-dev
 #include <unistd.h>
 
 #include <climits>
@@ -46,21 +45,25 @@ void append_file(int fd, long num_bytes, int num_iter = 1) {
 
 bool is_ulayfs_linked() { return ulayfs::debug::print_file != nullptr; }
 
-std::vector<int> get_cpu_list(int target_node) {
+std::vector<int> get_cpu_list() {
   std::vector<int> res;
-  int num_cpus = std::thread::hardware_concurrency();
-  for (int cpu = 0; cpu < num_cpus; ++cpu) {
-    if (numa_node_of_cpu(cpu) == target_node) {
-      res.push_back(cpu);
+  char* cpu_list_str = std::getenv("CPULIST");
+  if (cpu_list_str) {
+    char* p = strtok(cpu_list_str, ",");
+    while (p) {
+      res.push_back(std::atoi(p));
+      p = strtok(nullptr, ",");
+    }
+  } else {
+    fprintf(stderr,
+            "environment variable CPULIST not set. "
+            "Thread i is pinned to core i\n");
+    int num_cpus = std::thread::hardware_concurrency();
+    for (int i = 0; i < num_cpus; ++i) {
+      res.push_back(i);
     }
   }
   return res;
-}
-
-std::vector<int> get_cpu_list() {
-  int cpu = sched_getcpu();
-  int node = numa_node_of_cpu(cpu);
-  return get_cpu_list(node);
 }
 
 void pin_core(size_t thread_index) {

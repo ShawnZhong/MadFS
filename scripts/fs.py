@@ -19,6 +19,15 @@ def infer_numa_node(pmem_path: Path):
     return 0
 
 
+def get_cpulist(numa_node: int) -> List[int]:
+    result = []
+    text = Path(f"/sys/devices/system/node/node{numa_node}/cpulist").read_text()
+    for r in text.split(","):
+        start, end = r.split("-")
+        result += list(range(int(start), int(end) + 1))
+    return result
+
+
 class Filesystem:
     name: str
 
@@ -34,15 +43,17 @@ class Filesystem:
         return {}
 
     def process_cmd(self, cmd: List[str], env: Dict[str, str], **kwargs) -> List[str]:
+        numa = infer_numa_node(self.path)
+
         env = {
             **env,
             **self.get_env(cmd=cmd, **kwargs),
             "PMEM_PATH": str(self.path),
+            "CPULIST": ",".join(str(c) for c in get_cpulist(numa)),
         }
 
         cmd = ["env"] + [f"{k}={v}" for k, v in env.items()] + cmd
 
-        numa = infer_numa_node(self.path)
         if shutil.which("numactl"):
             cmd = ["numactl", f"--cpunodebind={numa}", f"--membind={numa}"] + cmd
         else:

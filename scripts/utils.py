@@ -15,7 +15,7 @@ def init(install_build_deps=False, install_dev_deps=False, configure=False):
     install_dev_deps_cmds = """
 sudo apt install -y clang libstdc++-10-dev clang-format &&    # for sanitizers and formatter
 sudo apt install -y linux-tools-common linux-tools-generic linux-tools-`uname -r` && # for perf
-sudo apt install -y ndctl numactl libnuma-dev &&              # for managing persistent memory and NUMA
+sudo apt install -y ndctl numactl &&                          # for managing persistent memory and NUMA
 sudo apt install -y sqlite3                                   # for benchmarking
 """
 
