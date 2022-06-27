@@ -52,6 +52,8 @@ class Tx {
 
   // in the case of read/write with offset change, update is done first
   bool is_offset_depend;
+  // if update is done first, we must know file_size already
+  uint64_t file_size;
   uint64_t ticket;
 
   /*

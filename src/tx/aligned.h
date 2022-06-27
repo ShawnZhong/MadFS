@@ -9,9 +9,9 @@ class AlignedTx : public WriteTx {
 
   AlignedTx(File* file, TxMgr* tx_mgr, const char* buf, size_t count,
             size_t offset, TxEntryIdx tail_tx_idx, pmem::TxBlock* tail_tx_block,
-            uint64_t ticket)
+            uint64_t file_size, uint64_t ticket)
       : WriteTx(file, tx_mgr, buf, count, offset, tail_tx_idx, tail_tx_block,
-                ticket) {}
+                file_size, ticket) {}
 
   ssize_t exec() override {
     debug::count(debug::ALIGNED_TX_START);
@@ -31,7 +31,9 @@ class AlignedTx : public WriteTx {
 
     // make a local copy of the tx tail
     if (!is_offset_depend)
-      file->update(tail_tx_idx, tail_tx_block, /*do_alloc*/ true);
+      file_size = file->update(tail_tx_idx, tail_tx_block, /*do_alloc*/ true);
+    // for an aligned tx, leftover_bytes must be zero, so there is no need to
+    // validate whether we falsely assume this tx can be inline
     for (uint32_t i = 0; i < num_blocks; ++i)
       recycle_image[i] = file->vidx_to_lidx(begin_vidx + i);
 

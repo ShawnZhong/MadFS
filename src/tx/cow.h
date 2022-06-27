@@ -19,9 +19,10 @@ class CoWTx : public WriteTx {
         end_full_vidx(BLOCK_SIZE_TO_IDX(end_offset)),
         num_full_blocks(end_full_vidx - begin_full_vidx) {}
   CoWTx(File* file, TxMgr* tx_mgr, const char* buf, size_t count, size_t offset,
-        TxEntryIdx tail_tx_idx, pmem::TxBlock* tail_tx_block, uint64_t ticket)
+        TxEntryIdx tail_tx_idx, pmem::TxBlock* tail_tx_block,
+        uint64_t file_size, uint64_t ticket)
       : WriteTx(file, tx_mgr, buf, count, offset, tail_tx_idx, tail_tx_block,
-                ticket),
+                file_size, ticket),
         begin_full_vidx(BLOCK_SIZE_TO_IDX(ALIGN_UP(offset, BLOCK_SIZE))),
         end_full_vidx(BLOCK_SIZE_TO_IDX(end_offset)),
         num_full_blocks(end_full_vidx - begin_full_vidx) {}
@@ -42,9 +43,10 @@ class SingleBlockTx : public CoWTx {
 
   SingleBlockTx(File* file, TxMgr* tx_mgr, const char* buf, size_t count,
                 size_t offset, TxEntryIdx tail_tx_idx,
-                pmem::TxBlock* tail_tx_block, uint64_t ticket)
+                pmem::TxBlock* tail_tx_block, uint64_t file_size,
+                uint64_t ticket)
       : CoWTx(file, tx_mgr, buf, count, offset, tail_tx_idx, tail_tx_block,
-              ticket),
+              file_size, ticket),
         local_offset(offset - BLOCK_IDX_TO_SIZE(begin_vidx)) {
     assert(num_blocks == 1);
   }
@@ -55,7 +57,23 @@ class SingleBlockTx : public CoWTx {
 
     // must acquire the tx tail before any get
     if (!is_offset_depend)
-      file->update(tail_tx_idx, tail_tx_block, /*do_alloc*/ true);
+      file_size = file->update(tail_tx_idx, tail_tx_block, /*do_alloc*/ true);
+
+    // after writing, if the file size is longer with nonzero leftover_bytes
+    // this tx cannot be inline
+    // TODO: handle redo
+    uint16_t leftover_bytes = ALIGN_UP(end_offset, BLOCK_SIZE) - end_offset;
+    if (end_offset > ALIGN_DOWN(file_size, BLOCK_SIZE) && leftover_bytes > 0) {
+      auto log_entry_idx = tx_mgr->append_log_entry(
+          allocator, pmem::LogEntry::Op::LOG_OVERWRITE,  // op
+          leftover_bytes,                                // leftover_bytes
+          num_blocks,                                    // total_blocks
+          begin_vidx,                                    // begin_virtual_idx
+          dst_lidxs                                      // begin_logical_idxs
+      );
+      commit_entry = pmem::TxEntryIndirect(log_entry_idx);
+    }
+
     recycle_image[0] = file->vidx_to_lidx(begin_vidx);
     assert(recycle_image[0] != dst_lidxs[0]);
 
@@ -125,9 +143,10 @@ class MultiBlockTx : public CoWTx {
                                 ALIGN_DOWN(end_offset, BLOCK_SIZE)) {}
   MultiBlockTx(File* file, TxMgr* tx_mgr, const char* buf, size_t count,
                size_t offset, TxEntryIdx tail_tx_idx,
-               pmem::TxBlock* tail_tx_block, uint64_t ticket)
+               pmem::TxBlock* tail_tx_block, uint64_t file_size,
+               uint64_t ticket)
       : CoWTx(file, tx_mgr, buf, count, offset, tail_tx_idx, tail_tx_block,
-              ticket),
+              file_size, ticket),
         first_block_overlap_size(ALIGN_UP(offset, BLOCK_SIZE) - offset),
         last_block_overlap_size(end_offset -
                                 ALIGN_DOWN(end_offset, BLOCK_SIZE)) {}
@@ -174,7 +193,23 @@ class MultiBlockTx : public CoWTx {
 
     // only get a snapshot of the tail when starting critical piece
     if (!is_offset_depend)
-      file->update(tail_tx_idx, tail_tx_block, /*do_alloc*/ true);
+      file_size = file->update(tail_tx_idx, tail_tx_block, /*do_alloc*/ true);
+
+    // after writing, if the file size is longer with nonzero leftover_bytes
+    // this tx cannot be inline
+    // TODO: handle redo
+    uint16_t leftover_bytes = ALIGN_UP(end_offset, BLOCK_SIZE) - end_offset;
+    if (end_offset > ALIGN_DOWN(file_size, BLOCK_SIZE) && leftover_bytes > 0) {
+      auto log_entry_idx = tx_mgr->append_log_entry(
+          allocator, pmem::LogEntry::Op::LOG_OVERWRITE,  // op
+          leftover_bytes,                                // leftover_bytes
+          num_blocks,                                    // total_blocks
+          begin_vidx,                                    // begin_virtual_idx
+          dst_lidxs                                      // begin_logical_idxs
+      );
+      commit_entry = pmem::TxEntryIndirect(log_entry_idx);
+    }
+
     for (uint32_t i = 0; i < num_blocks; ++i)
       recycle_image[i] = file->vidx_to_lidx(begin_vidx + i);
     src_first_lidx = recycle_image[0];

@@ -55,9 +55,10 @@ class WriteTx : public Tx {
       dst_blocks.push_back(file->lidx_to_addr_rw(lidx));
     assert(!dst_blocks.empty());
 
+    // assume we are not writing to the end of the file; must validate this
+    // assumption after knowing the offset; if fail, make another tx entry
     uint16_t leftover_bytes = ALIGN_UP(end_offset, BLOCK_SIZE) - end_offset;
-    if (leftover_bytes == 0 &&
-        pmem::TxEntryInline::can_inline(num_blocks, begin_vidx, dst_lidxs[0])) {
+    if (pmem::TxEntryInline::can_inline(num_blocks, begin_vidx, dst_lidxs[0])) {
       commit_entry = pmem::TxEntryInline(num_blocks, begin_vidx, dst_lidxs[0]);
     } else {
       // it's fine that we append log first as long we don't publish it by tx
@@ -73,11 +74,12 @@ class WriteTx : public Tx {
   }
   WriteTx(File* file, TxMgr* tx_mgr, const char* buf, size_t count,
           size_t offset, TxEntryIdx tail_tx_idx, pmem::TxBlock* tail_tx_block,
-          uint64_t ticket)
+          uint64_t file_size, uint64_t ticket)
       : WriteTx(file, tx_mgr, buf, count, offset) {
     is_offset_depend = true;
     this->tail_tx_idx = tail_tx_idx;
     this->tail_tx_block = tail_tx_block;
+    this->file_size = file_size;
     this->ticket = ticket;
   }
 };

@@ -29,7 +29,7 @@ ssize_t TxMgr::do_read(char* buf, size_t count) {
   uint64_t ticket;
   uint64_t offset =
       file->update_with_offset(tail_tx_idx, tail_tx_block, count,
-                               /*stop_at_boundary*/ true, ticket, &file_size,
+                               /*stop_at_boundary*/ true, ticket, file_size,
                                /*do_alloc*/ false);
 
   return Tx::exec_and_release_offset<ReadTx>(file, this, buf, count, offset,
@@ -53,25 +53,29 @@ ssize_t TxMgr::do_pwrite(const char* buf, size_t count, size_t offset) {
 ssize_t TxMgr::do_write(const char* buf, size_t count) {
   TxEntryIdx tail_tx_idx;
   pmem::TxBlock* tail_tx_block;
+  uint64_t file_size;
   uint64_t ticket;
   uint64_t offset =
       file->update_with_offset(tail_tx_idx, tail_tx_block, count,
-                               /*stop_at_boundary*/ false, ticket, nullptr,
+                               /*stop_at_boundary*/ false, ticket, file_size,
                                /*do_alloc*/ false);
 
   // special case that we have everything aligned, no OCC
   if (count % BLOCK_SIZE == 0 && offset % BLOCK_SIZE == 0)
     return Tx::exec_and_release_offset<AlignedTx>(
-        file, this, buf, count, offset, tail_tx_idx, tail_tx_block, ticket);
+        file, this, buf, count, offset, tail_tx_idx, tail_tx_block, file_size,
+        ticket);
 
   // another special case where range is within a single block
   if (BLOCK_SIZE_TO_IDX(offset) == BLOCK_SIZE_TO_IDX(offset + count - 1))
     return Tx::exec_and_release_offset<SingleBlockTx>(
-        file, this, buf, count, offset, tail_tx_idx, tail_tx_block, ticket);
+        file, this, buf, count, offset, tail_tx_idx, tail_tx_block, file_size,
+        ticket);
 
   // unaligned multi-block write
   return Tx::exec_and_release_offset<MultiBlockTx>(
-      file, this, buf, count, offset, tail_tx_idx, tail_tx_block, ticket);
+      file, this, buf, count, offset, tail_tx_idx, tail_tx_block, file_size,
+      ticket);
 }
 
 bool TxMgr::advance_tx_idx(TxEntryIdx& tx_idx, pmem::TxBlock*& tx_block,
