@@ -1,4 +1,5 @@
 #include "common.h"
+#include "zipf.h"
 
 #ifdef NDEBUG
 constexpr static bool debug = false;
@@ -6,8 +7,13 @@ constexpr static bool debug = false;
 constexpr static bool debug = true;
 #endif
 
-constexpr int MAX_SIZE = 4096;
+constexpr int BLOCK_SIZE = 4096;
 constexpr int MAX_NUM_THREAD = 16;
+constexpr int ZIPF_NUM_BLOCKS = 256 * 1024;
+constexpr double ZIPF_THETA = 0.9;
+
+std::default_random_engine generator;
+zipfian_int_distribution<int> zipf(1, ZIPF_NUM_BLOCKS, ZIPF_THETA);
 
 int fd;
 int num_iter = get_num_iter();
@@ -16,15 +22,16 @@ enum class Mode {
   NO_OVERLAP,
   APPEND,
   COW,
+  ZIPF,
 };
 
 template <Mode mode, int READ_PERCENT = -1>
 void bench(benchmark::State& state) {
   const auto num_bytes = state.range(0);
 
-  [[maybe_unused]] char dst_buf[MAX_SIZE * MAX_NUM_THREAD];
-  [[maybe_unused]] char src_buf[MAX_SIZE * MAX_NUM_THREAD];
-  std::fill(src_buf, src_buf + MAX_SIZE * MAX_NUM_THREAD, 'x');
+  [[maybe_unused]] char dst_buf[BLOCK_SIZE * MAX_NUM_THREAD];
+  [[maybe_unused]] char src_buf[BLOCK_SIZE * MAX_NUM_THREAD];
+  std::fill(src_buf, src_buf + BLOCK_SIZE * MAX_NUM_THREAD, 'x');
 
   if (state.thread_index == 0) {
     unlink(filepath);
@@ -33,10 +40,11 @@ void bench(benchmark::State& state) {
 
     // preallocate file
     if constexpr (mode != Mode::APPEND) {
-      auto len = num_bytes * MAX_NUM_THREAD;
-      [[maybe_unused]] ssize_t res = write(fd, src_buf, len);
-      assert(res == len);
-      fsync(fd);
+      if constexpr (mode == Mode::ZIPF) {
+        append_file(fd, BLOCK_SIZE * 1024, ZIPF_NUM_BLOCKS / 1024);
+      } else {
+        append_file(fd, num_bytes * MAX_NUM_THREAD);
+      }
     }
   }
 
@@ -83,6 +91,16 @@ void bench(benchmark::State& state) {
         fsync(fd);
       }
     }
+  } else if constexpr (mode == Mode::ZIPF) {
+    off_t offset[num_iter];
+    std::generate(offset, offset + num_iter, [&]() { return zipf(generator); });
+    int i = 0;
+    for (auto _ : state) {
+      [[maybe_unused]] ssize_t res =
+          pwrite(fd, src_buf, num_bytes, offset[i++] * BLOCK_SIZE);
+      assert(res == num_bytes);
+      fsync(fd);
+    }
   }
 
   // report result
@@ -99,7 +117,7 @@ void bench(benchmark::State& state) {
 }
 
 template <class F>
-auto register_bm(const char* name, F f, int num_bytes = 4096) {
+auto register_bm(const char* name, F f, int num_bytes = BLOCK_SIZE) {
   return benchmark::RegisterBenchmark(name, f)
       ->Args({num_bytes})
       ->DenseThreadRange(1, MAX_NUM_THREAD)
@@ -120,6 +138,9 @@ int main(int argc, char** argv) {
   register_bm("append_4k", bench<Mode::APPEND>);
   register_bm("cow_512", bench<Mode::COW>, 512);
   register_bm("cow_3584", bench<Mode::COW>, 3584);
+
+  register_bm("zipf_4k", bench<Mode::ZIPF>, 4096);
+  register_bm("zipf_2k", bench<Mode::ZIPF>, 2048);
 
   benchmark::RunSpecifiedBenchmarks();
   return 0;
