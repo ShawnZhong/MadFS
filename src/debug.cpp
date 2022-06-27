@@ -64,10 +64,7 @@ struct Counter {
 
 thread_local Counter counter;
 
-void count(Event event, size_t size) {
-  //    if constexpr (!BuildOptions::debug) return;
-  counter.count(event, size);
-}
+void count(Event event, size_t size) { counter.count(event, size); }
 
 size_t get_count(Event event) { return counter.counts[event]; }
 
