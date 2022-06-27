@@ -125,8 +125,7 @@ template <class F>
 auto register_bm(const char* name, F f, int num_bytes = 4096) {
   return benchmark::RegisterBenchmark(name, f)
       ->Args({num_bytes})
-      ->Threads(1)
-      ->DenseThreadRange(2, MAX_NUM_THREAD, 2)
+      ->DenseThreadRange(1, MAX_NUM_THREAD)
       ->Iterations(num_iter)
       ->UseRealTime();
 }
