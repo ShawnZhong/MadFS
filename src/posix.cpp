@@ -1,7 +1,5 @@
 #include "posix.h"
 
-#include <cassert>
-
 namespace ulayfs::posix {
 
 INIT_FN(lseek);

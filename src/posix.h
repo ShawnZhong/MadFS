@@ -7,7 +7,7 @@
 #include <sys/stat.h>
 #include <unistd.h>
 
-#include <cerrno>
+#include <cassert>
 #include <cstdio>
 
 #include "config.h"
