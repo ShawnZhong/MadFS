@@ -6,7 +6,6 @@
 #include <cassert>
 #include <cstring>
 
-#include "bitmap.h"
 #include "const.h"
 #include "entry.h"
 #include "idx.h"
@@ -14,112 +13,11 @@
 #include "utils.h"
 
 namespace ulayfs::pmem {
-/**
- * The base class for all the blocks
- *
- * Remove copy/move constructor and assignment operator to avoid accidental copy
- */
-class BaseBlock {
- public:
-  BaseBlock(BaseBlock const&) = delete;
-  BaseBlock(BaseBlock&&) = delete;
-  BaseBlock& operator=(BaseBlock const&) = delete;
-  BaseBlock& operator=(BaseBlock&&) = delete;
-};
-
-class TxBlock : public BaseBlock {
-  std::atomic<TxEntry> tx_entries[NUM_TX_ENTRY_PER_BLOCK];
-  // next is placed after tx_entires so that it could be flushed with tx_entries
-  std::atomic<LogicalBlockIdx> next;
-  // seq is used to construct total order between tx entries, so it must
-  // increase monotonically
-  // when compare two TxEntryIdx
-  // if within same block, compare local index
-  // if not, compare their block's seq number
-  uint32_t tx_seq;
-
- public:
-  [[nodiscard]] TxLocalIdx find_tail(TxLocalIdx hint = 0) const {
-    return TxEntry::find_tail<NUM_TX_ENTRY_PER_BLOCK>(tx_entries, hint);
-  }
-
-  TxEntry try_append(TxEntry entry, TxLocalIdx idx) {
-    return TxEntry::try_append(tx_entries, entry, idx);
-  }
-
-  // THIS FUNCTION IS NOT THREAD SAFE
-  void store(TxEntry entry, TxLocalIdx idx) {
-    tx_entries[idx].store(entry, std::memory_order_relaxed);
-  }
-
-  [[nodiscard]] TxEntry get(TxLocalIdx idx) const {
-    assert(idx >= 0 && idx < NUM_TX_ENTRY_PER_BLOCK);
-    return tx_entries[idx].load(std::memory_order_acquire);
-  }
-
-  // it should be fine not to use any fence since there will be fence for flush
-  void set_tx_seq(uint32_t seq) { tx_seq = seq; }
-  [[nodiscard]] uint32_t get_tx_seq() const { return tx_seq; }
-
-  [[nodiscard]] LogicalBlockIdx get_next_tx_block() const {
-    return next.load(std::memory_order_acquire);
-  }
-
-  /**
-   * Set the next block index
-   * @return true on success, false if there is a race condition
-   */
-  bool set_next_tx_block(LogicalBlockIdx block_idx) {
-    LogicalBlockIdx expected = 0;
-    return next.compare_exchange_strong(expected, block_idx,
-                                        std::memory_order_acq_rel,
-                                        std::memory_order_acquire);
-  }
-
-  /**
-   * flush the current block starting from `begin_idx` (including two pointers)
-   *
-   * @param begin_idx where to start flush
-   */
-  void flush_tx_block(TxLocalIdx begin_idx = 0) {
-    persist_unfenced(&tx_entries[begin_idx],
-                     sizeof(TxEntry) * (NUM_TX_ENTRY_PER_BLOCK - begin_idx) +
-                         2 * sizeof(LogicalBlockIdx));
-  }
-
-  /**
-   * flush a range of tx entries
-   *
-   * @param begin_idx
-   */
-  void flush_tx_entries(TxLocalIdx begin_idx, TxLocalIdx end_idx) {
-    assert(end_idx > begin_idx);
-    persist_unfenced(&tx_entries[begin_idx],
-                     sizeof(TxEntry) * (end_idx - begin_idx));
-  }
-};
-
-// LogEntryBlock is per-thread to avoid contention
-class LogEntryBlock : public BaseBlock {
-  // a LogEntryBlock is essentially a lightweight heap for transactions
-  // the major abstraction is really just a byte array
-  char pool[BLOCK_SIZE];
-
- public:
-  [[nodiscard]] LogEntry* get(LogLocalOffset offset) {
-    return reinterpret_cast<LogEntry*>(&pool[offset]);
-  }
-};
-
-class DataBlock : public BaseBlock {
- public:
-  char data[BLOCK_SIZE];
-};
 
 /*
  * LogicalBlockIdx 0 -> MetaBlock; other blocks can be any type of blocks
  */
-class MetaBlock : public BaseBlock {
+class MetaBlock : public noncopyable {
  private:
   // contents in the first cache line
   union {
@@ -324,56 +222,7 @@ class MetaBlock : public BaseBlock {
   }
 };
 
-union Block {
-  MetaBlock meta_block;
-  TxBlock tx_block;
-  LogEntryBlock log_entry_block;
-  DataBlock data_block;
-
-  // view a block as an array of cache line
-  char cache_lines[NUM_CL_PER_BLOCK][CACHELINE_SIZE];
-
-  [[nodiscard]] char* data_rw() { return data_block.data; }
-  [[nodiscard]] const char* data_ro() const { return data_block.data; }
-
-  /**
-   * zero-out a cache line
-   * @param cl_idx which cache line to zero out
-   * @return whether memset happened
-   */
-  bool zero_init_cl(uint16_t cl_idx) {
-    constexpr static const char zero_cl[CACHELINE_SIZE]{};
-    if (memcmp(&cache_lines[cl_idx], zero_cl, CACHELINE_SIZE) == 0)
-      return false;
-    memset(&cache_lines[cl_idx], 0, CACHELINE_SIZE);
-    persist_cl_unfenced(&cache_lines[cl_idx]);
-    return true;
-  }
-
-  /**
-   * zero-initialize a block within a given cache-line range
-   * @param cl_idx_begin the beginning cache-line index
-   * @param cl_idx_end the ending cache-line index
-   * @return whether memset happened
-   */
-  bool zero_init(uint16_t cl_idx_begin = 0,
-                 uint16_t cl_idx_end = NUM_CL_PER_BLOCK) {
-    bool do_memset = false;
-    for (uint16_t cl_idx = cl_idx_begin; cl_idx < cl_idx_end; ++cl_idx)
-      do_memset |= zero_init_cl(cl_idx);
-    if (do_memset) _mm_sfence();
-    return do_memset;
-  }
-};
-
 static_assert(sizeof(MetaBlock) == BLOCK_SIZE,
               "MetaBlock must be of size BLOCK_SIZE");
-static_assert(sizeof(TxBlock) == BLOCK_SIZE,
-              "TxBlock must be of size BLOCK_SIZE");
-static_assert(sizeof(LogEntryBlock) == BLOCK_SIZE,
-              "LogEntryBlock must be of size BLOCK_SIZE");
-static_assert(sizeof(DataBlock) == BLOCK_SIZE,
-              "DataBlock must be of size BLOCK_SIZE");
-static_assert(sizeof(Block) == BLOCK_SIZE, "Block must be of size BLOCK_SIZE");
 
 }  // namespace ulayfs::pmem

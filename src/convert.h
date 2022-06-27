@@ -2,7 +2,7 @@
 
 #include "alloc.h"
 #include "bitmap.h"
-#include "block.h"
+#include "block/block.h"
 #include "const.h"
 #include "entry.h"
 #include "file.h"

@@ -12,7 +12,6 @@
 #include <iomanip>
 
 #include "alloc.h"
-#include "block.h"
 #include "config.h"
 #include "idx.h"
 #include "utils.h"

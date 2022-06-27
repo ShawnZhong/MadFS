@@ -9,7 +9,7 @@
 #include <ostream>
 #include <type_traits>
 
-#include "block.h"
+#include "block/block.h"
 #include "const.h"
 #include "entry.h"
 #include "idx.h"

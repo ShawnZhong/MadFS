@@ -59,6 +59,15 @@ class zero_allocator : public tbb::cache_aligned_allocator<T> {
   }
 };
 
+/**
+ * Disable copy constructor and copy assignment to avoid accidental copy
+ */
+class noncopyable {
+ public:
+  noncopyable(const noncopyable &) = delete;
+  noncopyable &operator=(const noncopyable &) = delete;
+};
+
 // to indicate still actively use the file, one must acquire this file to
 // prevent gc or other utilities; may block
 // no explict release; lock will be released during close

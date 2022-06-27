@@ -6,7 +6,11 @@ include(FetchContent)
 add_library(ulayfs SHARED
     src/alloc.h src/alloc.cpp
     src/bitmap.h
-    src/block.h
+    src/block/block.h
+    src/block/data.h
+    src/block/log.h
+    src/block/meta.h
+    src/block/tx.h
     src/blktable.h src/blktable.cpp
     src/const.h
     src/debug.h src/debug.cpp
