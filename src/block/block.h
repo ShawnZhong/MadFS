@@ -1,6 +1,5 @@
 #pragma once
 
-#include "block/data.h"
 #include "block/log.h"
 #include "block/meta.h"
 #include "block/tx.h"
@@ -11,13 +10,11 @@ union Block {
   MetaBlock meta_block;
   TxBlock tx_block;
   LogEntryBlock log_entry_block;
-  DataBlock data_block;
-
-  // view a block as an array of cache line
+  char data[BLOCK_SIZE];
   char cache_lines[NUM_CL_PER_BLOCK][CACHELINE_SIZE];
 
-  [[nodiscard]] char* data_rw() { return data_block.data; }
-  [[nodiscard]] const char* data_ro() const { return data_block.data; }
+  [[nodiscard]] char* data_rw() { return data; }
+  [[nodiscard]] const char* data_ro() const { return data; }
 
   /**
    * zero-out a cache line

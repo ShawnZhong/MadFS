@@ -103,6 +103,7 @@ class MetaBlock : public noncopyable {
       PANIC_IF(rc != 0, "pthread_mutex_consistent failed");
     }
   }
+
   void unlock() {
     int rc = pthread_mutex_unlock(&cl2_meta.mutex);
     PANIC_IF(rc != 0, "Mutex unlock failed");
@@ -127,7 +128,7 @@ class MetaBlock : public noncopyable {
     persist_cl_unfenced(&cl2);
   }
 
-  [[nodiscard]] uint32_t get_tx_seq() const { return 0; }
+  [[nodiscard]] static uint32_t get_tx_seq() { return 0; }
 
   /**
    * Set the next tx block index
@@ -178,9 +179,11 @@ class MetaBlock : public noncopyable {
   [[nodiscard]] uint32_t get_num_blocks() const {
     return cl2_meta.num_blocks.load(std::memory_order_acquire);
   }
+
   [[nodiscard]] LogicalBlockIdx get_next_tx_block() const {
     return cl1_meta.next_tx_block.load(std::memory_order_acquire);
   }
+
   [[nodiscard]] TxEntryIdx get_tx_tail() const {
     auto tx_tail = cl1_meta.tx_tail.load(std::memory_order_relaxed);
     return tx_tail.tx_entry_idx;
