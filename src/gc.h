@@ -1,5 +1,4 @@
 #include "file.h"
-#include "flock.h"
 #include "posix.h"
 #include "utils.h"
 
@@ -12,8 +11,8 @@ class GarbageCollector {
     struct stat stat_buf;
     if (dram::File::try_open(fd, stat_buf, pathname, O_RDWR, 0)) return nullptr;
 
-    is_exclusive = flock::try_acquire(fd);
-    return new dram::File(fd, stat_buf, O_RDWR, /*guard*/ false);
+    is_exclusive = try_acquire_flock(fd);
+    return new dram::File(fd, stat_buf, O_RDWR, nullptr, /*guard*/ false);
   }
 
   static int do_gc(const char* pathname) {
