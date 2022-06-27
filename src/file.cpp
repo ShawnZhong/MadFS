@@ -20,8 +20,8 @@
 
 namespace ulayfs::dram {
 
-File::File(int fd, const struct stat& stat, int flags, const char* pathname,
-           bool guard)
+File::File(int fd, const struct stat& stat, int flags,
+           const char* pathname [[maybe_unused]], bool guard)
     : fd(fd),
       mem_table(fd, stat.st_size, (flags & O_ACCMODE) == O_RDONLY),
       meta(mem_table.get_meta()),
@@ -76,8 +76,9 @@ File::File(int fd, const struct stat& stat, int flags, const char* pathname,
   if (!file_size_updated) file_size = blk_table.update(/*do_alloc*/ false);
 
   if (flags & O_APPEND) offset_mgr.seek_absolute(file_size);
-
-  if constexpr (BuildOptions::debug) path = strdup(pathname);
+#ifdef ULAYFS_DEBUG
+  path = strdup(pathname);
+#endif
 }
 
 File::~File() {
@@ -86,7 +87,9 @@ File::~File() {
   if (fd >= 0) posix::close(fd);
   if (shm_fd >= 0) posix::close(shm_fd);
   if (bitmap) posix::munmap(bitmap, SHM_SIZE);
-  if constexpr (BuildOptions::debug) free((void*)path);
+#ifdef ULAYFS_DEBUG
+  free((void*)path);
+#endif
 }
 
 /*
