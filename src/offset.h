@@ -2,13 +2,10 @@
 
 #include <atomic>
 #include <cstdint>
-#include <cstring>
 #include <iosfwd>
 
-#include "block.h"
-#include "config.h"
+#include "block/block.h"
 #include "const.h"
-#include "entry.h"
 #include "idx.h"
 
 namespace ulayfs::dram {

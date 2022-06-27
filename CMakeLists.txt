@@ -6,22 +6,24 @@ include(FetchContent)
 add_library(ulayfs SHARED
     src/alloc.h src/alloc.cpp
     src/bitmap.h
-    src/block.h
-    src/btable.h src/btable.cpp
+    src/block/block.h
+    src/block/data.h
+    src/block/log.h
+    src/block/meta.h
+    src/block/tx.h
+    src/blktable.h src/blktable.cpp
     src/const.h
     src/debug.h src/debug.cpp
     src/entry.h
     src/file.h src/file.cpp
-    src/flock.h
     src/gc.h
     src/idx.h
     src/lib.h src/lib.cpp
-    src/mtable.h src/mtable.cpp
+    src/memtable.h src/memtable.cpp
     src/offset.h src/offset.cpp
     src/persist.h
     src/posix.h src/posix.cpp
     src/convert.h
-    src/tbb.h
     src/tx/mgr.h src/tx/mgr.cpp
     src/tx/tx.h
     src/tx/read.h

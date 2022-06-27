@@ -2,11 +2,10 @@
 
 #include "alloc.h"
 #include "bitmap.h"
-#include "block.h"
+#include "block/block.h"
 #include "const.h"
 #include "entry.h"
 #include "file.h"
-#include "flock.h"
 #include "idx.h"
 #include "persist.h"
 #include "posix.h"
@@ -19,7 +18,7 @@ class Converter {
   // convert a normal file to a uLayFS file
   // fd must be opened with both read and write permission
   static dram::File* convert_to(int fd, const char* pathname) {
-    if (!flock::try_acquire(fd)) {
+    if (!try_acquire_flock(fd)) {
       LOG_WARN("Target file locked, cannot perform conversion");
       return nullptr;
     }
@@ -32,8 +31,8 @@ class Converter {
     if (stat_buf.st_size == 0) {
       dram::File* file = new dram::File(fd, stat_buf, O_RDWR, pathname, false);
       // release exclusive lock and acquire shared lock
-      flock::release(fd);
-      flock::flock_guard(fd);
+      release_flock(fd);
+      flock_guard(fd);
       return file;
     }
 
@@ -137,18 +136,18 @@ class Converter {
 
   done:
     pmem::persist_fenced(file->meta, BLOCK_SIZE);
-    flock::release(fd);
-    flock::flock_guard(fd);
+    release_flock(fd);
+    flock_guard(fd);
     return file;
   }
 
   static int convert_from(dram::File* file) {
     int ret;
     int fd = file->fd;
-    flock::release(fd);
-    if (!flock::try_acquire(file->fd)) {
+    release_flock(fd);
+    if (!try_acquire_flock(file->fd)) {
       LOG_WARN("Target file locked, cannot perform conversion");
-      flock::flock_guard(fd);
+      flock_guard(fd);
       return -1;
     }
 
@@ -192,7 +191,7 @@ class Converter {
 
     // we steal fd here so it won't be destroyed with File
     file->fd = -1;
-    flock::release(fd);
+    release_flock(fd);
     return fd;
   }
 };

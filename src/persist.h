@@ -8,15 +8,6 @@
 #include "const.h"
 #include "utils.h"
 
-#if ULAYFS_USE_PMEMCHECK == 1
-#include <valgrind/pmemcheck.h>
-// ref: https://pmem.io/valgrind/generated/pmc-manual.html
-#else
-#define VALGRIND_PMC_REMOVE_PMEM_MAPPING(...) ({})
-#define VALGRIND_PMC_REGISTER_PMEM_MAPPING(...) ({})
-#define VALGRIND_PMC_DO_FLUSH(...) ({})
-#endif
-
 extern "C" {
 // https://github.com/pmem/pmdk/blob/master/src/libpmem2/x86_64/memcpy_memset.h
 void memmove_movnt_avx512f_clflush(char *, const char *, size_t);

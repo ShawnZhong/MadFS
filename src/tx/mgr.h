@@ -6,7 +6,7 @@
 #include <vector>
 
 #include "alloc.h"
-#include "block.h"
+#include "block/block.h"
 #include "entry.h"
 #include "idx.h"
 

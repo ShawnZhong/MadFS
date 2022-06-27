@@ -7,10 +7,10 @@
 #include <sys/stat.h>
 #include <unistd.h>
 
-#include <cerrno>
+#include <cassert>
 #include <cstdio>
 
-#include "utils.h"
+#include "config.h"
 
 namespace ulayfs::posix {
 

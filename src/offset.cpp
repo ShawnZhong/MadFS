@@ -1,5 +1,7 @@
 #include "offset.h"
 
+#include <emmintrin.h>
+
 #include <atomic>
 #include <cstdint>
 #include <ostream>
