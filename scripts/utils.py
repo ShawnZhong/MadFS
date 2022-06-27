@@ -19,16 +19,30 @@ sudo apt install -y ndctl numactl &&                          # for managing per
 sudo apt install -y sqlite3                                   # for benchmarking
 """
 
-    configure_cmds = """
-sudo sysctl -w vm.nr_hugepages=512 &&               # enable huge pages
-sudo sysctl -w kernel.kptr_restrict=0 &&            # expose kernel addresses for perf
-sudo sysctl -w kernel.perf_event_paranoid=-1 &&     # allow kernel profiling
-sudo sysctl -w vm.max_map_count=131072              # increase max number of mmap regions
-"""
+    configure_cmds = ""
 
+    # enable huge pages
+    if Path("/proc/sys/vm/nr_hugepages").read_text() != "512\n":
+        configure_cmds += "sudo sysctl -w vm.nr_hugepages=512\n"
+
+    # expose kernel addresses for perf
+    if Path("/proc/sys/kernel/kptr_restrict").read_text() != "0\n":
+        configure_cmds += "sudo sysctl -w kernel.kptr_restrict=0\n"
+
+    # allow kernel profiling
+    if Path("/proc/sys/kernel/perf_event_paranoid").read_text() != "-1\n":
+        configure_cmds += "sudo sysctl -w kernel.perf_event_paranoid=-1\n"
+
+    # increase max number of mmap regions
+    if Path("/proc/sys/vm/max_map_count").read_text() != "131072\n":
+        configure_cmds += "sudo sysctl -w vm.max_map_count=131072\n"
+
+    # disable CPU frequency scaling
+    paths = [Path(f"/sys/devices/system/cpu/cpu{i}/cpufreq/scaling_governor") for i in range(os.cpu_count())]
     configure_cmds += " &&\n".join(
-        f"echo performance | sudo tee /sys/devices/system/cpu/cpu{i}/cpufreq/scaling_governor >/dev/null"
-        for i in range(os.cpu_count())
+        f"echo performance | sudo tee {path} >/dev/null"
+        for path in paths
+        if path.read_text() != "performance\n"
     )
 
     if install_build_deps or install_dev_deps:
@@ -37,7 +51,7 @@ sudo sysctl -w vm.max_map_count=131072              # increase max number of mma
         system("sudo apt install -y cmake build-essential")
     if install_dev_deps:
         system(install_dev_deps_cmds)
-    if configure:
+    if configure and configure_cmds != "":
         system(configure_cmds)
 
 

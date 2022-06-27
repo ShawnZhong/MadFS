@@ -1,10 +1,5 @@
 #pragma once
 
-#include <magic_enum.hpp>
-#include <map>
-#include <mutex>
-#include <unordered_map>
-
 #include "config.h"
 
 namespace ulayfs::debug {
@@ -65,6 +60,8 @@ enum Event {
   PWRITE,
   OPEN,
   CLOSE,
+  ALIGNED_TX_START,
+  ALIGNED_TX_COMMIT,
   SINGLE_BLOCK_TX_START,
   SINGLE_BLOCK_TX_COPY,
   SINGLE_BLOCK_TX_COMMIT,
@@ -73,43 +70,8 @@ enum Event {
   MULTI_BLOCK_TX_COMMIT,
 };
 
-extern thread_local class Counter {
-  static std::mutex print_mutex;
-  std::array<size_t, magic_enum::enum_count<Event>()> counts;
-  std::array<size_t, magic_enum::enum_count<Event>()> sizes;
-
- public:
-  Counter() = default;
-  ~Counter() {
-    if constexpr (!BuildOptions::debug) return;
-    std::lock_guard<std::mutex> guard(print_mutex);
-    fprintf(log_file, "    [Thread %d] Counters:\n", tid);
-    magic_enum::enum_for_each<Event>([&](Event event) {
-      auto val = magic_enum::enum_integer(event);
-      size_t count = counts[val];
-      if (count == 0) return;
-      size_t size = sizes[val];
-      fprintf(log_file, "        %-25s: %zu",
-              magic_enum::enum_name(event).data(), count);
-      if (size != 0) {
-        double total_mb = (double)size / 1024.0 / 1024.0;
-        double avg_kb = (double)size / 1024.0 / (double)count;
-        fprintf(log_file, " (%.2f MB, avg = %.2f KB) ", total_mb, avg_kb);
-      }
-      fprintf(log_file, "\n");
-    });
-  }
-
-  void count(Event event, size_t size) {
-    if constexpr (!BuildOptions::debug) return;
-    counts[magic_enum::enum_integer(event)]++;
-    sizes[magic_enum::enum_integer(event)] += size;
-  }
-} counter;
-
-static inline void count(Event event, size_t size = 0) {
-  counter.count(event, size);
-}
-
+void count(Event event, size_t size = 0);
+size_t get_count(Event event) __attribute__((weak));
+void clear_count() __attribute__((weak));
 void print_file(int fd) __attribute__((weak));
 }  // namespace ulayfs::debug

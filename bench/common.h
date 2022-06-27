@@ -6,6 +6,9 @@
 
 #include <climits>
 #include <cstring>
+#include <thread>
+
+#include "debug.h"
 
 const char* filepath = []() -> const char* {
   const char* res = "test.txt";
@@ -38,4 +41,43 @@ void append_file(int fd, long num_bytes, int num_iter = 1) {
   }
   fsync(fd);
   delete[] buf;
+}
+
+bool is_ulayfs_linked() { return ulayfs::debug::print_file != nullptr; }
+
+std::vector<int> get_cpu_list() {
+  std::vector<int> res;
+  char* cpu_list_str = std::getenv("CPULIST");
+  if (cpu_list_str) {
+    char* p = strtok(cpu_list_str, ",");
+    while (p) {
+      res.push_back(std::atoi(p));
+      p = strtok(nullptr, ",");
+    }
+  } else {
+    fprintf(stderr,
+            "environment variable CPULIST not set. "
+            "Thread i is pinned to core i\n");
+    int num_cpus = std::thread::hardware_concurrency();
+    for (int i = 0; i < num_cpus; ++i) {
+      res.push_back(i);
+    }
+  }
+  return res;
+}
+
+void pin_core(size_t thread_index) {
+  static std::vector<int> cpu_list = get_cpu_list();
+  if (thread_index >= cpu_list.size()) {
+    fprintf(stderr, "thread_index: %ld is out of range\n", thread_index);
+    return;
+  }
+
+  cpu_set_t cpuset;
+  CPU_ZERO(&cpuset);
+  CPU_SET(cpu_list[thread_index], &cpuset);
+  if (sched_setaffinity(0, sizeof(cpuset), &cpuset) == -1) {
+    fprintf(stderr, "sched_setaffinity failed for thread_index %ld.\n",
+            thread_index);
+  }
 }

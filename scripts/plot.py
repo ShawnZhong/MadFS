@@ -5,12 +5,16 @@ import logging
 import re
 from pathlib import Path
 
+import matplotlib
 import pandas as pd
 from matplotlib import pyplot as plt
 
 pd.options.display.max_rows = 100
 pd.options.display.max_columns = 100
 pd.options.display.width = None
+
+matplotlib.rcParams["legend.columnspacing"] = 0.5
+matplotlib.rcParams["legend.fontsize"] = 6
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger("plot")
@@ -31,7 +35,7 @@ def get_sorted_subdirs(path):
     return paths
 
 
-def read_files(result_dir, post_process_fn):
+def read_files(result_dir):
     data = pd.DataFrame()
 
     for path in get_sorted_subdirs(result_dir):
@@ -46,22 +50,33 @@ def read_files(result_dir, post_process_fn):
             json_data = json.load(f)
             df = pd.DataFrame.from_dict(json_data["benchmarks"])
             df["label"] = fs_name
-            post_process_fn(df)
             data = data.append(df)
 
     return data
+
+
+def export_results(result_dir, data, name="result"):
+    with open(result_dir / f"{name}.csv", "w") as f:
+        data.to_csv(f)
+    with open(result_dir / f"{name}.txt", "w") as f:
+        for name, benchmark in data[["benchmark", "label", "x", "y"]].groupby(["benchmark"], sort=False):
+            pt = pd.pivot_table(benchmark, values="y", index="x", columns="label", sort=False)
+            if "uLayFS" in pt.columns:
+                for c in pt.columns:
+                    pt[f"{c}%"] = pt[c] / pt["uLayFS"] * 100
+            print(name)
+            print(pt)
+            print(name, file=f)
+            print(pt, file=f)
 
 
 def plot_single_bm(
         df,
         result_dir,
         barchart=False,
-        xlabel=None,
-        ylabel=None,
-        title=None,
         name=None,
         post_plot=None,
-        figsize=(3, 3),
+        figsize=(2.75, 2.75),
 ):
     plt.clf()
     fig, ax = plt.subplots(figsize=figsize)
@@ -72,36 +87,11 @@ def plot_single_bm(
         else:
             plt.plot(group["x"], group["y"], label=label, marker=".")
 
-    plt.xlabel(xlabel)
-    plt.ylabel(ylabel)
-    plt.title(title)
     if post_plot:
         post_plot(ax=ax, name=name, df=df)
 
     plt.savefig(result_dir / f"{name}.png", bbox_inches="tight", dpi=300)
     plt.savefig(result_dir / f"{name}.pdf", bbox_inches="tight")
-
-
-def plot_benchmarks(data, **kwargs):
-    for name, benchmark in data.groupby("benchmark"):
-        plot_single_bm(
-            benchmark, name=name, **kwargs,
-        )
-
-
-def export_results(result_dir, data):
-    with open(result_dir / f"result.csv", "w") as f:
-        data.to_csv(f)
-    with open(result_dir / f"result.txt", "w") as f:
-        for name, benchmark in data[["benchmark", "label", "x", "y"]].groupby(["benchmark"], sort=False):
-            pt = pd.pivot_table(benchmark, values="y", index="x", columns="label", sort=False)
-            if "uLayFS" in pt.columns:
-                for c in pt.columns:
-                    pt[f"{c}%"] = pt["uLayFS"] / pt[c] * 100
-            print(name)
-            print(pt)
-            print(name, file=f)
-            print(pt, file=f)
 
 
 def parse_name(name, i):
@@ -115,74 +105,105 @@ def format_bytes(x):
 
 
 def plot_micro_st(result_dir):
-    def post_process(df):
-        df["benchmark"] = df["name"].apply(parse_name, args=(0,))
-        df["x"] = df["name"].apply(parse_name, args=(1,)).apply(format_bytes)
-        df["y"] = df["bytes_per_second"].apply(lambda x: float(x) / 1024 ** 3)
+    df = read_files(result_dir)
+    df["benchmark"] = df["name"].apply(parse_name, args=(0,))
+    xlabel = "I/O Size (Bytes)"
 
-    def post_plot(name, ax, **kwargs):
-        plt.xticks(rotation=45)
-        ax.yaxis.set_major_locator(plt.MaxNLocator(steps=[1, 5, 10]))
-        ax.yaxis.set_major_formatter(plt.FormatStrFormatter('%.1f'))
-        ax.set_ylim(bottom=0)
-        plt.legend()
-        plt.title(name)
+    for name, benchmark in df.groupby("benchmark"):
+        if name.startswith("cow"):
+            df["x"] = df["name"].apply(parse_name, args=(1,))
+            df["y"] = df["real_time"].apply(lambda x: float(x) / 1000)
+            ylabel = "Latency (ms)"
+        else:
+            df["x"] = df["name"].apply(parse_name, args=(1,)).apply(format_bytes)
+            df["y"] = df["bytes_per_second"].apply(lambda x: float(x) / 1024 ** 3)
+            ylabel = "Throughput (GB/sec)"
 
-    data = read_files(result_dir, post_process)
-    export_results(result_dir, data)
-    plot_benchmarks(
-        data,
-        result_dir=result_dir,
-        post_plot=post_plot,
-        figsize=(2.75, 2.75),
-        xlabel="I/O Size (Bytes)",
-        ylabel="Throughput (GB/s)",
-    )
+        export_results(result_dir, benchmark, name=name)
+
+        def post_plot(ax, **kwargs):
+            ax.set_xlabel(xlabel)
+            ax.set_ylabel(ylabel)
+
+            plt.xticks(rotation=45)
+            ax.xaxis.set_major_locator(plt.MultipleLocator(4))
+
+            ax.yaxis.set_major_locator(plt.MaxNLocator(steps=[1, 5, 10]))
+            ax.yaxis.set_major_formatter(plt.FormatStrFormatter('%.1f'))
+            ax.set_ylim(bottom=0)
+
+            ax.legend(ncol=2)
+            plt.title(name)
+
+        plot_single_bm(
+            benchmark,
+            name=name,
+            result_dir=result_dir,
+            post_plot=post_plot,
+        )
 
 
 def plot_micro_mt(result_dir):
-    def post_process(df):
-        df["benchmark"] = df["name"].apply(parse_name, args=(0,))
-        df["x"] = df["name"].apply(parse_name, args=(-1,))
-        df["y"] = df["items_per_second"].apply(lambda x: float(x) / 1000 ** 2)
+    df = read_files(result_dir)
+    df["benchmark"] = df["name"].apply(parse_name, args=(0,))
+    df["x"] = df["name"].apply(parse_name, args=(-1,))
+    xlabel = "Number of Threads"
 
-        srmw_filter = df["benchmark"] == "srmw"
-        df.loc[srmw_filter, "x"] = df.loc[srmw_filter, "x"].apply(lambda x: str(int(x) - 1))
-        df.drop(df[df["x"] == "0"].index, inplace=True)
+    for name, benchmark in df.groupby("benchmark"):
+        if name.startswith("no_overlap"):
+            benchmark["y"] = benchmark["items_per_second"].apply(lambda x: float(x) / 1000 ** 2)
+            ylabel = "Throughput (Mops/sec)"
+        else:
+            benchmark["y"] = benchmark["bytes_per_second"].apply(lambda x: float(x) / 1024 ** 3)
+            ylabel = "Throughput (GB/sec)"
 
-    def post_plot(name, df, ax, **kwargs):
-        labels = df["x"].unique()
-        plt.xticks(ticks=labels, labels=labels)
-        ax.set_ylim(bottom=0)
-        ax.yaxis.set_major_locator(plt.MaxNLocator(steps=[1, 2]))
-        plt.legend()
-        plt.title(name)
+        export_results(result_dir, benchmark, name=name)
 
-    data = read_files(result_dir, post_process)
-    export_results(result_dir, data)
-    plot_benchmarks(
-        data,
-        result_dir=result_dir,
-        post_plot=post_plot,
-        xlabel="Number of Threads",
-        ylabel="Throughput (Mops/sec)",
-    )
+        def post_plot(ax, **kwargs):
+            if name.startswith("zipf") and "uLayFS" in df["label"].unique():
+                ax2 = ax.twinx()
+                ax2.plot(df["x"], df["tx_commit"] - 1, ":", label="tx_commit")
+                ax2.set_ylabel("uLayFS commit conflicts per Tx")
+
+            ax.set_xlabel(xlabel)
+            ax.set_ylabel(ylabel)
+
+            labels = benchmark["x"].unique()
+            plt.xticks(ticks=labels, labels=labels)
+            ax.xaxis.set_major_locator(plt.MultipleLocator(3))
+
+            ax.set_ylim(bottom=0)
+
+            ax.legend(ncol=2, loc="lower left")
+            plt.title(name)
+
+        plot_single_bm(
+            benchmark,
+            name=name,
+            result_dir=result_dir,
+            post_plot=post_plot,
+        )
 
 
 def plot_micro_meta(result_dir):
-    def post_process(df):
-        df["benchmark"] = df["name"].apply(parse_name, args=(0,))
-        df["x"] = df["name"].apply(parse_name, args=(1,))
-        df["y"] = df["cpu_time"].apply(lambda x: float(x) / 1000)
+    df = read_files(result_dir)
+    df["benchmark"] = df["name"].apply(parse_name, args=(0,))
+    df["x"] = df["name"].apply(parse_name, args=(1,))
+    df["y"] = df["cpu_time"].apply(lambda x: float(x) / 1000)
 
-    data = read_files(result_dir, post_process)
-    export_results(result_dir, data)
-    plot_benchmarks(
-        data,
-        result_dir=result_dir,
-        xlabel="Transaction History Length",
-        ylabel="Latency (us)",
-    )
+    export_results(result_dir, df)
+
+    def post_plot(ax, **kwargs):
+        plt.xlabel("Transaction History Length")
+        plt.ylabel("Latency (us)")
+
+    for name, benchmark in df.groupby("benchmark"):
+        plot_single_bm(
+            benchmark,
+            name=name,
+            result_dir=result_dir,
+            post_plot=post_plot,
+        )
 
 
 def plot_ycsb(result_dir):

@@ -1,4 +1,5 @@
 #include "common.h"
+#include "zipf.h"
 
 #ifdef NDEBUG
 constexpr static bool debug = false;
@@ -6,8 +7,10 @@ constexpr static bool debug = false;
 constexpr static bool debug = true;
 #endif
 
-constexpr int MAX_SIZE = 4096;
+constexpr int BLOCK_SIZE = 4096;
 constexpr int MAX_NUM_THREAD = 16;
+constexpr int ZIPF_NUM_BLOCKS = 256 * 1024;
+constexpr double ZIPF_THETA = 0.9;
 
 int fd;
 int num_iter = get_num_iter();
@@ -15,17 +18,19 @@ int num_iter = get_num_iter();
 enum class Mode {
   NO_OVERLAP,
   APPEND,
-  CONTENDED_WRITE,  // concurrent write to the same location
-  SRMW,  // single reader multiple concurrent writers to the same location
+  COW,
+  ZIPF,
 };
 
 template <Mode mode, int READ_PERCENT = -1>
 void bench(benchmark::State& state) {
   const auto num_bytes = state.range(0);
 
-  [[maybe_unused]] char dst_buf[MAX_SIZE * MAX_NUM_THREAD];
-  [[maybe_unused]] char src_buf[MAX_SIZE * MAX_NUM_THREAD];
-  std::fill(src_buf, src_buf + MAX_SIZE * MAX_NUM_THREAD, 'x');
+  pin_core(state.thread_index);
+
+  [[maybe_unused]] char dst_buf[BLOCK_SIZE * MAX_NUM_THREAD];
+  [[maybe_unused]] char src_buf[BLOCK_SIZE * MAX_NUM_THREAD];
+  std::fill(src_buf, src_buf + BLOCK_SIZE * MAX_NUM_THREAD, 'x');
 
   if (state.thread_index == 0) {
     unlink(filepath);
@@ -34,12 +39,15 @@ void bench(benchmark::State& state) {
 
     // preallocate file
     if constexpr (mode != Mode::APPEND) {
-      auto len = num_bytes * MAX_NUM_THREAD;
-      [[maybe_unused]] ssize_t res = write(fd, src_buf, len);
-      assert(res == len);
-      fsync(fd);
+      if constexpr (mode == Mode::ZIPF) {
+        append_file(fd, BLOCK_SIZE * 1024, ZIPF_NUM_BLOCKS / 1024);
+      } else {
+        append_file(fd, num_bytes * MAX_NUM_THREAD);
+      }
     }
   }
+
+  if (is_ulayfs_linked()) ulayfs::debug::clear_count();
 
   // run benchmark
   if constexpr (mode == Mode::APPEND) {
@@ -61,25 +69,11 @@ void bench(benchmark::State& state) {
         }
       }
     }
-  } else if constexpr (mode == Mode::CONTENDED_WRITE) {
+  } else if constexpr (mode == Mode::COW) {
     for (auto _ : state) {
       [[maybe_unused]] ssize_t res = pwrite(fd, src_buf, num_bytes, 0);
       assert(res == num_bytes);
       fsync(fd);
-    }
-  } else if constexpr (mode == Mode::SRMW) {
-    if (state.thread_index == 0) {
-      for (auto _ : state) {
-        [[maybe_unused]] ssize_t res = pread(fd, dst_buf, num_bytes, 0);
-        assert(res == num_bytes);
-        assert(memcmp(dst_buf, src_buf, num_bytes) == 0);
-      }
-    } else {
-      for (auto _ : state) {
-        [[maybe_unused]] ssize_t res = pwrite(fd, src_buf, num_bytes, 0);
-        assert(res == num_bytes);
-        fsync(fd);
-      }
     }
   } else if constexpr (mode == Mode::NO_OVERLAP) {
     bool is_read[num_iter];
@@ -98,20 +92,19 @@ void bench(benchmark::State& state) {
         fsync(fd);
       }
     }
-  }
+  } else if constexpr (mode == Mode::ZIPF) {
+    std::default_random_engine generator;
+    zipfian_int_distribution<int> zipf(1, ZIPF_NUM_BLOCKS, ZIPF_THETA);
 
-  // report result
-  auto items_processed = static_cast<int64_t>(state.iterations());
-  auto bytes_processed = items_processed * num_bytes;
-  if constexpr (mode == Mode::SRMW) {
-    // for read-write, we only report the result of the reader thread
-    if (state.thread_index == 0) {
-      state.SetBytesProcessed(bytes_processed);
-      state.SetItemsProcessed(items_processed);
+    off_t offset[num_iter];
+    std::generate(offset, offset + num_iter, [&]() { return zipf(generator); });
+    int i = 0;
+    for (auto _ : state) {
+      [[maybe_unused]] ssize_t res =
+          pwrite(fd, src_buf, num_bytes, offset[i++] * BLOCK_SIZE);
+      assert(res == num_bytes);
+      fsync(fd);
     }
-  } else {
-    state.SetBytesProcessed(bytes_processed);
-    state.SetItemsProcessed(items_processed);
   }
 
   // tear down
@@ -119,14 +112,37 @@ void bench(benchmark::State& state) {
     close(fd);
     unlink(filepath);
   }
+
+  // report result
+  auto items_processed = static_cast<int64_t>(state.iterations());
+  auto bytes_processed = items_processed * num_bytes;
+  state.SetBytesProcessed(bytes_processed);
+  state.SetItemsProcessed(items_processed);
+
+  if (is_ulayfs_linked()) {
+    double start_cnt =
+        ulayfs::debug::get_count(ulayfs::debug::SINGLE_BLOCK_TX_START) +
+        ulayfs::debug::get_count(ulayfs::debug::ALIGNED_TX_START);
+    double copy_cnt =
+        ulayfs::debug::get_count(ulayfs::debug::SINGLE_BLOCK_TX_COPY);
+    double commit_cnt =
+        ulayfs::debug::get_count(ulayfs::debug::SINGLE_BLOCK_TX_COMMIT) +
+        ulayfs::debug::get_count(ulayfs::debug::ALIGNED_TX_COMMIT);
+
+    if (start_cnt != 0) {
+      state.counters["tx_copy"] = copy_cnt / start_cnt / state.threads;
+      state.counters["tx_commit"] = commit_cnt / start_cnt / state.threads;
+    }
+
+    ulayfs::debug::clear_count();
+  }
 }
 
 template <class F>
-auto register_bm(const char* name, F f, int num_bytes = 4096) {
+auto register_bm(const char* name, F f, int num_bytes = BLOCK_SIZE) {
   return benchmark::RegisterBenchmark(name, f)
       ->Args({num_bytes})
-      ->Threads(1)
-      ->DenseThreadRange(2, MAX_NUM_THREAD, 2)
+      ->DenseThreadRange(1, MAX_NUM_THREAD)
       ->Iterations(num_iter)
       ->UseRealTime();
 }
@@ -142,8 +158,12 @@ int main(int argc, char** argv) {
 
   register_bm("append_512", bench<Mode::APPEND>, 512);
   register_bm("append_4k", bench<Mode::APPEND>);
-  register_bm("contended_512", bench<Mode::CONTENDED_WRITE>, 512);
-  register_bm("contended_3584", bench<Mode::CONTENDED_WRITE>, 3584);
+
+  register_bm("cow_512", bench<Mode::COW>, 512);
+  register_bm("cow_3584", bench<Mode::COW>, 3584);
+
+  register_bm("zipf_4k", bench<Mode::ZIPF>, 4096);
+  register_bm("zipf_2k", bench<Mode::ZIPF>, 2048);
 
   benchmark::RunSpecifiedBenchmarks();
   return 0;

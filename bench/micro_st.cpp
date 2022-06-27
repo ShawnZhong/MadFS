@@ -14,6 +14,7 @@ enum class Mode {
   SEQ_PWRITE,
   RND_PREAD,
   RND_PWRITE,
+  COW,
 };
 
 template <Mode mode>
@@ -39,7 +40,7 @@ void bench(benchmark::State& state) {
                 mode == Mode::RND_PREAD)
     open_flags = O_RDONLY;
   else if constexpr (mode == Mode::SEQ_WRITE || mode == Mode::SEQ_PWRITE ||
-                     mode == Mode::RND_PWRITE)
+                     mode == Mode::RND_PWRITE || mode == Mode::COW)
     open_flags = O_RDWR;
   else if constexpr (mode == Mode::APPEND)
     open_flags = O_RDWR | O_APPEND;
@@ -99,6 +100,12 @@ void bench(benchmark::State& state) {
         fsync(fd);
       }
     }
+  } else if constexpr (mode == Mode::COW) {
+    for (auto _ : state) {
+      [[maybe_unused]] ssize_t res = pwrite(fd, src_buf, num_bytes, 0);
+      assert(res == num_bytes);
+      fsync(fd);
+    }
   }
 
   // report result
@@ -129,6 +136,12 @@ int main(int argc, char** argv) {
            RegisterBenchmark("append", bench<Mode::APPEND>),
        }) {
     bm->RangeMultiplier(2)->Range(MIN_SIZE, MAX_SIZE)->Iterations(num_iter);
+  }
+
+  const auto& bm =
+      RegisterBenchmark("cow", bench<Mode::COW>)->Iterations(num_iter);
+  for (int i = 0; i <= 4096; i += 128) {
+    bm->Arg(i);
   }
 
   benchmark::RunSpecifiedBenchmarks();

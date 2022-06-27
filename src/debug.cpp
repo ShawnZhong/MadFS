@@ -2,7 +2,8 @@
 #include <unistd.h>
 
 #include <iostream>
-#include <unordered_map>
+#include <magic_enum.hpp>
+#include <mutex>
 
 #include "file.h"
 #include "lib.h"
@@ -15,8 +16,62 @@ namespace ulayfs::debug {
 thread_local const pid_t tid = static_cast<pid_t>(syscall(SYS_gettid));
 FILE *log_file = stderr;
 
-thread_local class Counter counter;
-std::mutex Counter::print_mutex;
+struct Counter {
+  std::array<size_t, magic_enum::enum_count<Event>()> counts;
+  std::array<size_t, magic_enum::enum_count<Event>()> sizes;
+
+  Counter() = default;
+  ~Counter() { print(); }
+
+  void count(Event event, size_t size) {
+    counts[magic_enum::enum_integer(event)]++;
+    sizes[magic_enum::enum_integer(event)] += size;
+  }
+
+  void clear() {
+    counts.fill(0);
+    sizes.fill(0);
+  }
+
+  bool is_empty() {
+    for (auto count : counts)
+      if (count != 0) return false;
+    return true;
+  }
+
+  void print() {
+    static std::mutex print_mutex;
+
+    if (is_empty()) return;
+    std::lock_guard<std::mutex> guard(print_mutex);
+    fprintf(log_file, "    [Thread %d] Counters:\n", tid);
+    magic_enum::enum_for_each<Event>([&](Event event) {
+      auto val = magic_enum::enum_integer(event);
+      size_t count = counts[val];
+      if (count == 0) return;
+      size_t size = sizes[val];
+      fprintf(log_file, "        %-25s: %zu",
+              magic_enum::enum_name(event).data(), count);
+      if (size != 0) {
+        double total_mb = (double)size / 1024.0 / 1024.0;
+        double avg_kb = (double)size / 1024.0 / (double)count;
+        fprintf(log_file, " (%.2f MB, avg = %.2f KB) ", total_mb, avg_kb);
+      }
+      fprintf(log_file, "\n");
+    });
+  }
+};
+
+thread_local Counter counter;
+
+void count(Event event, size_t size) {
+  //    if constexpr (!BuildOptions::debug) return;
+  counter.count(event, size);
+}
+
+size_t get_count(Event event) { return counter.counts[event]; }
+
+void clear_count() { counter.clear(); }
 
 void print_file(int fd) {
   __msan_scoped_disable_interceptor_checks();
