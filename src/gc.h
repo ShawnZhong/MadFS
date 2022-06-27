@@ -20,12 +20,12 @@ class GarbageCollector {
     bool is_exclusive;
     dram::File* file = open_file(pathname, is_exclusive);
     if (!file) return -1;
-    INFO("GarbageCollector: open file %s in %s mode", pathname,
-         is_exclusive ? "EX" : "SH");
-    INFO("GarbageCollector: start transaction & log gc");
+    LOG_INFO("GarbageCollector: open file %s in %s mode", pathname,
+             is_exclusive ? "EX" : "SH");
+    LOG_INFO("GarbageCollector: start transaction & log gc");
     file->tx_gc();
     if (is_exclusive) {
-      INFO("GarbageCollector: try remove bitmaps on the shared memory");
+      LOG_INFO("GarbageCollector: try remove bitmaps on the shared memory");
       file->unlink_shm();
     }
     return 0;

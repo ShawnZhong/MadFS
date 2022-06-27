@@ -168,12 +168,12 @@ void* File::mmap(void* addr_hint, size_t length, int prot, int mmap_flags,
   // reserve address space by memory-mapping /dev/zero
   static int zero_fd = posix::open("/dev/zero", O_RDONLY);
   if (zero_fd == -1) {
-    WARN("open(/dev/zero) failed");
+    LOG_WARN("open(/dev/zero) failed");
     return MAP_FAILED;
   }
   void* res = posix::mmap(addr_hint, length, prot, mmap_flags, zero_fd, 0);
   if (res == MAP_FAILED) {
-    WARN("mmap failed: %m");
+    LOG_WARN("mmap failed: %m");
     return MAP_FAILED;
   }
   char* new_addr = reinterpret_cast<char*>(res);
@@ -220,7 +220,7 @@ void* File::mmap(void* addr_hint, size_t length, int prot, int mmap_flags,
   return new_addr;
 
 error:
-  WARN("remap failed: %m");
+  LOG_WARN("remap failed: %m");
   posix::munmap(new_addr, length);
   return MAP_FAILED;
 }
@@ -314,7 +314,7 @@ void File::open_shm(const struct stat& stat) {
     }
   }
 
-  TRACE("posix::open(%s) = %d", shm_path, shm_fd);
+  LOG_TRACE("posix::open(%s) = %d", shm_path, shm_fd);
 
   // mmap bitmap
   void* shm = posix::mmap(nullptr, SHM_SIZE, PROT_READ | PROT_WRITE, MAP_SHARED,
@@ -329,8 +329,9 @@ void File::open_shm(const struct stat& stat) {
 
 static void unlink_shm_impl(const char* shm_path) {
   int ret = posix::unlink(shm_path);
-  TRACE("posix::unlink(%s) = %d", shm_path, ret);
-  if (unlikely(ret < 0)) WARN("Could not unlink shm file \"%s\": %m", shm_path);
+  LOG_TRACE("posix::unlink(%s) = %d", shm_path, ret);
+  if (unlikely(ret < 0))
+    LOG_WARN("Could not unlink shm file \"%s\": %m", shm_path);
 }
 
 void File::unlink_shm() { unlink_shm_impl(shm_path); }
@@ -343,7 +344,7 @@ void File::unlink_shm(const char* filepath) {
 }
 
 void File::tx_gc() {
-  DEBUG("Garbage Collect for fd %d", fd);
+  LOG_DEBUG("Garbage Collect for fd %d", fd);
   uint64_t file_size = blk_table.update(/*do_alloc*/ false);
   TxEntryIdx tail_tx_idx = blk_table.get_tx_idx();
   tx_mgr.gc(tail_tx_idx.block_idx, file_size);

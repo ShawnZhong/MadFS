@@ -216,14 +216,15 @@ class File {
   static bool try_open(int& fd, struct stat& stat_buf, const char* pathname,
                        int flags, mode_t mode) {
     if ((flags & O_ACCMODE) == O_WRONLY) {
-      INFO("File \"%s\" opened with O_WRONLY. Changed to O_RDWR.", pathname);
+      LOG_INFO("File \"%s\" opened with O_WRONLY. Changed to O_RDWR.",
+               pathname);
       flags &= ~O_WRONLY;
       flags |= O_RDWR;
     }
 
     fd = posix::open(pathname, flags, mode);
     if (unlikely(fd < 0)) {
-      WARN("File \"%s\" open failed: %m", pathname);
+      LOG_WARN("File \"%s\" open failed: %m", pathname);
       return false;
     }
 
@@ -235,18 +236,19 @@ class File {
 
     int rc = posix::fstat(fd, &stat_buf);
     if (unlikely(rc < 0)) {
-      WARN("File \"%s\" fstat failed: %m. Fallback to syscall.", pathname);
+      LOG_WARN("File \"%s\" fstat failed: %m. Fallback to syscall.", pathname);
       return false;
     }
 
     // we don't handle non-normal file (e.g., socket, directory, block dev)
     if (unlikely(!S_ISREG(stat_buf.st_mode) && !S_ISLNK(stat_buf.st_mode))) {
-      WARN("Non-normal file \"%s\". Fallback to syscall.", pathname);
+      LOG_WARN("Non-normal file \"%s\". Fallback to syscall.", pathname);
       return false;
     }
 
     if (!IS_ALIGNED(stat_buf.st_size, BLOCK_SIZE)) {
-      WARN("File size not aligned for \"%s\". Fallback to syscall", pathname);
+      LOG_WARN("File size not aligned for \"%s\". Fallback to syscall",
+               pathname);
       return false;
     }
 

@@ -200,7 +200,7 @@ class MetaBlock : public BaseBlock {
   void lock() {
     int rc = pthread_mutex_lock(&cl2_meta.mutex);
     if (rc == EOWNERDEAD) {
-      WARN("Mutex owner died");
+      LOG_WARN("Mutex owner died");
       rc = pthread_mutex_consistent(&cl2_meta.mutex);
       PANIC_IF(rc != 0, "pthread_mutex_consistent failed");
     }

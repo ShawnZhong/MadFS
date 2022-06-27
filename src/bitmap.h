@@ -156,7 +156,7 @@ class Bitmap {
    * @param len the number of bits to be freed
    */
   static void free(Bitmap bitmaps[], BitmapIdx begin, uint8_t len) {
-    TRACE("Freeing [%d, %d)", begin, begin + len);
+    LOG_TRACE("Freeing [%d, %d)", begin, begin + len);
 
     bitmaps[static_cast<uint32_t>(begin) >> BITMAP_BLOCK_CAPACITY_SHIFT].free(
         static_cast<uint32_t>(begin) & (BITMAP_BLOCK_CAPACITY - 1), len);

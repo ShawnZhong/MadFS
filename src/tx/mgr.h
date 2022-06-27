@@ -96,10 +96,10 @@ class TxMgr {
    * @return index of the first LogHeadEntry for later retrival of the whole
    *         group of entries
    */
-  LogEntryIdx append_log_entry(Allocator* allocator, pmem::LogEntry::Op op,
-                               uint16_t leftover_bytes, uint32_t num_blocks,
-                               VirtualBlockIdx begin_vidx,
-                               const std::vector<LogicalBlockIdx>& begin_lidxs) const;
+  LogEntryIdx append_log_entry(
+      Allocator* allocator, pmem::LogEntry::Op op, uint16_t leftover_bytes,
+      uint32_t num_blocks, VirtualBlockIdx begin_vidx,
+      const std::vector<LogicalBlockIdx>& begin_lidxs) const;
 
   /**
    * Try to commit an entry

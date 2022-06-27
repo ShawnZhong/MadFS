@@ -20,7 +20,7 @@ class Converter {
   // fd must be opened with both read and write permission
   static dram::File* convert_to(int fd, const char* pathname) {
     if (!flock::try_acquire(fd)) {
-      WARN("Target file locked, cannot perform conversion");
+      LOG_WARN("Target file locked, cannot perform conversion");
       return nullptr;
     }
 
@@ -147,7 +147,7 @@ class Converter {
     int fd = file->fd;
     flock::release(fd);
     if (!flock::try_acquire(file->fd)) {
-      WARN("Target file locked, cannot perform conversion");
+      LOG_WARN("Target file locked, cannot perform conversion");
       flock::flock_guard(fd);
       return -1;
     }
