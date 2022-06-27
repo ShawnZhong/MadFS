@@ -1,5 +1,7 @@
 #pragma once
 
+#include <ostream>
+
 // see https://cmake.org/cmake/help/latest/command/configure_file.html
 #cmakedefine01 ULAYFS_USE_MAP_SYNC
 #cmakedefine01 ULAYFS_FORCE_MAP_POPULATE
@@ -8,7 +10,19 @@
 
 #cmakedefine CMAKE_BUILD_TYPE "@CMAKE_BUILD_TYPE@"
 
-#include <ostream>
+#ifndef __has_feature
+#define __has_feature(x) 0
+#endif
+
+#if __has_feature(memory_sanitizer)
+#include <sanitizer/msan_interface.h>
+// ref:
+// https://github.com/llvm/llvm-project/blob/main/compiler-rt/include/sanitizer/msan_interface.h
+#else
+#define __msan_unpoison(...) ({})
+#define __msan_scoped_disable_interceptor_checks(...) ({})
+#define __msan_scoped_enable_interceptor_checks(...) ({})
+#endif
 
 namespace ulayfs {
 

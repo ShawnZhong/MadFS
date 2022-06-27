@@ -10,7 +10,7 @@
 #include <cerrno>
 #include <cstdio>
 
-#include "utils.h"
+#include "config.h"
 
 namespace ulayfs::posix {
 
