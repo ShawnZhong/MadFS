@@ -16,7 +16,6 @@
 #include "debug.h"
 #include "idx.h"
 #include "posix.h"
-#include "tbb.h"
 #include "utils.h"
 
 namespace ulayfs::dram {
