@@ -146,10 +146,6 @@ def plot_micro_mt(result_dir):
         df["x"] = df["name"].apply(parse_name, args=(-1,))
         df["y"] = df["items_per_second"].apply(lambda x: float(x) / 1000 ** 2)
 
-        srmw_filter = df["benchmark"] == "srmw"
-        df.loc[srmw_filter, "x"] = df.loc[srmw_filter, "x"].apply(lambda x: str(int(x) - 1))
-        df.drop(df[df["x"] == "0"].index, inplace=True)
-
     def post_plot(name, df, ax, **kwargs):
         labels = df["x"].unique()
         plt.xticks(ticks=labels, labels=labels)

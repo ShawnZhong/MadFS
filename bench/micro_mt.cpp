@@ -16,7 +16,6 @@ enum class Mode {
   NO_OVERLAP,
   APPEND,
   CONTENDED_WRITE,  // concurrent write to the same location
-  SRMW,  // single reader multiple concurrent writers to the same location
 };
 
 template <Mode mode, int READ_PERCENT = -1>
@@ -67,20 +66,6 @@ void bench(benchmark::State& state) {
       assert(res == num_bytes);
       fsync(fd);
     }
-  } else if constexpr (mode == Mode::SRMW) {
-    if (state.thread_index == 0) {
-      for (auto _ : state) {
-        [[maybe_unused]] ssize_t res = pread(fd, dst_buf, num_bytes, 0);
-        assert(res == num_bytes);
-        assert(memcmp(dst_buf, src_buf, num_bytes) == 0);
-      }
-    } else {
-      for (auto _ : state) {
-        [[maybe_unused]] ssize_t res = pwrite(fd, src_buf, num_bytes, 0);
-        assert(res == num_bytes);
-        fsync(fd);
-      }
-    }
   } else if constexpr (mode == Mode::NO_OVERLAP) {
     bool is_read[num_iter];
     std::generate(is_read, is_read + num_iter,
@@ -103,16 +88,8 @@ void bench(benchmark::State& state) {
   // report result
   auto items_processed = static_cast<int64_t>(state.iterations());
   auto bytes_processed = items_processed * num_bytes;
-  if constexpr (mode == Mode::SRMW) {
-    // for read-write, we only report the result of the reader thread
-    if (state.thread_index == 0) {
-      state.SetBytesProcessed(bytes_processed);
-      state.SetItemsProcessed(items_processed);
-    }
-  } else {
-    state.SetBytesProcessed(bytes_processed);
-    state.SetItemsProcessed(items_processed);
-  }
+  state.SetBytesProcessed(bytes_processed);
+  state.SetItemsProcessed(items_processed);
 
   // tear down
   if (state.thread_index == 0) {
