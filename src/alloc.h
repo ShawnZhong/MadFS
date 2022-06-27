@@ -11,7 +11,7 @@
 #include "const.h"
 #include "entry.h"
 #include "idx.h"
-#include "mtable.h"
+#include "memtable.h"
 #include "posix.h"
 
 namespace ulayfs::dram {

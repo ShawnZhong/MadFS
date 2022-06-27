@@ -7,7 +7,7 @@ add_library(ulayfs SHARED
     src/alloc.h src/alloc.cpp
     src/bitmap.h
     src/block.h
-    src/btable.h src/btable.cpp
+    src/blktable.h src/blktable.cpp
     src/const.h
     src/debug.h src/debug.cpp
     src/entry.h
@@ -15,7 +15,7 @@ add_library(ulayfs SHARED
     src/gc.h
     src/idx.h
     src/lib.h src/lib.cpp
-    src/mtable.h src/mtable.cpp
+    src/memtable.h src/memtable.cpp
     src/offset.h src/offset.cpp
     src/persist.h
     src/posix.h src/posix.cpp
