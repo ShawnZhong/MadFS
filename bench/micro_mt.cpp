@@ -101,6 +101,20 @@ void bench(benchmark::State& state) {
       assert(res == num_bytes);
       fsync(fd);
     }
+
+    if (is_ulayfs_linked()) {
+      double start_cnt =
+          ulayfs::debug::get_count(ulayfs::debug::SINGLE_BLOCK_TX_START);
+      double copy_cnt =
+          ulayfs::debug::get_count(ulayfs::debug::SINGLE_BLOCK_TX_COPY);
+      double commit_cnt =
+          ulayfs::debug::get_count(ulayfs::debug::SINGLE_BLOCK_TX_COMMIT);
+
+      if (start_cnt != 0) {
+        state.counters["tx_copy"] = copy_cnt / start_cnt / state.threads;
+        state.counters["tx_commit"] = commit_cnt / start_cnt / state.threads;
+      }
+    }
   }
 
   // report result
@@ -114,6 +128,7 @@ void bench(benchmark::State& state) {
     close(fd);
     unlink(filepath);
   }
+  if (is_ulayfs_linked()) ulayfs::debug::clear_count();
 }
 
 template <class F>
@@ -136,6 +151,7 @@ int main(int argc, char** argv) {
 
   register_bm("append_512", bench<Mode::APPEND>, 512);
   register_bm("append_4k", bench<Mode::APPEND>);
+
   register_bm("cow_512", bench<Mode::COW>, 512);
   register_bm("cow_3584", bench<Mode::COW>, 3584);
 

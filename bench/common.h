@@ -7,6 +7,8 @@
 #include <climits>
 #include <cstring>
 
+#include "debug.h"
+
 const char* filepath = []() -> const char* {
   const char* res = "test.txt";
 
@@ -39,3 +41,5 @@ void append_file(int fd, long num_bytes, int num_iter = 1) {
   fsync(fd);
   delete[] buf;
 }
+
+bool is_ulayfs_linked() { return ulayfs::debug::print_file != nullptr; }
