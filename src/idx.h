@@ -148,7 +148,7 @@ static_assert(std::is_trivial<LogEntryIdx>::value,
 /**
  * A transaction entry is identified by the block index and the local index
  */
-struct TxEntryIdx {
+struct alignas(8) TxEntryIdx {
   LogicalBlockIdx block_idx;
   TxLocalIdx local_idx;
 
@@ -177,41 +177,5 @@ static_assert(std::is_standard_layout<TxEntryIdx>::value,
               "TxEntryIdx must be a standard layout type");
 static_assert(std::is_trivial<TxEntryIdx>::value,
               "TxEntryIdx must be a trivial type");
-
-/**
- * Due to some unfortunate clang-implementation problems,
- * std::atomic<TxEntryIdx> can not be treated like a 64-bit value, which
- * complicates atomic read/write and upsets msan with use-of-uninitialized
- * problems. We have to wrap a union to make it explicit.
- *
- * [Reference](https://stackoverflow.com/questions/60445848/clang-doesnt-inline-stdatomicload-for-loading-64-bit-structs)
- */
-union TxEntryIdx64 {
-  TxEntryIdx tx_entry_idx;
-  uint64_t raw_bits;
-
-  TxEntryIdx64() = default;
-  TxEntryIdx64(const TxEntryIdx64& other) = default;
-  TxEntryIdx64(TxEntryIdx64&& other) = default;
-  TxEntryIdx64& operator=(const TxEntryIdx64&) = default;
-  TxEntryIdx64& operator=(TxEntryIdx64&&) = default;
-
-  TxEntryIdx64(const TxEntryIdx& idx) { tx_entry_idx = idx; }
-  TxEntryIdx64(TxEntryIdx&& idx) { tx_entry_idx = idx; }
-  TxEntryIdx64& operator=(const TxEntryIdx& idx) {
-    tx_entry_idx = idx;
-    return *this;
-  }
-  TxEntryIdx64& operator=(TxEntryIdx&& idx) {
-    tx_entry_idx = idx;
-    return *this;
-  }
-};
-
-static_assert(sizeof(TxEntryIdx64) == 8, "TxEntryIdx64 must be 64 bits");
-static_assert(std::is_standard_layout<TxEntryIdx64>::value,
-              "TxEntryIdx64 must be a standard layout type");
-static_assert(std::is_trivial<TxEntryIdx64>::value,
-              "TxEntryIdx64 must be a trival type");
 
 }  // namespace ulayfs

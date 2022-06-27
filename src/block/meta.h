@@ -27,7 +27,7 @@ class MetaBlock : public noncopyable {
 
       // hint to find tx log tail; not necessarily up-to-date
       // all tx entries before it must be flushed
-      std::atomic<TxEntryIdx64> tx_tail;
+      std::atomic<TxEntryIdx> tx_tail;
 
       // if inline_tx_entries is used up, this points to the next log block
       std::atomic<LogicalBlockIdx> next_tx_block;
@@ -37,7 +37,7 @@ class MetaBlock : public noncopyable {
     char cl1[CACHELINE_SIZE];
   };
 
-  static_assert(std::atomic<TxEntryIdx64>::is_always_lock_free,
+  static_assert(std::atomic<TxEntryIdx>::is_always_lock_free,
                 "cl1_meta.tx_tail must be lock-free");
 
   static_assert(sizeof(cl1_meta) <= CACHELINE_SIZE,
@@ -103,6 +103,7 @@ class MetaBlock : public noncopyable {
       PANIC_IF(rc != 0, "pthread_mutex_consistent failed");
     }
   }
+
   void unlock() {
     int rc = pthread_mutex_unlock(&cl2_meta.mutex);
     PANIC_IF(rc != 0, "Mutex unlock failed");
@@ -127,7 +128,7 @@ class MetaBlock : public noncopyable {
     persist_cl_unfenced(&cl2);
   }
 
-  [[nodiscard]] uint32_t get_tx_seq() const { return 0; }
+  [[nodiscard]] static uint32_t get_tx_seq() { return 0; }
 
   /**
    * Set the next tx block index
@@ -178,12 +179,14 @@ class MetaBlock : public noncopyable {
   [[nodiscard]] uint32_t get_num_blocks() const {
     return cl2_meta.num_blocks.load(std::memory_order_acquire);
   }
+
   [[nodiscard]] LogicalBlockIdx get_next_tx_block() const {
     return cl1_meta.next_tx_block.load(std::memory_order_acquire);
   }
+
   [[nodiscard]] TxEntryIdx get_tx_tail() const {
     auto tx_tail = cl1_meta.tx_tail.load(std::memory_order_relaxed);
-    return tx_tail.tx_entry_idx;
+    return tx_tail;
   }
 
   [[nodiscard]] TxEntry get_tx_entry(TxLocalIdx idx) const {
@@ -216,8 +219,7 @@ class MetaBlock : public noncopyable {
     out << "\tnext_tx_block: "
         << block.cl1_meta.next_tx_block.load(std::memory_order_acquire) << "\n";
     out << "\ttx_tail: "
-        << block.cl1_meta.tx_tail.load(std::memory_order_acquire).tx_entry_idx
-        << "\n";
+        << block.cl1_meta.tx_tail.load(std::memory_order_acquire) << "\n";
     return out;
   }
 };
