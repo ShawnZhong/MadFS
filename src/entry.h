@@ -113,7 +113,7 @@ struct __attribute__((packed)) TxEntryIndirect {
   LogLocalOffset local_offset : 12 = 0;
   uint32_t block_idx;
 
-  TxEntryIndirect(LogEntryIdx log_entry_idx) {
+  explicit TxEntryIndirect(LogEntryIdx log_entry_idx) {
     local_offset = log_entry_idx.local_offset;
     block_idx = log_entry_idx.block_idx.get();
   }

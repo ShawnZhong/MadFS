@@ -27,7 +27,7 @@ class BlkTable {
       table;
 
   // keep track of the next TxEntry to apply
-  std::atomic<TxEntryIdx64> tail_tx_idx;
+  std::atomic<TxEntryIdx> tail_tx_idx;
   std::atomic<pmem::TxBlock*> tail_tx_block;
   std::atomic_uint64_t file_size;
 
@@ -89,7 +89,7 @@ class BlkTable {
     uint64_t curr_ver = version.load(std::memory_order_acquire);
     if (curr_ver & 1) return true;  // old version means inconsistency
 
-    tx_idx = tail_tx_idx.load(std::memory_order_relaxed).tx_entry_idx;
+    tx_idx = tail_tx_idx.load(std::memory_order_relaxed);
     tx_block = tail_tx_block.load(std::memory_order_relaxed);
     f_size = file_size.load(std::memory_order_relaxed);
 
@@ -101,7 +101,7 @@ class BlkTable {
   }
 
   [[nodiscard]] TxEntryIdx get_tx_idx() const {
-    return tail_tx_idx.load(std::memory_order_relaxed).tx_entry_idx;
+    return tail_tx_idx.load(std::memory_order_relaxed);
   }
   [[nodiscard]] pmem::TxBlock* get_tx_block() const {
     return tail_tx_block.load(std::memory_order_relaxed);
