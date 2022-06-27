@@ -14,6 +14,7 @@ class AlignedTx : public WriteTx {
                 ticket) {}
 
   ssize_t exec() override {
+    debug::count(debug::ALIGNED_TX_START);
     pmem::TxEntry conflict_entry;
 
     // since everything is block-aligned, we can copy data directly
@@ -37,6 +38,7 @@ class AlignedTx : public WriteTx {
     if (is_offset_depend) file->wait_offset(ticket);
 
   retry:
+    debug::count(debug::ALIGNED_TX_COMMIT);
     conflict_entry =
         tx_mgr->try_commit(commit_entry, tail_tx_idx, tail_tx_block);
     if (!conflict_entry.is_valid()) goto done;

@@ -113,13 +113,13 @@ def plot_micro_st(result_dir):
         else:
             df["x"] = df["name"].apply(parse_name, args=(1,)).apply(format_bytes)
             df["y"] = df["bytes_per_second"].apply(lambda x: float(x) / 1024 ** 3)
-            ylabel = "Throughput (GB/s)"
+            ylabel = "Throughput (GB/sec)"
 
         export_results(result_dir, benchmark, name=name)
 
         def post_plot(ax, **kwargs):
-            plt.xlabel(xlabel)
-            plt.ylabel(ylabel)
+            ax.set_xlabel(xlabel)
+            ax.set_ylabel(ylabel)
 
             plt.xticks(rotation=45)
             ax.xaxis.set_major_locator(plt.MultipleLocator(4))
@@ -128,7 +128,7 @@ def plot_micro_st(result_dir):
             ax.yaxis.set_major_formatter(plt.FormatStrFormatter('%.1f'))
             ax.set_ylim(bottom=0)
 
-            plt.legend(fontsize=6, ncol=2)
+            ax.legend(fontsize=6, ncol=2)
             plt.title(name)
 
         plot_single_bm(
@@ -156,8 +156,13 @@ def plot_micro_mt(result_dir):
         export_results(result_dir, benchmark, name=name)
 
         def post_plot(ax, **kwargs):
-            plt.xlabel(xlabel)
-            plt.ylabel(ylabel)
+            if name.startswith("zipf"):
+                ax2 = ax.twinx()
+                ax2.plot(df["x"], df["tx_commit"] - 1, ":", label="tx_commit")
+                ax2.set_ylabel("uLayFS commit conflicts per Tx")
+
+            ax.set_xlabel(xlabel)
+            ax.set_ylabel(ylabel)
 
             labels = benchmark["x"].unique()
             plt.xticks(ticks=labels, labels=labels)
@@ -165,7 +170,7 @@ def plot_micro_mt(result_dir):
 
             ax.set_ylim(bottom=0)
 
-            plt.legend(fontsize=6, ncol=2)
+            ax.legend(fontsize=6, ncol=2)
             plt.title(name)
 
         plot_single_bm(
