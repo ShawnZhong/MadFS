@@ -62,16 +62,19 @@ class SingleBlockTx : public CoWTx {
     // after writing, if the file size is longer with nonzero leftover_bytes
     // this tx cannot be inline
     // TODO: handle redo
-    uint16_t leftover_bytes = ALIGN_UP(end_offset, BLOCK_SIZE) - end_offset;
-    if (end_offset > ALIGN_DOWN(file_size, BLOCK_SIZE) && leftover_bytes > 0) {
-      auto log_entry_idx = tx_mgr->append_log_entry(
-          allocator, pmem::LogEntry::Op::LOG_OVERWRITE,  // op
-          leftover_bytes,                                // leftover_bytes
-          num_blocks,                                    // total_blocks
-          begin_vidx,                                    // begin_virtual_idx
-          dst_lidxs                                      // begin_logical_idxs
-      );
-      commit_entry = pmem::TxEntryIndirect(log_entry_idx);
+    if (commit_entry.is_inline()) {
+      uint16_t leftover_bytes = ALIGN_UP(end_offset, BLOCK_SIZE) - end_offset;
+      if (end_offset > ALIGN_DOWN(file_size, BLOCK_SIZE) &&
+          leftover_bytes > 0) {
+        auto log_entry_idx = tx_mgr->append_log_entry(
+            allocator, pmem::LogEntry::Op::LOG_OVERWRITE,  // op
+            leftover_bytes,                                // leftover_bytes
+            num_blocks,                                    // total_blocks
+            begin_vidx,                                    // begin_virtual_idx
+            dst_lidxs                                      // begin_logical_idxs
+        );
+        commit_entry = pmem::TxEntryIndirect(log_entry_idx);
+      }
     }
 
     recycle_image[0] = file->vidx_to_lidx(begin_vidx);
@@ -198,16 +201,19 @@ class MultiBlockTx : public CoWTx {
     // after writing, if the file size is longer with nonzero leftover_bytes
     // this tx cannot be inline
     // TODO: handle redo
-    uint16_t leftover_bytes = ALIGN_UP(end_offset, BLOCK_SIZE) - end_offset;
-    if (end_offset > ALIGN_DOWN(file_size, BLOCK_SIZE) && leftover_bytes > 0) {
-      auto log_entry_idx = tx_mgr->append_log_entry(
-          allocator, pmem::LogEntry::Op::LOG_OVERWRITE,  // op
-          leftover_bytes,                                // leftover_bytes
-          num_blocks,                                    // total_blocks
-          begin_vidx,                                    // begin_virtual_idx
-          dst_lidxs                                      // begin_logical_idxs
-      );
-      commit_entry = pmem::TxEntryIndirect(log_entry_idx);
+    if (commit_entry.is_inline()) {
+      uint16_t leftover_bytes = ALIGN_UP(end_offset, BLOCK_SIZE) - end_offset;
+      if (end_offset > ALIGN_DOWN(file_size, BLOCK_SIZE) &&
+          leftover_bytes > 0) {
+        auto log_entry_idx = tx_mgr->append_log_entry(
+            allocator, pmem::LogEntry::Op::LOG_OVERWRITE,  // op
+            leftover_bytes,                                // leftover_bytes
+            num_blocks,                                    // total_blocks
+            begin_vidx,                                    // begin_virtual_idx
+            dst_lidxs                                      // begin_logical_idxs
+        );
+        commit_entry = pmem::TxEntryIndirect(log_entry_idx);
+      }
     }
 
     for (uint32_t i = 0; i < num_blocks; ++i)
