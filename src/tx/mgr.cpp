@@ -27,9 +27,10 @@ ssize_t TxMgr::do_read(char* buf, size_t count) {
   pmem::TxBlock* tail_tx_block;
   uint64_t file_size;
   uint64_t ticket;
-  uint64_t offset =
+  uint64_t offset;
+  file_size =
       file->update_with_offset(tail_tx_idx, tail_tx_block, count,
-                               /*stop_at_boundary*/ true, ticket, file_size,
+                               /*stop_at_boundary*/ true, ticket, offset,
                                /*do_alloc*/ false);
 
   return Tx::exec_and_release_offset<ReadTx>(file, this, buf, count, offset,
@@ -55,9 +56,10 @@ ssize_t TxMgr::do_write(const char* buf, size_t count) {
   pmem::TxBlock* tail_tx_block;
   uint64_t file_size;
   uint64_t ticket;
-  uint64_t offset =
+  uint64_t offset;
+  file_size =
       file->update_with_offset(tail_tx_idx, tail_tx_block, count,
-                               /*stop_at_boundary*/ false, ticket, file_size,
+                               /*stop_at_boundary*/ false, ticket, offset,
                                /*do_alloc*/ false);
 
   // special case that we have everything aligned, no OCC
