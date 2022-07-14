@@ -102,6 +102,15 @@ class TxMgr {
       const std::vector<LogicalBlockIdx>& begin_lidxs) const;
 
   /**
+   * reset leftover_bytes that was previously passed into append_log_entry
+   *
+   * @param first_idx return value of append_log_entry
+   * @param leftover_bytes new value of leftover_bytes
+   */
+  void update_log_entry_leftover_bytes(LogEntryIdx first_idx,
+                                       uint16_t leftover_bytes);
+
+  /**
    * Try to commit an entry
    *
    * @param[in] entry entry to commit

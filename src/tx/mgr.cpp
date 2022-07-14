@@ -160,6 +160,25 @@ LogEntryIdx TxMgr::append_log_entry(
   return first_idx;
 }
 
+void TxMgr::update_log_entry_leftover_bytes(LogEntryIdx first_idx,
+                                            uint16_t leftover_bytes) {
+  const auto& [first_entry, first_block] = get_log_entry(first_idx);
+  pmem::LogEntry* curr_entry = first_entry;
+  pmem::LogEntryBlock* curr_block = first_block;
+  while (true) {
+    const auto& [next_entry, next_block] =
+        get_next_log_entry(curr_entry, curr_block);
+    if (next_entry != nullptr) {
+      curr_entry = next_entry;
+      curr_block = next_block;
+    } else {
+      curr_entry->leftover_bytes = leftover_bytes;
+      curr_entry->persist();
+      break;
+    }
+  }
+}
+
 bool TxMgr::tx_idx_greater(const TxEntryIdx lhs_idx, const TxEntryIdx rhs_idx,
                            const pmem::TxBlock* lhs_block,
                            const pmem::TxBlock* rhs_block) {

@@ -32,6 +32,8 @@ class AlignedTx : public WriteTx {
     // make a local copy of the tx tail
     if (!is_offset_depend)
       file_size = file->update(tail_tx_idx, tail_tx_block, /*do_alloc*/ true);
+    prepare_commit_entry();
+
     // for an aligned tx, leftover_bytes must be zero, so there is no need to
     // validate whether we falsely assume this tx can be inline
     for (uint32_t i = 0; i < num_blocks; ++i)
@@ -47,6 +49,7 @@ class AlignedTx : public WriteTx {
     // we don't check the return value of handle_conflict here because we don't
     // care whether there is a conflict, as long as recycle_image gets updated
     handle_conflict(conflict_entry, begin_vidx, end_vidx - 1, recycle_image);
+    recheck_commit_entry();
     goto retry;
 
   done:

@@ -54,28 +54,13 @@ class SingleBlockTx : public CoWTx {
   ssize_t exec() override {
     debug::count(debug::SINGLE_BLOCK_TX_START);
     pmem::TxEntry conflict_entry;
+    bool need_redo;
 
     // must acquire the tx tail before any get
     if (!is_offset_depend)
       file_size = file->update(tail_tx_idx, tail_tx_block, /*do_alloc*/ true);
 
-    // after writing, if the file size is longer with nonzero leftover_bytes
-    // this tx cannot be inline
-    // TODO: handle redo
-    if (commit_entry.is_inline()) {
-      uint16_t leftover_bytes = ALIGN_UP(end_offset, BLOCK_SIZE) - end_offset;
-      if (end_offset > ALIGN_DOWN(file_size, BLOCK_SIZE) &&
-          leftover_bytes > 0) {
-        auto log_entry_idx = tx_mgr->append_log_entry(
-            allocator, pmem::LogEntry::Op::LOG_OVERWRITE,  // op
-            leftover_bytes,                                // leftover_bytes
-            num_blocks,                                    // total_blocks
-            begin_vidx,                                    // begin_virtual_idx
-            dst_lidxs                                      // begin_logical_idxs
-        );
-        commit_entry = pmem::TxEntryIndirect(log_entry_idx);
-      }
-    }
+    prepare_commit_entry();
 
     recycle_image[0] = file->vidx_to_lidx(begin_vidx);
     assert(recycle_image[0] != dst_lidxs[0]);
@@ -116,7 +101,10 @@ class SingleBlockTx : public CoWTx {
     if (!conflict_entry.is_valid()) goto done;  // success, no conflict
 
     // we just treat begin_vidx as both first and last vidx
-    if (!handle_conflict(conflict_entry, begin_vidx, begin_vidx, recycle_image))
+    need_redo =
+        handle_conflict(conflict_entry, begin_vidx, begin_vidx, recycle_image);
+    recheck_commit_entry();
+    if (!need_redo)
       goto retry;
     else
       goto redo;
@@ -163,6 +151,7 @@ class MultiBlockTx : public CoWTx {
     // of redo, we may skip if no change is made
     bool do_copy_first = true;
     bool do_copy_last = true;
+    bool need_redo;
     pmem::TxEntry conflict_entry;
     LogicalBlockIdx src_first_lidx, src_last_lidx;
 
@@ -198,23 +187,7 @@ class MultiBlockTx : public CoWTx {
     if (!is_offset_depend)
       file_size = file->update(tail_tx_idx, tail_tx_block, /*do_alloc*/ true);
 
-    // after writing, if the file size is longer with nonzero leftover_bytes
-    // this tx cannot be inline
-    // TODO: handle redo
-    if (commit_entry.is_inline()) {
-      uint16_t leftover_bytes = ALIGN_UP(end_offset, BLOCK_SIZE) - end_offset;
-      if (end_offset > ALIGN_DOWN(file_size, BLOCK_SIZE) &&
-          leftover_bytes > 0) {
-        auto log_entry_idx = tx_mgr->append_log_entry(
-            allocator, pmem::LogEntry::Op::LOG_OVERWRITE,  // op
-            leftover_bytes,                                // leftover_bytes
-            num_blocks,                                    // total_blocks
-            begin_vidx,                                    // begin_virtual_idx
-            dst_lidxs                                      // begin_logical_idxs
-        );
-        commit_entry = pmem::TxEntryIndirect(log_entry_idx);
-      }
-    }
+    prepare_commit_entry();
 
     for (uint32_t i = 0; i < num_blocks; ++i)
       recycle_image[i] = file->vidx_to_lidx(begin_vidx + i);
@@ -265,8 +238,10 @@ class MultiBlockTx : public CoWTx {
     // make a copy of the first and last again
     src_first_lidx = recycle_image[0];
     src_last_lidx = recycle_image[num_blocks - 1];
-    if (!handle_conflict(conflict_entry, begin_vidx, end_full_vidx,
-                         recycle_image))
+    need_redo = handle_conflict(conflict_entry, begin_vidx, end_full_vidx,
+                                recycle_image);
+    recheck_commit_entry();
+    if (!need_redo)
       goto retry;  // we have moved to the new tail, retry commit
     else {
       do_copy_first = src_first_lidx != recycle_image[0];
