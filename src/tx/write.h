@@ -76,8 +76,9 @@ class WriteTx : public Tx {
       leftover_bytes = 0;
   }
 
-  void prepare_commit_entry() {
-    update_leftover_bytes();
+  void prepare_commit_entry(bool skip_update_leftover_bytes = false) {
+    // skip if file_size is unknown but leftover_bytes is known
+    if (!skip_update_leftover_bytes) update_leftover_bytes();
     if (pmem::TxEntryInline::can_inline(num_blocks, begin_vidx, dst_lidxs[0]) &&
         leftover_bytes == 0) {
       commit_entry = pmem::TxEntryInline(num_blocks, begin_vidx, dst_lidxs[0]);
