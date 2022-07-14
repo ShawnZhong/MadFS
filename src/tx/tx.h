@@ -118,8 +118,8 @@ class Tx {
             curr_entry.inline_entry.num_blocks, conflict_image);
         VirtualBlockIdx end_vidx = curr_entry.inline_entry.begin_virtual_idx +
                                    curr_entry.inline_entry.num_blocks;
-        if (BLOCK_IDX_TO_SIZE(end_vidx) > file_size)
-          file_size = BLOCK_IDX_TO_SIZE(end_vidx);
+        uint64_t possible_file_size = BLOCK_IDX_TO_SIZE(end_vidx);
+        if (possible_file_size > file_size) file_size = possible_file_size;
       } else {  // non-inline tx entry
         auto [curr_le_entry, curr_le_block] = tx_mgr->get_log_entry(
             curr_entry.indirect_entry.get_log_entry_idx());
