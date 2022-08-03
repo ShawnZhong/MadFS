@@ -76,7 +76,6 @@ class MetaBlock : public noncopyable {
    */
   void init() {
     // initialize the mutex
-    VALGRIND_PMC_REMOVE_PMEM_MAPPING(&cl2_meta.mutex, sizeof(cl2_meta.mutex));
     pthread_mutexattr_t attr;
     pthread_mutexattr_init(&attr);
     pthread_mutexattr_setrobust(&attr, PTHREAD_MUTEX_ROBUST);
@@ -102,11 +101,13 @@ class MetaBlock : public noncopyable {
       rc = pthread_mutex_consistent(&cl2_meta.mutex);
       PANIC_IF(rc != 0, "pthread_mutex_consistent failed");
     }
+    VALGRIND_PMC_SET_CLEAN(&cl2_meta.mutex, sizeof(cl2_meta.mutex));
   }
 
   void unlock() {
     int rc = pthread_mutex_unlock(&cl2_meta.mutex);
     PANIC_IF(rc != 0, "Mutex unlock failed");
+    VALGRIND_PMC_SET_CLEAN(&cl2_meta.mutex, sizeof(cl2_meta.mutex));
   }
 
   /*
@@ -124,6 +125,8 @@ class MetaBlock : public noncopyable {
       goto retry;
     // we do not persist the num_logical_blocks field since it's fine if the
     // value is out-of-date in the worst case, we just do unnecessary fallocate
+    VALGRIND_PMC_SET_CLEAN(&cl2_meta.num_logical_blocks,
+                           sizeof(cl2_meta.num_logical_blocks));
   }
 
   [[nodiscard]] static uint32_t get_tx_seq() { return 0; }
@@ -150,6 +153,7 @@ class MetaBlock : public noncopyable {
    */
   void set_tx_tail(TxEntryIdx tx_tail) {
     cl1_meta.tx_tail.store(tx_tail, std::memory_order_relaxed);
+    VALGRIND_PMC_SET_CLEAN(&cl1_meta.tx_tail, sizeof(cl1_meta.tx_tail));
   }
 
   /**
