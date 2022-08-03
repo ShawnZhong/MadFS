@@ -52,6 +52,8 @@ class Tx {
 
   // in the case of read/write with offset change, update is done first
   bool is_offset_depend;
+  // if update is done first, we must know file_size already
+  uint64_t file_size;
   uint64_t ticket;
 
   /*
@@ -92,7 +94,7 @@ class Tx {
  protected:
   /**
    * Move to the real tx and update first/last_src_block to indicate whether to
-   * redo
+   * redo; update file_size if necessary
    *
    * @param[in] curr_entry the last entry returned by try_commit; this should be
    * what dereferenced from tail_tx_idx, and we only take it to avoid one more
@@ -114,6 +116,10 @@ class Tx {
             first_vidx, last_vidx, curr_entry.inline_entry.begin_virtual_idx,
             curr_entry.inline_entry.begin_logical_idx,
             curr_entry.inline_entry.num_blocks, conflict_image);
+        VirtualBlockIdx end_vidx = curr_entry.inline_entry.begin_virtual_idx +
+                                   curr_entry.inline_entry.num_blocks;
+        uint64_t possible_file_size = BLOCK_IDX_TO_SIZE(end_vidx);
+        if (possible_file_size > file_size) file_size = possible_file_size;
       } else {  // non-inline tx entry
         auto [curr_le_entry, curr_le_block] = tx_mgr->get_log_entry(
             curr_entry.indirect_entry.get_log_entry_idx());
@@ -132,6 +138,13 @@ class Tx {
               curr_le_entry->begin_vidx + (i << BITMAP_BLOCK_CAPACITY_SHIFT),
               curr_le_entry->begin_lidxs[i],
               curr_le_entry->get_last_lidx_num_blocks(), conflict_image);
+          VirtualBlockIdx end_vidx = curr_le_entry->begin_vidx +
+                                     (i << BITMAP_BLOCK_CAPACITY_SHIFT) +
+                                     curr_le_entry->get_last_lidx_num_blocks();
+          uint64_t possible_file_size =
+              BLOCK_IDX_TO_SIZE(end_vidx) - curr_le_entry->leftover_bytes;
+          if (possible_file_size > file_size) file_size = possible_file_size;
+
           const auto& [next_le_entry, next_le_block] =
               tx_mgr->get_next_log_entry(curr_le_entry, curr_le_block);
           if (next_le_entry == nullptr) break;

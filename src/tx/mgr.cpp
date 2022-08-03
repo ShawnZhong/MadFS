@@ -27,9 +27,10 @@ ssize_t TxMgr::do_read(char* buf, size_t count) {
   pmem::TxBlock* tail_tx_block;
   uint64_t file_size;
   uint64_t ticket;
-  uint64_t offset =
+  uint64_t offset;
+  file_size =
       file->update_with_offset(tail_tx_idx, tail_tx_block, count,
-                               /*stop_at_boundary*/ true, ticket, &file_size,
+                               /*stop_at_boundary*/ true, ticket, offset,
                                /*do_alloc*/ false);
 
   return Tx::exec_and_release_offset<ReadTx>(file, this, buf, count, offset,
@@ -53,25 +54,30 @@ ssize_t TxMgr::do_pwrite(const char* buf, size_t count, size_t offset) {
 ssize_t TxMgr::do_write(const char* buf, size_t count) {
   TxEntryIdx tail_tx_idx;
   pmem::TxBlock* tail_tx_block;
+  uint64_t file_size;
   uint64_t ticket;
-  uint64_t offset =
+  uint64_t offset;
+  file_size =
       file->update_with_offset(tail_tx_idx, tail_tx_block, count,
-                               /*stop_at_boundary*/ false, ticket, nullptr,
+                               /*stop_at_boundary*/ false, ticket, offset,
                                /*do_alloc*/ false);
 
   // special case that we have everything aligned, no OCC
   if (count % BLOCK_SIZE == 0 && offset % BLOCK_SIZE == 0)
     return Tx::exec_and_release_offset<AlignedTx>(
-        file, this, buf, count, offset, tail_tx_idx, tail_tx_block, ticket);
+        file, this, buf, count, offset, tail_tx_idx, tail_tx_block, file_size,
+        ticket);
 
   // another special case where range is within a single block
   if (BLOCK_SIZE_TO_IDX(offset) == BLOCK_SIZE_TO_IDX(offset + count - 1))
     return Tx::exec_and_release_offset<SingleBlockTx>(
-        file, this, buf, count, offset, tail_tx_idx, tail_tx_block, ticket);
+        file, this, buf, count, offset, tail_tx_idx, tail_tx_block, file_size,
+        ticket);
 
   // unaligned multi-block write
   return Tx::exec_and_release_offset<MultiBlockTx>(
-      file, this, buf, count, offset, tail_tx_idx, tail_tx_block, ticket);
+      file, this, buf, count, offset, tail_tx_idx, tail_tx_block, file_size,
+      ticket);
 }
 
 bool TxMgr::advance_tx_idx(TxEntryIdx& tx_idx, pmem::TxBlock*& tx_block,
@@ -152,6 +158,25 @@ LogEntryIdx TxMgr::append_log_entry(
     }
   }
   return first_idx;
+}
+
+void TxMgr::update_log_entry_leftover_bytes(LogEntryIdx first_idx,
+                                            uint16_t leftover_bytes) {
+  const auto& [first_entry, first_block] = get_log_entry(first_idx);
+  pmem::LogEntry* curr_entry = first_entry;
+  pmem::LogEntryBlock* curr_block = first_block;
+  while (true) {
+    const auto& [next_entry, next_block] =
+        get_next_log_entry(curr_entry, curr_block);
+    if (next_entry != nullptr) {
+      curr_entry = next_entry;
+      curr_block = next_block;
+    } else {
+      curr_entry->leftover_bytes = leftover_bytes;
+      curr_entry->persist();
+      break;
+    }
+  }
 }
 
 bool TxMgr::tx_idx_greater(const TxEntryIdx lhs_idx, const TxEntryIdx rhs_idx,

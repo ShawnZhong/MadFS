@@ -19,9 +19,10 @@ class CoWTx : public WriteTx {
         end_full_vidx(BLOCK_SIZE_TO_IDX(end_offset)),
         num_full_blocks(end_full_vidx - begin_full_vidx) {}
   CoWTx(File* file, TxMgr* tx_mgr, const char* buf, size_t count, size_t offset,
-        TxEntryIdx tail_tx_idx, pmem::TxBlock* tail_tx_block, uint64_t ticket)
+        TxEntryIdx tail_tx_idx, pmem::TxBlock* tail_tx_block,
+        uint64_t file_size, uint64_t ticket)
       : WriteTx(file, tx_mgr, buf, count, offset, tail_tx_idx, tail_tx_block,
-                ticket),
+                file_size, ticket),
         begin_full_vidx(BLOCK_SIZE_TO_IDX(ALIGN_UP(offset, BLOCK_SIZE))),
         end_full_vidx(BLOCK_SIZE_TO_IDX(end_offset)),
         num_full_blocks(end_full_vidx - begin_full_vidx) {}
@@ -42,9 +43,10 @@ class SingleBlockTx : public CoWTx {
 
   SingleBlockTx(File* file, TxMgr* tx_mgr, const char* buf, size_t count,
                 size_t offset, TxEntryIdx tail_tx_idx,
-                pmem::TxBlock* tail_tx_block, uint64_t ticket)
+                pmem::TxBlock* tail_tx_block, uint64_t file_size,
+                uint64_t ticket)
       : CoWTx(file, tx_mgr, buf, count, offset, tail_tx_idx, tail_tx_block,
-              ticket),
+              file_size, ticket),
         local_offset(offset - BLOCK_IDX_TO_SIZE(begin_vidx)) {
     assert(num_blocks == 1);
   }
@@ -52,10 +54,14 @@ class SingleBlockTx : public CoWTx {
   ssize_t exec() override {
     debug::count(debug::SINGLE_BLOCK_TX_START);
     pmem::TxEntry conflict_entry;
+    bool need_redo;
 
     // must acquire the tx tail before any get
     if (!is_offset_depend)
-      file->update(tail_tx_idx, tail_tx_block, /*do_alloc*/ true);
+      file_size = file->update(tail_tx_idx, tail_tx_block, /*do_alloc*/ true);
+
+    prepare_commit_entry();
+
     recycle_image[0] = file->vidx_to_lidx(begin_vidx);
     assert(recycle_image[0] != dst_lidxs[0]);
 
@@ -95,7 +101,10 @@ class SingleBlockTx : public CoWTx {
     if (!conflict_entry.is_valid()) goto done;  // success, no conflict
 
     // we just treat begin_vidx as both first and last vidx
-    if (!handle_conflict(conflict_entry, begin_vidx, begin_vidx, recycle_image))
+    need_redo =
+        handle_conflict(conflict_entry, begin_vidx, begin_vidx, recycle_image);
+    recheck_commit_entry();
+    if (!need_redo)
       goto retry;
     else
       goto redo;
@@ -125,9 +134,10 @@ class MultiBlockTx : public CoWTx {
                                 ALIGN_DOWN(end_offset, BLOCK_SIZE)) {}
   MultiBlockTx(File* file, TxMgr* tx_mgr, const char* buf, size_t count,
                size_t offset, TxEntryIdx tail_tx_idx,
-               pmem::TxBlock* tail_tx_block, uint64_t ticket)
+               pmem::TxBlock* tail_tx_block, uint64_t file_size,
+               uint64_t ticket)
       : CoWTx(file, tx_mgr, buf, count, offset, tail_tx_idx, tail_tx_block,
-              ticket),
+              file_size, ticket),
         first_block_overlap_size(ALIGN_UP(offset, BLOCK_SIZE) - offset),
         last_block_overlap_size(end_offset -
                                 ALIGN_DOWN(end_offset, BLOCK_SIZE)) {}
@@ -141,6 +151,7 @@ class MultiBlockTx : public CoWTx {
     // of redo, we may skip if no change is made
     bool do_copy_first = true;
     bool do_copy_last = true;
+    bool need_redo;
     pmem::TxEntry conflict_entry;
     LogicalBlockIdx src_first_lidx, src_last_lidx;
 
@@ -174,7 +185,10 @@ class MultiBlockTx : public CoWTx {
 
     // only get a snapshot of the tail when starting critical piece
     if (!is_offset_depend)
-      file->update(tail_tx_idx, tail_tx_block, /*do_alloc*/ true);
+      file_size = file->update(tail_tx_idx, tail_tx_block, /*do_alloc*/ true);
+
+    prepare_commit_entry();
+
     for (uint32_t i = 0; i < num_blocks; ++i)
       recycle_image[i] = file->vidx_to_lidx(begin_vidx + i);
     src_first_lidx = recycle_image[0];
@@ -224,8 +238,10 @@ class MultiBlockTx : public CoWTx {
     // make a copy of the first and last again
     src_first_lidx = recycle_image[0];
     src_last_lidx = recycle_image[num_blocks - 1];
-    if (!handle_conflict(conflict_entry, begin_vidx, end_full_vidx,
-                         recycle_image))
+    need_redo = handle_conflict(conflict_entry, begin_vidx, end_full_vidx,
+                                recycle_image);
+    recheck_commit_entry();
+    if (!need_redo)
       goto retry;  // we have moved to the new tail, retry commit
     else {
       do_copy_first = src_first_lidx != recycle_image[0];
