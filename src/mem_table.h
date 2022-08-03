@@ -100,7 +100,7 @@ class MemTable {
   // ask more blocks for the kernel filesystem, so that idx is valid
   void grow_to_fit(LogicalBlockIdx idx) {
     // fast path: if smaller than the number of block; return
-    if (idx < meta->get_num_blocks()) return;
+    if (idx < meta->get_num_logical_blocks()) return;
 
     // slow path: acquire lock to verify and grow_to_fit if necessary
     // the new file size should be a multiple of grow_to_fit unit
@@ -111,7 +111,7 @@ class MemTable {
 
     int ret = posix::fallocate(fd, 0, 0, static_cast<off_t>(file_size));
     PANIC_IF(ret, "fd %d: fallocate failed", fd);
-    meta->set_num_blocks_if_larger(BLOCK_SIZE_TO_IDX(file_size));
+    meta->set_num_logical_blocks_if_larger(BLOCK_SIZE_TO_IDX(file_size));
   }
 
   /**

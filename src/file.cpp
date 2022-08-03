@@ -360,8 +360,8 @@ std::ostream& operator<<(std::ostream& out, const File& f) {
   out << f.offset_mgr;
   if (f.can_write) {
     out << "Bitmap: \n";
-    for (size_t i = 0; i < f.meta->get_num_blocks() / BITMAP_BLOCK_CAPACITY;
-         ++i) {
+    auto num_bitmaps = f.meta->get_num_logical_blocks() / BITMAP_BLOCK_CAPACITY;
+    for (size_t i = 0; i < num_bitmaps; ++i) {
       out << "\t" << std::setw(6) << std::right << i * BITMAP_BLOCK_CAPACITY
           << " - " << std::setw(6) << std::left
           << (i + 1) * BITMAP_BLOCK_CAPACITY - 1 << ": " << f.bitmap[i] << "\n";

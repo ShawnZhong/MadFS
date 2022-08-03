@@ -29,7 +29,8 @@ MemTable::MemTable(int fd, off_t init_file_size, bool read_only)
     throw FileInitException("invalid meta block");
 
   // update the mata block if necessary
-  if (should_grow) meta->set_num_blocks_if_larger(first_region_num_blocks);
+  if (should_grow)
+    meta->set_num_logical_blocks_if_larger(first_region_num_blocks);
 }
 
 std::ostream& operator<<(std::ostream& out, const MemTable& m) {
