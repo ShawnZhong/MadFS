@@ -120,10 +120,8 @@ struct __attribute__((packed)) TxEntryIndirect {
 
   LogEntryIdx get_log_entry_idx() { return {block_idx, local_offset}; }
 
-  friend std::ostream& operator<<(std::ostream& out,
-                                  const TxEntryIndirect& entry) {
-    out << "TxEntryIndirect{log_head={" << entry.block_idx << ","
-        << entry.local_offset << "}}";
+  friend std::ostream& operator<<(std::ostream& out, const TxEntryIndirect& e) {
+    out << "TxEntryIndirect{" << e.block_idx << "," << e.local_offset << "}";
     return out;
   }
 };

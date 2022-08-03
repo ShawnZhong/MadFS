@@ -156,7 +156,7 @@ class Converter {
     uint32_t virtual_num_blocks =
         BLOCK_SIZE_TO_IDX(ALIGN_UP(virtual_size_aligned, BLOCK_SIZE));
 
-    uint32_t logical_num_blocks = file->meta->get_num_blocks();
+    uint32_t logical_num_blocks = file->meta->get_num_logical_blocks();
     LogicalBlockIdx new_begin_lidx =
         ALIGN_UP(logical_num_blocks + 1, NUM_BLOCKS_PER_GROW);
     ret = posix::fallocate(fd, 0, BLOCK_IDX_TO_SIZE(new_begin_lidx),

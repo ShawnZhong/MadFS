@@ -53,7 +53,7 @@ class MetaBlock : public noncopyable {
       // total number of blocks actually in this file (including unused ones)
       // modifications to this should be through the getter/setter functions
       // that use atomic instructions
-      std::atomic_uint32_t num_blocks;
+      std::atomic<uint32_t> num_logical_blocks;
     } cl2_meta;
 
     // padding
@@ -113,19 +113,17 @@ class MetaBlock : public noncopyable {
    * Getters and setters
    */
   // called by other public functions with lock held
-  void set_num_blocks_if_larger(uint32_t new_num_blocks) {
+  void set_num_logical_blocks_if_larger(uint32_t new_num_blocks) {
     uint32_t old_num_blocks =
-        cl2_meta.num_blocks.load(std::memory_order_acquire);
+        cl2_meta.num_logical_blocks.load(std::memory_order_acquire);
   retry:
     if (unlikely(old_num_blocks >= new_num_blocks)) return;
-    if (!cl2_meta.num_blocks.compare_exchange_strong(
+    if (!cl2_meta.num_logical_blocks.compare_exchange_strong(
             old_num_blocks, new_num_blocks, std::memory_order_acq_rel,
             std::memory_order_acquire))
       goto retry;
-    // if num_blocks is out-of-date, it's fine...
-    // in the worst case, we just do unnecessary fallocate...
-    // so we don't wait for it to persist
-    persist_cl_unfenced(&cl2);
+    // we do not persist the num_logical_blocks field since it's fine if the
+    // value is out-of-date in the worst case, we just do unnecessary fallocate
   }
 
   [[nodiscard]] static uint32_t get_tx_seq() { return 0; }
@@ -176,8 +174,8 @@ class MetaBlock : public noncopyable {
                      sizeof(TxEntry) * (end_idx - begin_idx));
   }
 
-  [[nodiscard]] uint32_t get_num_blocks() const {
-    return cl2_meta.num_blocks.load(std::memory_order_acquire);
+  [[nodiscard]] uint32_t get_num_logical_blocks() const {
+    return cl2_meta.num_logical_blocks.load(std::memory_order_acquire);
   }
 
   [[nodiscard]] LogicalBlockIdx get_next_tx_block() const {
@@ -214,8 +212,9 @@ class MetaBlock : public noncopyable {
 
   friend std::ostream& operator<<(std::ostream& out, const MetaBlock& block) {
     out << "MetaBlock: \n";
-    out << "\tnum_blocks: "
-        << block.cl2_meta.num_blocks.load(std::memory_order_acquire) << "\n";
+    out << "\tnum_logical_blocks: "
+        << block.cl2_meta.num_logical_blocks.load(std::memory_order_acquire)
+        << "\n";
     out << "\tnext_tx_block: "
         << block.cl1_meta.next_tx_block.load(std::memory_order_acquire) << "\n";
     out << "\ttx_tail: "
