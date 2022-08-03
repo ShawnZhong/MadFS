@@ -1,5 +1,6 @@
 #pragma once
 
+#include "file.h"
 #include "mgr.h"
 
 namespace ulayfs::dram {
