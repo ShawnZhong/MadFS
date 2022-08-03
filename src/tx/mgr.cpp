@@ -11,9 +11,9 @@
 #include "file.h"
 #include "idx.h"
 #include "persist.h"
-#include "tx/aligned.h"
-#include "tx/cow.h"
 #include "tx/read.h"
+#include "tx/write_aligned.h"
+#include "tx/write_unaligned.h"
 #include "utils.h"
 
 namespace ulayfs::dram {

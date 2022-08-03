@@ -10,7 +10,7 @@ add_library(ulayfs SHARED
     src/block/log.h
     src/block/meta.h
     src/block/tx.h
-    src/blktable.h src/blktable.cpp
+    src/blk_table.h src/blk_table.cpp
     src/const.h
     src/debug.h src/debug.cpp
     src/entry.h
@@ -18,7 +18,7 @@ add_library(ulayfs SHARED
     src/gc.h
     src/idx.h
     src/lib.h src/lib.cpp
-    src/memtable.h src/memtable.cpp
+    src/mem_table.h src/mem_table.cpp
     src/offset.h src/offset.cpp
     src/persist.h
     src/posix.h src/posix.cpp
@@ -27,8 +27,8 @@ add_library(ulayfs SHARED
     src/tx/tx.h
     src/tx/read.h
     src/tx/write.h
-    src/tx/aligned.h
-    src/tx/cow.h
+    src/tx/write_aligned.h
+    src/tx/write_unaligned.h
     src/utils.h
     )
 
