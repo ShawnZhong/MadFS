@@ -20,10 +20,10 @@ jobs:
         run: make ${{matrix.build_type}} BUILD_TARGETS="ulayfs"
 
       - name: test_basic
-        run: ./run test_basic ${{matrix.build_type}}
+        run: ./run test_basic -b ${{matrix.build_type}}
 
       - name: test_rw
-        run: ./run test_rw ${{matrix.build_type}}
+        run: ./run test_rw -b ${{matrix.build_type}}
 
       - name: test_sync
-        run: ./run test_sync ${{matrix.build_type}}
+        run: ./run test_sync -b ${{matrix.build_type}}
