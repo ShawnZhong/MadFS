@@ -21,9 +21,9 @@
 #include "entry.h"
 #include "idx.h"
 #include "mem_table.h"
-#include "offset.h"
 #include "posix.h"
 #include "tx/mgr.h"
+#include "tx/offset.h"
 #include "utils.h"
 
 namespace ulayfs::utility {
@@ -40,7 +40,6 @@ class File {
   pmem::MetaBlock* meta;
   TxMgr tx_mgr;
   BlkTable blk_table;
-  OffsetMgr offset_mgr;
 
   int shm_fd;
   const bool can_read;
@@ -103,21 +102,9 @@ class File {
     pthread_spin_lock(&spinlock);
     blk_table.update(do_alloc);
     *state = blk_table.get_file_state();
-    old_offset = offset_mgr.acquire_offset(count, state->file_size,
-                                           stop_at_boundary, ticket);
+    old_offset = tx_mgr.offset_mgr.acquire_offset(count, state->file_size,
+                                                  stop_at_boundary, ticket);
     pthread_spin_unlock(&spinlock);
-  }
-
-  void wait_offset(uint64_t ticket) { offset_mgr.wait_offset(ticket); }
-
-  bool validate_offset(uint64_t ticket, const TxEntryIdx curr_idx,
-                       const pmem::TxBlock* curr_block) {
-    return offset_mgr.validate_offset(ticket, curr_idx, curr_block);
-  }
-
-  void release_offset(uint64_t ticket, const TxEntryIdx curr_idx,
-                      const pmem::TxBlock* curr_block) {
-    return offset_mgr.release_offset(ticket, curr_idx, curr_block);
   }
 
   /**

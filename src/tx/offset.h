@@ -4,6 +4,7 @@
 #include <cstdint>
 #include <iosfwd>
 
+#include "blk_table.h"
 #include "block/block.h"
 #include "const.h"
 #include "idx.h"
@@ -11,27 +12,28 @@
 namespace ulayfs::dram {
 
 class File;
+class TxMgr;
+struct TxCursor;
 
 class OffsetMgr {
   union TicketSlot {
     struct {
       std::atomic_uint64_t ticket;
-      TxEntryIdx tx_idx;
-      const pmem::TxBlock* tx_block;
+      TxCursor cursor;
     } ticket_slot;
     char cl[CACHELINE_SIZE];
 
     TicketSlot() { ticket_slot.ticket.store(0, std::memory_order_relaxed); }
   };
 
-  File* file;
+  TxMgr* tx_mgr;
   uint64_t offset;
   uint64_t next_ticket;
   TicketSlot queues[NUM_OFFSET_QUEUE_SLOT];
 
  public:
-  explicit OffsetMgr(File* file)
-      : file(file), offset(0), next_ticket(1), queues() {}
+  explicit OffsetMgr(TxMgr* tx_mgr)
+      : tx_mgr(tx_mgr), offset(0), next_ticket(1), queues() {}
 
   // must have spinlock acquired
   // only call if seeking is the only serialization point
@@ -74,8 +76,7 @@ class OffsetMgr {
    * @param[in] curr_block the tx tail block seen by the current operation
    * @return whether the ordering is fine (prev <= curr)
    */
-  bool validate_offset(uint64_t ticket, TxEntryIdx curr_idx,
-                       const pmem::TxBlock* curr_block);
+  bool validate_offset(uint64_t ticket, TxCursor cursor);
 
   /**
    * release the offset
@@ -84,8 +85,7 @@ class OffsetMgr {
    * @param[in] curr_idx the tx tail idx seen by the current operation
    * @param[in] curr_block the tx tail block seen by the current operation
    */
-  void release_offset(uint64_t ticket, TxEntryIdx curr_idx,
-                      const pmem::TxBlock* curr_block);
+  void release_offset(uint64_t ticket, TxCursor cursor);
 
   friend std::ostream& operator<<(std::ostream& out, const OffsetMgr& o);
 };

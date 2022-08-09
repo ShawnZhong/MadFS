@@ -9,16 +9,11 @@
 #include "block/block.h"
 #include "entry.h"
 #include "idx.h"
+#include "offset.h"
 
 namespace ulayfs::dram {
 
 class File;
-
-struct TxCursor {
-  TxEntryIdx idx;
-  pmem::TxBlock* block;
-};
-static_assert(sizeof(TxCursor) == 16);
 
 class TxMgr {
  private:
@@ -26,7 +21,11 @@ class TxMgr {
   pmem::MetaBlock* meta;
 
  public:
-  TxMgr(File* file, pmem::MetaBlock* meta) : file(file), meta(meta) {}
+  OffsetMgr offset_mgr;
+
+ public:
+  TxMgr(File* file, pmem::MetaBlock* meta)
+      : file(file), meta(meta), offset_mgr(this) {}
 
   ssize_t do_pread(char* buf, size_t count, size_t offset);
   ssize_t do_read(char* buf, size_t count);

@@ -85,7 +85,7 @@ class SingleBlockTx : public CoWTx {
       }
     }
 
-    if (is_offset_depend) file->wait_offset(ticket);
+    if (is_offset_depend) tx_mgr->offset_mgr.wait_offset(ticket);
 
   retry:
     debug::count(debug::SINGLE_BLOCK_TX_COMMIT);
@@ -216,7 +216,7 @@ class MultiBlockTx : public CoWTx {
     }
     _mm_sfence();
 
-    if (is_offset_depend) file->wait_offset(ticket);
+    if (is_offset_depend) tx_mgr->offset_mgr.wait_offset(ticket);
 
   retry:
     debug::count(debug::MULTI_BLOCK_TX_COMMIT);

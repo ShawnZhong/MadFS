@@ -13,16 +13,29 @@
 #include "const.h"
 #include "entry.h"
 #include "idx.h"
-#include "tx/mgr.h"
 #include "utils.h"
 
 namespace ulayfs::dram {
+
+/**
+ * @brief A TxCursor is a pointer to a transaction entry
+ *
+ * It is 16 bytes in size and can be passed around by value in the registers.
+ */
+struct TxCursor {
+  TxEntryIdx idx;
+  pmem::TxBlock* block;
+};
+static_assert(sizeof(TxCursor) == 16);
 
 struct FileState {
   TxCursor cursor;
   uint64_t file_size;
 };
 static_assert(sizeof(FileState) == 24);
+
+class File;
+class TxMgr;
 
 // read logs and update mapping from virtual blocks to logical blocks
 class BlkTable {
@@ -81,17 +94,7 @@ class BlkTable {
    * @return whether update is necessary; if false, set tx_idx and tx_block;
    * otherwise leave them undefined.
    */
-  [[nodiscard]] bool need_update(FileState* result_state, bool do_alloc) const {
-    uint64_t curr_ver = version.load(std::memory_order_acquire);
-    if (curr_ver & 1) return true;  // old version means inconsistency
-    *result_state = state;
-    if (curr_ver != version.load(std::memory_order_release)) return true;
-    if (!tx_mgr->handle_cursor_overflow(&result_state->cursor, do_alloc))
-      return false;
-    // if it's not valid, there is no new tx to the tx history, thus no need to
-    // acquire spinlock to update
-    return tx_mgr->get_tx_entry(result_state->cursor).is_valid();
-  }
+  [[nodiscard]] bool need_update(FileState* result_state, bool do_alloc) const;
 
   [[nodiscard]] TxEntryIdx get_tx_idx() const { return state.cursor.idx; }
   [[nodiscard]] FileState get_file_state() const { return state; }

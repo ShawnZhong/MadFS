@@ -37,26 +37,23 @@ const OffsetMgr::TicketSlot* OffsetMgr::wait_offset(uint64_t ticket) {
   return slot;
 }
 
-bool OffsetMgr::validate_offset(uint64_t ticket, const TxEntryIdx curr_idx,
-                                const pmem::TxBlock* curr_block) {
+bool OffsetMgr::validate_offset(uint64_t ticket, const TxCursor cursor) {
   // if we don't want strict serialization on offset, always return immediately
   if (!runtime_options.strict_offset_serial) return true;
   const TicketSlot* slot = wait_offset(ticket);
   // no previous operation to validate against
   if (!slot) return true;
-  if (!file->tx_idx_greater(slot->ticket_slot.tx_idx, curr_idx,
-                            slot->ticket_slot.tx_block, curr_block))
+  if (!tx_mgr->tx_idx_greater(slot->ticket_slot.cursor.idx, cursor.idx,
+                              slot->ticket_slot.cursor.block, cursor.block))
     return true;
   return false;
 }
 
-void OffsetMgr::release_offset(uint64_t ticket, const TxEntryIdx curr_idx,
-                               const pmem::TxBlock* curr_block) {
+void OffsetMgr::release_offset(uint64_t ticket, const TxCursor cursor) {
   // if we don't want strict serialization on offset, always return immediately
   if (!runtime_options.strict_offset_serial) return;
   TicketSlot* slot = &queues[ticket % NUM_OFFSET_QUEUE_SLOT];
-  slot->ticket_slot.tx_idx = curr_idx;
-  slot->ticket_slot.tx_block = curr_block;
+  slot->ticket_slot.cursor = cursor;
   slot->ticket_slot.ticket.store(ticket, std::memory_order_release);
 }
 

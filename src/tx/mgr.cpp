@@ -391,6 +391,7 @@ template LogicalBlockIdx TxMgr::alloc_next_block(
     pmem::TxBlock* block, pmem::TxBlock*& new_block) const;
 
 std::ostream& operator<<(std::ostream& out, const TxMgr& tx_mgr) {
+  out << tx_mgr.offset_mgr;
   out << "Transactions: \n";
   TxCursor cursor{};
 

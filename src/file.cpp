@@ -25,7 +25,6 @@ File::File(int fd, const struct stat& stat, int flags,
       meta(mem_table.get_meta()),
       tx_mgr(this, meta),
       blk_table(this, &tx_mgr),
-      offset_mgr(this),
       can_read((flags & O_ACCMODE) == O_RDONLY ||
                (flags & O_ACCMODE) == O_RDWR),
       can_write((flags & O_ACCMODE) == O_WRONLY ||
@@ -73,7 +72,7 @@ File::File(int fd, const struct stat& stat, int flags,
 
   if (!file_size_updated) file_size = blk_table.update(/*do_alloc*/ false);
 
-  if (flags & O_APPEND) offset_mgr.seek_absolute(file_size);
+  if (flags & O_APPEND) tx_mgr.offset_mgr.seek_absolute(file_size);
 #ifdef ULAYFS_DEBUG
   path = strdup(pathname);
 #endif
@@ -138,14 +137,14 @@ off_t File::lseek(off_t offset, int whence) {
 
   switch (whence) {
     case SEEK_SET:
-      ret = offset_mgr.seek_absolute(offset);
+      ret = tx_mgr.offset_mgr.seek_absolute(offset);
       break;
     case SEEK_CUR:
-      ret = offset_mgr.seek_relative(offset);
+      ret = tx_mgr.offset_mgr.seek_relative(offset);
       if (ret == -1) errno = EINVAL;
       break;
     case SEEK_END:
-      ret = offset_mgr.seek_absolute(file_size + offset);
+      ret = tx_mgr.offset_mgr.seek_absolute(file_size + offset);
       break;
     // TODO: add SEEK_DATA and SEEK_HOLE
     case SEEK_DATA:
@@ -356,7 +355,6 @@ std::ostream& operator<<(std::ostream& out, const File& f) {
   out << *f.meta;
   out << f.blk_table;
   out << f.mem_table;
-  out << f.offset_mgr;
   if (f.can_write) {
     out << "Bitmap: \n";
     auto num_bitmaps = f.meta->get_num_logical_blocks() / BITMAP_BLOCK_CAPACITY;

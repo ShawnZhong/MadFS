@@ -11,6 +11,18 @@
 
 namespace ulayfs::dram {
 
+bool BlkTable::need_update(FileState* result_state, bool do_alloc) const {
+  uint64_t curr_ver = version.load(std::memory_order_acquire);
+  if (curr_ver & 1) return true;  // old version means inconsistency
+  *result_state = state;
+  if (curr_ver != version.load(std::memory_order_release)) return true;
+  if (!tx_mgr->handle_cursor_overflow(&result_state->cursor, do_alloc))
+    return false;
+  // if it's not valid, there is no new tx to the tx history, thus no need to
+  // acquire spinlock to update
+  return tx_mgr->get_tx_entry(result_state->cursor).is_valid();
+}
+
 uint64_t BlkTable::update(bool do_alloc, bool init_bitmap) {
   TxCursor cursor = state.cursor;
   LogicalBlockIdx prev_tx_block_idx;
