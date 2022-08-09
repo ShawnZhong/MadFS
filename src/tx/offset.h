@@ -4,10 +4,10 @@
 #include <cstdint>
 #include <iosfwd>
 
-#include "blk_table.h"
 #include "block/block.h"
 #include "const.h"
 #include "idx.h"
+#include "tx/cursor.h"
 
 namespace ulayfs::dram {
 

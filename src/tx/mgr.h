@@ -108,45 +108,37 @@ class TxMgr {
   /**
    * Try to commit an entry
    *
-   * @param[in] entry entry to commit
-   * @param[in,out] tx_idx idx of entry to commit
-   * @param[in,out] tx_block block pointer of the block by tx_idx
+   * @param entry entry to commit
+   * @param cursor the cursor to commit to (might be updated under overflow)
    * @return empty entry on success; conflict entry otherwise
    */
   pmem::TxEntry try_commit(pmem::TxEntry entry, TxCursor* cursor);
 
   /**
    * @tparam B MetaBlock or TxBlock
-   * @param[in] block the block that needs a next block to be allocated
-   * @param[out] new_tx_block the new tx block allocated (can be same as block)
-   * @return the block id of the allocated block
+   * @param block the block that needs a next block to be allocated
+   * @return the block id of the allocated block and the new tx block allocated
    */
   template <class B>
   std::tuple<LogicalBlockIdx, pmem::TxBlock*> alloc_next_block(B* block) const;
 
   /**
-   * If the given idx is in an overflow state, update it if allowed.
+   * If the given cursor is in an overflow state, update it if allowed.
    *
-   * @param[in,out] tx_idx the transaction index to be handled, might be updated
-   * @param[in,out] tx_block the block corresponding to the tx, might be updated
-   * @param[in] do_alloc whether allocation is allowed
+   * @param cursor the cursor to update
+   * @param do_alloc whether allocation is allowed
    * @return true if the idx is not in overflow state; false otherwise
    */
   bool handle_cursor_overflow(TxCursor* cursor, bool do_alloc) const;
 
   /**
-   * Flush tx entries from tx_idx_begin to tx_idx_end
-   * A typical use pattern is use meta->tx_tail as begin and the latest tail as
-   * end. Thus, we usually don't know the block address that corresponds to
-   * tx_idx_begin, but we know the block address that corresponds to tx_idx_end
+   * Flush tx entries
    *
-   * @param tx_idx_begin which tx entry to begin
-   * @param tx_idx_end which tx entry to stop (non-inclusive)
-   * @param tx_block_end if tx_idx_end is known, could optionally provide to
-   * save one access to mem_table (this should be a common case)
+   * @param begin the start cursor of the entries to flush, exclusive
+   * @param end the end cursor of the entries to flush, inclusive
    */
-  void flush_tx_entries(TxEntryIdx begin, TxCursor end);
   void flush_tx_entries(TxCursor begin, TxCursor end);
+  void flush_tx_entries(TxEntryIdx begin, TxCursor end);
 
   /**
    * Garbage collecting transaction blocks and log blocks. This function builds

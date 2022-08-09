@@ -76,12 +76,9 @@ class BlkTable {
    * cache coherence traffic. If this function return true, do not acquire
    * spinlock in file.
    *
-   * @param[out] tx_idx if no need to update, return tx_idx
-   * @param[out] tx_block if no need to update, return tx_block
-   * @param[out] f_size if no need to update, return file_size
-   * @param[in] do_alloc whether do allocation
-   * @return whether update is necessary; if false, set tx_idx and tx_block;
-   * otherwise leave them undefined.
+   * @param result_state if no need to update, file state is stored here
+   * @param do_alloc whether do allocation
+   * @return whether update is necessary
    */
   [[nodiscard]] bool need_update(FileState* result_state, bool do_alloc) const;
 
