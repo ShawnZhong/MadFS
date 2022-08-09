@@ -14,7 +14,7 @@ pd.options.display.max_columns = 100
 pd.options.display.width = None
 
 matplotlib.rcParams["legend.columnspacing"] = 0.5
-matplotlib.rcParams["legend.fontsize"] = 6
+matplotlib.rcParams["legend.fontsize"] = 8
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger("plot")
@@ -110,7 +110,9 @@ def plot_micro_st(result_dir):
     xlabel = "I/O Size (Bytes)"
 
     for name, df in benchmarks.groupby("benchmark"):
-        if name.startswith("cow"):
+        is_cow = name.startswith("cow")
+
+        if is_cow:
             df["x"] = df["name"].apply(parse_name, args=(1,))
             df["y"] = df["real_time"].apply(lambda x: float(x) / 1000)
             ylabel = "Latency (ms)"
@@ -126,14 +128,15 @@ def plot_micro_st(result_dir):
             ax.set_ylabel(ylabel)
 
             plt.xticks(rotation=45)
-            ax.xaxis.set_major_locator(plt.MultipleLocator(4))
+            if is_cow:
+                ax.xaxis.set_major_locator(plt.MultipleLocator(5))
 
             ax.yaxis.set_major_locator(plt.MaxNLocator(steps=[1, 5, 10]))
             ax.yaxis.set_major_formatter(plt.FormatStrFormatter('%.1f'))
             ax.set_ylim(bottom=0)
 
             ax.legend(ncol=2)
-            plt.title(name)
+            # plt.title(name)
 
         plot_single_bm(
             df,
