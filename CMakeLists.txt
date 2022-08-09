@@ -23,6 +23,7 @@ add_library(ulayfs SHARED
     src/persist.h
     src/posix.h src/posix.cpp
     src/convert.h
+    src/tx/cursor.h
     src/tx/mgr.h src/tx/mgr.cpp
     src/tx/tx.h
     src/tx/read.h

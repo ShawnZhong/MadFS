@@ -185,12 +185,6 @@ class File {
 
   void tx_gc();
 
-  bool tx_idx_greater(const TxEntryIdx lhs_idx, const TxEntryIdx rhs_idx,
-                      const pmem::TxBlock* lhs_block = nullptr,
-                      const pmem::TxBlock* rhs_block = nullptr) {
-    return tx_mgr.tx_idx_greater(lhs_idx, rhs_idx, lhs_block, rhs_block);
-  }
-
   // try to open a file with checking whether the given file is in uLayFS format
   static bool try_open(int& fd, struct stat& stat_buf, const char* pathname,
                        int flags, mode_t mode) {

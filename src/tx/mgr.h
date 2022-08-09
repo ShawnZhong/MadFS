@@ -29,13 +29,8 @@ class TxMgr {
 
   ssize_t do_pread(char* buf, size_t count, size_t offset);
   ssize_t do_read(char* buf, size_t count);
-
   ssize_t do_pwrite(const char* buf, size_t count, size_t offset);
   ssize_t do_write(const char* buf, size_t count);
-
-  bool tx_idx_greater(TxEntryIdx lhs_idx, TxEntryIdx rhs_idx,
-                      const pmem::TxBlock* lhs_block = nullptr,
-                      const pmem::TxBlock* rhs_block = nullptr);
 
   /**
    * Advance cursor to the next transaction entry
@@ -108,7 +103,7 @@ class TxMgr {
    * @param leftover_bytes new value of leftover_bytes
    */
   void update_log_entry_leftover_bytes(LogEntryIdx first_idx,
-                                       uint16_t leftover_bytes);
+                                       uint16_t leftover_bytes) const;
 
   /**
    * Try to commit an entry
@@ -127,8 +122,7 @@ class TxMgr {
    * @return the block id of the allocated block
    */
   template <class B>
-  LogicalBlockIdx alloc_next_block(B* block,
-                                   pmem::TxBlock*& new_tx_block) const;
+  std::tuple<LogicalBlockIdx, pmem::TxBlock*> alloc_next_block(B* block) const;
 
   /**
    * If the given idx is in an overflow state, update it if allowed.
@@ -151,7 +145,8 @@ class TxMgr {
    * @param tx_block_end if tx_idx_end is known, could optionally provide to
    * save one access to mem_table (this should be a common case)
    */
-  void flush_tx_entries(TxEntryIdx begin_idx, TxCursor cursor);
+  void flush_tx_entries(TxEntryIdx begin, TxCursor end);
+  void flush_tx_entries(TxCursor begin, TxCursor end);
 
   /**
    * Garbage collecting transaction blocks and log blocks. This function builds

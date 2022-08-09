@@ -13,21 +13,10 @@
 #include "const.h"
 #include "entry.h"
 #include "idx.h"
+#include "tx/cursor.h"
 #include "utils.h"
 
 namespace ulayfs::dram {
-
-/**
- * @brief A TxCursor is a pointer to a transaction entry
- *
- * It is 16 bytes in size and can be passed around by value in the registers.
- */
-struct TxCursor {
-  TxEntryIdx idx;
-  pmem::TxBlock* block;
-};
-static_assert(sizeof(TxCursor) == 16);
-
 struct FileState {
   TxCursor cursor;
   uint64_t file_size;

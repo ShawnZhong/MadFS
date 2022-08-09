@@ -11,6 +11,7 @@
 #include "file.h"
 #include "idx.h"
 #include "persist.h"
+#include "tx/cursor.h"
 #include "tx/read.h"
 #include "tx/write_aligned.h"
 #include "tx/write_unaligned.h"
@@ -148,7 +149,7 @@ LogEntryIdx TxMgr::append_log_entry(
 }
 
 void TxMgr::update_log_entry_leftover_bytes(LogEntryIdx first_idx,
-                                            uint16_t leftover_bytes) {
+                                            uint16_t leftover_bytes) const {
   const auto& [first_entry, first_block] = get_log_entry(first_idx);
   pmem::LogEntry* curr_entry = first_entry;
   pmem::LogEntryBlock* curr_block = first_block;
@@ -164,20 +165,6 @@ void TxMgr::update_log_entry_leftover_bytes(LogEntryIdx first_idx,
       break;
     }
   }
-}
-
-bool TxMgr::tx_idx_greater(const TxEntryIdx lhs_idx, const TxEntryIdx rhs_idx,
-                           const pmem::TxBlock* lhs_block,
-                           const pmem::TxBlock* rhs_block) {
-  if (lhs_idx.block_idx == rhs_idx.block_idx)
-    return lhs_idx.local_idx > rhs_idx.local_idx;
-  if (lhs_idx.block_idx == 0) return false;
-  if (rhs_idx.block_idx == 0) return true;
-  if (!lhs_block)
-    lhs_block = &file->lidx_to_addr_ro(lhs_idx.block_idx)->tx_block;
-  if (!rhs_block)
-    rhs_block = &file->lidx_to_addr_ro(rhs_idx.block_idx)->tx_block;
-  return lhs_block->get_tx_seq() > rhs_block->get_tx_seq();
 }
 
 pmem::TxEntry TxMgr::try_commit(pmem::TxEntry entry, TxCursor* cursor) {
@@ -202,9 +189,10 @@ bool TxMgr::handle_cursor_overflow(TxCursor* cursor, bool do_alloc) const {
                                           : cursor->block->get_next_tx_block();
     if (block_idx == 0) {
       if (!do_alloc) return false;
-      cursor->idx.block_idx =
-          is_inline ? alloc_next_block(meta, cursor->block)
-                    : alloc_next_block(cursor->block, cursor->block);
+      const auto& [new_block_idx, new_block] =
+          is_inline ? alloc_next_block(meta) : alloc_next_block(cursor->block);
+      cursor->idx.block_idx = new_block_idx;
+      cursor->block = new_block;
       cursor->idx.local_idx -= capacity;
     } else {
       cursor->idx.block_idx = block_idx;
@@ -215,29 +203,34 @@ bool TxMgr::handle_cursor_overflow(TxCursor* cursor, bool do_alloc) const {
   return true;
 }
 
-void TxMgr::flush_tx_entries(TxEntryIdx begin_idx, TxCursor cursor) {
-  if (!tx_idx_greater(cursor.idx, begin_idx)) return;
+void TxMgr::flush_tx_entries(TxEntryIdx begin, TxCursor end) {
+  flush_tx_entries({begin, &file->lidx_to_addr_rw(begin.block_idx)->tx_block},
+                   end);
+}
+
+void TxMgr::flush_tx_entries(TxCursor begin, TxCursor end) {
+  if (begin >= end) return;
   pmem::TxBlock* tx_block_begin;
   // handle special case of inline tx
-  if (begin_idx.block_idx == 0) {
-    if (cursor.idx.block_idx == 0) {
-      meta->flush_tx_entries(begin_idx.local_idx, cursor.idx.local_idx);
+  if (begin.idx.block_idx == 0) {
+    if (end.idx.block_idx == 0) {
+      meta->flush_tx_entries(begin.idx.local_idx, end.idx.local_idx);
       goto done;
     }
-    meta->flush_tx_block(begin_idx.local_idx);
+    meta->flush_tx_block(begin.idx.local_idx);
     // now the next block is the "new begin"
-    begin_idx = {meta->get_next_tx_block(), 0};
+    begin.idx = {meta->get_next_tx_block(), 0};
   }
-  while (begin_idx.block_idx != cursor.idx.block_idx) {
-    tx_block_begin = &file->lidx_to_addr_rw(begin_idx.block_idx)->tx_block;
-    tx_block_begin->flush_tx_block(begin_idx.local_idx);
-    begin_idx = {tx_block_begin->get_next_tx_block(), 0};
+  while (begin.idx.block_idx != end.idx.block_idx) {
+    tx_block_begin = &file->lidx_to_addr_rw(begin.idx.block_idx)->tx_block;
+    tx_block_begin->flush_tx_block(begin.idx.local_idx);
+    begin.idx = {tx_block_begin->get_next_tx_block(), 0};
     // special case: tx_idx_end is the first entry of the next block, which
     // means we only need to flush the current block and no need to
     // dereference to get the last block
   }
-  if (begin_idx.local_idx == cursor.idx.local_idx) goto done;
-  cursor.block->flush_tx_entries(begin_idx.local_idx, cursor.idx.local_idx);
+  if (begin.idx.local_idx == end.idx.local_idx) goto done;
+  end.block->flush_tx_entries(begin.idx.local_idx, end.idx.local_idx);
 
 done:
   _mm_sfence();
@@ -266,26 +259,28 @@ void TxMgr::find_tail(TxEntryIdx& tx_idx, pmem::TxBlock*& tx_block) const {
 };
 
 template <class B>
-LogicalBlockIdx TxMgr::alloc_next_block(B* block,
-                                        pmem::TxBlock*& new_tx_block) const {
+std::tuple<LogicalBlockIdx, pmem::TxBlock*> TxMgr::alloc_next_block(
+    B* block) const {
   // allocate the next block
   auto allocator = file->get_local_allocator();
-  pmem::Block* new_block;
-  LogicalBlockIdx new_block_idx =
-      allocator->alloc_tx_block(block->get_tx_seq() + 1, new_block);
+  auto [new_block_idx, new_block] =
+      allocator->alloc_tx_block(block->get_tx_seq() + 1);
 
   bool success = block->set_next_tx_block(new_block_idx);
   if (success) {
-    new_tx_block = &new_block->tx_block;
-    return new_block_idx;
+    return {new_block_idx, new_block};
   } else {
     // there is a race condition for adding the new blocks
     allocator->free_tx_block(new_block_idx, new_block);
     new_block_idx = block->get_next_tx_block();
-    new_tx_block = &file->lidx_to_addr_rw(new_block_idx)->tx_block;
-    return new_block_idx;
+    return {new_block_idx, &file->lidx_to_addr_rw(new_block_idx)->tx_block};
   }
 }
+// explicit template instantiations
+template std::tuple<LogicalBlockIdx, pmem::TxBlock*> TxMgr::alloc_next_block(
+    pmem::MetaBlock* block) const;
+template std::tuple<LogicalBlockIdx, pmem::TxBlock*> TxMgr::alloc_next_block(
+    pmem::TxBlock* block) const;
 
 void TxMgr::gc(const LogicalBlockIdx tail_tx_block_idx, uint64_t file_size) {
   // skip if tail_tx_block is meta block, it directly follows meta or there is
@@ -383,12 +378,6 @@ abort:
   } while (new_tx_blk_idx != tail_tx_block_idx && new_tx_blk_idx != 0);
   allocator->return_free_list();
 }
-
-// explicit template instantiations
-template LogicalBlockIdx TxMgr::alloc_next_block(
-    pmem::MetaBlock* block, pmem::TxBlock*& new_block) const;
-template LogicalBlockIdx TxMgr::alloc_next_block(
-    pmem::TxBlock* block, pmem::TxBlock*& new_block) const;
 
 std::ostream& operator<<(std::ostream& out, const TxMgr& tx_mgr) {
   out << tx_mgr.offset_mgr;

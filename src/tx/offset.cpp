@@ -9,7 +9,6 @@
 #include "config.h"
 #include "const.h"
 #include "file.h"
-#include "idx.h"
 
 namespace ulayfs::dram {
 
@@ -43,9 +42,7 @@ bool OffsetMgr::validate_offset(uint64_t ticket, const TxCursor cursor) {
   const TicketSlot* slot = wait_offset(ticket);
   // no previous operation to validate against
   if (!slot) return true;
-  if (!tx_mgr->tx_idx_greater(slot->ticket_slot.cursor.idx, cursor.idx,
-                              slot->ticket_slot.cursor.block, cursor.block))
-    return true;
+  if (slot->ticket_slot.cursor < cursor) return true;
   return false;
 }
 
