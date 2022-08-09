@@ -8,10 +8,8 @@ class AlignedTx : public WriteTx {
       : WriteTx(file, tx_mgr, buf, count, offset) {}
 
   AlignedTx(File* file, TxMgr* tx_mgr, const char* buf, size_t count,
-            size_t offset, TxEntryIdx tail_tx_idx, pmem::TxBlock* tail_tx_block,
-            uint64_t file_size, uint64_t ticket)
-      : WriteTx(file, tx_mgr, buf, count, offset, tail_tx_idx, tail_tx_block,
-                file_size, ticket) {}
+            size_t offset, FileState state, uint64_t ticket)
+      : WriteTx(file, tx_mgr, buf, count, offset, state, ticket) {}
 
   ssize_t exec() override {
     debug::count(debug::ALIGNED_TX_START);
@@ -36,8 +34,7 @@ class AlignedTx : public WriteTx {
     prepare_commit_entry(/*skip_update_leftover_bytes*/ true);
 
     // make a local copy of the tx tail
-    if (!is_offset_depend)
-      file_size = file->update(tail_tx_idx, tail_tx_block, /*do_alloc*/ true);
+    if (!is_offset_depend) file->update(&state, /*do_alloc*/ true);
 
     // for an aligned tx, leftover_bytes must be zero, so there is no need to
     // validate whether we falsely assume this tx can be inline
@@ -48,8 +45,7 @@ class AlignedTx : public WriteTx {
 
   retry:
     debug::count(debug::ALIGNED_TX_COMMIT);
-    conflict_entry =
-        tx_mgr->try_commit(commit_entry, tail_tx_idx, tail_tx_block);
+    conflict_entry = tx_mgr->try_commit(commit_entry, &state.cursor);
     if (!conflict_entry.is_valid()) goto done;
     // we don't check the return value of handle_conflict here because we don't
     // care whether there is a conflict, as long as recycle_image gets updated

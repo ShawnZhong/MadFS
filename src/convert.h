@@ -106,7 +106,7 @@ class Converter {
       file->tx_mgr.try_commit(pmem::TxEntryIndirect(log_entry_idx), tx_idx,
                               tx_block);
     }
-    file->tx_mgr.advance_tx_idx(tx_idx, tx_block, true);
+    file->tx_mgr.advance_cursor(tx_idx, tx_block, true);
 
     // if it's not full block or MetaBlock does not have the capacity, we still
     // need LogEntryBlock
@@ -123,7 +123,7 @@ class Converter {
             pmem::TxEntryInline(len, begin_vidx,
                                 LogicalBlockIdx(begin_vidx.get())),
             tx_idx, tx_block);
-        file->tx_mgr.advance_tx_idx(tx_idx, tx_block, true);
+        file->tx_mgr.advance_cursor(tx_idx, tx_block, true);
       }
     } else {
       auto log_entry_idx = file->tx_mgr.append_log_entry(

@@ -23,19 +23,15 @@ ssize_t TxMgr::do_pread(char* buf, size_t count, size_t offset) {
 }
 
 ssize_t TxMgr::do_read(char* buf, size_t count) {
-  TxEntryIdx tail_tx_idx;
-  pmem::TxBlock* tail_tx_block;
-  uint64_t file_size;
+  FileState state;
   uint64_t ticket;
   uint64_t offset;
-  file_size =
-      file->update_with_offset(tail_tx_idx, tail_tx_block, count,
-                               /*stop_at_boundary*/ true, ticket, offset,
-                               /*do_alloc*/ false);
+  file->update_with_offset(&state, count,
+                           /*stop_at_boundary*/ true, ticket, offset,
+                           /*do_alloc*/ false);
 
   return Tx::exec_and_release_offset<ReadTx>(file, this, buf, count, offset,
-                                             tail_tx_idx, tail_tx_block,
-                                             file_size, ticket);
+                                             state, ticket);
 }
 
 ssize_t TxMgr::do_pwrite(const char* buf, size_t count, size_t offset) {
@@ -52,47 +48,38 @@ ssize_t TxMgr::do_pwrite(const char* buf, size_t count, size_t offset) {
 }
 
 ssize_t TxMgr::do_write(const char* buf, size_t count) {
-  TxEntryIdx tail_tx_idx;
-  pmem::TxBlock* tail_tx_block;
-  uint64_t file_size;
+  FileState state;
   uint64_t ticket;
   uint64_t offset;
-  file_size =
-      file->update_with_offset(tail_tx_idx, tail_tx_block, count,
-                               /*stop_at_boundary*/ false, ticket, offset,
-                               /*do_alloc*/ false);
+  file->update_with_offset(&state, count,
+                           /*stop_at_boundary*/ false, ticket, offset,
+                           /*do_alloc*/ false);
 
   // special case that we have everything aligned, no OCC
   if (count % BLOCK_SIZE == 0 && offset % BLOCK_SIZE == 0)
-    return Tx::exec_and_release_offset<AlignedTx>(
-        file, this, buf, count, offset, tail_tx_idx, tail_tx_block, file_size,
-        ticket);
+    return Tx::exec_and_release_offset<AlignedTx>(file, this, buf, count,
+                                                  offset, state, ticket);
 
   // another special case where range is within a single block
   if (BLOCK_SIZE_TO_IDX(offset) == BLOCK_SIZE_TO_IDX(offset + count - 1))
-    return Tx::exec_and_release_offset<SingleBlockTx>(
-        file, this, buf, count, offset, tail_tx_idx, tail_tx_block, file_size,
-        ticket);
+    return Tx::exec_and_release_offset<SingleBlockTx>(file, this, buf, count,
+                                                      offset, state, ticket);
 
   // unaligned multi-block write
-  return Tx::exec_and_release_offset<MultiBlockTx>(
-      file, this, buf, count, offset, tail_tx_idx, tail_tx_block, file_size,
-      ticket);
+  return Tx::exec_and_release_offset<MultiBlockTx>(file, this, buf, count,
+                                                   offset, state, ticket);
 }
 
-bool TxMgr::advance_tx_idx(TxEntryIdx& tx_idx, pmem::TxBlock*& tx_block,
-                           bool do_alloc) const {
-  assert(tx_idx.local_idx >= 0);
-  tx_idx.local_idx++;
-  return handle_idx_overflow(tx_idx, tx_block, do_alloc);
+bool TxMgr::advance_cursor(TxCursor* cursor, bool do_alloc) const {
+  assert(cursor->idx.local_idx >= 0);
+  cursor->idx.local_idx++;
+  return handle_cursor_overflow(cursor, do_alloc);
 }
 
-pmem::TxEntry TxMgr::get_tx_entry(TxEntryIdx idx,
-                                  pmem::TxBlock* tx_block) const {
-  assert(idx.local_idx <
-         (idx.block_idx == 0 ? NUM_INLINE_TX_ENTRY : NUM_TX_ENTRY_PER_BLOCK));
-  if (idx.block_idx == 0) return meta->get_tx_entry(idx.local_idx);
-  return tx_block->get(idx.local_idx);
+pmem::TxEntry TxMgr::get_tx_entry(const TxCursor cursor) const {
+  if (cursor.idx.block_idx == 0)
+    return meta->get_tx_entry(cursor.idx.local_idx);
+  return cursor.block->get(cursor.idx.local_idx);
 }
 
 std::tuple<pmem::LogEntry*, pmem::LogEntryBlock*> TxMgr::get_log_entry(
@@ -193,68 +180,64 @@ bool TxMgr::tx_idx_greater(const TxEntryIdx lhs_idx, const TxEntryIdx rhs_idx,
   return lhs_block->get_tx_seq() > rhs_block->get_tx_seq();
 }
 
-pmem::TxEntry TxMgr::try_commit(pmem::TxEntry entry, TxEntryIdx& tx_idx,
-                                pmem::TxBlock*& tx_block) {
-  handle_idx_overflow(tx_idx, tx_block, true);
+pmem::TxEntry TxMgr::try_commit(pmem::TxEntry entry, TxCursor* cursor) {
+  handle_cursor_overflow(cursor, true);
 
-  bool is_inline = tx_idx.block_idx == 0;
-  assert(is_inline == (tx_block == nullptr));
+  bool is_inline = cursor->idx.block_idx == 0;
+  assert(is_inline == (cursor->block == nullptr));
 
-  if (pmem::TxEntry::need_flush(tx_idx.local_idx)) {
-    flush_tx_entries(meta->get_tx_tail(), tx_idx, tx_block);
-    meta->set_tx_tail(tx_idx);
+  if (pmem::TxEntry::need_flush(cursor->idx.local_idx)) {
+    flush_tx_entries(meta->get_tx_tail(), *cursor);
+    meta->set_tx_tail(cursor->idx);
   }
-  return is_inline ? meta->try_append(entry, tx_idx.local_idx)
-                   : tx_block->try_append(entry, tx_idx.local_idx);
+  return is_inline ? meta->try_append(entry, cursor->idx.local_idx)
+                   : cursor->block->try_append(entry, cursor->idx.local_idx);
 }
 
-bool TxMgr::handle_idx_overflow(TxEntryIdx& tx_idx, pmem::TxBlock*& tx_block,
-                                bool do_alloc) const {
-  const bool is_inline = tx_idx.is_inline();
-  uint16_t capacity = tx_idx.get_capacity();
-  if (unlikely(tx_idx.local_idx >= capacity)) {
-    LogicalBlockIdx block_idx =
-        is_inline ? meta->get_next_tx_block() : tx_block->get_next_tx_block();
+bool TxMgr::handle_cursor_overflow(TxCursor* cursor, bool do_alloc) const {
+  const bool is_inline = cursor->idx.is_inline();
+  uint16_t capacity = cursor->idx.get_capacity();
+  if (unlikely(cursor->idx.local_idx >= capacity)) {
+    LogicalBlockIdx block_idx = is_inline ? meta->get_next_tx_block()
+                                          : cursor->block->get_next_tx_block();
     if (block_idx == 0) {
       if (!do_alloc) return false;
-      tx_idx.block_idx = is_inline ? alloc_next_block(meta, tx_block)
-                                   : alloc_next_block(tx_block, tx_block);
-      tx_idx.local_idx -= capacity;
+      cursor->idx.block_idx =
+          is_inline ? alloc_next_block(meta, cursor->block)
+                    : alloc_next_block(cursor->block, cursor->block);
+      cursor->idx.local_idx -= capacity;
     } else {
-      tx_idx.block_idx = block_idx;
-      tx_idx.local_idx -= capacity;
-      tx_block = &file->lidx_to_addr_rw(tx_idx.block_idx)->tx_block;
+      cursor->idx.block_idx = block_idx;
+      cursor->idx.local_idx -= capacity;
+      cursor->block = &file->lidx_to_addr_rw(cursor->idx.block_idx)->tx_block;
     }
   }
   return true;
 }
 
-void TxMgr::flush_tx_entries(TxEntryIdx tx_idx_begin, TxEntryIdx tx_idx_end,
-                             pmem::TxBlock* tx_block_end) {
-  if (!tx_idx_greater(tx_idx_end, tx_idx_begin)) return;
+void TxMgr::flush_tx_entries(TxEntryIdx begin_idx, TxCursor cursor) {
+  if (!tx_idx_greater(cursor.idx, begin_idx)) return;
   pmem::TxBlock* tx_block_begin;
   // handle special case of inline tx
-  if (tx_idx_begin.block_idx == 0) {
-    if (tx_idx_end.block_idx == 0) {
-      meta->flush_tx_entries(tx_idx_begin.local_idx, tx_idx_end.local_idx);
+  if (begin_idx.block_idx == 0) {
+    if (cursor.idx.block_idx == 0) {
+      meta->flush_tx_entries(begin_idx.local_idx, cursor.idx.local_idx);
       goto done;
     }
-    meta->flush_tx_block(tx_idx_begin.local_idx);
+    meta->flush_tx_block(begin_idx.local_idx);
     // now the next block is the "new begin"
-    tx_idx_begin = {meta->get_next_tx_block(), 0};
+    begin_idx = {meta->get_next_tx_block(), 0};
   }
-  while (tx_idx_begin.block_idx != tx_idx_end.block_idx) {
-    tx_block_begin = &file->lidx_to_addr_rw(tx_idx_begin.block_idx)->tx_block;
-    tx_block_begin->flush_tx_block(tx_idx_begin.local_idx);
-    tx_idx_begin = {tx_block_begin->get_next_tx_block(), 0};
+  while (begin_idx.block_idx != cursor.idx.block_idx) {
+    tx_block_begin = &file->lidx_to_addr_rw(begin_idx.block_idx)->tx_block;
+    tx_block_begin->flush_tx_block(begin_idx.local_idx);
+    begin_idx = {tx_block_begin->get_next_tx_block(), 0};
     // special case: tx_idx_end is the first entry of the next block, which
     // means we only need to flush the current block and no need to
     // dereference to get the last block
   }
-  if (tx_idx_begin.local_idx == tx_idx_end.local_idx) goto done;
-  if (!tx_block_end)
-    tx_block_end = &file->lidx_to_addr_rw(tx_idx_end.block_idx)->tx_block;
-  tx_block_end->flush_tx_entries(tx_idx_begin.local_idx, tx_idx_end.local_idx);
+  if (begin_idx.local_idx == cursor.idx.local_idx) goto done;
+  cursor.block->flush_tx_entries(begin_idx.local_idx, cursor.idx.local_idx);
 
 done:
   _mm_sfence();
@@ -324,8 +307,8 @@ void TxMgr::gc(const LogicalBlockIdx tail_tx_block_idx, uint64_t file_size) {
   auto new_block = file->lidx_to_addr_rw(first_tx_block_idx);
   memset(&new_block->cache_lines[NUM_CL_PER_BLOCK - 1], 0, CACHELINE_SIZE);
   new_block->tx_block.set_tx_seq(tx_seq++);
-  auto new_tx_block = &new_block->tx_block;
-  TxEntryIdx tx_idx = {first_tx_block_idx, 0};
+  TxCursor cursor = {.idx = {first_tx_block_idx, 0},
+                     .block = &new_block->tx_block};
 
   VirtualBlockIdx begin = 0;
   VirtualBlockIdx i = 1;
@@ -340,17 +323,17 @@ void TxMgr::gc(const LogicalBlockIdx tail_tx_block_idx, uint64_t file_size) {
 
     auto commit_entry =
         pmem::TxEntryInline(i - begin, begin, file->vidx_to_lidx(begin));
-    new_tx_block->store(commit_entry, tx_idx.local_idx);
-    if (!advance_tx_idx(tx_idx, new_tx_block, false)) {
+    cursor.block->store(commit_entry, cursor.idx.local_idx);
+    if (!advance_cursor(&cursor, false)) {
       // current block is full, flush it and allocate a new block
       auto new_tx_block_idx = allocator->alloc(1);
-      new_tx_block->set_next_tx_block(new_tx_block_idx);
-      pmem::persist_unfenced(new_tx_block, BLOCK_SIZE);
+      cursor.block->set_next_tx_block(new_tx_block_idx);
+      pmem::persist_unfenced(cursor.block, BLOCK_SIZE);
       new_block = file->lidx_to_addr_rw(new_tx_block_idx);
       memset(&new_block->cache_lines[NUM_CL_PER_BLOCK - 1], 0, CACHELINE_SIZE);
       new_block->tx_block.set_tx_seq(tx_seq++);
-      new_tx_block = &new_block->tx_block;
-      tx_idx = {new_tx_block_idx, 0};
+      cursor.block = &new_block->tx_block;
+      cursor.idx = {new_tx_block_idx, 0};
     }
     begin = i;
   }
@@ -360,7 +343,7 @@ void TxMgr::gc(const LogicalBlockIdx tail_tx_block_idx, uint64_t file_size) {
     if (leftover_bytes == 0) {
       auto commit_entry =
           pmem::TxEntryInline(i - begin, begin, file->vidx_to_lidx(begin));
-      new_tx_block->store(commit_entry, tx_idx.local_idx);
+      cursor.block->store(commit_entry, cursor.idx.local_idx);
     } else {
       // since i - begin <= 63, this can fit into one log entry
       auto begin_lidx = std::vector{file->vidx_to_lidx(begin)};
@@ -368,18 +351,18 @@ void TxMgr::gc(const LogicalBlockIdx tail_tx_block_idx, uint64_t file_size) {
           append_log_entry(allocator, pmem::LogEntry::Op::LOG_OVERWRITE,
                            leftover_bytes, i - begin, begin, begin_lidx);
       auto commit_entry = pmem::TxEntryIndirect(log_head_idx);
-      new_tx_block->store(commit_entry, tx_idx.local_idx);
+      cursor.block->store(commit_entry, cursor.idx.local_idx);
     }
   }
   // pad the last block with dummy tx entries
-  while (advance_tx_idx(tx_idx, new_tx_block, false))
-    new_tx_block->store(pmem::TxEntry::TxEntryDummy, tx_idx.local_idx);
+  while (advance_cursor(&cursor, false))
+    cursor.block->store(pmem::TxEntry::TxEntryDummy, cursor.idx.local_idx);
   // last block points to the tail, meta points to the first block
-  new_tx_block->set_next_tx_block(tail_tx_block_idx);
+  cursor.block->set_next_tx_block(tail_tx_block_idx);
   // abort if new transaction history is longer than the old one
-  if (tail_block->tx_block.get_tx_seq() <= new_tx_block->get_tx_seq())
+  if (tail_block->tx_block.get_tx_seq() <= cursor.block->get_tx_seq())
     goto abort;
-  pmem::persist_fenced(new_tx_block, BLOCK_SIZE);
+  pmem::persist_fenced(cursor.block, BLOCK_SIZE);
   while (!meta->set_next_tx_block(first_tx_block_idx, orig_tx_block_idx))
     ;
   // FIXME: use better API to flush the first cache line
@@ -394,7 +377,7 @@ abort:
   // free the new tx blocks
   auto new_tx_blk_idx = first_tx_block_idx;
   do {
-    auto next_tx_blk_idx = new_tx_block->get_next_tx_block();
+    auto next_tx_blk_idx = cursor.block->get_next_tx_block();
     allocator->free(new_tx_blk_idx, 1);
     new_tx_blk_idx = next_tx_blk_idx;
   } while (new_tx_blk_idx != tail_tx_block_idx && new_tx_blk_idx != 0);
@@ -409,17 +392,15 @@ template LogicalBlockIdx TxMgr::alloc_next_block(
 
 std::ostream& operator<<(std::ostream& out, const TxMgr& tx_mgr) {
   out << "Transactions: \n";
-
-  TxEntryIdx tx_idx = {0, 0};
-  pmem::TxBlock* tx_block = nullptr;
+  TxCursor cursor{};
 
   while (true) {
-    auto tx_entry = tx_mgr.get_tx_entry(tx_idx, tx_block);
+    auto tx_entry = tx_mgr.get_tx_entry(cursor);
     if (!tx_entry.is_valid()) break;
     if (tx_entry.is_dummy()) goto next;
 
     // print tx entry
-    out << "\t" << tx_idx << " -> " << tx_entry << "\n";
+    out << "\t" << cursor.idx << " -> " << tx_entry << "\n";
 
     // print log entries if the tx is not inlined
     if (!tx_entry.is_inline()) {
@@ -437,7 +418,7 @@ std::ostream& operator<<(std::ostream& out, const TxMgr& tx_mgr) {
       }
     }
   next:
-    if (!tx_mgr.advance_tx_idx(tx_idx, tx_block, /*do_alloc*/ false)) break;
+    if (!tx_mgr.advance_cursor(&cursor, /*do_alloc*/ false)) break;
   }
 
   return out;

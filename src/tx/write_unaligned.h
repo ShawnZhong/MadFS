@@ -19,10 +19,8 @@ class CoWTx : public WriteTx {
         end_full_vidx(BLOCK_SIZE_TO_IDX(end_offset)),
         num_full_blocks(end_full_vidx - begin_full_vidx) {}
   CoWTx(File* file, TxMgr* tx_mgr, const char* buf, size_t count, size_t offset,
-        TxEntryIdx tail_tx_idx, pmem::TxBlock* tail_tx_block,
-        uint64_t file_size, uint64_t ticket)
-      : WriteTx(file, tx_mgr, buf, count, offset, tail_tx_idx, tail_tx_block,
-                file_size, ticket),
+        FileState state, uint64_t ticket)
+      : WriteTx(file, tx_mgr, buf, count, offset, state, ticket),
         begin_full_vidx(BLOCK_SIZE_TO_IDX(ALIGN_UP(offset, BLOCK_SIZE))),
         end_full_vidx(BLOCK_SIZE_TO_IDX(end_offset)),
         num_full_blocks(end_full_vidx - begin_full_vidx) {}
@@ -42,11 +40,8 @@ class SingleBlockTx : public CoWTx {
   }
 
   SingleBlockTx(File* file, TxMgr* tx_mgr, const char* buf, size_t count,
-                size_t offset, TxEntryIdx tail_tx_idx,
-                pmem::TxBlock* tail_tx_block, uint64_t file_size,
-                uint64_t ticket)
-      : CoWTx(file, tx_mgr, buf, count, offset, tail_tx_idx, tail_tx_block,
-              file_size, ticket),
+                size_t offset, FileState state, uint64_t ticket)
+      : CoWTx(file, tx_mgr, buf, count, offset, state, ticket),
         local_offset(offset - BLOCK_IDX_TO_SIZE(begin_vidx)) {
     assert(num_blocks == 1);
   }
@@ -57,8 +52,7 @@ class SingleBlockTx : public CoWTx {
     bool need_redo;
 
     // must acquire the tx tail before any get
-    if (!is_offset_depend)
-      file_size = file->update(tail_tx_idx, tail_tx_block, /*do_alloc*/ true);
+    if (!is_offset_depend) file->update(&state, /*do_alloc*/ true);
 
     prepare_commit_entry();
 
@@ -96,8 +90,7 @@ class SingleBlockTx : public CoWTx {
   retry:
     debug::count(debug::SINGLE_BLOCK_TX_COMMIT);
     // try to commit the tx entry
-    conflict_entry =
-        tx_mgr->try_commit(commit_entry, tail_tx_idx, tail_tx_block);
+    conflict_entry = tx_mgr->try_commit(commit_entry, &state.cursor);
     if (!conflict_entry.is_valid()) goto done;  // success, no conflict
 
     // we just treat begin_vidx as both first and last vidx
@@ -133,11 +126,8 @@ class MultiBlockTx : public CoWTx {
         last_block_overlap_size(end_offset -
                                 ALIGN_DOWN(end_offset, BLOCK_SIZE)) {}
   MultiBlockTx(File* file, TxMgr* tx_mgr, const char* buf, size_t count,
-               size_t offset, TxEntryIdx tail_tx_idx,
-               pmem::TxBlock* tail_tx_block, uint64_t file_size,
-               uint64_t ticket)
-      : CoWTx(file, tx_mgr, buf, count, offset, tail_tx_idx, tail_tx_block,
-              file_size, ticket),
+               size_t offset, FileState state, uint64_t ticket)
+      : CoWTx(file, tx_mgr, buf, count, offset, state, ticket),
         first_block_overlap_size(ALIGN_UP(offset, BLOCK_SIZE) - offset),
         last_block_overlap_size(end_offset -
                                 ALIGN_DOWN(end_offset, BLOCK_SIZE)) {}
@@ -184,8 +174,7 @@ class MultiBlockTx : public CoWTx {
     }
 
     // only get a snapshot of the tail when starting critical piece
-    if (!is_offset_depend)
-      file_size = file->update(tail_tx_idx, tail_tx_block, /*do_alloc*/ true);
+    if (!is_offset_depend) file->update(&state, /*do_alloc*/ true);
 
     prepare_commit_entry();
 
@@ -232,8 +221,7 @@ class MultiBlockTx : public CoWTx {
   retry:
     debug::count(debug::MULTI_BLOCK_TX_COMMIT);
     // try to commit the transaction
-    conflict_entry =
-        tx_mgr->try_commit(commit_entry, tail_tx_idx, tail_tx_block);
+    conflict_entry = tx_mgr->try_commit(commit_entry, &state.cursor);
     if (!conflict_entry.is_valid()) goto done;  // success
     // make a copy of the first and last again
     src_first_lidx = recycle_image[0];

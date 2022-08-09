@@ -89,30 +89,23 @@ class File {
   /*
    * exported interface for update; init_bitmap is always false
    */
-  uint64_t update(TxEntryIdx& tx_idx, pmem::TxBlock*& tx_block, bool do_alloc) {
-    uint64_t new_file_size;
-    if (!blk_table.need_update(tx_idx, tx_block, new_file_size, do_alloc))
-      return new_file_size;
+  void update(FileState* state, bool do_alloc) {
+    if (!blk_table.need_update(state, do_alloc)) return;
     pthread_spin_lock(&spinlock);
-    new_file_size = blk_table.update(do_alloc);
-    tx_idx = blk_table.get_tx_idx();
-    tx_block = blk_table.get_tx_block();
+    blk_table.update(do_alloc);
+    *state = blk_table.get_file_state();
     pthread_spin_unlock(&spinlock);
-    return new_file_size;
   }
 
-  uint64_t update_with_offset(TxEntryIdx& tx_idx, pmem::TxBlock*& tx_block,
-                              uint64_t& offset_change, bool stop_at_boundary,
-                              uint64_t& ticket, uint64_t& old_offset,
-                              bool do_alloc) {
+  void update_with_offset(FileState* state, uint64_t& count,
+                          bool stop_at_boundary, uint64_t& ticket,
+                          uint64_t& old_offset, bool do_alloc) {
     pthread_spin_lock(&spinlock);
-    uint64_t new_file_size = blk_table.update(do_alloc);
-    tx_idx = blk_table.get_tx_idx();
-    tx_block = blk_table.get_tx_block();
-    old_offset = offset_mgr.acquire_offset(offset_change, new_file_size,
+    blk_table.update(do_alloc);
+    *state = blk_table.get_file_state();
+    old_offset = offset_mgr.acquire_offset(count, state->file_size,
                                            stop_at_boundary, ticket);
     pthread_spin_unlock(&spinlock);
-    return new_file_size;
   }
 
   void wait_offset(uint64_t ticket) { offset_mgr.wait_offset(ticket); }
