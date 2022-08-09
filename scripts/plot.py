@@ -105,11 +105,11 @@ def format_bytes(x):
 
 
 def plot_micro_st(result_dir):
-    df = read_files(result_dir)
-    df["benchmark"] = df["name"].apply(parse_name, args=(0,))
+    benchmarks = read_files(result_dir)
+    benchmarks["benchmark"] = benchmarks["name"].apply(parse_name, args=(0,))
     xlabel = "I/O Size (Bytes)"
 
-    for name, benchmark in df.groupby("benchmark"):
+    for name, df in benchmarks.groupby("benchmark"):
         if name.startswith("cow"):
             df["x"] = df["name"].apply(parse_name, args=(1,))
             df["y"] = df["real_time"].apply(lambda x: float(x) / 1000)
@@ -119,7 +119,7 @@ def plot_micro_st(result_dir):
             df["y"] = df["bytes_per_second"].apply(lambda x: float(x) / 1024 ** 3)
             ylabel = "Throughput (GB/sec)"
 
-        export_results(result_dir, benchmark, name=name)
+        export_results(result_dir, df, name=name)
 
         def post_plot(ax, **kwargs):
             ax.set_xlabel(xlabel)
@@ -136,7 +136,7 @@ def plot_micro_st(result_dir):
             plt.title(name)
 
         plot_single_bm(
-            benchmark,
+            df,
             name=name,
             result_dir=result_dir,
             post_plot=post_plot,
