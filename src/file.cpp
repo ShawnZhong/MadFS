@@ -25,7 +25,6 @@ File::File(int fd, const struct stat& stat, int flags,
       meta(mem_table.get_meta()),
       tx_mgr(this, meta),
       blk_table(this, &tx_mgr),
-      offset_mgr(this),
       can_read((flags & O_ACCMODE) == O_RDONLY ||
                (flags & O_ACCMODE) == O_RDWR),
       can_write((flags & O_ACCMODE) == O_WRONLY ||
@@ -73,7 +72,7 @@ File::File(int fd, const struct stat& stat, int flags,
 
   if (!file_size_updated) file_size = blk_table.update(/*do_alloc*/ false);
 
-  if (flags & O_APPEND) offset_mgr.seek_absolute(file_size);
+  if (flags & O_APPEND) tx_mgr.offset_mgr.seek_absolute(file_size);
 #ifdef ULAYFS_DEBUG
   path = strdup(pathname);
 #endif
@@ -138,14 +137,14 @@ off_t File::lseek(off_t offset, int whence) {
 
   switch (whence) {
     case SEEK_SET:
-      ret = offset_mgr.seek_absolute(offset);
+      ret = tx_mgr.offset_mgr.seek_absolute(offset);
       break;
     case SEEK_CUR:
-      ret = offset_mgr.seek_relative(offset);
+      ret = tx_mgr.offset_mgr.seek_relative(offset);
       if (ret == -1) errno = EINVAL;
       break;
     case SEEK_END:
-      ret = offset_mgr.seek_absolute(file_size + offset);
+      ret = tx_mgr.offset_mgr.seek_absolute(file_size + offset);
       break;
     // TODO: add SEEK_DATA and SEEK_HOLE
     case SEEK_DATA:
@@ -227,19 +226,18 @@ error:
 }
 
 int File::fsync() {
-  TxEntryIdx tail_tx_idx;
-  pmem::TxBlock* tail_tx_block;
-  update(tail_tx_idx, tail_tx_block, /*do_alloc*/ false);
-  tx_mgr.flush_tx_entries(meta->get_tx_tail(), tail_tx_idx, tail_tx_block);
+  FileState state;
+  this->update(&state, /*do_alloc*/ false);
+  tx_mgr.flush_tx_entries(meta->get_tx_tail(), state.cursor);
   // we keep an invariant that tx_tail must be a valid (non-overflow) idx
   // an overflow index implies that the `next` pointer of the block is not set
   // (and thus not flushed) yet, so we cannot assume it is equivalent to the
   // first index of the next block
   // here we use the last index of the block to enforce reflush later
-  uint16_t capacity = tail_tx_idx.get_capacity();
-  if (unlikely(tail_tx_idx.local_idx >= capacity))
-    tail_tx_idx.local_idx = capacity - 1;
-  meta->set_tx_tail(tail_tx_idx);
+  uint16_t capacity = state.cursor.idx.get_capacity();
+  if (unlikely(state.cursor.idx.local_idx >= capacity))
+    state.cursor.idx.local_idx = capacity - 1;
+  meta->set_tx_tail(state.cursor.idx);
   return 0;
 }
 
@@ -357,7 +355,6 @@ std::ostream& operator<<(std::ostream& out, const File& f) {
   out << *f.meta;
   out << f.blk_table;
   out << f.mem_table;
-  out << f.offset_mgr;
   if (f.can_write) {
     out << "Bitmap: \n";
     auto num_bitmaps = f.meta->get_num_logical_blocks() / BITMAP_BLOCK_CAPACITY;

@@ -21,9 +21,9 @@
 #include "entry.h"
 #include "idx.h"
 #include "mem_table.h"
-#include "offset.h"
 #include "posix.h"
 #include "tx/mgr.h"
+#include "tx/offset.h"
 #include "utils.h"
 
 namespace ulayfs::utility {
@@ -40,7 +40,6 @@ class File {
   pmem::MetaBlock* meta;
   TxMgr tx_mgr;
   BlkTable blk_table;
-  OffsetMgr offset_mgr;
 
   int shm_fd;
   const bool can_read;
@@ -89,42 +88,23 @@ class File {
   /*
    * exported interface for update; init_bitmap is always false
    */
-  uint64_t update(TxEntryIdx& tx_idx, pmem::TxBlock*& tx_block, bool do_alloc) {
-    uint64_t new_file_size;
-    if (!blk_table.need_update(tx_idx, tx_block, new_file_size, do_alloc))
-      return new_file_size;
+  void update(FileState* state, bool do_alloc) {
+    if (!blk_table.need_update(state, do_alloc)) return;
     pthread_spin_lock(&spinlock);
-    new_file_size = blk_table.update(do_alloc);
-    tx_idx = blk_table.get_tx_idx();
-    tx_block = blk_table.get_tx_block();
+    blk_table.update(do_alloc);
+    *state = blk_table.get_file_state();
     pthread_spin_unlock(&spinlock);
-    return new_file_size;
   }
 
-  uint64_t update_with_offset(TxEntryIdx& tx_idx, pmem::TxBlock*& tx_block,
-                              uint64_t& offset_change, bool stop_at_boundary,
-                              uint64_t& ticket, uint64_t& old_offset,
-                              bool do_alloc) {
+  void update_with_offset(FileState* state, uint64_t& count,
+                          bool stop_at_boundary, uint64_t& ticket,
+                          uint64_t& old_offset, bool do_alloc) {
     pthread_spin_lock(&spinlock);
-    uint64_t new_file_size = blk_table.update(do_alloc);
-    tx_idx = blk_table.get_tx_idx();
-    tx_block = blk_table.get_tx_block();
-    old_offset = offset_mgr.acquire_offset(offset_change, new_file_size,
-                                           stop_at_boundary, ticket);
+    blk_table.update(do_alloc);
+    *state = blk_table.get_file_state();
+    old_offset = tx_mgr.offset_mgr.acquire_offset(count, state->file_size,
+                                                  stop_at_boundary, ticket);
     pthread_spin_unlock(&spinlock);
-    return new_file_size;
-  }
-
-  void wait_offset(uint64_t ticket) { offset_mgr.wait_offset(ticket); }
-
-  bool validate_offset(uint64_t ticket, const TxEntryIdx curr_idx,
-                       const pmem::TxBlock* curr_block) {
-    return offset_mgr.validate_offset(ticket, curr_idx, curr_block);
-  }
-
-  void release_offset(uint64_t ticket, const TxEntryIdx curr_idx,
-                      const pmem::TxBlock* curr_block) {
-    return offset_mgr.release_offset(ticket, curr_idx, curr_block);
   }
 
   /**
@@ -204,12 +184,6 @@ class File {
   static void unlink_shm(const char* filepath);
 
   void tx_gc();
-
-  bool tx_idx_greater(const TxEntryIdx lhs_idx, const TxEntryIdx rhs_idx,
-                      const pmem::TxBlock* lhs_block = nullptr,
-                      const pmem::TxBlock* rhs_block = nullptr) {
-    return tx_mgr.tx_idx_greater(lhs_idx, rhs_idx, lhs_block, rhs_block);
-  }
 
   // try to open a file with checking whether the given file is in uLayFS format
   static bool try_open(int& fd, struct stat& stat_buf, const char* pathname,

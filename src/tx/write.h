@@ -6,13 +6,8 @@ namespace ulayfs::dram {
 
 class WriteTx : public Tx {
  protected:
-  /*
-   * write-specific arguments
-   */
   const char* const buf;
-
   Allocator* allocator;
-
   std::vector<LogicalBlockIdx>& recycle_image;
 
   // the logical index of the destination data block
@@ -56,14 +51,12 @@ class WriteTx : public Tx {
       dst_blocks.push_back(file->lidx_to_addr_rw(lidx));
     assert(!dst_blocks.empty());
   }
+
   WriteTx(File* file, TxMgr* tx_mgr, const char* buf, size_t count,
-          size_t offset, TxEntryIdx tail_tx_idx, pmem::TxBlock* tail_tx_block,
-          uint64_t file_size, uint64_t ticket)
+          size_t offset, FileState state, uint64_t ticket)
       : WriteTx(file, tx_mgr, buf, count, offset) {
     is_offset_depend = true;
-    this->tail_tx_idx = tail_tx_idx;
-    this->tail_tx_block = tail_tx_block;
-    this->file_size = file_size;
+    this->state = state;
     this->ticket = ticket;
   }
 
@@ -72,7 +65,8 @@ class WriteTx : public Tx {
     // this is how many bytes left at last block that is not written by us
     leftover_bytes = ALIGN_UP(end_offset, BLOCK_SIZE) - end_offset;
     // then verify if this is the end of file; if not, leftover must be zero
-    if (leftover_bytes > 0 && end_offset <= ALIGN_DOWN(file_size, BLOCK_SIZE))
+    if (leftover_bytes > 0 &&
+        end_offset <= ALIGN_DOWN(state.file_size, BLOCK_SIZE))
       leftover_bytes = 0;
   }
 

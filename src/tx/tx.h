@@ -54,16 +54,9 @@ class Tx {
   // in the case of read/write with offset change, update is done first
   bool is_offset_depend;
   // if update is done first, we must know file_size already
-  uint64_t file_size;
   uint64_t ticket;
 
-  /*
-   * Mutable states
-   */
-  // the index of the current transaction tail
-  TxEntryIdx tail_tx_idx;
-  // the log block corresponding to the transaction
-  pmem::TxBlock* tail_tx_block;
+  FileState state;
 
   Tx(File* file, TxMgr* tx_mgr, size_t count, size_t offset)
       : file(file),
@@ -81,14 +74,11 @@ class Tx {
         is_offset_depend(false) {}
 
  public:
-  virtual ssize_t exec() = 0;
-
- public:
   template <typename TX, typename... Params>
   static ssize_t exec_and_release_offset(Params&&... params) {
     TX tx(std::forward<Params>(params)...);
     ssize_t ret = tx.exec();
-    tx.file->release_offset(tx.ticket, tx.tail_tx_idx, tx.tail_tx_block);
+    tx.tx_mgr->offset_mgr.release_offset(tx.ticket, tx.state.cursor);
     return ret;
   }
 
@@ -120,7 +110,8 @@ class Tx {
         VirtualBlockIdx end_vidx = curr_entry.inline_entry.begin_virtual_idx +
                                    curr_entry.inline_entry.num_blocks;
         uint64_t possible_file_size = BLOCK_IDX_TO_SIZE(end_vidx);
-        if (possible_file_size > file_size) file_size = possible_file_size;
+        if (possible_file_size > state.file_size)
+          state.file_size = possible_file_size;
       } else {  // non-inline tx entry
         auto [curr_le_entry, curr_le_block] = tx_mgr->get_log_entry(
             curr_entry.indirect_entry.get_log_entry_idx());
@@ -144,7 +135,8 @@ class Tx {
                                      curr_le_entry->get_last_lidx_num_blocks();
           uint64_t possible_file_size =
               BLOCK_IDX_TO_SIZE(end_vidx) - curr_le_entry->leftover_bytes;
-          if (possible_file_size > file_size) file_size = possible_file_size;
+          if (possible_file_size > state.file_size)
+            state.file_size = possible_file_size;
 
           const auto& [next_le_entry, next_le_block] =
               tx_mgr->get_next_log_entry(curr_le_entry, curr_le_block);
@@ -153,10 +145,8 @@ class Tx {
           curr_le_block = next_le_block;
         }
       }
-      if (!tx_mgr->advance_tx_idx(tail_tx_idx, tail_tx_block,
-                                  /*do_alloc*/ false))
-        break;
-      curr_entry = tx_mgr->get_tx_entry(tail_tx_idx, tail_tx_block);
+      if (!tx_mgr->advance_cursor(&state.cursor, /*do_alloc*/ false)) break;
+      curr_entry = tx_mgr->get_tx_entry(state.cursor);
     } while (curr_entry.is_valid());
 
     return has_conflict;

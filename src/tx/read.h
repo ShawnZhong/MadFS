@@ -6,24 +6,20 @@ namespace ulayfs::dram {
 class ReadTx : public Tx {
  protected:
   char* const buf;
-  uint64_t file_size;
 
  public:
   ReadTx(File* file, TxMgr* tx_mgr, char* buf, size_t count, size_t offset)
       : Tx(file, tx_mgr, count, offset), buf(buf) {}
 
   ReadTx(File* file, TxMgr* tx_mgr, char* buf, size_t count, size_t offset,
-         TxEntryIdx tail_tx_idx, pmem::TxBlock* tail_tx_block,
-         uint64_t file_size, uint64_t ticket)
+         FileState state, uint64_t ticket)
       : ReadTx(file, tx_mgr, buf, count, offset) {
     is_offset_depend = true;
-    this->tail_tx_idx = tail_tx_idx;
-    this->tail_tx_block = tail_tx_block;
-    this->file_size = file_size;
+    this->state = state;
     this->ticket = ticket;
   }
 
-  ssize_t exec() override {
+  ssize_t exec() {
     size_t first_block_offset = offset & (BLOCK_SIZE - 1);
     size_t first_block_size = BLOCK_SIZE - first_block_offset;
     if (first_block_size > count) first_block_size = count;
@@ -32,12 +28,11 @@ class ReadTx : public Tx {
     redo_image.clear();
     redo_image.resize(num_blocks, 0);
 
-    if (!is_offset_depend)
-      file_size = file->update(tail_tx_idx, tail_tx_block, /*do_alloc*/ false);
+    if (!is_offset_depend) file->update(&state, /*do_alloc*/ false);
     // reach EOF
-    if (offset >= file_size) return 0;
-    if (offset + count > file_size) {  // partial read; recalculate end_*
-      count = file_size - offset;
+    if (offset >= state.file_size) return 0;
+    if (offset + count > state.file_size) {  // partial read; recalculate end_*
+      count = state.file_size - offset;
       end_offset = offset + count;
       end_vidx = BLOCK_SIZE_TO_IDX(ALIGN_UP(end_offset, BLOCK_SIZE));
     }
@@ -67,10 +62,8 @@ class ReadTx : public Tx {
   redo:
     while (true) {
       // check the tail is still tail
-      if (!tx_mgr->handle_idx_overflow(tail_tx_idx, tail_tx_block, false))
-        break;
-      pmem::TxEntry curr_entry =
-          tx_mgr->get_tx_entry(tail_tx_idx, tail_tx_block);
+      if (!tx_mgr->handle_cursor_overflow(&state.cursor, false)) break;
+      pmem::TxEntry curr_entry = tx_mgr->get_tx_entry(state.cursor);
       if (!curr_entry.is_valid()) break;
 
       // then scan the log and build redo_image; if no redo needed, we are done
@@ -117,7 +110,7 @@ class ReadTx : public Tx {
     // we actually don't care what's the previous tx's tail, because we will
     // need to validate against the latest tail anyway
     if (is_offset_depend) {
-      if (!file->validate_offset(ticket, tail_tx_idx, tail_tx_block)) {
+      if (!tx_mgr->offset_mgr.validate_offset(ticket, state.cursor)) {
         // we don't need to revalidate after redo
         is_offset_depend = false;
         goto redo;

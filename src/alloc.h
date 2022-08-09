@@ -96,9 +96,9 @@ class Allocator {
   std::tuple<pmem::LogEntry*, LogEntryIdx, pmem::LogEntryBlock*>
   alloc_log_entry(uint32_t num_blocks);
 
-  LogicalBlockIdx alloc_tx_block(uint32_t seq, pmem::Block*& tx_block);
+  std::tuple<LogicalBlockIdx, pmem::TxBlock*> alloc_tx_block(uint32_t seq);
 
-  void free_tx_block(LogicalBlockIdx tx_block_idx, pmem::Block* tx_block);
+  void free_tx_block(LogicalBlockIdx tx_block_idx, pmem::TxBlock* tx_block);
 };
 
 }  // namespace ulayfs::dram

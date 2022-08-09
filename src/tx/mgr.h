@@ -9,6 +9,7 @@
 #include "block/block.h"
 #include "entry.h"
 #include "idx.h"
+#include "offset.h"
 
 namespace ulayfs::dram {
 
@@ -20,43 +21,37 @@ class TxMgr {
   pmem::MetaBlock* meta;
 
  public:
-  TxMgr(File* file, pmem::MetaBlock* meta) : file(file), meta(meta) {}
+  OffsetMgr offset_mgr;
+
+ public:
+  TxMgr(File* file, pmem::MetaBlock* meta)
+      : file(file), meta(meta), offset_mgr(this) {}
 
   ssize_t do_pread(char* buf, size_t count, size_t offset);
   ssize_t do_read(char* buf, size_t count);
-
   ssize_t do_pwrite(const char* buf, size_t count, size_t offset);
   ssize_t do_write(const char* buf, size_t count);
 
-  bool tx_idx_greater(TxEntryIdx lhs_idx, TxEntryIdx rhs_idx,
-                      const pmem::TxBlock* lhs_block = nullptr,
-                      const pmem::TxBlock* rhs_block = nullptr);
-
   /**
-   * Move to the next transaction entry
+   * Advance cursor to the next transaction entry
    *
-   * @param[in,out] tx_idx the current index, will be changed to the next index
-   * @param[in,out] tx_block output parameter, change to the TxBlock
-   * corresponding to the next idx
-   * @param[in] do_alloc whether allocation is allowed when reaching the end of
+   * @param cursor the cursor to advance
+   * @param do_alloc whether allocation is allowed when reaching the end of
    * a block
    *
    * @return true on success; false when reaches the end of a block and do_alloc
    * is false. The advance would happen anyway but in the case of false, it is
    * in a overflow state
    */
-  bool advance_tx_idx(TxEntryIdx& tx_idx, pmem::TxBlock*& tx_block,
-                      bool do_alloc) const;
+  bool advance_cursor(TxCursor* cursor, bool do_alloc) const;
 
   /**
    * Read the tx entry from the MetaBlock or TxBlock
    *
-   * @param idx the index of the entry
-   * @param tx_block the TxBlock to read from
+   * @param cursor the cursor to read from
    * @return the tx entry
    */
-  [[nodiscard]] pmem::TxEntry get_tx_entry(TxEntryIdx idx,
-                                           pmem::TxBlock* tx_block) const;
+  [[nodiscard]] pmem::TxEntry get_tx_entry(TxCursor cursor) const;
 
   /**
    * Get log entry given the index
@@ -108,53 +103,42 @@ class TxMgr {
    * @param leftover_bytes new value of leftover_bytes
    */
   void update_log_entry_leftover_bytes(LogEntryIdx first_idx,
-                                       uint16_t leftover_bytes);
+                                       uint16_t leftover_bytes) const;
 
   /**
    * Try to commit an entry
    *
-   * @param[in] entry entry to commit
-   * @param[in,out] tx_idx idx of entry to commit
-   * @param[in,out] tx_block block pointer of the block by tx_idx
+   * @param entry entry to commit
+   * @param cursor the cursor to commit to (might be updated under overflow)
    * @return empty entry on success; conflict entry otherwise
    */
-  pmem::TxEntry try_commit(pmem::TxEntry entry, TxEntryIdx& tx_idx,
-                           pmem::TxBlock*& tx_block);
+  pmem::TxEntry try_commit(pmem::TxEntry entry, TxCursor* cursor);
 
   /**
    * @tparam B MetaBlock or TxBlock
-   * @param[in] block the block that needs a next block to be allocated
-   * @param[out] new_tx_block the new tx block allocated (can be same as block)
-   * @return the block id of the allocated block
+   * @param block the block that needs a next block to be allocated
+   * @return the block id of the allocated block and the new tx block allocated
    */
   template <class B>
-  LogicalBlockIdx alloc_next_block(B* block,
-                                   pmem::TxBlock*& new_tx_block) const;
+  std::tuple<LogicalBlockIdx, pmem::TxBlock*> alloc_next_block(B* block) const;
 
   /**
-   * If the given idx is in an overflow state, update it if allowed.
+   * If the given cursor is in an overflow state, update it if allowed.
    *
-   * @param[in,out] tx_idx the transaction index to be handled, might be updated
-   * @param[in,out] tx_block the block corresponding to the tx, might be updated
-   * @param[in] do_alloc whether allocation is allowed
+   * @param cursor the cursor to update
+   * @param do_alloc whether allocation is allowed
    * @return true if the idx is not in overflow state; false otherwise
    */
-  bool handle_idx_overflow(TxEntryIdx& tx_idx, pmem::TxBlock*& tx_block,
-                           bool do_alloc) const;
+  bool handle_cursor_overflow(TxCursor* cursor, bool do_alloc) const;
 
   /**
-   * Flush tx entries from tx_idx_begin to tx_idx_end
-   * A typical use pattern is use meta->tx_tail as begin and the latest tail as
-   * end. Thus, we usually don't know the block address that corresponds to
-   * tx_idx_begin, but we know the block address that corresponds to tx_idx_end
+   * Flush tx entries
    *
-   * @param tx_idx_begin which tx entry to begin
-   * @param tx_idx_end which tx entry to stop (non-inclusive)
-   * @param tx_block_end if tx_idx_end is known, could optionally provide to
-   * save one access to mem_table (this should be a common case)
+   * @param begin the start cursor of the entries to flush, exclusive
+   * @param end the end cursor of the entries to flush, inclusive
    */
-  void flush_tx_entries(TxEntryIdx tx_idx_begin, TxEntryIdx tx_idx_end,
-                        pmem::TxBlock* tx_block_end = nullptr);
+  void flush_tx_entries(TxCursor begin, TxCursor end);
+  void flush_tx_entries(TxEntryIdx begin, TxCursor end);
 
   /**
    * Garbage collecting transaction blocks and log blocks. This function builds

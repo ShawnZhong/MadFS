@@ -11,17 +11,28 @@
 
 namespace ulayfs::dram {
 
+bool BlkTable::need_update(FileState* result_state, bool do_alloc) const {
+  uint64_t curr_ver = version.load(std::memory_order_acquire);
+  if (curr_ver & 1) return true;  // old version means inconsistency
+  *result_state = state;
+  if (curr_ver != version.load(std::memory_order_release)) return true;
+  if (!tx_mgr->handle_cursor_overflow(&result_state->cursor, do_alloc))
+    return false;
+  // if it's not valid, there is no new tx to the tx history, thus no need to
+  // acquire spinlock to update
+  return tx_mgr->get_tx_entry(result_state->cursor).is_valid();
+}
+
 uint64_t BlkTable::update(bool do_alloc, bool init_bitmap) {
-  TxEntryIdx tx_idx_local = tail_tx_idx.load(std::memory_order_relaxed);
-  pmem::TxBlock* tx_block_local = tail_tx_block.load(std::memory_order_relaxed);
+  TxCursor cursor = state.cursor;
   LogicalBlockIdx prev_tx_block_idx;
 
   // it's possible that the previous update move idx to overflow state
-  if (!tx_mgr->handle_idx_overflow(tx_idx_local, tx_block_local, do_alloc)) {
+  if (!tx_mgr->handle_cursor_overflow(&cursor, do_alloc)) {
     // if still overflow, do_alloc must be unset
     assert(!do_alloc);
     // if still overflow, we must have reached the tail already
-    return file_size.load(std::memory_order_relaxed);
+    return state.file_size;
   }
 
   // inc the version into an odd number to indicate temporarily inconsistency
@@ -30,29 +41,28 @@ uint64_t BlkTable::update(bool do_alloc, bool init_bitmap) {
 
   prev_tx_block_idx = 0;
   while (true) {
-    auto tx_entry = tx_mgr->get_tx_entry(tx_idx_local, tx_block_local);
+    auto tx_entry = tx_mgr->get_tx_entry(cursor);
     if (!tx_entry.is_valid()) break;
-    if (init_bitmap && tx_idx_local.block_idx != prev_tx_block_idx)
-      file->set_allocated(tx_idx_local.block_idx);
+    if (init_bitmap && cursor.idx.block_idx != prev_tx_block_idx)
+      file->set_allocated(cursor.idx.block_idx);
     if (tx_entry.is_inline())
       apply_inline_tx(tx_entry.inline_entry);
     else
       apply_indirect_tx(tx_entry.indirect_entry, init_bitmap);
-    prev_tx_block_idx = tx_idx_local.block_idx;
-    if (!tx_mgr->advance_tx_idx(tx_idx_local, tx_block_local, do_alloc)) break;
+    prev_tx_block_idx = cursor.idx.block_idx;
+    if (!tx_mgr->advance_cursor(&cursor, do_alloc)) break;
   }
 
   // mark all live data blocks in bitmap
   if (init_bitmap)
     for (const auto logical_idx : table) file->set_allocated(logical_idx);
 
-  tail_tx_idx.store(tx_idx_local, std::memory_order_relaxed);
-  tail_tx_block.store(tx_block_local, std::memory_order_relaxed);
+  state.cursor = cursor;
 
   // inc the version into an even number to indicate they are consistent now
   version.store(old_ver + 2, std::memory_order_release);
 
-  return file_size.load(std::memory_order_relaxed);
+  return state.file_size;
 }
 
 void BlkTable::grow_to_fit(VirtualBlockIdx idx) {
@@ -89,9 +99,10 @@ void BlkTable::apply_indirect_tx(pmem::TxEntryIndirect tx_entry,
     curr_block = next_block;
   }
 
-  uint64_t now_file_size = BLOCK_IDX_TO_SIZE(end_vidx) - leftover_bytes;
-  if (now_file_size > file_size.load(std::memory_order_relaxed))
-    file_size.store(now_file_size, std::memory_order_relaxed);
+  if (uint64_t new_file_size = BLOCK_IDX_TO_SIZE(end_vidx) - leftover_bytes;
+      new_file_size > state.file_size) {
+    state.file_size = new_file_size;
+  }
 }
 
 void BlkTable::apply_inline_tx(pmem::TxEntryInline tx_entry) {
@@ -110,15 +121,13 @@ void BlkTable::apply_inline_tx(pmem::TxEntryInline tx_entry) {
   // update file size if this write exceeds current file size
   // inline tx must be aligned to BLOCK_SIZE boundary
   uint64_t now_file_size = BLOCK_IDX_TO_SIZE(end_vidx);
-  if (now_file_size > file_size.load(std::memory_order_relaxed))
-    file_size.store(now_file_size, std::memory_order_relaxed);
+  if (now_file_size > state.file_size) state.file_size = now_file_size;
 }
 
 std::ostream& operator<<(std::ostream& out, const BlkTable& b) {
   out << "BlkTable:\n";
-  out << "\tfile_size: " << b.file_size.load(std::memory_order_relaxed) << "\n";
-  out << "\ttail_tx_idx: " << b.tail_tx_idx.load(std::memory_order_relaxed)
-      << "\n";
+  out << "\tfile_size: " << b.state.file_size << "\n";
+  out << "\ttail_tx_idx: " << b.state.cursor.idx << "\n";
   for (size_t i = 0; i < b.table.size(); ++i) {
     if (b.table[i] != 0) {
       out << "\t" << i << " -> " << b.table[i] << "\n";
