@@ -11,7 +11,7 @@ class AlignedTx : public WriteTx {
             size_t offset, FileState state, uint64_t ticket)
       : WriteTx(file, tx_mgr, buf, count, offset, state, ticket) {}
 
-  ssize_t exec() override {
+  ssize_t exec() {
     debug::count(debug::ALIGNED_TX_START);
     pmem::TxEntry conflict_entry;
 

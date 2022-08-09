@@ -19,7 +19,7 @@ add_library(ulayfs SHARED
     src/idx.h
     src/lib.h src/lib.cpp
     src/mem_table.h src/mem_table.cpp
-    src/tx/offset.h src/tx/offset.cpp
+    src/tx/offset.h
     src/persist.h
     src/posix.h src/posix.cpp
     src/convert.h

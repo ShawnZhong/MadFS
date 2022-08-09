@@ -74,9 +74,6 @@ class Tx {
         is_offset_depend(false) {}
 
  public:
-  virtual ssize_t exec() = 0;
-
- public:
   template <typename TX, typename... Params>
   static ssize_t exec_and_release_offset(Params&&... params) {
     TX tx(std::forward<Params>(params)...);

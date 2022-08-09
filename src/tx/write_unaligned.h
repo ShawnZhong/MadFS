@@ -46,7 +46,7 @@ class SingleBlockTx : public CoWTx {
     assert(num_blocks == 1);
   }
 
-  ssize_t exec() override {
+  ssize_t exec() {
     debug::count(debug::SINGLE_BLOCK_TX_START);
     pmem::TxEntry conflict_entry;
     bool need_redo;
@@ -131,7 +131,7 @@ class MultiBlockTx : public CoWTx {
         first_block_overlap_size(ALIGN_UP(offset, BLOCK_SIZE) - offset),
         last_block_overlap_size(end_offset -
                                 ALIGN_DOWN(end_offset, BLOCK_SIZE)) {}
-  ssize_t exec() override {
+  ssize_t exec() {
     debug::count(debug::MULTI_BLOCK_TX_START);
     // if need_copy_first/last is false, this means it is handled by the full
     // block copy and never need redo

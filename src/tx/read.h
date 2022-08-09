@@ -19,7 +19,7 @@ class ReadTx : public Tx {
     this->ticket = ticket;
   }
 
-  ssize_t exec() override {
+  ssize_t exec() {
     size_t first_block_offset = offset & (BLOCK_SIZE - 1);
     size_t first_block_size = BLOCK_SIZE - first_block_offset;
     if (first_block_size > count) first_block_size = count;
