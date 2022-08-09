@@ -3,7 +3,7 @@ import pprint
 from pathlib import Path
 from typing import Optional, List
 
-from fs import available_fs
+from fs import ULAYFS, Filesystem
 from utils import get_timestamp, system, root_dir
 
 logging.basicConfig(level=logging.INFO)
@@ -64,10 +64,10 @@ class Runner:
     def run(
             self,
             cmd: Optional[List[str]] = None,
-            additional_args=None,
-            prog_log_name="prog.log",
-            fs="uLayFS",
-            trace=False,
+            additional_args: List[str] = None,
+            prog_log_name: str = "prog.log",
+            fs: Filesystem = ULAYFS,
+            trace: bool = False,
     ):
         if cmd is None:
             assert self.prog_path is not None
@@ -81,7 +81,7 @@ class Runner:
         if additional_args is not None:
             cmd += additional_args
 
-        cmd = available_fs[fs].process_cmd(cmd, env={}, build_type=self.build_type)
+        cmd = fs.process_cmd(cmd=cmd, env={}, build_type=self.build_type)
         cmd = " ".join(cmd)
 
         # execute

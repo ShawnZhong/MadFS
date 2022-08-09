@@ -39,6 +39,6 @@ if __name__ == "__main__":
     runner.build(cmake_args=args.cmake_args)
     runner.run(
         additional_args=args.additional_args,
-        fs=args.fs,
+        fs=available_fs[args.fs],
         trace=args.trace,
     )

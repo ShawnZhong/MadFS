@@ -140,7 +140,7 @@ int main(int argc, char** argv) {
 
   const auto& bm =
       RegisterBenchmark("cow", bench<Mode::COW>)->Iterations(num_iter);
-  for (int i = 0; i <= 4096; i += 128) {
+  for (int i = 128; i <= 4096 - 128; i += 128) {
     bm->Arg(i);
   }
 

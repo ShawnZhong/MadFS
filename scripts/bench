@@ -28,8 +28,9 @@ class Benchmark:
         raise NotImplementedError()
 
     def run(self, trace, **kwargs):
-        for fs in self.fs_names:
-            runner = Runner(self.cmake_target, result_dir=self.result_dir / fs, build_type=self.build_type)
+        for fs_name in self.fs_names:
+            fs = available_fs[fs_name]
+            runner = Runner(self.cmake_target, result_dir=self.result_dir / fs_name, build_type=self.build_type)
             runner.build()
             self.run_single_config(fs=fs, runner=runner, trace=trace, **kwargs)
         return self.result_dir
@@ -39,7 +40,9 @@ class MicroBenchmark(Benchmark):
     def get_cmake_target(self, benchmark, **kwargs):
         return f"micro_{benchmark}"
 
-    def run_single_config(self, fs, runner, trace, **kwargs):
+    def run_single_config(self, fs, runner: Runner, trace, **kwargs):
+        if fs.path:
+            system(f"rm -rf {fs.path}/*")
         runner.run(fs=fs, additional_args=self.additional_args, trace=trace)
 
 
@@ -52,7 +55,7 @@ class YcsbBenchmark(Benchmark):
         return "leveldb_ycsb"
 
     def run_single_config(self, fs, runner, trace):
-        dbdir = available_fs[fs].path / "bench-dbdir"
+        dbdir = fs.path / "bench-dbdir"
         for w in self.workloads:
             system(f"rm -rf {dbdir} && mkdir -p {dbdir}")
             for load in [True, False]:
@@ -60,7 +63,8 @@ class YcsbBenchmark(Benchmark):
                 trace_name = f"{w}-{'load' if load else 'run'}"
                 trace_path = root_dir / "bench" / "ycsb-traces-large" / f"{trace_name}.txt"
                 cmd = f"{runner.prog_path} -f {trace_path} -d {dbdir}".split()
-                runner.run(cmd=cmd, fs=fs, prog_log_name=f"{trace_name}.log", additional_args=self.additional_args, trace=trace)
+                runner.run(cmd=cmd, fs=fs, prog_log_name=f"{trace_name}.log", additional_args=self.additional_args,
+                           trace=trace)
             system(f"rm -rf {dbdir}")
 
 
