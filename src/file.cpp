@@ -146,7 +146,6 @@ off_t File::lseek(off_t offset, int whence) {
     case SEEK_END:
       ret = tx_mgr.offset_mgr.seek_absolute(file_size + offset);
       break;
-    // TODO: add SEEK_DATA and SEEK_HOLE
     case SEEK_DATA:
     case SEEK_HOLE:
     default:
