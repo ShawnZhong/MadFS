@@ -17,6 +17,7 @@ thread_local const pid_t tid = static_cast<pid_t>(syscall(SYS_gettid));
 FILE *log_file = stderr;
 
 struct Counter {
+  static std::mutex print_mutex;
   std::array<size_t, magic_enum::enum_count<Event>()> counts;
   std::array<size_t, magic_enum::enum_count<Event>()> sizes;
 
@@ -40,8 +41,7 @@ struct Counter {
   }
 
   void print() {
-    static std::mutex print_mutex;
-
+    if constexpr (!BuildOptions::enable_counter) return;
     if (is_empty()) return;
     std::lock_guard<std::mutex> guard(print_mutex);
     fprintf(log_file, "    [Thread %d] Counters:\n", tid);
@@ -64,11 +64,25 @@ struct Counter {
 
 thread_local Counter counter;
 
-void count(Event event, size_t size) { counter.count(event, size); }
+void count(Event event, size_t size) {
+  if constexpr (BuildOptions::enable_counter) {
+    counter.count(event, size);
+  }
+}
 
-size_t get_count(Event event) { return counter.counts[event]; }
+size_t get_count(Event event) {
+  if constexpr (BuildOptions::enable_counter) {
+    return counter.counts[event];
+  } else {
+    return 0;
+  }
+}
 
-void clear_count() { counter.clear(); }
+void clear_count() {
+  if constexpr (BuildOptions::enable_counter) {
+    counter.clear();
+  }
+}
 
 void print_file(int fd) {
   __msan_scoped_disable_interceptor_checks();

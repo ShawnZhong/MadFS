@@ -73,7 +73,7 @@ File::File(int fd, const struct stat& stat, int flags,
   if (!file_size_updated) file_size = blk_table.update(/*do_alloc*/ false);
 
   if (flags & O_APPEND) tx_mgr.offset_mgr.seek_absolute(file_size);
-#ifdef ULAYFS_DEBUG
+#if ULAYFS_DEBUG
   path = strdup(pathname);
 #endif
 }
@@ -84,7 +84,7 @@ File::~File() {
   if (fd >= 0) posix::close(fd);
   if (shm_fd >= 0) posix::close(shm_fd);
   if (bitmap) posix::munmap(bitmap, SHM_SIZE);
-#ifdef ULAYFS_DEBUG
+#if ULAYFS_DEBUG
   free((void*)path);
 #endif
 }
