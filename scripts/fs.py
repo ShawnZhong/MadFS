@@ -79,7 +79,7 @@ class ULAYFS(Ext4DAX):
     name = "uLayFS"
 
     @staticmethod
-    def build(build_type, result_dir, cmake_args):
+    def build(build_type, result_dir, cmake_args=""):
         build_path = root_dir / f"build-{build_type}"
 
         system(
