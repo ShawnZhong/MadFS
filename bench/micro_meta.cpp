@@ -26,7 +26,11 @@ void bench(benchmark::State& state) {
   } else if constexpr (mode == Mode::OPEN_FILE_SIZE) {
     auto target_file_size = state.range(0);
     int num_ops = static_cast<int>(target_file_size / 4096 * 0.998);
-    append_file(fd, 4096, num_ops);
+    char buffer[4096];
+    for (int i = 0; i < num_ops; ++i) {
+      [[maybe_unused]] size_t res = write(fd, buffer, 4096);
+      assert(res == 4096);
+    }
     struct stat st;  // NOLINT(cppcoreguidelines-pro-type-member-init)
     fstat(fd, &st);
     state.counters["file_size"] =
