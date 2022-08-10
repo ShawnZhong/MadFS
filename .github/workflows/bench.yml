@@ -7,19 +7,22 @@ on:
 
 jobs:
   micro:
-    name: Microbenchmarks
+    name: Micro
     runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        build_type: [ debug, release ]
     steps:
       - uses: actions/checkout@v2
 
       - name: micro_st
-        run: BENCH_NUM_ITER=10 ./run micro_st
+        run: BENCH_NUM_ITER=10 ./run micro_st -b ${{matrix.build_type}}
 
       - name: micro_mt
-        run: BENCH_NUM_ITER=10 ./run micro_mt
+        run: BENCH_NUM_ITER=10 ./run micro_mt -b ${{matrix.build_type}}
 
       - name: micro_meta
-        run: BENCH_NUM_ITER=10 ./run micro_meta
+        run: BENCH_NUM_ITER=10 ./run micro_meta -b ${{matrix.build_type}}
 
   leveldb:
     name: LevelDB
