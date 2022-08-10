@@ -56,8 +56,8 @@ void prefill_file(int fd, size_t num_bytes,
 
 bool is_ulayfs_linked() { return ulayfs::debug::print_file != nullptr; }
 
-std::vector<int> get_cpu_list() {
-  std::vector<int> res;
+std::vector<size_t> get_cpu_list() {
+  std::vector<size_t> res;
   char* cpu_list_str = std::getenv("CPULIST");
   if (cpu_list_str) {
     char* p = strtok(cpu_list_str, ",");
@@ -69,8 +69,8 @@ std::vector<int> get_cpu_list() {
     fprintf(stderr,
             "environment variable CPULIST not set. "
             "Thread i is pinned to core i\n");
-    int num_cpus = std::thread::hardware_concurrency();
-    for (int i = 0; i < num_cpus; ++i) {
+    size_t num_cpus = std::thread::hardware_concurrency();
+    for (size_t i = 0; i < num_cpus; ++i) {
       res.push_back(i);
     }
   }
@@ -78,7 +78,7 @@ std::vector<int> get_cpu_list() {
 }
 
 void pin_core(size_t thread_index) {
-  static std::vector<int> cpu_list = get_cpu_list();
+  static std::vector<size_t> cpu_list = get_cpu_list();
   if (thread_index >= cpu_list.size()) {
     fprintf(stderr, "thread_index: %ld is out of range\n", thread_index);
     return;
