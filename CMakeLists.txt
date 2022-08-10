@@ -36,7 +36,7 @@ add_library(ulayfs SHARED
 #[[
 build flags
 ]]
-set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -march=native -Wall -Wextra -Wno-unused-function -Wno-unused-private-field")
+set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -march=native -Wall -Wextra -Wno-unused")
 target_compile_options(ulayfs PRIVATE -Werror)
 set_property(TARGET ulayfs PROPERTY INTERPROCEDURAL_OPTIMIZATION TRUE) # LTO
 
@@ -48,7 +48,7 @@ option(ULAYFS_USE_MAP_SYNC "Use MAP_SYNC for mmap" ON)
 option(ULAYFS_FORCE_MAP_POPULATE "Always use MAP_POPULATE for mmap" ON)
 option(ULAYFS_TX_FLUSH_ONLY_FSYNC "Only flush transaction entries in fsync" OFF)
 option(ULAYFS_USE_PMEMCHECK "Enable pmemcheck macros" OFF)
-
+option(ULAYFS_ENABLE_COUNTERS "Enable performance counters" OFF)
 
 include(cmake/tooling.cmake)
 include(cmake/libpmem2.cmake)

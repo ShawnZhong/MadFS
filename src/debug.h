@@ -47,7 +47,7 @@ extern FILE *log_file;
     ULAYFS_FPRINTF(debug::log_file, "%s " msg, level_str, ##__VA_ARGS__); \
   } while (0)
 
-#ifdef ULAYFS_DEBUG
+#if ULAYFS_DEBUG
 #define LOG_TRACE(msg, ...) ULAYFS_LOG(0, msg, ##__VA_ARGS__)
 #define LOG_DEBUG(msg, ...) ULAYFS_LOG(1, msg, ##__VA_ARGS__)
 #define LOG_INFO(msg, ...) ULAYFS_LOG(2, msg, ##__VA_ARGS__)
