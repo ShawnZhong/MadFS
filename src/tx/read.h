@@ -9,7 +9,9 @@ class ReadTx : public Tx {
 
  public:
   ReadTx(File* file, TxMgr* tx_mgr, char* buf, size_t count, size_t offset)
-      : Tx(file, tx_mgr, count, offset), buf(buf) {}
+      : Tx(file, tx_mgr, count, offset), buf(buf) {
+    tx_mgr->lock.rdlock();
+  }
 
   ReadTx(File* file, TxMgr* tx_mgr, char* buf, size_t count, size_t offset,
          FileState state, uint64_t ticket)

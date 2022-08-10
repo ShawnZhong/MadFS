@@ -9,6 +9,7 @@
 #include "block/block.h"
 #include "entry.h"
 #include "idx.h"
+#include "lock.h"
 #include "offset.h"
 
 namespace ulayfs::dram {
@@ -21,6 +22,7 @@ class TxMgr {
   pmem::MetaBlock* meta;
 
  public:
+  decltype(create_cc_lock()) lock = create_cc_lock();
   OffsetMgr offset_mgr;
 
  public:

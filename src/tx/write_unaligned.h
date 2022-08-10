@@ -87,20 +87,24 @@ class SingleBlockTx : public CoWTx {
     if (is_offset_depend) tx_mgr->offset_mgr.wait_offset(ticket);
 
   retry:
-    debug::count(debug::SINGLE_BLOCK_TX_COMMIT);
-    // try to commit the tx entry
-    pmem::TxEntry conflict_entry =
-        tx_mgr->try_commit(commit_entry, &state.cursor);
-    if (!conflict_entry.is_valid()) goto done;  // success, no conflict
+    if constexpr (BuildOptions::cc_occ) {
+      debug::count(debug::SINGLE_BLOCK_TX_COMMIT);
+      // try to commit the tx entry
+      pmem::TxEntry conflict_entry =
+          tx_mgr->try_commit(commit_entry, &state.cursor);
+      if (!conflict_entry.is_valid()) goto done;  // success, no conflict
 
-    // we just treat begin_vidx as both first and last vidx
-    need_redo =
-        handle_conflict(conflict_entry, begin_vidx, begin_vidx, recycle_image);
-    recheck_commit_entry();
-    if (!need_redo)
-      goto retry;
-    else
-      goto redo;
+      // we just treat begin_vidx as both first and last vidx
+      need_redo = handle_conflict(conflict_entry, begin_vidx, begin_vidx,
+                                  recycle_image);
+      recheck_commit_entry();
+      if (!need_redo)
+        goto retry;
+      else
+        goto redo;
+    } else {
+      tx_mgr->try_commit(commit_entry, &state.cursor);
+    }
 
   done:
     allocator->free(recycle_image[0]);  // it has only single block
@@ -219,25 +223,29 @@ class MultiBlockTx : public CoWTx {
     if (is_offset_depend) tx_mgr->offset_mgr.wait_offset(ticket);
 
   retry:
-    debug::count(debug::MULTI_BLOCK_TX_COMMIT);
-    // try to commit the transaction
-    conflict_entry = tx_mgr->try_commit(commit_entry, &state.cursor);
-    if (!conflict_entry.is_valid()) goto done;  // success
-    // make a copy of the first and last again
-    src_first_lidx = recycle_image[0];
-    src_last_lidx = recycle_image[num_blocks - 1];
-    need_redo = handle_conflict(conflict_entry, begin_vidx, end_full_vidx,
-                                recycle_image);
-    recheck_commit_entry();
-    if (!need_redo)
-      goto retry;  // we have moved to the new tail, retry commit
-    else {
-      do_copy_first = src_first_lidx != recycle_image[0];
-      do_copy_last = src_last_lidx != recycle_image[num_blocks - 1];
-      if (do_copy_first || do_copy_last)
-        goto redo;
-      else
-        goto retry;
+    if constexpr (BuildOptions::cc_occ) {
+      debug::count(debug::MULTI_BLOCK_TX_COMMIT);
+      // try to commit the transaction
+      conflict_entry = tx_mgr->try_commit(commit_entry, &state.cursor);
+      if (!conflict_entry.is_valid()) goto done;  // success
+      // make a copy of the first and last again
+      src_first_lidx = recycle_image[0];
+      src_last_lidx = recycle_image[num_blocks - 1];
+      need_redo = handle_conflict(conflict_entry, begin_vidx, end_full_vidx,
+                                  recycle_image);
+      recheck_commit_entry();
+      if (!need_redo)
+        goto retry;  // we have moved to the new tail, retry commit
+      else {
+        do_copy_first = src_first_lidx != recycle_image[0];
+        do_copy_last = src_last_lidx != recycle_image[num_blocks - 1];
+        if (do_copy_first || do_copy_last)
+          goto redo;
+        else
+          goto retry;
+      }
+    } else {
+      tx_mgr->try_commit(commit_entry, &state.cursor);
     }
 
   done:

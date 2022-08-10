@@ -3,7 +3,7 @@ import argparse
 import logging
 from pathlib import Path
 
-from fs import available_fs
+from fs import available_fs, bench_fs
 from runner import Runner
 from utils import root_dir, get_timestamp, add_common_args, system, drop_cache, init, parse_args
 
@@ -100,7 +100,7 @@ if __name__ == "__main__":
     argparser.add_argument(
         "-f",
         "--fs_names",
-        default=available_fs.keys(),
+        default=bench_fs.keys(),
         choices=available_fs.keys(),
         nargs="+",
         help="Filesystems to benchmark",
