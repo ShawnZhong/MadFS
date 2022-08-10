@@ -33,7 +33,6 @@ class WriteTx : public Tx {
     dst_lidxs.clear();
     dst_blocks.clear();
 
-    // TODO: handle writev requests
     // for overwrite, "leftover_bytes" is zero; only in append we care
     // append log without fence because we only care flush completion
     // before try_commit

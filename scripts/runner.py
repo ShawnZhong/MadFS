@@ -1,5 +1,4 @@
 import logging
-import pprint
 from pathlib import Path
 from typing import Optional, List
 
@@ -49,15 +48,9 @@ class Runner:
         system(
             f"make {self.build_type} -C {root_dir} "
             f"CMAKE_ARGS='{cmake_args}' "
-            f"BUILD_TARGETS='{cmake_target} ulayfs' ",
+            f"BUILD_TARGETS='{cmake_target}' ",
             log_path=build_log_path,
         )
-
-        # save config
-        config_log_path = self.result_dir / "config.log"
-        with open(config_log_path, "w") as fout:
-            pprint.pprint(locals(), stream=fout)
-        system(f"cmake -LA -N {self.build_path} >> {config_log_path}")
 
         self.prog_path = self.build_path / cmake_target
 
@@ -81,7 +74,8 @@ class Runner:
         if additional_args is not None:
             cmd += additional_args
 
-        cmd = fs.process_cmd(cmd=cmd, env={}, build_type=self.build_type)
+        cmd = fs.process_cmd(cmd, env={}, build_type=self.build_type, result_dir=self.result_dir)
+        # cmd = "perf stat -d -d -d".split() + cmd
         cmd = " ".join(cmd)
 
         # execute

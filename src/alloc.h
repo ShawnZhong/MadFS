@@ -77,6 +77,9 @@ class Allocator {
    */
   void free(const std::vector<LogicalBlockIdx>& recycle_image);
 
+  /**
+   * Return all the blocks in the free list to the bitmap
+   */
   void return_free_list() {
     for (uint32_t n = 0; n < BITMAP_BLOCK_CAPACITY; ++n)
       for (LogicalBlockIdx lidx : free_lists[n])
@@ -96,8 +99,18 @@ class Allocator {
   std::tuple<pmem::LogEntry*, LogEntryIdx, pmem::LogEntryBlock*>
   alloc_log_entry(uint32_t num_blocks);
 
+  /**
+   * Allocate a tx block
+   * @param seq the sequence number of the tx block
+   * @return a tuple of the block index and the block address
+   */
   std::tuple<LogicalBlockIdx, pmem::TxBlock*> alloc_tx_block(uint32_t seq);
 
+  /**
+   * Free a tx block
+   * @param tx_block_idx the index of the tx block
+   * @param tx_block the address of the tx block to free
+   */
   void free_tx_block(LogicalBlockIdx tx_block_idx, pmem::TxBlock* tx_block);
 };
 

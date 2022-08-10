@@ -135,7 +135,7 @@ void bench(benchmark::State& state) {
         ulayfs::debug::get_count(ulayfs::debug::SINGLE_BLOCK_TX_COMMIT) +
         ulayfs::debug::get_count(ulayfs::debug::ALIGNED_TX_COMMIT);
 
-    if (start_cnt != 0) {
+    if (start_cnt != 0 && commit_cnt != 0) {
       state.counters["tx_copy"] = copy_cnt / start_cnt / state.threads;
       state.counters["tx_commit"] = commit_cnt / start_cnt / state.threads;
     }

@@ -60,7 +60,11 @@ include_directories(${CMAKE_CURRENT_BINARY_DIR})
 dependencies
 ]]
 
-FetchContent_Declare(magic-enum GIT_REPOSITORY https://github.com/Neargye/magic_enum.git)
+FetchContent_Declare(
+    magic-enum
+    GIT_REPOSITORY https://github.com/Neargye/magic_enum.git
+    GIT_TAG v0.8.0
+)
 FetchContent_Declare(tbb URL https://github.com/oneapi-src/oneTBB/releases/download/v2021.5.0/oneapi-tbb-2021.5.0-lin.tgz)
 FetchContent_MakeAvailable(magic-enum tbb)
 

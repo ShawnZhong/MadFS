@@ -48,7 +48,7 @@ struct LogEntry {
   uint16_t leftover_bytes : 12;
 
   // the number of blocks described in this log entry
-  // every 64 blocks corresponds to one entry in body_lidxs
+  // every 64 blocks corresponds to one entry in begin_lidxs
   uint16_t num_blocks;
 
   union {

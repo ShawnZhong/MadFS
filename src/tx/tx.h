@@ -100,7 +100,6 @@ class Tx {
                        std::vector<LogicalBlockIdx>& conflict_image) {
     bool has_conflict = false;
 
-    // TODO: handle writev requests
     do {
       if (curr_entry.is_inline()) {  // inline tx entry
         has_conflict |= get_conflict_image(

@@ -48,7 +48,6 @@ class SingleBlockTx : public CoWTx {
 
   ssize_t exec() {
     debug::count(debug::SINGLE_BLOCK_TX_START);
-    pmem::TxEntry conflict_entry;
     bool need_redo;
 
     // must acquire the tx tail before any get
@@ -90,7 +89,8 @@ class SingleBlockTx : public CoWTx {
   retry:
     debug::count(debug::SINGLE_BLOCK_TX_COMMIT);
     // try to commit the tx entry
-    conflict_entry = tx_mgr->try_commit(commit_entry, &state.cursor);
+    pmem::TxEntry conflict_entry =
+        tx_mgr->try_commit(commit_entry, &state.cursor);
     if (!conflict_entry.is_valid()) goto done;  // success, no conflict
 
     // we just treat begin_vidx as both first and last vidx
