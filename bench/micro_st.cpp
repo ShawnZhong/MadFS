@@ -31,7 +31,7 @@ void bench(benchmark::State& state) {
   fd = open(filepath, O_CREAT | O_RDWR | O_APPEND, S_IRUSR | S_IWUSR);
   if (fd < 0) state.SkipWithError("open failed");
   if constexpr (mode != Mode::APPEND) {
-    append_file(fd, num_bytes * num_iter);
+    prefill_file(fd, num_bytes * num_iter);
   }
   close(fd);
 

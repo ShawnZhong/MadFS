@@ -40,9 +40,9 @@ void bench(benchmark::State& state) {
     // preallocate file
     if constexpr (mode != Mode::APPEND) {
       if constexpr (mode == Mode::ZIPF) {
-        append_file(fd, BLOCK_SIZE * 1024, ZIPF_NUM_BLOCKS / 1024);
+        prefill_file(fd, BLOCK_SIZE * ZIPF_NUM_BLOCKS);
       } else {
-        append_file(fd, num_bytes * MAX_NUM_THREAD);
+        prefill_file(fd, num_bytes * MAX_NUM_THREAD);
       }
     }
   }

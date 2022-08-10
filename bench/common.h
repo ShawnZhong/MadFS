@@ -32,13 +32,20 @@ int get_num_iter(int default_val = 10000) noexcept {
   return num_iter;
 }
 
-void append_file(int fd, long num_bytes, int num_iter = 1) {
-  auto buf = new char[num_bytes];
-  std::fill(buf, buf + num_bytes, 'x');
-  for (int i = 0; i < num_iter; ++i) {
-    [[maybe_unused]] ssize_t res = write(fd, buf, num_bytes);
-    assert(res == num_bytes);
+void prefill_file(int fd, size_t num_bytes,
+                  size_t chunk_size = 32l * 1024 * 1024) {
+  auto buf = new char[chunk_size];
+  std::fill(buf, buf + chunk_size, 'x');
+
+  for (size_t i = 0; i < num_bytes / chunk_size; ++i) {
+    [[maybe_unused]] size_t res = write(fd, buf, chunk_size);
+    assert(res == chunk_size);
   }
+  if (size_t remaining_size = num_bytes % chunk_size) {
+    [[maybe_unused]] size_t res = write(fd, buf, remaining_size);
+    assert(res == remaining_size);
+  }
+
   fsync(fd);
   delete[] buf;
 }
