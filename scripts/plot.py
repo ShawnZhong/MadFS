@@ -143,7 +143,7 @@ def plot_micro_st(result_dir):
             ax.yaxis.set_major_locator(plt.MaxNLocator(steps=[1, 5, 10]))
             ax.set_ylim(bottom=0)
 
-            title = {
+            titles = {
                 "seq_pread": "Sequential Read",
                 "seq_pwrite": "Sequential Overwrite",
                 "rnd_pread": "Random Read",
@@ -151,7 +151,7 @@ def plot_micro_st(result_dir):
                 "append": "Append",
                 "cow": "Sub-Block Overwrite",
             }
-            ax.set_title(title.get(name), pad=5)
+            ax.set_title(titles.get(name), pad=5)
 
         plot_single_bm(
             df,
@@ -165,35 +165,39 @@ def plot_micro_mt(result_dir):
     df = read_files(result_dir)
     df["benchmark"] = df["name"].apply(parse_name, args=(0,))
     df["x"] = df["name"].apply(parse_name, args=(-1,))
-    xlabel = "Number of Threads"
+    xlabel = "Threads"
 
     for name, benchmark in df.groupby("benchmark"):
-        if name.startswith("no_overlap"):
-            benchmark["y"] = benchmark["items_per_second"].apply(lambda x: float(x) / 1000 ** 2)
-            ylabel = "Throughput (Mops/sec)"
-        else:
-            benchmark["y"] = benchmark["bytes_per_second"].apply(lambda x: float(x) / 1024 ** 3)
-            ylabel = "Throughput (GB/sec)"
+        benchmark["y"] = benchmark["bytes_per_second"].apply(lambda x: float(x) / 1024 ** 3)
+        ylabel = "Throughput (GB/s)"
 
         export_results(result_dir, benchmark, name=name)
 
         def post_plot(ax, **kwargs):
-            if name.startswith("zipf") and "uLayFS" in df["label"].unique():
+            if name.startswith("zipf") and "uLayFS" in df["label"].unique() and "tx_commit" in df.columns:
                 ax2 = ax.twinx()
                 ax2.plot(df["x"], df["tx_commit"] - 1, ":", label="tx_commit")
                 ax2.set_ylabel("uLayFS commit conflicts per Tx")
 
-            ax.set_xlabel(xlabel)
-            ax.set_ylabel(ylabel)
+            ax.set_xlabel(xlabel, labelpad=0)
+            ax.set_ylabel(ylabel, labelpad=0)
 
             labels = benchmark["x"].unique()
             plt.xticks(ticks=labels, labels=labels)
-            ax.xaxis.set_major_locator(plt.MultipleLocator(3))
-
+            ax.xaxis.set_major_locator(plt.MaxNLocator(6))
+            ax.yaxis.set_major_locator(plt.MultipleLocator(1))
             ax.set_ylim(bottom=0)
 
-            ax.legend(ncol=2, loc="lower left")
-            plt.title(name)
+            titles = {
+                "unif_0R": "100% Write",
+                "unif_50R": "50% Read + 50% Write",
+                "unif_95R": "95% Read + 5% Write",
+                "unif_100R": "100% Read",
+                "zipf_4k": r"4 KB Write w/ Zipf",
+                "zipf_2k": r"2 KB Write w/ Zipf",
+            }
+
+            ax.set_title(titles.get(name), pad=5)
 
         plot_single_bm(
             benchmark,
