@@ -3,7 +3,7 @@ import shutil
 from pathlib import Path
 from typing import Dict, Optional, List
 
-from utils import root_dir, is_ulayfs_linked
+from utils import root_dir, is_ulayfs_linked, system
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger("fs")
@@ -79,15 +79,32 @@ class ULAYFS(Ext4DAX):
     name = "uLayFS"
 
     @staticmethod
-    def get_env(cmd, build_type):
+    def build(build_type, result_dir, cmake_args):
+        build_path = root_dir / f"build-{build_type}"
+
+        system(
+            f"make {build_type} -C {root_dir} "
+            f"CMAKE_ARGS='{cmake_args}' "
+            f"BUILD_TARGETS='ulayfs' ",
+            log_path=result_dir / "build.log",
+        )
+
+        config_log_path = result_dir / "config.log"
+        system(f"cmake -LA -N {build_path} >> {config_log_path}")
+
+        return build_path / "libulayfs.so"
+
+    @staticmethod
+    def _get_env(cmd, **kwargs):
         if is_ulayfs_linked(cmd[0]):
             return {}
-        ulayfs_path = root_dir / f"build-{build_type}" / "libulayfs.so"
-        if not ulayfs_path.exists():
-            logger.warning(f"Cannot find ulayfs path: {ulayfs_path}")
-            return {}
+        ulayfs_path = ULAYFS.build(**kwargs)
         env = {"LD_PRELOAD": ulayfs_path}
         return env
+
+    @staticmethod
+    def get_env(cmd, **kwargs):
+        return ULAYFS._get_env(cmd, **kwargs)
 
 
 class NOVA(Filesystem):
