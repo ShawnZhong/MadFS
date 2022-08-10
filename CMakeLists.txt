@@ -18,7 +18,7 @@ add_library(ulayfs SHARED
     src/gc.h
     src/idx.h
     src/lib.h src/lib.cpp
-    src/mem_table.h src/mem_table.cpp
+    src/mem_table.h
     src/tx/offset.h
     src/persist.h
     src/posix.h src/posix.cpp
