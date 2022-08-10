@@ -10,6 +10,8 @@
 
 #include "debug.h"
 
+constexpr int BLOCK_SIZE = 4096;
+
 const char* filepath = []() -> const char* {
   const char* res = "test.txt";
 
@@ -36,6 +38,8 @@ void prefill_file(int fd, size_t num_bytes,
                   size_t chunk_size = 32l * 1024 * 1024) {
   auto buf = new char[chunk_size];
   std::fill(buf, buf + chunk_size, 'x');
+
+  printf("prefilling file %s with %ld MB\n", filepath, num_bytes / 1024 / 1024);
 
   for (size_t i = 0; i < num_bytes / chunk_size; ++i) {
     [[maybe_unused]] size_t res = write(fd, buf, chunk_size);

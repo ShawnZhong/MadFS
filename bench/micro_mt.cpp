@@ -1,3 +1,5 @@
+#include <sys/stat.h>
+
 #include "common.h"
 #include "zipf.h"
 
@@ -7,18 +9,17 @@ constexpr static bool debug = false;
 constexpr static bool debug = true;
 #endif
 
-constexpr int BLOCK_SIZE = 4096;
 constexpr int MAX_NUM_THREAD = 16;
 constexpr int ZIPF_NUM_BLOCKS = 256 * 1024;
+constexpr int FILE_SIZE = ZIPF_NUM_BLOCKS * BLOCK_SIZE;
 constexpr double ZIPF_THETA = 0.9;
 
 int fd;
 int num_iter = get_num_iter();
 
 enum class Mode {
-  NO_OVERLAP,
+  UNIF,
   APPEND,
-  COW,
   ZIPF,
 };
 
@@ -33,16 +34,20 @@ void bench(benchmark::State& state) {
   std::fill(src_buf, src_buf + BLOCK_SIZE * MAX_NUM_THREAD, 'x');
 
   if (state.thread_index == 0) {
-    unlink(filepath);
+    if constexpr (mode == Mode::APPEND) {
+      unlink(filepath);
+    }
+
     fd = open(filepath, O_CREAT | O_RDWR, S_IRUSR | S_IWUSR);
     if (fd < 0) state.SkipWithError("open failed");
 
     // preallocate file
     if constexpr (mode != Mode::APPEND) {
-      if constexpr (mode == Mode::ZIPF) {
-        prefill_file(fd, BLOCK_SIZE * ZIPF_NUM_BLOCKS);
-      } else {
-        prefill_file(fd, num_bytes * MAX_NUM_THREAD);
+      // check file size
+      struct stat st;  // NOLINT(cppcoreguidelines-pro-type-member-init)
+      fstat(fd, &st);
+      if (st.st_size != FILE_SIZE) {
+        prefill_file(fd, FILE_SIZE);
       }
     }
   }
@@ -69,28 +74,30 @@ void bench(benchmark::State& state) {
         }
       }
     }
-  } else if constexpr (mode == Mode::COW) {
-    for (auto _ : state) {
-      [[maybe_unused]] ssize_t res = pwrite(fd, src_buf, num_bytes, 0);
-      assert(res == num_bytes);
-      fsync(fd);
-    }
-  } else if constexpr (mode == Mode::NO_OVERLAP) {
+  } else if constexpr (mode == Mode::UNIF) {
     bool is_read[num_iter];
     std::generate(is_read, is_read + num_iter,
                   [&]() { return rand() % 100 < READ_PERCENT; });
-    const off_t offset = state.thread_index * num_bytes;
+
+    int rand_off[num_iter];
+    std::generate(rand_off, rand_off + num_iter, [&]() {
+      return rand() % (FILE_SIZE / num_bytes) * num_bytes;
+    });
+
     int i = 0;
     for (auto _ : state) {
-      if (is_read[i++]) {
-        [[maybe_unused]] ssize_t res = pread(fd, dst_buf, num_bytes, offset);
+      if (is_read[i]) {
+        [[maybe_unused]] ssize_t res =
+            pread(fd, dst_buf, num_bytes, rand_off[i]);
         assert(res == num_bytes);
         assert(memcmp(dst_buf, src_buf, num_bytes) == 0);
       } else {
-        [[maybe_unused]] ssize_t res = pwrite(fd, src_buf, num_bytes, offset);
+        [[maybe_unused]] ssize_t res =
+            pwrite(fd, src_buf, num_bytes, rand_off[i]);
         assert(res == num_bytes);
         fsync(fd);
       }
+      i++;
     }
   } else if constexpr (mode == Mode::ZIPF) {
     std::default_random_engine generator;
@@ -110,7 +117,6 @@ void bench(benchmark::State& state) {
   // tear down
   if (state.thread_index == 0) {
     close(fd);
-    unlink(filepath);
   }
 
   // report result
@@ -151,19 +157,18 @@ int main(int argc, char** argv) {
   benchmark::Initialize(&argc, argv);
   if (benchmark::ReportUnrecognizedArguments(argc, argv)) return 1;
 
-  register_bm("no_overlap_0R", bench<Mode::NO_OVERLAP, 0>);
-  register_bm("no_overlap_50R", bench<Mode::NO_OVERLAP, 50>);
-  register_bm("no_overlap_95R", bench<Mode::NO_OVERLAP, 95>);
-  register_bm("no_overlap_100R", bench<Mode::NO_OVERLAP, 100>);
+  unlink(filepath);
 
-  register_bm("append_512", bench<Mode::APPEND>, 512);
-  register_bm("append_4k", bench<Mode::APPEND>);
-
-  register_bm("cow_512", bench<Mode::COW>, 512);
-  register_bm("cow_3584", bench<Mode::COW>, 3584);
+  register_bm("unif_0R", bench<Mode::UNIF, 0>);
+  register_bm("unif_50R", bench<Mode::UNIF, 50>);
+  register_bm("unif_95R", bench<Mode::UNIF, 95>);
+  register_bm("unif_100R", bench<Mode::UNIF, 100>);
 
   register_bm("zipf_4k", bench<Mode::ZIPF>, 4096);
   register_bm("zipf_2k", bench<Mode::ZIPF>, 2048);
+
+  register_bm("append_512", bench<Mode::APPEND>, 512);
+  register_bm("append_4k", bench<Mode::APPEND>);
 
   benchmark::RunSpecifiedBenchmarks();
   return 0;
