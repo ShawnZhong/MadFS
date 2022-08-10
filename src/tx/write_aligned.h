@@ -13,7 +13,6 @@ class AlignedTx : public WriteTx {
 
   ssize_t exec() {
     debug::count(debug::ALIGNED_TX_START);
-    pmem::TxEntry conflict_entry;
 
     // since everything is block-aligned, we can copy data directly
     const char* rest_buf = buf;
@@ -45,7 +44,8 @@ class AlignedTx : public WriteTx {
 
   retry:
     debug::count(debug::ALIGNED_TX_COMMIT);
-    conflict_entry = tx_mgr->try_commit(commit_entry, &state.cursor);
+    pmem::TxEntry conflict_entry =
+        tx_mgr->try_commit(commit_entry, &state.cursor);
     if (!conflict_entry.is_valid()) goto done;
     // we don't check the return value of handle_conflict here because we don't
     // care whether there is a conflict, as long as recycle_image gets updated
