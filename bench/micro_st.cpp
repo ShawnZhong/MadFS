@@ -27,20 +27,27 @@ void bench(benchmark::State& state) {
 
   unlink(filepath);
 
+  constexpr bool is_read = mode == Mode::SEQ_READ || mode == Mode::SEQ_PREAD ||
+                           mode == Mode::RND_PREAD;
+  constexpr bool is_overwrite = mode == Mode::SEQ_WRITE ||
+                                mode == Mode::SEQ_PWRITE ||
+                                mode == Mode::RND_PWRITE || mode == Mode::COW;
+
   // preallocate file
   fd = open(filepath, O_CREAT | O_RDWR | O_APPEND, S_IRUSR | S_IWUSR);
   if (fd < 0) state.SkipWithError("open failed");
   if constexpr (mode != Mode::APPEND) {
     prefill_file(fd, num_bytes * num_iter);
+    if constexpr (is_read) {
+      sleep(1);  // wait for the background thread of SplitFS to finish
+    }
   }
   close(fd);
 
   int open_flags = 0;
-  if constexpr (mode == Mode::SEQ_READ || mode == Mode::SEQ_PREAD ||
-                mode == Mode::RND_PREAD)
+  if constexpr (is_read)
     open_flags = O_RDONLY;
-  else if constexpr (mode == Mode::SEQ_WRITE || mode == Mode::SEQ_PWRITE ||
-                     mode == Mode::RND_PWRITE || mode == Mode::COW)
+  else if constexpr (is_overwrite)
     open_flags = O_RDWR;
   else if constexpr (mode == Mode::APPEND)
     open_flags = O_RDWR | O_APPEND;

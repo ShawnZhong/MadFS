@@ -5,16 +5,12 @@ import logging
 import re
 from pathlib import Path
 
-import matplotlib
 import pandas as pd
 from matplotlib import pyplot as plt
 
 pd.options.display.max_rows = 100
 pd.options.display.max_columns = 100
 pd.options.display.width = None
-
-matplotlib.rcParams["legend.columnspacing"] = 0.5
-matplotlib.rcParams["legend.fontsize"] = 8
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger("plot")
@@ -70,13 +66,18 @@ def export_results(result_dir, data, name="result"):
             print(pt, file=f)
 
 
+def save_fig(fig, name, result_dir):
+    fig.savefig(result_dir / f"{name}.png", bbox_inches="tight", pad_inches=0, dpi=300)
+    fig.savefig(result_dir / f"{name}.pdf", bbox_inches="tight", pad_inches=0)
+
+
 def plot_single_bm(
         df,
         result_dir,
         barchart=False,
         name=None,
         post_plot=None,
-        figsize=(2.75, 2.75),
+        figsize=(2.5, 1.5),
 ):
     plt.clf()
     fig, ax = plt.subplots(figsize=figsize)
@@ -90,53 +91,67 @@ def plot_single_bm(
     if post_plot:
         post_plot(ax=ax, name=name, df=df)
 
-    plt.savefig(result_dir / f"{name}.png", bbox_inches="tight", dpi=300)
-    plt.savefig(result_dir / f"{name}.pdf", bbox_inches="tight")
+    save_fig(fig, name, result_dir)
+
+    figlegend = plt.figure()
+    figlegend.legend(
+        *ax.get_legend_handles_labels(),
+        ncol=4,
+        loc="center",
+        fontsize=8,
+        columnspacing=1,
+        # handlelength=1.5,
+        frameon=False,
+    )
+    save_fig(figlegend, "legend", result_dir)
 
 
 def parse_name(name, i):
     return re.split("[/:]", name)[i]
 
 
-def format_bytes(x):
-    if int(x) % 1024 == 0:
-        return f"{int(x) // 1024}K"
-    return str(x)
-
-
 def plot_micro_st(result_dir):
     benchmarks = read_files(result_dir)
     benchmarks["benchmark"] = benchmarks["name"].apply(parse_name, args=(0,))
-    xlabel = "I/O Size (Bytes)"
 
     for name, df in benchmarks.groupby("benchmark"):
         is_cow = name.startswith("cow")
-
         if is_cow:
             df["x"] = df["name"].apply(parse_name, args=(1,))
             df["y"] = df["real_time"].apply(lambda x: float(x) / 1000)
-            ylabel = "Latency (ms)"
+            xunit = "Bytes"
+            ylabel = r"Latency ($\mu$s)"
         else:
-            df["x"] = df["name"].apply(parse_name, args=(1,)).apply(format_bytes)
+            df["x"] = df["name"].apply(parse_name, args=(1,)).apply(lambda x: f"{int(x) / 1024:1g}")
             df["y"] = df["bytes_per_second"].apply(lambda x: float(x) / 1024 ** 3)
-            ylabel = "Throughput (GB/sec)"
+            xunit = "KB"
+            ylabel = "Throughput (GB/s)"
 
         export_results(result_dir, df, name=name)
 
-        def post_plot(ax, **kwargs):
-            ax.set_xlabel(xlabel)
-            ax.set_ylabel(ylabel)
+        xlabel = f"Size ({xunit})"
 
-            plt.xticks(rotation=45)
+        def post_plot(ax, **kwargs):
+            ax.set_xlabel(xlabel, labelpad=0)
+            ax.set_ylabel(ylabel, labelpad=0)
+
             if is_cow:
-                ax.xaxis.set_major_locator(plt.MultipleLocator(5))
+                ax.xaxis.set_major_locator(plt.MaxNLocator(4))
+            else:
+                ax.xaxis.set_major_locator(plt.MultipleLocator(2))
 
             ax.yaxis.set_major_locator(plt.MaxNLocator(steps=[1, 5, 10]))
-            ax.yaxis.set_major_formatter(plt.FormatStrFormatter('%.1f'))
             ax.set_ylim(bottom=0)
 
-            ax.legend(ncol=2)
-            # plt.title(name)
+            title = {
+                "seq_pread": "Sequential Read",
+                "seq_pwrite": "Sequential Overwrite",
+                "rnd_pread": "Random Read",
+                "rnd_pwrite": "Random Overwrite",
+                "append": "Append",
+                "cow": "Sub-Block Overwrite",
+            }
+            ax.set_title(title.get(name), pad=5)
 
         plot_single_bm(
             df,
