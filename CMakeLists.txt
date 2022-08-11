@@ -3,38 +3,8 @@ project(uLayFS)
 set(CMAKE_CXX_STANDARD 20)
 include(FetchContent)
 
-add_library(ulayfs SHARED
-    src/alloc.h src/alloc.cpp
-    src/bitmap.h
-    src/block/block.h
-    src/block/log.h
-    src/block/meta.h
-    src/block/tx.h
-    src/blk_table.h src/blk_table.cpp
-    src/const.h
-    src/timer.h
-    src/debug.h src/debug.cpp
-    src/entry.h
-    src/file.h src/file.cpp
-    src/gc.h
-    src/idx.h
-    src/lib.h src/lib.cpp
-    src/logging.h
-    src/mem_table.h
-    src/tx/offset.h
-    src/persist.h
-    src/posix.h src/posix.cpp
-    src/convert.h
-    src/tx/cursor.h
-    src/tx/lock.h
-    src/tx/mgr.h src/tx/mgr.cpp
-    src/tx/tx.h
-    src/tx/read.h
-    src/tx/write.h
-    src/tx/write_aligned.h
-    src/tx/write_unaligned.h
-    src/utils.h
-    )
+file(GLOB_RECURSE ulayfs_SRC CONFIGURE_DEPENDS "src/*.h" "src/*.cpp")
+add_library(ulayfs SHARED ${ulayfs_SRC})
 
 #[[
 build flags
