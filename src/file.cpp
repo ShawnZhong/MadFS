@@ -13,8 +13,8 @@
 
 #include "alloc.h"
 #include "config.h"
-#include "counter.h"
 #include "idx.h"
+#include "timer.h"
 #include "utils.h"
 
 namespace ulayfs::dram {
@@ -95,38 +95,38 @@ File::~File() {
  */
 
 ssize_t File::pwrite(const void* buf, size_t count, size_t offset) {
-  if (!can_write) {
+  if (unlikely(!can_write)) {
     errno = EBADF;
     return -1;
   }
-  if (count == 0) return 0;
+  if (unlikely(count == 0)) return 0;
   return tx_mgr.do_pwrite(static_cast<const char*>(buf), count, offset);
 }
 
 ssize_t File::write(const void* buf, size_t count) {
-  if (!can_write) {
+  if (unlikely(!can_write)) {
     errno = EBADF;
     return -1;
   }
-  if (count == 0) return 0;
+  if (unlikely(count == 0)) return 0;
   return tx_mgr.do_write(static_cast<const char*>(buf), count);
 }
 
 ssize_t File::pread(void* buf, size_t count, off_t offset) {
-  if (!can_read) {
+  if (unlikely(!can_read)) {
     errno = EBADF;
     return -1;
   }
-  if (count == 0) return 0;
+  if (unlikely(count == 0)) return 0;
   return tx_mgr.do_pread(static_cast<char*>(buf), count, offset);
 }
 
 ssize_t File::read(void* buf, size_t count) {
-  if (!can_read) {
+  if (unlikely(!can_read)) {
     errno = EBADF;
     return -1;
   }
-  if (count == 0) return 0;
+  if (unlikely(count == 0)) return 0;
   return tx_mgr.do_read(static_cast<char*>(buf), count);
 }
 
@@ -226,7 +226,7 @@ error:
 }
 
 int File::fsync() {
-  counter.start_timer<Event::FSYNC>();
+  timer.start<Event::FSYNC>();
   FileState state;
   this->update(&state, /*do_alloc*/ false);
   tx_mgr.flush_tx_entries(meta->get_tx_tail(), state.cursor);
@@ -239,7 +239,7 @@ int File::fsync() {
   if (unlikely(state.cursor.idx.local_idx >= capacity))
     state.cursor.idx.local_idx = capacity - 1;
   meta->set_tx_tail(state.cursor.idx);
-  counter.end_timer<Event::FSYNC>();
+  timer.stop<Event::FSYNC>();
   return 0;
 }
 

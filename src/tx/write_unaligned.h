@@ -47,7 +47,7 @@ class SingleBlockTx : public CoWTx {
   }
 
   ssize_t exec() {
-    counter.count<Event::SINGLE_BLOCK_TX_START>();
+    timer.count<Event::SINGLE_BLOCK_TX_START>();
     bool need_redo;
 
     // must acquire the tx tail before any get
@@ -62,7 +62,7 @@ class SingleBlockTx : public CoWTx {
     pmem::memcpy_persist(dst_blocks[0]->data_rw() + local_offset, buf, count);
 
   redo:
-    counter.count<Event::SINGLE_BLOCK_TX_COPY>();
+    timer.count<Event::SINGLE_BLOCK_TX_COPY>();
     assert(dst_blocks.size() == 1);
 
     // copy original data
@@ -88,7 +88,7 @@ class SingleBlockTx : public CoWTx {
 
   retry:
     if constexpr (BuildOptions::cc_occ) {
-      counter.count<Event::SINGLE_BLOCK_TX_COMMIT>();
+      timer.count<Event::SINGLE_BLOCK_TX_COMMIT>();
       // try to commit the tx entry
       pmem::TxEntry conflict_entry =
           tx_mgr->try_commit(commit_entry, &state.cursor);
@@ -136,7 +136,7 @@ class MultiBlockTx : public CoWTx {
         last_block_overlap_size(end_offset -
                                 ALIGN_DOWN(end_offset, BLOCK_SIZE)) {}
   ssize_t exec() {
-    counter.count<Event::MULTI_BLOCK_TX_START>();
+    timer.count<Event::MULTI_BLOCK_TX_START>();
     // if need_copy_first/last is false, this means it is handled by the full
     // block copy and never need redo
     const bool need_copy_first = begin_full_vidx != begin_vidx;
@@ -201,7 +201,7 @@ class MultiBlockTx : public CoWTx {
                          last_block_overlap_size);
 
   redo:
-    counter.count<Event::MULTI_BLOCK_TX_COPY>();
+    timer.count<Event::MULTI_BLOCK_TX_COPY>();
     // copy first block
     if (need_copy_first && do_copy_first) {
       // copy the data from the first source block if exists
@@ -224,7 +224,7 @@ class MultiBlockTx : public CoWTx {
 
   retry:
     if constexpr (BuildOptions::cc_occ) {
-      counter.count<Event::MULTI_BLOCK_TX_COMMIT>();
+      timer.count<Event::MULTI_BLOCK_TX_COMMIT>();
       // try to commit the transaction
       conflict_entry = tx_mgr->try_commit(commit_entry, &state.cursor);
       if (!conflict_entry.is_valid()) goto done;  // success

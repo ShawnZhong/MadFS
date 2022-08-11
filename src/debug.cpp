@@ -1,7 +1,7 @@
 #include "debug.h"
 
-#include "counter.h"
 #include "lib.h"
+#include "timer.h"
 
 namespace ulayfs::debug {
 void print_file(int fd) {
@@ -14,8 +14,8 @@ void print_file(int fd) {
   __msan_scoped_enable_interceptor_checks();
 }
 
-size_t get_occurrence(Event event) { return counter.get_occurrence(event); }
-void clear_count() { counter.clear(); }
-void print_counter() { counter.print(); }
+size_t get_occurrence(Event event) { return timer.get_occurrence(event); }
+void clear_count() { timer.clear(); }
+void print_counter() { timer.print(); }
 
 }  // namespace ulayfs::debug

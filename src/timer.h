@@ -1,5 +1,7 @@
 #pragma once
 
+#include <emmintrin.h>
+
 #include <chrono>
 #include <magic_enum.hpp>
 #include <mutex>
@@ -11,18 +13,19 @@ namespace ulayfs {
 
 namespace detail {
 
-class Counter {
+class Timer {
  private:
   std::array<size_t, magic_enum::enum_count<Event>()> occurrences{};
   std::array<size_t, magic_enum::enum_count<Event>()> sizes{};
-  std::array<size_t, magic_enum::enum_count<Event>()> durations{};
+  std::array<std::chrono::nanoseconds, magic_enum::enum_count<Event>()>
+      durations{};
   std::array<std::chrono::time_point<std::chrono::high_resolution_clock>,
              magic_enum::enum_count<Event>()>
       start_times;
 
  public:
-  Counter() = default;
-  ~Counter() { print(); }
+  Timer() = default;
+  ~Timer() { print(); }
 
   template <Event event>
   void count() {
@@ -36,31 +39,30 @@ class Counter {
   }
 
   template <Event event>
-  void start_timer() {
+  void start() {
     count<event>();
     auto now = std::chrono::high_resolution_clock::now();
     start_times[magic_enum::enum_integer(event)] = now;
   }
 
   template <Event event>
-  void start_timer(size_t size) {
+  void start(size_t size) {
     sizes[magic_enum::enum_integer(event)] += size;
-    start_timer<event>();
+    start<event>();
   }
 
   template <Event event>
-  void end_timer() {
+  void stop(bool fence = false) {
+    if (fence) _mm_mfence();
     auto end_time = std::chrono::high_resolution_clock::now();
     auto start_time = start_times[magic_enum::enum_integer(event)];
-    auto duration = std::chrono::duration_cast<std::chrono::nanoseconds>(
-        end_time - start_time);
-    durations[magic_enum::enum_integer(event)] += duration.count();
+    durations[magic_enum::enum_integer(event)] += (end_time - start_time);
   }
 
   void clear() {
     occurrences.fill(0);
     sizes.fill(0);
-    durations.fill(0);
+    durations.fill({});
   }
 
   [[nodiscard]] size_t get_occurrence(Event event) const {
@@ -72,7 +74,7 @@ class Counter {
 
     if (is_empty()) return;
     std::lock_guard<std::mutex> guard(print_mutex);
-    fprintf(log_file, "    [Thread %d] Counters:\n", tid);
+    fprintf(log_file, "    [Thread %d] Timer:\n", tid);
     magic_enum::enum_for_each<Event>([&](Event event) {
       auto val = magic_enum::enum_integer(event);
       size_t occurrence = occurrences[val];
@@ -83,18 +85,21 @@ class Counter {
               magic_enum::enum_name(event).data(), occurrence);
 
       // print duration
-      if (size_t duration = durations[val]; duration != 0) {
-        double avg_ns = (double)duration / (double)occurrence;
-        double avg_us = avg_ns / 1000.0;
-        double total_ms = (double)duration / 1000000.0;
-        fprintf(log_file, "\t(%.3f us, %.2f ms)", avg_us, total_ms);
+      if (auto duration = durations[val]; duration.count() != 0) {
+        double total_ms =
+            std::chrono::duration<double, std::milli>(duration).count();
+        double avg_us =
+            std::chrono::duration<double, std::micro>(duration).count() /
+            (double)occurrence;
+
+        fprintf(log_file, " (%6.3f us, %6.2f ms)", avg_us, total_ms);
       }
 
       // print size
       if (size_t size = sizes[val]; size != 0) {
         double total_mb = (double)size / 1024.0 / 1024.0;
         double avg_kb = (double)size / 1024.0 / (double)occurrence;
-        fprintf(log_file, "\t(%.2f KB, %.2f MB)", avg_kb, total_mb);
+        fprintf(log_file, " (%6.2f KB, %6.2f MB)", avg_kb, total_mb);
       }
 
       fprintf(log_file, "\n");
@@ -109,7 +114,7 @@ class Counter {
   }
 };
 
-class DummyCounter {
+class DummyTimer {
  public:
   template <Event event>
   void count() {}
@@ -118,13 +123,13 @@ class DummyCounter {
   void count(size_t) {}
 
   template <Event event>
-  void start_timer() {}
+  void start() {}
 
   template <Event event>
-  void start_timer(size_t) {}
+  void start(size_t) {}
 
   template <Event event>
-  void end_timer() {}
+  void stop(bool = false) {}
 
   void clear() {}
 
@@ -133,16 +138,16 @@ class DummyCounter {
   void print() {}
 };
 
-static auto make_counter() {
-  if constexpr (BuildOptions::enable_counter)
-    return Counter{};
+static auto make_timer() {
+  if constexpr (BuildOptions::enable_timer)
+    return Timer{};
   else
-    return DummyCounter{};
+    return DummyTimer{};
 }
 
 }  // namespace detail
 
-using Counter = decltype(detail::make_counter());
+using Timer = decltype(detail::make_timer());
 
-extern thread_local Counter counter;
+extern thread_local Timer timer;
 }  // namespace ulayfs

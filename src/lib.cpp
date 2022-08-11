@@ -16,9 +16,9 @@
 
 #include "config.h"
 #include "const.h"
-#include "counter.h"
 #include "file.h"
 #include "posix.h"
+#include "timer.h"
 #include "utils.h"
 
 namespace ulayfs {
@@ -29,7 +29,7 @@ bool initialized = false;
 // shared across threads within the same process
 tbb::concurrent_unordered_map<int, std::shared_ptr<dram::File>> files;
 
-thread_local Counter counter;
+thread_local Timer timer;
 thread_local const pid_t tid = static_cast<pid_t>(syscall(SYS_gettid));
 FILE* log_file = stderr;
 
@@ -63,7 +63,7 @@ int open(const char* pathname, int flags, ...) {
     files.emplace(fd,
                   std::make_shared<dram::File>(fd, stat_buf, flags, pathname));
     LOG_INFO("ulayfs::open(%s, %x, %x) = %d", pathname, flags, mode, fd);
-    counter.count<Event::OPEN>();
+    timer.count<Event::OPEN>();
   } catch (const FileInitException& e) {
     LOG_WARN("File \"%s\": ulayfs::open failed: %s. Fallback to syscall",
              pathname, e.what());
@@ -104,7 +104,7 @@ int close(int fd) {
   if (auto file = get_file(fd)) {
     LOG_DEBUG("ulayfs::close(%s)", file->path);
     files.unsafe_erase(fd);
-    counter.count<Event::CLOSE>();
+    timer.count<Event::CLOSE>();
     return 0;
   } else {
     LOG_DEBUG("posix::close(%d)", fd);
@@ -136,10 +136,10 @@ int fclose(FILE* stream) {
 
 ssize_t read(int fd, void* buf, size_t count) {
   if (auto file = get_file(fd)) {
-    counter.start_timer<Event::READ>(count);
+    timer.start<Event::READ>(count);
     auto res = file->read(buf, count);
     LOG_DEBUG("ulayfs::read(%s, buf, %zu) = %zu", file->path, count, res);
-    counter.end_timer<Event::READ>();
+    timer.stop<Event::READ>();
     return res;
   } else {
     auto res = posix::read(fd, buf, count);
@@ -150,9 +150,9 @@ ssize_t read(int fd, void* buf, size_t count) {
 
 ssize_t pread(int fd, void* buf, size_t count, off_t offset) {
   if (auto file = get_file(fd)) {
-    counter.start_timer<Event::PREAD>(count);
+    timer.start<Event::PREAD>(count);
     auto res = file->pread(buf, count, offset);
-    counter.end_timer<Event::PREAD>();
+    timer.stop<Event::PREAD>();
     LOG_DEBUG("ulayfs::pread(%s, buf, %zu, %ld) = %zu", file->path, count,
               offset, res);
     return res;
@@ -181,9 +181,9 @@ ssize_t __pread_chk(int fd, void* buf, size_t count, off_t offset,
 
 ssize_t write(int fd, const void* buf, size_t count) {
   if (auto file = get_file(fd)) {
-    counter.start_timer<Event::WRITE>(count);
+    timer.start<Event::WRITE>(count);
     ssize_t res = file->write(buf, count);
-    counter.end_timer<Event::WRITE>();
+    timer.stop<Event::WRITE>();
     LOG_DEBUG("ulayfs::write(%s, buf, %zu) = %zu", file->path, count, res);
     return res;
   } else {
@@ -195,10 +195,10 @@ ssize_t write(int fd, const void* buf, size_t count) {
 
 ssize_t pwrite(int fd, const void* buf, size_t count, off_t offset) {
   if (auto file = get_file(fd)) {
-    counter.start_timer<Event::PWRITE>(count);
+    timer.start<Event::PWRITE>(count);
     ssize_t res = file->pwrite(buf, count, offset);
+    timer.stop<Event::PWRITE>();
     LOG_DEBUG("ulayfs::pwrite(%s, buf, %zu) = %zu", file->path, count, res);
-    counter.end_timer<Event::PWRITE>();
     return res;
   } else {
     LOG_DEBUG("posix::pwrite(%d, buf, %zu, %ld)", fd, count, offset);

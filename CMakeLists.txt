@@ -12,7 +12,7 @@ add_library(ulayfs SHARED
     src/block/tx.h
     src/blk_table.h src/blk_table.cpp
     src/const.h
-    src/counter.h
+    src/timer.h
     src/debug.h src/debug.cpp
     src/entry.h
     src/file.h src/file.cpp
@@ -51,7 +51,7 @@ option(ULAYFS_USE_MAP_SYNC "Use MAP_SYNC for mmap" ON)
 option(ULAYFS_FORCE_MAP_POPULATE "Always use MAP_POPULATE for mmap" ON)
 option(ULAYFS_TX_FLUSH_ONLY_FSYNC "Only flush transaction entries in fsync" OFF)
 option(ULAYFS_USE_PMEMCHECK "Enable pmemcheck macros" OFF)
-option(ULAYFS_COUNTER "Enable performance counters" OFF)
+option(ULAYFS_TIMER "Enable timer" OFF)
 option(ULAYFS_CC_OCC "Use OCC for CC" ON)
 option(ULAYFS_CC_MUTEX "Use robust mutex for CC" OFF)
 option(ULAYFS_CC_SPINLOCK "Use spinlock for CC" OFF)
