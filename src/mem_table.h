@@ -142,16 +142,16 @@ class MemTable {
    * @return the pointer to the first block on the persistent memory
    */
   pmem::Block* mmap_file(size_t length, off_t offset, int flags = 0) {
-    if constexpr (BuildOptions::use_map_sync)
+    if constexpr (BuildOptions::map_sync)
       flags |= MAP_SHARED_VALIDATE | MAP_SYNC;
     else
       flags |= MAP_SHARED;
-    if constexpr (BuildOptions::force_map_populate) flags |= MAP_POPULATE;
+    if constexpr (BuildOptions::map_populate) flags |= MAP_POPULATE;
 
     void* addr = posix::mmap(nullptr, length, prot, flags, fd, offset);
 
     if (unlikely(addr == MAP_FAILED)) {
-      if constexpr (BuildOptions::use_map_sync) {
+      if constexpr (BuildOptions::map_sync) {
         if (errno == EOPNOTSUPP) {
           LOG_WARN("MAP_SYNC not supported for fd = %d. Retry w/o MAP_SYNC",
                    fd);

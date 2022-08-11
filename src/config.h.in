@@ -3,8 +3,8 @@
 #include <ostream>
 
 // see https://cmake.org/cmake/help/latest/command/configure_file.html
-#cmakedefine01 ULAYFS_USE_MAP_SYNC
-#cmakedefine01 ULAYFS_FORCE_MAP_POPULATE
+#cmakedefine01 ULAYFS_MAP_SYNC
+#cmakedefine01 ULAYFS_MAP_POPULATE
 #cmakedefine01 ULAYFS_TX_FLUSH_ONLY_FSYNC
 #cmakedefine01 ULAYFS_USE_PMEMCHECK
 #cmakedefine01 ULAYFS_TIMER
@@ -43,8 +43,8 @@ namespace ulayfs {
 
 constexpr static struct BuildOptions {
   constexpr static const char* build_type = CMAKE_BUILD_TYPE;
-  constexpr static bool use_map_sync = ULAYFS_USE_MAP_SYNC;
-  constexpr static bool force_map_populate = ULAYFS_FORCE_MAP_POPULATE;
+  constexpr static bool map_sync = ULAYFS_MAP_SYNC;
+  constexpr static bool map_populate = ULAYFS_MAP_POPULATE;
   constexpr static bool tx_flush_only_fsync = ULAYFS_TX_FLUSH_ONLY_FSYNC;
   constexpr static bool use_pmemcheck = ULAYFS_USE_PMEMCHECK;
   constexpr static bool enable_timer = ULAYFS_TIMER;
@@ -81,8 +81,8 @@ constexpr static struct BuildOptions {
     out << "BuildOptions: \n";
     out << "\tbuild_type: " << build_type << "\n";
     out << "\tuse_pmemcheck: " << use_pmemcheck << "\n";
-    out << "\tuse_map_sync: " << use_map_sync << "\n";
-    out << "\tforce_map_populate: " << force_map_populate << "\n";
+    out << "\tmap_sync: " << map_sync << "\n";
+    out << "\tmap_populate: " << map_populate << "\n";
     out << "\ttx_flush_only_fsync: " << tx_flush_only_fsync << "\n";
     out << "\tenable_timer: " << enable_timer << "\n";
 
