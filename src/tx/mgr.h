@@ -22,7 +22,7 @@ class TxMgr {
   pmem::MetaBlock* meta;
 
  public:
-  decltype(create_cc_lock()) lock = create_cc_lock();
+  Lock lock;  // nop lock is used by default
   OffsetMgr offset_mgr;
 
  public:
