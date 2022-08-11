@@ -8,9 +8,11 @@ enum class Event {
   WRITE,
   PREAD,
   PWRITE,
+  PWRITE_TX,
   OPEN,
   CLOSE,
-  ALIGNED_TX_START,
+  FSYNC,
+  ALIGNED_TX_COPY,
   ALIGNED_TX_COMMIT,
   SINGLE_BLOCK_TX_START,
   SINGLE_BLOCK_TX_COPY,
@@ -27,6 +29,7 @@ namespace debug {
 void print_file(int fd) __attribute__((weak));
 size_t get_occurrence(Event event) __attribute__((weak));
 void clear_count() __attribute__((weak));
+void print_counter() __attribute__((weak));
 }  // namespace debug
 
 static bool is_linked() { return debug::print_file != nullptr; }

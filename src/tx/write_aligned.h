@@ -12,12 +12,11 @@ class AlignedTx : public WriteTx {
       : WriteTx(file, tx_mgr, buf, count, offset, state, ticket) {}
 
   ssize_t exec() {
-    counter.count(Event::ALIGNED_TX_START);
-
     // since everything is block-aligned, we can copy data directly
     const char* rest_buf = buf;
     size_t rest_count = count;
 
+    counter.start_timer<Event::ALIGNED_TX_COPY>();
     for (auto block : dst_blocks) {
       size_t num_bytes = std::min(rest_count, BITMAP_BYTES_CAPACITY);
       pmem::memcpy_persist(block->data_rw(), rest_buf, num_bytes);
@@ -25,6 +24,7 @@ class AlignedTx : public WriteTx {
       rest_count -= num_bytes;
     }
     _mm_sfence();
+    counter.end_timer<Event::ALIGNED_TX_COPY>();
 
     // for aligned tx, `leftover_bytes` is always zero, so we don't need to know
     // file size before prepare commit entry.
@@ -44,9 +44,10 @@ class AlignedTx : public WriteTx {
 
   retry:
     if constexpr (BuildOptions::cc_occ) {
-      counter.count(Event::ALIGNED_TX_COMMIT);
+      counter.start_timer<Event::ALIGNED_TX_COMMIT>();
       pmem::TxEntry conflict_entry =
           tx_mgr->try_commit(commit_entry, &state.cursor);
+      counter.end_timer<Event::ALIGNED_TX_COMMIT>();
       if (!conflict_entry.is_valid()) goto done;
       // we don't check the return value of handle_conflict here because we
       // don't care whether there is a conflict, as long as recycle_image gets
