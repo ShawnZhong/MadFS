@@ -9,13 +9,15 @@ constexpr static bool debug = false;
 constexpr static bool debug = true;
 #endif
 
+constexpr int BLOCK_SIZE = 4096;
 constexpr int MAX_NUM_THREAD = 16;
-constexpr int ZIPF_NUM_BLOCKS = 256 * 1024;
-constexpr int FILE_SIZE = ZIPF_NUM_BLOCKS * BLOCK_SIZE;
 constexpr double ZIPF_THETA = 0.9;
 
-int fd;
+const char* filepath = get_filepath();
 int num_iter = get_num_iter();
+int file_size = get_file_size();
+
+int fd;
 
 enum class Mode {
   UNIF,
@@ -46,8 +48,8 @@ void bench(benchmark::State& state) {
       // check file size
       struct stat st;  // NOLINT(cppcoreguidelines-pro-type-member-init)
       fstat(fd, &st);
-      if (st.st_size != FILE_SIZE) {
-        prefill_file(fd, FILE_SIZE);
+      if (st.st_size != file_size) {
+        prefill_file(fd, file_size);
       }
     }
   }
@@ -81,7 +83,7 @@ void bench(benchmark::State& state) {
 
     int rand_off[num_iter];
     std::generate(rand_off, rand_off + num_iter, [&]() {
-      return rand() % (FILE_SIZE / num_bytes) * num_bytes;
+      return rand() % (file_size / num_bytes) * num_bytes;
     });
 
     int i = 0;
@@ -101,7 +103,7 @@ void bench(benchmark::State& state) {
     }
   } else if constexpr (mode == Mode::ZIPF) {
     std::default_random_engine generator;
-    zipfian_int_distribution<int> zipf(1, ZIPF_NUM_BLOCKS, ZIPF_THETA);
+    zipfian_int_distribution<int> zipf(1, file_size / BLOCK_SIZE, ZIPF_THETA);
 
     off_t offset[num_iter];
     std::generate(offset, offset + num_iter, [&]() { return zipf(generator); });

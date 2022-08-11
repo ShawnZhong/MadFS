@@ -94,7 +94,9 @@ def get_timestamp():
 
 
 def add_common_args(argparser: argparse.ArgumentParser):
+    from fs import bench_fs, available_fs
     from runner import build_types
+    
     argparser.add_argument(
         "-b",
         "--build_type",
@@ -110,6 +112,14 @@ def add_common_args(argparser: argparse.ArgumentParser):
         "--benchmark_filter",
         dest="benchmark_filter",
         help="filters to be passed to Google Benchmark"
+    )
+    argparser.add_argument(
+        "-f",
+        "--fs_names",
+        default=bench_fs.keys(),
+        choices=available_fs.keys(),
+        nargs="+",
+        help="Filesystems to run",
     )
     argparser.add_argument(
         "additional_args",

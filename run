@@ -22,23 +22,21 @@ if __name__ == "__main__":
         default="",
         help="additional build arguments to be passed to CMake",
     )
-    parser.add_argument(
-        "-f",
-        "--fs",
-        default="uLayFS",
-        choices=available_fs.keys(),
-        help="filesystem type to be used",
-    )
     add_common_args(parser)
+    # set the default argument of fs to uLayFS
+    parser.set_defaults(fs_names=["uLayFS"])
     args = parse_args(parser)
+
     if args.build_type is None:
         args.build_type = "debug" if args.cmake_target.startswith("test") else "release"
     logger.info(f"args={args}")
 
-    runner = Runner(name=args.cmake_target, build_type=args.build_type)
-    runner.build(cmake_args=args.cmake_args)
-    runner.run(
-        additional_args=args.additional_args,
-        fs=available_fs[args.fs],
-        trace=args.trace,
-    )
+    for fs_name in args.fs_names:
+        fs = available_fs[fs_name]
+        runner = Runner(name=args.cmake_target, build_type=args.build_type)
+        runner.build(cmake_args=args.cmake_args)
+        runner.run(
+            additional_args=args.additional_args,
+            fs=fs,
+            trace=args.trace,
+        )

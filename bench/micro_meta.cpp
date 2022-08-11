@@ -2,8 +2,10 @@
 
 #include "common.h"
 
-int fd;
 int num_iter = get_num_iter(10000);
+const char* filepath = get_filepath();
+
+int fd;
 
 enum class Mode {
   OPEN_TX_LEN,
