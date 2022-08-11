@@ -4,6 +4,7 @@
 #include <bit>
 #include <bitset>
 #include <cstdint>
+#include <optional>
 #include <ostream>
 
 #include "const.h"
@@ -20,8 +21,8 @@ class Bitmap {
  public:
   constexpr static uint64_t BITMAP_ALL_USED = 0xffffffffffffffff;
 
-  // return the index of the bit (0-63); -1 if fail
-  BitmapIdx alloc_one() {
+  // return the index of the bit (0-63)
+  std::optional<BitmapIdx> alloc_one() {
   retry:
     uint64_t b = bitmap.load(std::memory_order_acquire);
     if (b == BITMAP_ALL_USED) return -1;
@@ -34,14 +35,14 @@ class Bitmap {
     return static_cast<BitmapIdx>(std::countr_zero(b));
   }
 
-  // allocate all blocks in this bit; return 0 if succeeds, -1 otherwise
-  BitmapIdx alloc_all() {
+  // allocate all blocks in this bit; return true on success
+  bool alloc_all() {
     uint64_t expected = 0;
     if (!bitmap.compare_exchange_strong(expected, BITMAP_ALL_USED,
                                         std::memory_order_acq_rel,
                                         std::memory_order_acquire))
-      return -1;
-    return 0;
+      return false;
+    return true;
   }
 
   // allocate all blocks in this bitmap that's unused
@@ -94,15 +95,15 @@ class Bitmap {
    * @param num_bitmaps the total number of bitmaps in the array
    * @param hint hint to the empty bit
    */
-  static BitmapIdx alloc_one(Bitmap bitmaps[], uint32_t num_bitmaps,
-                             BitmapIdx hint) {
-    BitmapIdx ret;
+  static std::optional<BitmapIdx> alloc_one(Bitmap bitmaps[],
+                                            uint32_t num_bitmaps,
+                                            BitmapIdx hint) {
     uint32_t idx = static_cast<uint32_t>(hint) >> BITMAP_BLOCK_CAPACITY_SHIFT;
     for (; idx < num_bitmaps; ++idx) {
-      ret = bitmaps[idx].alloc_one();
-      if (ret >= 0) return (idx << BITMAP_BLOCK_CAPACITY_SHIFT) + ret;
+      if (auto ret = bitmaps[idx].alloc_one(); ret.has_value())
+        return (idx << BITMAP_BLOCK_CAPACITY_SHIFT) + ret.value();
     }
-    return -1;
+    return {};
   }
 
   /**
@@ -114,15 +115,16 @@ class Bitmap {
    * @param hint hint to the empty bit
    * @return the BitmapIdx
    */
-  static BitmapIdx alloc_batch(Bitmap bitmaps[], uint32_t num_bitmaps,
-                               BitmapIdx hint) {
-    BitmapIdx ret;
+  static std::optional<BitmapIdx> alloc_batch(Bitmap bitmaps[],
+                                              uint32_t num_bitmaps,
+                                              BitmapIdx hint) {
     uint32_t idx = static_cast<uint32_t>(hint) >> BITMAP_BLOCK_CAPACITY_SHIFT;
     for (; idx < num_bitmaps; ++idx) {
-      ret = bitmaps[idx].alloc_all();
-      if (ret >= 0) return idx << BITMAP_BLOCK_CAPACITY_SHIFT;
+      if (bool success = bitmaps[idx].alloc_all(); success) {
+        return idx << BITMAP_BLOCK_CAPACITY_SHIFT;
+      }
     }
-    return -1;
+    return {};
   }
 
   /**
@@ -144,7 +146,7 @@ class Bitmap {
       if (allocated_bits != BITMAP_ALL_USED)
         return idx << BITMAP_BLOCK_CAPACITY_SHIFT;
     }
-    return -1;
+    PANIC("Failed to allocate from bitmap");
   }
 
   /**
@@ -164,7 +166,8 @@ class Bitmap {
 
   friend std::ostream& operator<<(std::ostream& out, const Bitmap& b) {
     for (size_t i = 0; i < BITMAP_BLOCK_CAPACITY; ++i) {
-      out << (b.bitmap.load(std::memory_order_relaxed) & (1l << i) ? "1" : "0");
+      out << (b.bitmap.load(std::memory_order_relaxed) & (1ul << i) ? "1"
+                                                                    : "0");
     }
     return out;
   }

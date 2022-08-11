@@ -76,7 +76,7 @@ class File {
   ssize_t pread(void* buf, size_t count, off_t offset);
   ssize_t read(void* buf, size_t count);
   off_t lseek(off_t offset, int whence);
-  void* mmap(void* addr, size_t length, int prot, int flags, off_t offset);
+  void* mmap(void* addr, size_t length, int prot, int flags, size_t offset);
   int fsync();
   void stat(struct stat* buf);
 

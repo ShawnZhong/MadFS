@@ -3,7 +3,7 @@
 #include <cstddef>
 
 namespace ulayfs {
-enum class Event {
+enum class Event : std::size_t {
   READ,
   WRITE,
   PREAD,

@@ -63,7 +63,7 @@ class MemTable {
       PANIC_IF(ret < 0, "fallocate failed");
     }
 
-    first_region = mmap_file(file_size, 0, 0);
+    first_region = mmap_file(static_cast<size_t>(file_size), 0, 0);
     first_region_num_blocks = BLOCK_SIZE_TO_IDX(file_size);
     meta = &first_region[0].meta_block;
     if (!is_empty && !meta->is_valid())

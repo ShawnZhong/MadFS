@@ -73,7 +73,8 @@ File::File(int fd, const struct stat& stat, int flags,
 
   if (!file_size_updated) file_size = blk_table.update(/*do_alloc*/ false);
 
-  if (flags & O_APPEND) tx_mgr.offset_mgr.seek_absolute(file_size);
+  if (flags & O_APPEND)
+    tx_mgr.offset_mgr.seek_absolute(static_cast<off_t>(file_size));
 #if ULAYFS_DEBUG
   path = strdup(pathname);
 #endif
@@ -118,7 +119,8 @@ ssize_t File::pread(void* buf, size_t count, off_t offset) {
     return -1;
   }
   if (unlikely(count == 0)) return 0;
-  return tx_mgr.do_pread(static_cast<char*>(buf), count, offset);
+  return tx_mgr.do_pread(static_cast<char*>(buf), count,
+                         static_cast<size_t>(offset));
 }
 
 ssize_t File::read(void* buf, size_t count) {
@@ -145,7 +147,8 @@ off_t File::lseek(off_t offset, int whence) {
       if (ret == -1) errno = EINVAL;
       break;
     case SEEK_END:
-      ret = tx_mgr.offset_mgr.seek_absolute(file_size + offset);
+      ret = tx_mgr.offset_mgr.seek_absolute(static_cast<off_t>(file_size) +
+                                            offset);
       break;
     case SEEK_DATA:
     case SEEK_HOLE:
@@ -159,7 +162,7 @@ off_t File::lseek(off_t offset, int whence) {
 }
 
 void* File::mmap(void* addr_hint, size_t length, int prot, int mmap_flags,
-                 off_t offset) {
+                 size_t offset) {
   if (offset % BLOCK_SIZE != 0) {
     errno = EINVAL;
     return MAP_FAILED;
@@ -237,7 +240,7 @@ int File::fsync() {
   // here we use the last index of the block to enforce reflush later
   uint16_t capacity = state.cursor.idx.get_capacity();
   if (unlikely(state.cursor.idx.local_idx >= capacity))
-    state.cursor.idx.local_idx = capacity - 1;
+    state.cursor.idx.local_idx = static_cast<uint16_t>(capacity - 1);
   meta->set_tx_tail(state.cursor.idx);
   timer.stop<Event::FSYNC>();
   return 0;

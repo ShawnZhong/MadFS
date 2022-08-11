@@ -20,7 +20,7 @@ ssize_t write(int fd, const void* buf, size_t count) {
 ssize_t pwrite(int fd, const void* buf, size_t count, off_t offset) {
   if (auto file = get_file(fd)) {
     timer.start<Event::PWRITE>(count);
-    ssize_t res = file->pwrite(buf, count, offset);
+    ssize_t res = file->pwrite(buf, count, static_cast<size_t>(offset));
     timer.stop<Event::PWRITE>();
     LOG_DEBUG("ulayfs::pwrite(%s, buf, %zu) = %zu", file->path, count, res);
     return res;
