@@ -148,7 +148,7 @@ def plot_micro_st(result_dir):
                 "append": "Append",
                 "cow": "Sub-Block Overwrite",
             }
-            ax.set_title(titles.get(name), pad=5)
+            ax.set_title(titles.get(name), pad=3, fontsize=12)
 
         plot_single_bm(
             df,
@@ -198,7 +198,7 @@ def plot_micro_mt(result_dir):
                 "zipf_2k": r"2 KB Write w/ Zipf",
             }
 
-            ax.set_title(titles.get(name), pad=5)
+            ax.set_title(titles.get(name), pad=3, fontsize=11)
 
         plot_single_bm(
             benchmark,

@@ -38,8 +38,7 @@ class Filesystem:
     def is_available(self) -> bool:
         return self.path is not None
 
-    @staticmethod
-    def get_env(**kwargs):
+    def get_env(self, **kwargs):
         return {}
 
     def process_cmd(self, cmd: List[str], env: Dict[str, str], **kwargs) -> List[str]:
@@ -62,21 +61,29 @@ class Filesystem:
         return cmd
 
 
+def _get_ext4_path() -> Path:
+    for path in ["/mnt/pmem0-ext4-dax", "/mnt/pmem0", "/mnt/pmem1", "/mnt/pmem_emul"]:
+        if Path(path).is_mount():
+            return Path(path)
+
+    logger.warning(f"Cannot find ext4-dax path, use current directory")
+    return Path(".")
+
+
+_ext4_path = _get_ext4_path()
+
+
 class Ext4DAX(Filesystem):
     name = "ext4-DAX"
 
     @property
     def path(self) -> Optional[Path]:
-        for path in ["/mnt/pmem0-ext4-dax", "/mnt/pmem0", "/mnt/pmem1", "/mnt/pmem_emul"]:
-            if Path(path).is_mount():
-                return Path(path)
-
-        logger.warning(f"Cannot find ext4-dax path, use current directory")
-        return Path(".")
+        return _ext4_path
 
 
 class ULAYFS(Ext4DAX):
     name = "uLayFS"
+    cc = "OCC"
 
     @staticmethod
     def build(build_type, result_dir, cmake_args=""):
@@ -105,49 +112,36 @@ class ULAYFS(Ext4DAX):
             f"-DULAYFS_CC_{option}={'ON' if option == cc else 'OFF'}"
             for option in options
         )
-        
+
         return result
 
-    @staticmethod
-    def _get_env(cmd, cc, **kwargs):
+    def get_env(self, cmd, **kwargs):
         if is_ulayfs_linked(cmd[0]):
             return {}
-        cmake_args = ULAYFS._make_cmake_args(cc)
+        cmake_args = ULAYFS._make_cmake_args(self.cc)
         ulayfs_path = ULAYFS.build(cmake_args=cmake_args, **kwargs)
         env = {"LD_PRELOAD": ulayfs_path}
         return env
 
-    @staticmethod
-    def get_env(cmd, **kwargs):
-        return ULAYFS._get_env(cmd, cc="OCC", **kwargs)
-
 
 class ULAYFS_OCC(ULAYFS):
     name = "OCC"
+    cc = "OCC"
 
 
 class ULAYFS_MUTEX(ULAYFS):
     name = "mutex"
-
-    @staticmethod
-    def get_env(cmd, **kwargs):
-        return ULAYFS._get_env(cmd, cc="MUTEX", **kwargs)
+    cc = "MUTEX"
 
 
 class ULAYFS_SPINLOCK(ULAYFS):
     name = "spinlock"
-
-    @staticmethod
-    def get_env(cmd, **kwargs):
-        return ULAYFS._get_env(cmd, cc="SPINLOCK", **kwargs)
+    cc = "SPINLOCK"
 
 
 class ULAYFS_RWLOCK(ULAYFS):
     name = "rwlock"
-
-    @staticmethod
-    def get_env(cmd, **kwargs):
-        return ULAYFS._get_env(cmd, cc="RWLOCK", **kwargs)
+    cc = "RWLOCK"
 
 
 class NOVA(Filesystem):
@@ -182,8 +176,7 @@ class SplitFS(Filesystem):
 
         return True
 
-    @staticmethod
-    def get_env(**kwargs):
+    def get_env(self, **kwargs):
         env = {
             "LD_LIBRARY_PATH": SplitFS.build_path,
             "NVP_TREE_FILE": SplitFS.build_path / "bin" / "nvp_nvp.tree",

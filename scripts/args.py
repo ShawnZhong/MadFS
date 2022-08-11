@@ -61,11 +61,16 @@ def parse_args(argparser: argparse.ArgumentParser):
         "env": {},
     }
 
-    if cmd_args.filter:
-        run_config["prog_args"] += [f"--benchmark_filter={cmd_args.__dict__.pop('filter')}"]
-    if cmd_args.size:
-        run_config["env"]["BENCH_FILE_SIZE"] = cmd_args.__dict__.pop("size")
-    if cmd_args.iter:
-        run_config["env"]["BENCH_NUM_ITER"] = cmd_args.__dict__.pop("iter")
+    bm_filter = cmd_args.__dict__.pop("filter")
+    if bm_filter:
+        run_config["prog_args"] += [f"--benchmark_filter={bm_filter}"]
+
+    bm_size = cmd_args.__dict__.pop("size")
+    if bm_size:
+        run_config["env"]["BENCH_FILE_SIZE"] = bm_size
+
+    bm_iter = cmd_args.__dict__.pop("iter")
+    if bm_iter:
+        run_config["env"]["BENCH_NUM_ITER"] = bm_iter
 
     return cmd_args, run_config
