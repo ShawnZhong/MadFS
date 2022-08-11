@@ -5,9 +5,9 @@
 #include <cstring>
 
 #include "const.h"
-#include "debug.h"
 #include "entry.h"
 #include "idx.h"
+#include "logging.h"
 #include "utils.h"
 
 namespace ulayfs::pmem {

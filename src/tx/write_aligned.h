@@ -12,7 +12,7 @@ class AlignedTx : public WriteTx {
       : WriteTx(file, tx_mgr, buf, count, offset, state, ticket) {}
 
   ssize_t exec() {
-    debug::count(debug::ALIGNED_TX_START);
+    counter.count(Event::ALIGNED_TX_START);
 
     // since everything is block-aligned, we can copy data directly
     const char* rest_buf = buf;
@@ -44,7 +44,7 @@ class AlignedTx : public WriteTx {
 
   retry:
     if constexpr (BuildOptions::cc_occ) {
-      debug::count(debug::ALIGNED_TX_COMMIT);
+      counter.count(Event::ALIGNED_TX_COMMIT);
       pmem::TxEntry conflict_entry =
           tx_mgr->try_commit(commit_entry, &state.cursor);
       if (!conflict_entry.is_valid()) goto done;

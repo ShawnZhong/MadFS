@@ -16,12 +16,6 @@ if __name__ == "__main__":
         "cmake_target",
         help="see .cpp files in `test` and `bench` for available targets",
     )
-    parser.add_argument(
-        "-c",
-        "--cmake_args",
-        default="",
-        help="additional build arguments to be passed to CMake",
-    )
     add_common_args(parser)
     # set the default argument of fs to uLayFS
     parser.set_defaults(fs_names=["uLayFS"])

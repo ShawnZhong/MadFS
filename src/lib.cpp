@@ -15,6 +15,7 @@
 
 #include "config.h"
 #include "const.h"
+#include "counter.h"
 #include "file.h"
 #include "posix.h"
 #include "utils.h"
@@ -57,7 +58,7 @@ int open(const char* pathname, int flags, ...) {
     files.emplace(fd,
                   std::make_shared<dram::File>(fd, stat_buf, flags, pathname));
     LOG_INFO("ulayfs::open(%s, %x, %x) = %d", pathname, flags, mode, fd);
-    debug::count(debug::OPEN);
+    counter.count(Event::OPEN);
   } catch (const FileInitException& e) {
     LOG_WARN("File \"%s\": ulayfs::open failed: %s. Fallback to syscall",
              pathname, e.what());
@@ -98,7 +99,7 @@ int close(int fd) {
   if (auto file = get_file(fd)) {
     LOG_DEBUG("ulayfs::close(%s)", file->path);
     files.unsafe_erase(fd);
-    debug::count(debug::CLOSE);
+    counter.count(Event::CLOSE);
     return 0;
   } else {
     LOG_DEBUG("posix::close(%d)", fd);
@@ -107,7 +108,7 @@ int close(int fd) {
 }
 
 FILE* fopen(const char* filename, const char* mode) {
-  static INIT_FN(fopen);
+  static DEFINE_FN(fopen);
 
   FILE* file = fopen(filename, mode);
   LOG_DEBUG("posix::fopen(%s, %s) = %p", filename, mode, file);
@@ -115,7 +116,7 @@ FILE* fopen(const char* filename, const char* mode) {
 }
 
 int fclose(FILE* stream) {
-  static INIT_FN(fclose);
+  static DEFINE_FN(fclose);
 
   int fd = fileno(stream);
   if (auto file = get_file(fd)) {
@@ -130,9 +131,10 @@ int fclose(FILE* stream) {
 
 ssize_t read(int fd, void* buf, size_t count) {
   if (auto file = get_file(fd)) {
+    counter.start_timer(Event::READ, count);
     auto res = file->read(buf, count);
     LOG_DEBUG("ulayfs::read(%s, buf, %zu) = %zu", file->path, count, res);
-    debug::count(debug::READ, count);
+    counter.end_timer(Event::READ);
     return res;
   } else {
     auto res = posix::read(fd, buf, count);
@@ -143,10 +145,11 @@ ssize_t read(int fd, void* buf, size_t count) {
 
 ssize_t pread(int fd, void* buf, size_t count, off_t offset) {
   if (auto file = get_file(fd)) {
+    counter.start_timer(Event::PREAD, count);
     auto res = file->pread(buf, count, offset);
+    counter.end_timer(Event::PREAD);
     LOG_DEBUG("ulayfs::pread(%s, buf, %zu, %ld) = %zu", file->path, count,
               offset, res);
-    debug::count(debug::PREAD, count);
     return res;
   } else {
     auto res = posix::pread(fd, buf, count, offset);
@@ -173,9 +176,10 @@ ssize_t __pread_chk(int fd, void* buf, size_t count, off_t offset,
 
 ssize_t write(int fd, const void* buf, size_t count) {
   if (auto file = get_file(fd)) {
+    counter.start_timer(Event::WRITE, count);
     ssize_t res = file->write(buf, count);
+    counter.end_timer(Event::WRITE);
     LOG_DEBUG("ulayfs::write(%s, buf, %zu) = %zu", file->path, count, res);
-    debug::count(debug::WRITE, count);
     return res;
   } else {
     ssize_t res = posix::write(fd, buf, count);
@@ -186,9 +190,11 @@ ssize_t write(int fd, const void* buf, size_t count) {
 
 ssize_t pwrite(int fd, const void* buf, size_t count, off_t offset) {
   if (auto file = get_file(fd)) {
-    LOG_DEBUG("ulayfs::pwrite(%s, buf, %zu, %ld)", file->path, count, offset);
-    debug::count(debug::PWRITE, count);
-    return file->pwrite(buf, count, offset);
+    counter.start_timer(Event::PWRITE, count);
+    ssize_t res = file->pwrite(buf, count, offset);
+    counter.end_timer(Event::PWRITE);
+    LOG_DEBUG("ulayfs::pwrite(%s, buf, %zu) = %zu", file->path, count, res);
+    return res;
   } else {
     LOG_DEBUG("posix::pwrite(%d, buf, %zu, %ld)", fd, count, offset);
     return posix::pwrite(fd, buf, count, offset);
@@ -274,7 +280,7 @@ int __fxstat64([[maybe_unused]] int ver, int fd, struct stat64* buf) {
 }
 
 int __xstat([[maybe_unused]] int ver, const char* pathname, struct stat* buf) {
-  static INIT_FN(__xstat);
+  static DEFINE_FN(__xstat);
 
   if (int rc = __xstat(ver, pathname, buf); unlikely(rc < 0)) {
     LOG_WARN("posix::stat(%s) = %d: %m", pathname, rc);
@@ -360,7 +366,7 @@ void __attribute__((constructor)) ulayfs_ctor() {
   std::cerr << build_options << std::endl;
   std::cerr << runtime_options << std::endl;
   if (runtime_options.log_file) {
-    debug::log_file = fopen(runtime_options.log_file, "a");
+    log_file = fopen(runtime_options.log_file, "a");
   }
 }
 

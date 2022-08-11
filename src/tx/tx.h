@@ -1,5 +1,6 @@
 #pragma once
 
+#include "counter.h"
 #include "file.h"
 #include "mgr.h"
 

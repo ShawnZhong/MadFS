@@ -7,7 +7,7 @@
 #cmakedefine01 ULAYFS_FORCE_MAP_POPULATE
 #cmakedefine01 ULAYFS_TX_FLUSH_ONLY_FSYNC
 #cmakedefine01 ULAYFS_USE_PMEMCHECK
-#cmakedefine01 ULAYFS_ENABLE_COUNTER
+#cmakedefine01 ULAYFS_COUNTER
 #cmakedefine01 ULAYFS_CC_OCC
 #cmakedefine01 ULAYFS_CC_MUTEX
 #cmakedefine01 ULAYFS_CC_SPINLOCK
@@ -47,7 +47,7 @@ constexpr static struct BuildOptions {
   constexpr static bool force_map_populate = ULAYFS_FORCE_MAP_POPULATE;
   constexpr static bool tx_flush_only_fsync = ULAYFS_TX_FLUSH_ONLY_FSYNC;
   constexpr static bool use_pmemcheck = ULAYFS_USE_PMEMCHECK;
-  constexpr static bool enable_counter = ULAYFS_ENABLE_COUNTER;
+  constexpr static bool enable_counter = ULAYFS_COUNTER;
   constexpr static bool cc_occ = ULAYFS_CC_OCC;
   constexpr static bool cc_mutex = ULAYFS_CC_MUTEX;
   constexpr static bool cc_spinlock = ULAYFS_CC_SPINLOCK;

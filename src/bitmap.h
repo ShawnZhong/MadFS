@@ -7,8 +7,8 @@
 #include <ostream>
 
 #include "const.h"
-#include "debug.h"
 #include "idx.h"
+#include "logging.h"
 #include "utils.h"
 
 namespace ulayfs::dram {

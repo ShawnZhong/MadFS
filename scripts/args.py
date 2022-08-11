@@ -11,6 +11,12 @@ def add_common_args(argparser: argparse.ArgumentParser):
         choices=build_types,
     )
     argparser.add_argument(
+        "-c",
+        "--cmake_args",
+        default="",
+        help="additional build arguments to be passed to CMake",
+    )
+    argparser.add_argument(
         "-f",
         "--fs_names",
         default=bench_fs.keys(),
