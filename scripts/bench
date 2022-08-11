@@ -3,58 +3,57 @@ import argparse
 import logging
 from pathlib import Path
 
+from args import add_common_args, parse_args
 from fs import available_fs
+from plot import plot_micro_st, plot_micro_mt, plot_micro_meta, plot_ycsb
 from runner import Runner
-from utils import root_dir, get_timestamp, add_common_args, system, drop_cache, init, parse_args
+from utils import root_dir, get_timestamp, system, drop_cache, init
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger("bench")
 
 
+def get_result_dir(cmake_target):
+    return root_dir / "results" / f"bench_{cmake_target}" / get_timestamp()
+
+
 class Benchmark:
-    def __init__(self, build_type, additional_args, fs_names, **kwargs):
+    def __init__(self, benchmark):
         init(configure=True)
+        self.cmake_target = f"micro_{benchmark}"
 
-        self.build_type = build_type
-        self.additional_args = additional_args
-        self.fs_names = fs_names
-        self.cmake_target = self.get_cmake_target(**kwargs)
-        self.result_dir = root_dir / "results" / f"bench_{self.cmake_target}" / get_timestamp()
+    def run(self, build_type, fs_names, run_config):
+        result_dir = get_result_dir(self.cmake_target)
 
-    def get_cmake_target(self, **kwargs):
-        raise NotImplementedError()
-
-    def run_single_config(self, **kwargs):
-        raise NotImplementedError()
-
-    def run(self, trace, **kwargs):
-        for fs_name in self.fs_names:
+        for fs_name in fs_names:
             fs = available_fs[fs_name]
-            runner = Runner(self.cmake_target, result_dir=self.result_dir / fs_name, build_type=self.build_type)
+            runner = Runner(
+                self.cmake_target,
+                result_dir=result_dir / fs_name,
+                build_type=build_type
+            )
             runner.build()
-            self.run_single_config(fs=fs, runner=runner, trace=trace, **kwargs)
-        return self.result_dir
+            self.run_single_config(
+                fs=fs,
+                runner=runner,
+                run_config=run_config
+            )
+        return result_dir
 
-
-class MicroBenchmark(Benchmark):
-    def get_cmake_target(self, benchmark, **kwargs):
-        return f"micro_{benchmark}"
-
-    def run_single_config(self, fs, runner: Runner, trace, **kwargs):
+    def run_single_config(self, fs, runner: Runner, run_config):
         if fs.path:
             system(f"rm -rf {fs.path}/*")
-        runner.run(fs=fs, additional_args=self.additional_args, trace=trace)
+        runner.run(fs=fs, **run_config)
 
 
 class YcsbBenchmark(Benchmark):
-    def __init__(self, **kwargs):
-        super().__init__(**kwargs)
-        self.workloads = ("a", "b", "c", "d", "e", "f")
+    workloads = ("a", "b", "c", "d", "e", "f")
 
-    def get_cmake_target(self, **kwargs):
-        return "leveldb_ycsb"
+    def __init__(self, benchmark):
+        super().__init__(benchmark)
+        self.cmake_target = "leveldb_ycsb"
 
-    def run_single_config(self, fs, runner, trace):
+    def run_single_config(self, fs, runner: Runner, run_config):
         dbdir = fs.path / "bench-dbdir"
         for w in self.workloads:
             system(f"rm -rf {dbdir} && mkdir -p {dbdir}")
@@ -63,31 +62,29 @@ class YcsbBenchmark(Benchmark):
                 trace_name = f"{w}-{'load' if load else 'run'}"
                 trace_path = root_dir / "bench" / "ycsb-traces-large" / f"{trace_name}.txt"
                 cmd = f"{runner.prog_path} -f {trace_path} -d {dbdir}".split()
-                runner.run(cmd=cmd, fs=fs, prog_log_name=f"{trace_name}.log", additional_args=self.additional_args,
-                           trace=trace)
+                runner.run(cmd=cmd, fs=fs, prog_log_name=f"{trace_name}.log", **run_config)
             system(f"rm -rf {dbdir}")
 
 
+bm_classes = {
+    "st": Benchmark,
+    "mt": Benchmark,
+    "meta": Benchmark,
+    "ycsb": YcsbBenchmark,
+}
+
+plot_fns = {
+    "st": plot_micro_st,
+    "mt": plot_micro_mt,
+    "meta": plot_micro_meta,
+    "ycsb": plot_ycsb,
+}
+
+
 def main(benchmark, result_dir, **kwargs):
-    from plot import plot_micro_st, plot_micro_mt, plot_micro_meta, plot_ycsb
-
     if result_dir is None:
-        bm_classes = {
-            "st": MicroBenchmark,
-            "mt": MicroBenchmark,
-            "meta": MicroBenchmark,
-            "ycsb": YcsbBenchmark,
-        }
-        result_dir = bm_classes[benchmark](benchmark=benchmark, **kwargs).run(**kwargs)
-
-    plot_fns = {
-        "st": plot_micro_st,
-        "mt": plot_micro_mt,
-        "meta": plot_micro_meta,
-        "ycsb": plot_ycsb,
-    }
+        result_dir = bm_classes[benchmark](benchmark).run(**kwargs)
     plot_fns[benchmark](result_dir)
-
     logger.info(f"Results saved to {result_dir}")
 
 
@@ -103,11 +100,9 @@ if __name__ == "__main__":
         type=Path,
         help="If set, plot the results in the given directory w/o running the benchmark",
     )
-    argparser.set_defaults(fs_names=available_fs.keys())
+    argparser.set_defaults(fs_names=available_fs.keys(), build_type="release")
     add_common_args(argparser)
 
-    args = parse_args(argparser)
-    if args.build_type is None:
-        args.build_type = "release"
-    logger.info(f"args={args}")
-    main(**vars(args))
+    args, run_cfg = parse_args(argparser)
+    logger.info(f"args={args}, run_config={run_cfg}")
+    main(**vars(args), run_config=run_cfg)

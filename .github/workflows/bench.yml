@@ -16,13 +16,13 @@ jobs:
       - uses: actions/checkout@v2
 
       - name: micro_st
-        run: BENCH_NUM_ITER=10 ./run micro_st -b ${{matrix.build_type}}
+        run: ./run micro_st -b ${{matrix.build_type}} --iter 10
 
       - name: micro_mt
-        run: BENCH_FILE_SIZE=16 BENCH_NUM_ITER=10 ./run micro_mt -b ${{matrix.build_type}}
+        run: ./run micro_mt -b ${{matrix.build_type}} --size 16 --iter 10
 
       - name: micro_meta
-        run: BENCH_NUM_ITER=10 ./run micro_meta -b ${{matrix.build_type}}
+        run: ./run micro_meta -b ${{matrix.build_type}} --iter 10
 
   leveldb:
     name: LevelDB

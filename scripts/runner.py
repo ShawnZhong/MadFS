@@ -57,24 +57,28 @@ class Runner:
     def run(
             self,
             cmd: Optional[List[str]] = None,
-            additional_args: List[str] = None,
             prog_log_name: str = "prog.log",
             fs: Filesystem = ULAYFS,
+            prog_args: List[str] = None,
+            env=None,
             trace: bool = False,
     ):
         if cmd is None:
             assert self.prog_path is not None
             cmd = [str(self.prog_path)]
 
+        if env is None:
+            env = {}
+
         if self.is_micro:
             json_path = self.result_dir / "result.json"
             cmd += [f"--benchmark_counters_tabular=true"]
             cmd += [f"--benchmark_out={json_path}"]
 
-        if additional_args is not None:
-            cmd += additional_args
+        if prog_args is not None:
+            cmd += prog_args
 
-        cmd = fs.process_cmd(cmd, env={}, build_type=self.build_type, result_dir=self.result_dir)
+        cmd = fs.process_cmd(cmd, env=env, build_type=self.build_type, result_dir=self.result_dir)
         # cmd = "perf stat -d -d -d".split() + cmd
         cmd = " ".join(cmd)
 
