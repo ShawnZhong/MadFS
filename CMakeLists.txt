@@ -24,6 +24,7 @@ add_library(ulayfs SHARED
     src/posix.h src/posix.cpp
     src/convert.h
     src/tx/cursor.h
+    src/tx/lock.h
     src/tx/mgr.h src/tx/mgr.cpp
     src/tx/tx.h
     src/tx/read.h
@@ -49,6 +50,10 @@ option(ULAYFS_FORCE_MAP_POPULATE "Always use MAP_POPULATE for mmap" ON)
 option(ULAYFS_TX_FLUSH_ONLY_FSYNC "Only flush transaction entries in fsync" OFF)
 option(ULAYFS_USE_PMEMCHECK "Enable pmemcheck macros" OFF)
 option(ULAYFS_ENABLE_COUNTERS "Enable performance counters" OFF)
+option(ULAYFS_CC_OCC "Use OCC for CC" ON)
+option(ULAYFS_CC_MUTEX "Use robust mutex for CC" OFF)
+option(ULAYFS_CC_SPINLOCK "Use spinlock for CC" OFF)
+option(ULAYFS_CC_RWLOCK "Use rwlock for CC" OFF)
 
 include(cmake/tooling.cmake)
 include(cmake/libpmem2.cmake)

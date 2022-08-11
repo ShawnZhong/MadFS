@@ -8,6 +8,10 @@
 #cmakedefine01 ULAYFS_TX_FLUSH_ONLY_FSYNC
 #cmakedefine01 ULAYFS_USE_PMEMCHECK
 #cmakedefine01 ULAYFS_ENABLE_COUNTER
+#cmakedefine01 ULAYFS_CC_OCC
+#cmakedefine01 ULAYFS_CC_MUTEX
+#cmakedefine01 ULAYFS_CC_SPINLOCK
+#cmakedefine01 ULAYFS_CC_RWLOCK
 
 #cmakedefine CMAKE_BUILD_TYPE "@CMAKE_BUILD_TYPE@"
 
@@ -44,6 +48,11 @@ constexpr static struct BuildOptions {
   constexpr static bool tx_flush_only_fsync = ULAYFS_TX_FLUSH_ONLY_FSYNC;
   constexpr static bool use_pmemcheck = ULAYFS_USE_PMEMCHECK;
   constexpr static bool enable_counter = ULAYFS_ENABLE_COUNTER;
+  constexpr static bool cc_occ = ULAYFS_CC_OCC;
+  constexpr static bool cc_mutex = ULAYFS_CC_MUTEX;
+  constexpr static bool cc_spinlock = ULAYFS_CC_SPINLOCK;
+  constexpr static bool cc_rwlock = ULAYFS_CC_RWLOCK;
+  static_assert(cc_occ + cc_mutex + cc_spinlock + cc_rwlock == 1);
 
 #ifndef NDEBUG
 #define ULAYFS_DEBUG 1
@@ -76,9 +85,18 @@ constexpr static struct BuildOptions {
     out << "\tforce_map_populate: " << force_map_populate << "\n";
     out << "\ttx_flush_only_fsync: " << tx_flush_only_fsync << "\n";
     out << "\tenable_counter: " << enable_counter << "\n";
-    out << "\tsupport_clwb: " << support_clwb << "\n";
-    out << "\tsupport_clflushopt: " << support_clflushopt << "\n";
-    out << "\tsupport_avx512f: " << support_avx512f << "\n";
+
+    out << "\thardware support:\n";
+    out << "\t\tclwb: " << support_clwb << "\n";
+    out << "\t\tclflushopt: " << support_clflushopt << "\n";
+    out << "\t\tavx512f: " << support_avx512f << "\n";
+
+    out << "\tconcurrency control:\n";
+    out << "\t\tcc_occ: " << cc_occ << "\n";
+    out << "\t\tcc_mutex: " << cc_mutex << "\n";
+    out << "\t\tcc_spinlock: " << cc_spinlock << "\n";
+    out << "\t\tcc_rwlock: " << cc_rwlock << "\n";
+
     return out;
   }
 } build_options;

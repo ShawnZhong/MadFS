@@ -1,6 +1,5 @@
 #pragma once
 
-#include <pthread.h>
 #include <tbb/concurrent_vector.h>
 
 #include <atomic>

@@ -95,16 +95,59 @@ class ULAYFS(Ext4DAX):
         return build_path / "libulayfs.so"
 
     @staticmethod
-    def _get_env(cmd, **kwargs):
+    def _make_cmake_args(cc: str) -> str:
+        options = ["OCC", "MUTEX", "SPINLOCK", "RWLOCK"]
+
+        if cc not in options:
+            raise ValueError(f"{cc} is not a valid option")
+
+        result = " ".join(
+            f"-DULAYFS_CC_{option}={'ON' if option == cc else 'OFF'}"
+            for option in options
+        )
+        
+        return result
+
+    @staticmethod
+    def _get_env(cmd, cc, **kwargs):
         if is_ulayfs_linked(cmd[0]):
             return {}
-        ulayfs_path = ULAYFS.build(**kwargs)
+        cmake_args = ULAYFS._make_cmake_args(cc)
+        ulayfs_path = ULAYFS.build(cmake_args=cmake_args, **kwargs)
         env = {"LD_PRELOAD": ulayfs_path}
         return env
 
     @staticmethod
     def get_env(cmd, **kwargs):
-        return ULAYFS._get_env(cmd, **kwargs)
+        return ULAYFS._get_env(cmd, cc="OCC", **kwargs)
+
+
+class ULAYFS_OCC(ULAYFS):
+    name = "OCC"
+
+
+class ULAYFS_MUTEX(ULAYFS):
+    name = "mutex"
+
+    @staticmethod
+    def get_env(cmd, **kwargs):
+        return ULAYFS._get_env(cmd, cc="MUTEX", **kwargs)
+
+
+class ULAYFS_SPINLOCK(ULAYFS):
+    name = "spinlock"
+
+    @staticmethod
+    def get_env(cmd, **kwargs):
+        return ULAYFS._get_env(cmd, cc="SPINLOCK", **kwargs)
+
+
+class ULAYFS_RWLOCK(ULAYFS):
+    name = "rwlock"
+
+    @staticmethod
+    def get_env(cmd, **kwargs):
+        return ULAYFS._get_env(cmd, cc="RWLOCK", **kwargs)
 
 
 class NOVA(Filesystem):
@@ -149,9 +192,10 @@ class SplitFS(Filesystem):
         return env
 
 
-def get_available_fs() -> Dict[str, Filesystem]:
-    all_fs = [ULAYFS(), Ext4DAX(), NOVA(), SplitFS()]
-    return {fs.name: fs for fs in all_fs if fs.is_available()}
+def filter_available_fs(fs_list: List[Filesystem]) -> Dict[str, Filesystem]:
+    return {fs.name: fs for fs in fs_list if fs.is_available()}
 
 
-available_fs = get_available_fs()
+_bench_fs = [ULAYFS(), Ext4DAX(), NOVA(), SplitFS()]
+bench_fs = filter_available_fs(_bench_fs)
+available_fs = filter_available_fs(_bench_fs + [ULAYFS_OCC(), ULAYFS_SPINLOCK(), ULAYFS_MUTEX(), ULAYFS_RWLOCK()])

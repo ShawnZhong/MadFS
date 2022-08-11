@@ -27,6 +27,8 @@ class WriteTx : public Tx {
         recycle_image(local_buf_image_lidxs),
         dst_lidxs(local_buf_dst_lidxs),
         dst_blocks(local_buf_dst_blocks) {
+    tx_mgr->lock.wrlock();
+
     // reset recycle_image
     recycle_image.clear();
     recycle_image.resize(num_blocks);

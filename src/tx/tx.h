@@ -73,6 +73,8 @@ class Tx {
         num_blocks(end_vidx - begin_vidx),
         is_offset_depend(false) {}
 
+  ~Tx() { tx_mgr->lock.unlock(); }
+
  public:
   template <typename TX, typename... Params>
   static ssize_t exec_and_release_offset(Params&&... params) {

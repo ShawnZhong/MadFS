@@ -43,16 +43,21 @@ class AlignedTx : public WriteTx {
     if (is_offset_depend) tx_mgr->offset_mgr.wait_offset(ticket);
 
   retry:
-    debug::count(debug::ALIGNED_TX_COMMIT);
-    pmem::TxEntry conflict_entry =
-        tx_mgr->try_commit(commit_entry, &state.cursor);
-    if (!conflict_entry.is_valid()) goto done;
-    // we don't check the return value of handle_conflict here because we don't
-    // care whether there is a conflict, as long as recycle_image gets updated
-    handle_conflict(conflict_entry, begin_vidx, end_vidx - 1, recycle_image);
-    // aligned transaction will never have leftover bytes, so no need to recheck
-    // commit_entry
-    goto retry;
+    if constexpr (BuildOptions::cc_occ) {
+      debug::count(debug::ALIGNED_TX_COMMIT);
+      pmem::TxEntry conflict_entry =
+          tx_mgr->try_commit(commit_entry, &state.cursor);
+      if (!conflict_entry.is_valid()) goto done;
+      // we don't check the return value of handle_conflict here because we
+      // don't care whether there is a conflict, as long as recycle_image gets
+      // updated
+      handle_conflict(conflict_entry, begin_vidx, end_vidx - 1, recycle_image);
+      // aligned transaction will never have leftover bytes, so no need to
+      // recheck commit_entry
+      goto retry;
+    } else {
+      tx_mgr->try_commit(commit_entry, &state.cursor);
+    }
 
   done:
     // recycle the data blocks being overwritten
