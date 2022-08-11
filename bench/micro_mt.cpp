@@ -130,7 +130,7 @@ void bench(benchmark::State& state) {
   if (ulayfs::is_linked()) {
     double start_cnt =
         ulayfs::debug::get_occurrence(ulayfs::Event::SINGLE_BLOCK_TX_START) +
-        ulayfs::debug::get_occurrence(ulayfs::Event::ALIGNED_TX_START);
+        ulayfs::debug::get_occurrence(ulayfs::Event::ALIGNED_TX_COPY);
     double copy_cnt =
         ulayfs::debug::get_occurrence(ulayfs::Event::SINGLE_BLOCK_TX_COPY);
     double commit_cnt =

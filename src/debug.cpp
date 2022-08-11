@@ -16,5 +16,6 @@ void print_file(int fd) {
 
 size_t get_occurrence(Event event) { return counter.get_occurrence(event); }
 void clear_count() { counter.clear(); }
+void print_counter() { counter.print(); }
 
 }  // namespace ulayfs::debug

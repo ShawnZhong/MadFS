@@ -13,6 +13,7 @@
 
 #include "alloc.h"
 #include "config.h"
+#include "counter.h"
 #include "idx.h"
 #include "utils.h"
 
@@ -225,6 +226,7 @@ error:
 }
 
 int File::fsync() {
+  counter.start_timer<Event::FSYNC>();
   FileState state;
   this->update(&state, /*do_alloc*/ false);
   tx_mgr.flush_tx_entries(meta->get_tx_tail(), state.cursor);
@@ -237,6 +239,7 @@ int File::fsync() {
   if (unlikely(state.cursor.idx.local_idx >= capacity))
     state.cursor.idx.local_idx = capacity - 1;
   meta->set_tx_tail(state.cursor.idx);
+  counter.end_timer<Event::FSYNC>();
   return 0;
 }
 

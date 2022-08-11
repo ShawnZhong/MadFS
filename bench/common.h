@@ -55,6 +55,8 @@ void prefill_file(int fd, size_t num_bytes,
     assert(res == remaining_size);
   }
 
+  if (ulayfs::is_linked()) ulayfs::debug::clear_count();
+
   fsync(fd);
   delete[] buf;
 }
