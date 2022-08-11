@@ -137,7 +137,7 @@ def plot_micro_st(result_dir):
 
             if is_cow:
                 ax.xaxis.set_major_locator(plt.MaxNLocator(4))
-            else:
+            elif "read" in name:
                 ax.xaxis.set_major_locator(plt.MultipleLocator(2))
 
             ax.yaxis.set_major_locator(plt.MaxNLocator(steps=[1, 5, 10]))

@@ -41,10 +41,11 @@ int get_file_size(int default_val = 1024) noexcept {
 
 void prefill_file(int fd, size_t num_bytes,
                   size_t chunk_size = 32l * 1024 * 1024) {
+  fprintf(stderr, "prefilling file with %ld MB in %ld MB chunk\n",
+          num_bytes / 1024 / 1024, chunk_size / 1024 / 1024);
+
   auto buf = new char[chunk_size];
   std::fill(buf, buf + chunk_size, 'x');
-
-  printf("prefilling file with %ld MB\n", num_bytes / 1024 / 1024);
 
   for (size_t i = 0; i < num_bytes / chunk_size; ++i) {
     [[maybe_unused]] size_t res = write(fd, buf, chunk_size);

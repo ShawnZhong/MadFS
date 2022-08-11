@@ -1,7 +1,6 @@
 #include "common.h"
 
 constexpr int BLOCK_SIZE = 4096;
-constexpr int MIN_SIZE = 512;
 constexpr int MAX_SIZE = 128 * 1024;
 
 int num_iter = get_num_iter();
@@ -140,12 +139,17 @@ int main(int argc, char** argv) {
            RegisterBenchmark("seq_read", bench<Mode::SEQ_READ>),
            RegisterBenchmark("seq_pread", bench<Mode::SEQ_PREAD>),
            RegisterBenchmark("rnd_pread", bench<Mode::RND_PREAD>),
+       }) {
+    bm->RangeMultiplier(2)->Range(512, MAX_SIZE)->Iterations(num_iter);
+  }
+
+  for (auto& bm : {
            RegisterBenchmark("seq_write", bench<Mode::SEQ_WRITE>),
            RegisterBenchmark("seq_pwrite", bench<Mode::SEQ_PWRITE>),
            RegisterBenchmark("rnd_pwrite", bench<Mode::RND_PWRITE>),
            RegisterBenchmark("append", bench<Mode::APPEND>),
        }) {
-    bm->RangeMultiplier(2)->Range(MIN_SIZE, MAX_SIZE)->Iterations(num_iter);
+    bm->RangeMultiplier(2)->Range(4096, MAX_SIZE)->Iterations(num_iter);
   }
 
   const auto& bm =
