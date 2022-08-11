@@ -2,26 +2,24 @@
 
 namespace ulayfs::posix {
 
-INIT_FN(lseek);
-INIT_FN(write);
-INIT_FN(pwrite);
-INIT_FN(read);
-INIT_FN(pread);
-INIT_FN(open);
-INIT_FN(close);
-INIT_FN(mmap);
-INIT_FN(mremap);
-INIT_FN(munmap);
-INIT_FN(fallocate);
-INIT_FN(ftruncate);
-INIT_FN(fsync);
-INIT_FN(fdatasync);
-INIT_FN(flock);
-INIT_FN(fcntl);
-INIT_FN(unlink);
-INIT_FN(rename);
-INIT_FN(__fxstat);
-
-#undef INIT_FN
+DEFINE_FN(lseek);
+DEFINE_FN(write);
+DEFINE_FN(pwrite);
+DEFINE_FN(read);
+DEFINE_FN(pread);
+DEFINE_FN(open);
+DEFINE_FN(close);
+DEFINE_FN(mmap);
+DEFINE_FN(mremap);
+DEFINE_FN(munmap);
+DEFINE_FN(fallocate);
+DEFINE_FN(ftruncate);
+DEFINE_FN(fsync);
+DEFINE_FN(fdatasync);
+DEFINE_FN(flock);
+DEFINE_FN(fcntl);
+DEFINE_FN(unlink);
+DEFINE_FN(rename);
+DEFINE_FN(__fxstat);
 
 }  // namespace ulayfs::posix

@@ -10,6 +10,7 @@
 #include <exception>
 
 #include "config.h"
+#include "logging.h"
 #include "posix.h"
 
 #define likely(x) __builtin_expect(!!(x), 1)

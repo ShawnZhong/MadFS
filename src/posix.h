@@ -22,7 +22,7 @@ namespace ulayfs::posix {
  *     declared in the system header.
  *
  * (2) define and initialize the function `posix::fn` in `posix.cpp` by adding a
- *     `INIT_FN(fn)` statement. This initializes `posix::fn` to the function
+ *     `DEFINE_FN(fn)` statement. This initializes `posix::fn` to the function
  *     pointer returned by `dlsym` during runtime.
  *
  * The functions declared in the system headers are defined in `lib.cpp`, which
@@ -37,7 +37,7 @@ namespace ulayfs::posix {
 
 #define DECL_FN(fn) extern const decltype(&::fn) fn
 
-#define INIT_FN(fn)                                                      \
+#define DEFINE_FN(fn)                                                    \
   const decltype(&::fn) fn = []() noexcept {                             \
     auto res = reinterpret_cast<decltype(&::fn)>(dlsym(RTLD_NEXT, #fn)); \
     assert(res != nullptr);                                              \

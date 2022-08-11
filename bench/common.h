@@ -59,8 +59,6 @@ void prefill_file(int fd, size_t num_bytes,
   delete[] buf;
 }
 
-bool is_ulayfs_linked() { return ulayfs::debug::print_file != nullptr; }
-
 std::vector<size_t> get_cpu_list() {
   std::vector<size_t> res;
   char* cpu_list_str = std::getenv("CPULIST");

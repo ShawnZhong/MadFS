@@ -54,7 +54,7 @@ void bench(benchmark::State& state) {
     }
   }
 
-  if (is_ulayfs_linked()) ulayfs::debug::clear_count();
+  if (ulayfs::is_linked()) ulayfs::debug::clear_count();
 
   // run benchmark
   if constexpr (mode == Mode::APPEND) {
@@ -127,22 +127,20 @@ void bench(benchmark::State& state) {
   state.SetBytesProcessed(bytes_processed);
   state.SetItemsProcessed(items_processed);
 
-  if (is_ulayfs_linked()) {
+  if (ulayfs::is_linked()) {
     double start_cnt =
-        ulayfs::debug::get_count(ulayfs::debug::SINGLE_BLOCK_TX_START) +
-        ulayfs::debug::get_count(ulayfs::debug::ALIGNED_TX_START);
+        ulayfs::debug::get_occurrence(ulayfs::Event::SINGLE_BLOCK_TX_START) +
+        ulayfs::debug::get_occurrence(ulayfs::Event::ALIGNED_TX_START);
     double copy_cnt =
-        ulayfs::debug::get_count(ulayfs::debug::SINGLE_BLOCK_TX_COPY);
+        ulayfs::debug::get_occurrence(ulayfs::Event::SINGLE_BLOCK_TX_COPY);
     double commit_cnt =
-        ulayfs::debug::get_count(ulayfs::debug::SINGLE_BLOCK_TX_COMMIT) +
-        ulayfs::debug::get_count(ulayfs::debug::ALIGNED_TX_COMMIT);
+        ulayfs::debug::get_occurrence(ulayfs::Event::SINGLE_BLOCK_TX_COMMIT) +
+        ulayfs::debug::get_occurrence(ulayfs::Event::ALIGNED_TX_COMMIT);
 
     if (start_cnt != 0 && commit_cnt != 0) {
       state.counters["tx_copy"] = copy_cnt / start_cnt / state.threads;
       state.counters["tx_commit"] = commit_cnt / start_cnt / state.threads;
     }
-
-    ulayfs::debug::clear_count();
   }
 }
 

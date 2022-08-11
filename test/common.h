@@ -27,7 +27,7 @@
   } while (0)
 
 void print_file(int fd) {
-  if (ulayfs::debug::print_file) {
+  if (ulayfs::is_linked()) {
     ulayfs::debug::print_file(fd);
   } else {
     printf("uLayFS not linked\n");

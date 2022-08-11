@@ -22,7 +22,7 @@ class Benchmark:
         init(configure=True)
         self.cmake_target = f"micro_{benchmark}"
 
-    def run(self, build_type, fs_names, run_config):
+    def build_and_run(self, build_type, cmake_args, fs_names, run_config):
         result_dir = get_result_dir(self.cmake_target)
 
         for fs_name in fs_names:
@@ -32,7 +32,7 @@ class Benchmark:
                 result_dir=result_dir / fs_name,
                 build_type=build_type
             )
-            runner.build()
+            runner.build(cmake_args=cmake_args)
             self.run_single_config(
                 fs=fs,
                 runner=runner,
@@ -83,7 +83,7 @@ plot_fns = {
 
 def main(benchmark, result_dir, **kwargs):
     if result_dir is None:
-        result_dir = bm_classes[benchmark](benchmark).run(**kwargs)
+        result_dir = bm_classes[benchmark](benchmark).build_and_run(**kwargs)
     plot_fns[benchmark](result_dir)
     logger.info(f"Results saved to {result_dir}")
 
