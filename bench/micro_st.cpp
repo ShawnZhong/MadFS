@@ -3,8 +3,8 @@
 constexpr int BLOCK_SIZE = 4096;
 constexpr int MAX_SIZE = 128 * 1024;
 
-int num_iter = get_num_iter();
 const char* filepath = get_filepath();
+int num_iter = get_num_iter();
 
 int fd;
 

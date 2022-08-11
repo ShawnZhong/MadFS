@@ -47,8 +47,8 @@ set_property(TARGET ulayfs PROPERTY INTERPROCEDURAL_OPTIMIZATION TRUE) # LTO
 build options
 ]]
 
-option(ULAYFS_USE_MAP_SYNC "Use MAP_SYNC for mmap" ON)
-option(ULAYFS_FORCE_MAP_POPULATE "Always use MAP_POPULATE for mmap" ON)
+option(ULAYFS_MAP_SYNC "Use MAP_SYNC for mmap" ON)
+option(ULAYFS_MAP_POPULATE "Use MAP_POPULATE for mmap" ON)
 option(ULAYFS_TX_FLUSH_ONLY_FSYNC "Only flush transaction entries in fsync" OFF)
 option(ULAYFS_USE_PMEMCHECK "Enable pmemcheck macros" OFF)
 option(ULAYFS_TIMER "Enable timer" OFF)
