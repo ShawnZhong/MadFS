@@ -11,8 +11,6 @@
 
 namespace ulayfs {
 
-namespace detail {
-
 class Timer {
  private:
   std::array<size_t, magic_enum::enum_count<Event>()> occurrences{};
@@ -29,17 +27,20 @@ class Timer {
 
   template <Event event>
   void count() {
+    if constexpr (!BuildOptions::enable_timer) return;
     occurrences[magic_enum::enum_integer(event)]++;
   }
 
   template <Event event>
   void count(size_t size) {
+    if constexpr (!BuildOptions::enable_timer) return;
     count<event>();
     sizes[magic_enum::enum_integer(event)] += size;
   }
 
   template <Event event>
   void start() {
+    if constexpr (!BuildOptions::enable_timer) return;
     count<event>();
     auto now = std::chrono::high_resolution_clock::now();
     start_times[magic_enum::enum_integer(event)] = now;
@@ -47,12 +48,14 @@ class Timer {
 
   template <Event event>
   void start(size_t size) {
+    if constexpr (!BuildOptions::enable_timer) return;
     sizes[magic_enum::enum_integer(event)] += size;
     start<event>();
   }
 
   template <Event event>
   void stop(bool fence = false) {
+    if constexpr (!BuildOptions::enable_timer) return;
     if (fence) _mm_mfence();
     auto end_time = std::chrono::high_resolution_clock::now();
     auto start_time = start_times[magic_enum::enum_integer(event)];
@@ -60,18 +63,21 @@ class Timer {
   }
 
   void clear() {
+    if constexpr (!BuildOptions::enable_timer) return;
     occurrences.fill(0);
     sizes.fill(0);
     durations.fill({});
   }
 
   [[nodiscard]] size_t get_occurrence(Event event) const {
+    if constexpr (!BuildOptions::enable_timer) return 0;
     return occurrences[magic_enum::enum_integer(event)];
   }
 
   void print() {
     static std::mutex print_mutex;
 
+    if constexpr (!BuildOptions::enable_timer) return;
     if (is_empty()) return;
     std::lock_guard<std::mutex> guard(print_mutex);
     fprintf(log_file, "    [Thread %d] Timer:\n", tid);
@@ -113,41 +119,6 @@ class Timer {
     return true;
   }
 };
-
-class DummyTimer {
- public:
-  template <Event event>
-  void count() {}
-
-  template <Event event>
-  void count(size_t) {}
-
-  template <Event event>
-  void start() {}
-
-  template <Event event>
-  void start(size_t) {}
-
-  template <Event event>
-  void stop(bool = false) {}
-
-  void clear() {}
-
-  size_t get_occurrence(Event) { return 0; }
-
-  void print() {}
-};
-
-static auto make_timer() {
-  if constexpr (BuildOptions::enable_timer)
-    return Timer{};
-  else
-    return DummyTimer{};
-}
-
-}  // namespace detail
-
-using Timer = decltype(detail::make_timer());
 
 extern thread_local Timer timer;
 }  // namespace ulayfs
