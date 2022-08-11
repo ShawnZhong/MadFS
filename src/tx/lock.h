@@ -4,6 +4,8 @@
 
 namespace ulayfs::dram {
 
+namespace detail {
+
 /**
  * @brief A nop lock struct.
  *
@@ -53,6 +55,11 @@ struct Spinlock {
   void unlock() { pthread_spin_unlock(&spinlock); };
 };
 
+/**
+ * @brief A lock struct that uses pthread_rwlock_t.
+ *
+ * Used when ULAYFS_CC_RWLOCK is set.
+ */
 struct RwLock {
   pthread_rwlock_t rwlock;
   RwLock() {  // NOLINT(cppcoreguidelines-pro-type-member-init)
@@ -64,11 +71,14 @@ struct RwLock {
   void unlock() { pthread_rwlock_unlock(&rwlock); };
 };
 
-static auto create_cc_lock() {
+static auto make_cc_lock() {
   if constexpr (BuildOptions::cc_occ) return NopLock{};
   if constexpr (BuildOptions::cc_mutex) return MutexLock{};
   if constexpr (BuildOptions::cc_spinlock) return Spinlock{};
   if constexpr (BuildOptions::cc_rwlock) return RwLock{};
 }
 
+}  // namespace detail
+
+using Lock = decltype(detail::make_cc_lock());
 }  // namespace ulayfs::dram

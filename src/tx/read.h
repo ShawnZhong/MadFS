@@ -10,7 +10,7 @@ class ReadTx : public Tx {
  public:
   ReadTx(File* file, TxMgr* tx_mgr, char* buf, size_t count, size_t offset)
       : Tx(file, tx_mgr, count, offset), buf(buf) {
-    tx_mgr->lock.rdlock();
+    tx_mgr->lock.rdlock();  // nop lock is used by default
   }
 
   ReadTx(File* file, TxMgr* tx_mgr, char* buf, size_t count, size_t offset,
