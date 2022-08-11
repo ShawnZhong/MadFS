@@ -37,8 +37,12 @@ ssize_t TxMgr::do_read(char* buf, size_t count) {
 
 ssize_t TxMgr::do_pwrite(const char* buf, size_t count, size_t offset) {
   // special case that we have everything aligned, no OCC
-  if (count % BLOCK_SIZE == 0 && offset % BLOCK_SIZE == 0)
-    return AlignedTx(file, this, buf, count, offset).exec();
+  if (count % BLOCK_SIZE == 0 && offset % BLOCK_SIZE == 0) {
+    counter.start_timer<Event::ALIGNED_TX>();
+    ssize_t res = AlignedTx(file, this, buf, count, offset).exec();
+    counter.stop_timer<Event::ALIGNED_TX>();
+    return res;
+  }
 
   // another special case where range is within a single block
   if ((BLOCK_SIZE_TO_IDX(offset)) == BLOCK_SIZE_TO_IDX(offset + count - 1))

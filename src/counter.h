@@ -1,5 +1,7 @@
 #pragma once
 
+#include <emmintrin.h>
+
 #include <chrono>
 #include <magic_enum.hpp>
 #include <mutex>
@@ -15,7 +17,8 @@ class Counter {
  private:
   std::array<size_t, magic_enum::enum_count<Event>()> occurrences{};
   std::array<size_t, magic_enum::enum_count<Event>()> sizes{};
-  std::array<size_t, magic_enum::enum_count<Event>()> durations{};
+  std::array<std::chrono::nanoseconds, magic_enum::enum_count<Event>()>
+      durations{};
   std::array<std::chrono::time_point<std::chrono::high_resolution_clock>,
              magic_enum::enum_count<Event>()>
       start_times;
@@ -49,18 +52,17 @@ class Counter {
   }
 
   template <Event event>
-  void end_timer() {
+  void stop_timer(bool fence = false) {
+    if (fence) _mm_mfence();
     auto end_time = std::chrono::high_resolution_clock::now();
     auto start_time = start_times[magic_enum::enum_integer(event)];
-    auto duration = std::chrono::duration_cast<std::chrono::nanoseconds>(
-        end_time - start_time);
-    durations[magic_enum::enum_integer(event)] += duration.count();
+    durations[magic_enum::enum_integer(event)] += (end_time - start_time);
   }
 
   void clear() {
     occurrences.fill(0);
     sizes.fill(0);
-    durations.fill(0);
+    durations.fill({});
   }
 
   [[nodiscard]] size_t get_occurrence(Event event) const {
@@ -83,18 +85,21 @@ class Counter {
               magic_enum::enum_name(event).data(), occurrence);
 
       // print duration
-      if (size_t duration = durations[val]; duration != 0) {
-        double avg_ns = (double)duration / (double)occurrence;
-        double avg_us = avg_ns / 1000.0;
-        double total_ms = (double)duration / 1000000.0;
-        fprintf(log_file, "\t(%.3f us, %.2f ms)", avg_us, total_ms);
+      if (auto duration = durations[val]; duration.count() != 0) {
+        double total_ms =
+            std::chrono::duration<double, std::milli>(duration).count();
+        double avg_us =
+            std::chrono::duration<double, std::micro>(duration).count() /
+            (double)occurrence;
+
+        fprintf(log_file, " (%6.3f us, %6.2f ms)", avg_us, total_ms);
       }
 
       // print size
       if (size_t size = sizes[val]; size != 0) {
         double total_mb = (double)size / 1024.0 / 1024.0;
         double avg_kb = (double)size / 1024.0 / (double)occurrence;
-        fprintf(log_file, "\t(%.2f KB, %.2f MB)", avg_kb, total_mb);
+        fprintf(log_file, " (%6.2f KB, %6.2f MB)", avg_kb, total_mb);
       }
 
       fprintf(log_file, "\n");
@@ -124,7 +129,7 @@ class DummyCounter {
   void start_timer(size_t) {}
 
   template <Event event>
-  void end_timer() {}
+  void stop_timer() {}
 
   void clear() {}
 

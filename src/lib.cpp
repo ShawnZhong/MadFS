@@ -139,7 +139,7 @@ ssize_t read(int fd, void* buf, size_t count) {
     counter.start_timer<Event::READ>(count);
     auto res = file->read(buf, count);
     LOG_DEBUG("ulayfs::read(%s, buf, %zu) = %zu", file->path, count, res);
-    counter.end_timer<Event::READ>();
+    counter.stop_timer<Event::READ>();
     return res;
   } else {
     auto res = posix::read(fd, buf, count);
@@ -152,7 +152,7 @@ ssize_t pread(int fd, void* buf, size_t count, off_t offset) {
   if (auto file = get_file(fd)) {
     counter.start_timer<Event::PREAD>(count);
     auto res = file->pread(buf, count, offset);
-    counter.end_timer<Event::PREAD>();
+    counter.stop_timer<Event::PREAD>();
     LOG_DEBUG("ulayfs::pread(%s, buf, %zu, %ld) = %zu", file->path, count,
               offset, res);
     return res;
@@ -183,7 +183,7 @@ ssize_t write(int fd, const void* buf, size_t count) {
   if (auto file = get_file(fd)) {
     counter.start_timer<Event::WRITE>(count);
     ssize_t res = file->write(buf, count);
-    counter.end_timer<Event::WRITE>();
+    counter.stop_timer<Event::WRITE>();
     LOG_DEBUG("ulayfs::write(%s, buf, %zu) = %zu", file->path, count, res);
     return res;
   } else {
@@ -197,8 +197,8 @@ ssize_t pwrite(int fd, const void* buf, size_t count, off_t offset) {
   if (auto file = get_file(fd)) {
     counter.start_timer<Event::PWRITE>(count);
     ssize_t res = file->pwrite(buf, count, offset);
+    counter.stop_timer<Event::PWRITE>();
     LOG_DEBUG("ulayfs::pwrite(%s, buf, %zu) = %zu", file->path, count, res);
-    counter.end_timer<Event::PWRITE>();
     return res;
   } else {
     LOG_DEBUG("posix::pwrite(%d, buf, %zu, %ld)", fd, count, offset);
