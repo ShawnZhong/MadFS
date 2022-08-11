@@ -91,10 +91,10 @@ using LogicalBlockIdx = BaseIdx<uint32_t, IdxType::LOGICAL_BLOCK_IDX>;
 using VirtualBlockIdx = BaseIdx<uint32_t, IdxType::VIRTUAL_BLOCK_IDX>;
 
 // each bit in the bitmap corresponds to a logical block
-using BitmapIdx = int32_t;
+using BitmapIdx = uint32_t;
 
-// local index within a block; this can be -1 to indicate an error
-using TxLocalIdx = int32_t;
+// local index within a block
+using TxLocalIdx = uint32_t;
 
 // Note: LogLocalOffset will persist and the valid range is [0, 4096]
 using LogLocalOffset = uint16_t;

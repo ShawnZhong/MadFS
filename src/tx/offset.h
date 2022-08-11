@@ -27,7 +27,7 @@ class OffsetMgr {
   };
 
   TxMgr* tx_mgr;
-  uint64_t offset;
+  off_t offset;
   uint64_t next_ticket;
   TicketSlot queues[NUM_OFFSET_QUEUE_SLOT];
 
@@ -38,10 +38,13 @@ class OffsetMgr {
   // must have spinlock acquired
   // only call if seeking is the only serialization point
   // no boundary check
-  uint64_t seek_absolute(uint64_t abs_offset) { return offset = abs_offset; }
-  int64_t seek_relative(int64_t rel_offset) {
-    int64_t new_offset = offset + rel_offset;
-    if (new_offset < 0) return -1;
+  off_t seek_absolute(off_t new_offset) { return offset = new_offset; }
+  off_t seek_relative(off_t diff) {
+    if ((diff > 0 && offset > std::numeric_limits<off_t>::max() - diff) ||
+        (diff < 0 && offset < std::numeric_limits<off_t>::min() - diff)) {
+      return -1;
+    }
+    off_t new_offset = offset + diff;
     return seek_absolute(new_offset);
   }
 
@@ -58,14 +61,14 @@ class OffsetMgr {
    */
   uint64_t acquire_offset(uint64_t& count, uint64_t file_size,
                           bool stop_at_boundary, uint64_t& ticket) {
-    auto old_offset = offset;
-    offset += count;
-    if (stop_at_boundary && offset > file_size) {
-      offset = file_size;
-      count = offset - old_offset;
+    off_t old_offset = offset;
+    offset += static_cast<off_t>(count);
+    if (stop_at_boundary && static_cast<uint64_t>(offset) > file_size) {
+      offset = static_cast<off_t>(file_size);
+      count = file_size - static_cast<uint64_t>(old_offset);
     }
     ticket = next_ticket++;
-    return old_offset;
+    return static_cast<uint64_t>(old_offset);
   }
 
   /**

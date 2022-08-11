@@ -43,25 +43,22 @@ LogicalBlockIdx Allocator::alloc(uint32_t num_blocks) {
   }
 
   bool is_found = false;
-  uint32_t num_bits_left;
-  BitmapIdx allocated_idx;
-  LogicalBlockIdx allocated_block_idx;
-  uint64_t allocated_bits;
 
 retry:
   // then we have to allocate from global bitmaps
   // but try_alloc doesn't necessarily return the number of blocks we want
-  allocated_idx =
+  uint64_t allocated_bits;
+  BitmapIdx allocated_idx =
       Bitmap::try_alloc(bitmap, NUM_BITMAP, recent_bitmap_idx, allocated_bits);
-  PANIC_IF(allocated_idx < 0, "Allocator::alloc: failed to alloc from Bitmap");
   LOG_TRACE("Allocator::alloc: allocating from bitmap %d: 0x%lx", allocated_idx,
             allocated_bits);
 
   // add available bits to the local free list
-  num_bits_left = BITMAP_BLOCK_CAPACITY;
+  uint32_t num_bits_left = BITMAP_BLOCK_CAPACITY;
+  LogicalBlockIdx allocated_block_idx;
   while (num_bits_left > 0) {
     // first remove all trailing ones
-    uint32_t num_right_ones =
+    auto num_right_ones =
         static_cast<uint32_t>(std::countr_one(allocated_bits));
     allocated_bits >>= num_right_ones;
     num_bits_left -= num_right_ones;

@@ -192,7 +192,7 @@ class MetaBlock : public noncopyable {
   }
 
   [[nodiscard]] TxEntry get_tx_entry(TxLocalIdx idx) const {
-    assert(idx >= 0 && idx < NUM_INLINE_TX_ENTRY);
+    assert(idx < NUM_INLINE_TX_ENTRY);
     return inline_tx_entries[idx].load(std::memory_order_acquire);
   }
 

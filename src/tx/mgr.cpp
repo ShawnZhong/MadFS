@@ -76,7 +76,6 @@ ssize_t TxMgr::do_write(const char* buf, size_t count) {
 }
 
 bool TxMgr::advance_cursor(TxCursor* cursor, bool do_alloc) const {
-  assert(cursor->idx.local_idx >= 0);
   cursor->idx.local_idx++;
   return handle_cursor_overflow(cursor, do_alloc);
 }

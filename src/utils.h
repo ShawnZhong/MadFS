@@ -39,7 +39,7 @@ struct FatalException : public std::exception {};
 template <typename T>
 static inline T next_pow2(T x) {
   // countl_zero counts the number of leading 0-bits in x
-  return T(1) << (sizeof(T) * 8 - std::countl_zero(x));
+  return T(1) << ((int)sizeof(T) * 8 - std::countl_zero(x));
 }
 
 template <typename T>

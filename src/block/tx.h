@@ -38,7 +38,7 @@ class TxBlock : public noncopyable {
   }
 
   [[nodiscard]] TxEntry get(TxLocalIdx idx) const {
-    assert(idx >= 0 && idx < NUM_TX_ENTRY_PER_BLOCK);
+    assert(idx < NUM_TX_ENTRY_PER_BLOCK);
     return tx_entries[idx].load(std::memory_order_acquire);
   }
 
