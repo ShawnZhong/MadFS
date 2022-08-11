@@ -8,7 +8,7 @@ from pathlib import Path
 import pandas as pd
 from matplotlib import pyplot as plt
 
-from fs import available_fs
+from fs import all_fs
 
 pd.options.display.max_rows = 100
 pd.options.display.max_columns = 100
@@ -20,7 +20,7 @@ plt.set_loglevel('WARNING')
 
 
 def get_sorted_subdirs(path):
-    order = {k: i for i, k in enumerate(available_fs)}
+    order = {k: i for i, k in enumerate(all_fs)}
 
     paths = list(Path(path).glob("*"))
     paths = [p for p in paths if p.is_dir()]
@@ -29,6 +29,9 @@ def get_sorted_subdirs(path):
 
 
 def read_files(result_dir):
+    if not result_dir.exists():
+        raise FileNotFoundError(f"{result_dir} does not exist")
+
     data = pd.DataFrame()
 
     for path in get_sorted_subdirs(result_dir):
@@ -171,14 +174,14 @@ def plot_micro_mt(result_dir):
         export_results(result_dir, benchmark, name=name)
 
         def post_plot(ax, **kwargs):
-            if "tx_commit" in benchmark.columns:
-                ax2 = ax.twinx()
-                y = benchmark["tx_commit"] - 1
-                y[y == 0] = None
-                ax2.plot(benchmark["x"], y, ":", label="tx_commit")
-                ax2.set_ylim(bottom=0)
-                ax2.yaxis.set_major_locator(plt.MaxNLocator(steps=[1, 5, 10]))
-                ax2.set_ylabel("uLayFS commit conflicts per Tx")
+            # if "tx_commit" in benchmark.columns:
+            #     ax2 = ax.twinx()
+            #     y = benchmark["tx_commit"] - 1
+            #     y[y == 0] = None
+            #     ax2.plot(benchmark["x"], y, ":", label="tx_commit")
+            #     ax2.set_ylim(bottom=0)
+            #     ax2.yaxis.set_major_locator(plt.MaxNLocator(steps=[1, 5, 10]))
+            #     ax2.set_ylabel("uLayFS commit conflicts per Tx")
 
             ax.set_xlabel(xlabel, labelpad=0)
             ax.set_ylabel(ylabel, labelpad=0)
