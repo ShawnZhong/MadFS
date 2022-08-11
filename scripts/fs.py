@@ -185,10 +185,9 @@ class SplitFS(Filesystem):
         return env
 
 
-def filter_available_fs(fs_list: List[Filesystem]) -> Dict[str, Filesystem]:
-    return {fs.name: fs for fs in fs_list if fs.is_available()}
+all_bench_fs = {fs.name: fs for fs in [ULAYFS(), Ext4DAX(), NOVA(), SplitFS()]}
+all_extra_fs = {fs.name: fs for fs in [ULAYFS_OCC(), ULAYFS_MUTEX(), ULAYFS_SPINLOCK(), ULAYFS_RWLOCK()]}
+all_fs = {**all_bench_fs, **all_extra_fs}
 
-
-_bench_fs = [ULAYFS(), Ext4DAX(), NOVA(), SplitFS()]
-bench_fs = filter_available_fs(_bench_fs)
-available_fs = filter_available_fs(_bench_fs + [ULAYFS_OCC(), ULAYFS_SPINLOCK(), ULAYFS_MUTEX(), ULAYFS_RWLOCK()])
+bench_fs = {k: v for k, v in all_bench_fs.items() if v.is_available()}
+available_fs = {**bench_fs, **{k: v for k, v in all_extra_fs.items() if v.is_available()}}
