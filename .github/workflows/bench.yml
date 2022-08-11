@@ -19,7 +19,7 @@ jobs:
         run: BENCH_NUM_ITER=10 ./run micro_st -b ${{matrix.build_type}}
 
       - name: micro_mt
-        run: BENCH_NUM_ITER=10 ./run micro_mt -b ${{matrix.build_type}}
+        run: BENCH_FILE_SIZE=16 BENCH_NUM_ITER=10 ./run micro_mt -b ${{matrix.build_type}}
 
       - name: micro_meta
         run: BENCH_NUM_ITER=10 ./run micro_meta -b ${{matrix.build_type}}

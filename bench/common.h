@@ -10,28 +10,33 @@
 
 #include "debug.h"
 
-constexpr int BLOCK_SIZE = 4096;
-
-const char* filepath = []() -> const char* {
+const char* get_filepath() {
   const char* res = "test.txt";
 
-  char* pmem_path = std::getenv("PMEM_PATH");
-  if (pmem_path) {
+  if (char* pmem_path = std::getenv("PMEM_PATH"); pmem_path) {
     static char path[PATH_MAX];
     strcpy(path, pmem_path);
     strcat(path, "/test.txt");
     res = path;
   }
 
-  fprintf(stderr, "================ filepath: %s ================ \n", res);
+  fprintf(stderr, "Benchmark config:\n");
+  fprintf(stderr, "\tfilepath: %s\n", res);
   return res;
-}();
+}
 
 int get_num_iter(int default_val = 10000) noexcept {
-  char* num_iter_str = std::getenv("BENCH_NUM_ITER");
-  int num_iter = num_iter_str ? std::atoi(num_iter_str) : default_val;
-  fprintf(stderr, "================ num_iter: %d =============== \n", num_iter);
+  char* str = std::getenv("BENCH_NUM_ITER");
+  int num_iter = str ? std::atoi(str) : default_val;
+  fprintf(stderr, "\tnum_iter: %d\n", num_iter);
   return num_iter;
+}
+
+int get_file_size(int default_val = 1024) noexcept {
+  char* str = std::getenv("BENCH_FILE_SIZE");
+  int mb = str ? std::atoi(str) : default_val;
+  fprintf(stderr, "\tfile_size: %d MB\n", mb);
+  return mb * 1024 * 1024;
 }
 
 void prefill_file(int fd, size_t num_bytes,
@@ -39,7 +44,7 @@ void prefill_file(int fd, size_t num_bytes,
   auto buf = new char[chunk_size];
   std::fill(buf, buf + chunk_size, 'x');
 
-  printf("prefilling file %s with %ld MB\n", filepath, num_bytes / 1024 / 1024);
+  printf("prefilling file with %ld MB\n", num_bytes / 1024 / 1024);
 
   for (size_t i = 0; i < num_bytes / chunk_size; ++i) {
     [[maybe_unused]] size_t res = write(fd, buf, chunk_size);

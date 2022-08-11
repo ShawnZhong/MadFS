@@ -3,7 +3,7 @@ import argparse
 import logging
 from pathlib import Path
 
-from fs import available_fs, bench_fs
+from fs import available_fs
 from runner import Runner
 from utils import root_dir, get_timestamp, add_common_args, system, drop_cache, init, parse_args
 
@@ -98,19 +98,12 @@ if __name__ == "__main__":
         choices=["st", "mt", "meta", "ycsb"]
     )
     argparser.add_argument(
-        "-f",
-        "--fs_names",
-        default=bench_fs.keys(),
-        choices=available_fs.keys(),
-        nargs="+",
-        help="Filesystems to benchmark",
-    )
-    argparser.add_argument(
         "-p",
         "--result_dir",
         type=Path,
         help="If set, plot the results in the given directory w/o running the benchmark",
     )
+    argparser.set_defaults(fs_names=available_fs.keys())
     add_common_args(argparser)
 
     args = parse_args(argparser)
