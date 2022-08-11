@@ -1,4 +1,3 @@
-import argparse
 import datetime
 import logging
 import os
@@ -91,46 +90,3 @@ def system(cmd, log_path=None):
 
 def get_timestamp():
     return datetime.datetime.now().strftime("%Y%m%d-%H%M%S")
-
-
-def add_common_args(argparser: argparse.ArgumentParser):
-    from fs import bench_fs, available_fs
-    from runner import build_types
-    
-    argparser.add_argument(
-        "-b",
-        "--build_type",
-        choices=build_types,
-    )
-    argparser.add_argument(
-        "--trace",
-        action="store_true",
-        help="Run with tracing enabled",
-    )
-    argparser.add_argument(
-        "--filter",
-        "--benchmark_filter",
-        dest="benchmark_filter",
-        help="filters to be passed to Google Benchmark"
-    )
-    argparser.add_argument(
-        "-f",
-        "--fs_names",
-        default=bench_fs.keys(),
-        choices=available_fs.keys(),
-        nargs="+",
-        help="Filesystems to run",
-    )
-    argparser.add_argument(
-        "additional_args",
-        nargs="*",
-        help="additional arguments to be passed to the program during execution",
-    )
-
-
-def parse_args(argparser: argparse.ArgumentParser):
-    args = argparser.parse_intermixed_args()
-    if args.benchmark_filter:
-        args.additional_args += [f"--benchmark_filter={args.benchmark_filter}"]
-        del args.benchmark_filter
-    return args

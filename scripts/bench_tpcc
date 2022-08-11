@@ -30,11 +30,11 @@ def run_tpcc(build_type, fs_names):
 
         runner = Runner("tpcc_load", result_dir=result_dir / fs.name / "load")
         runner.build()
-        runner.run(additional_args=f"-w 4 -d {db_path}".split(), load_ulayfs=fs.load_ulayfs)
+        runner.run(prog_args=f"-w 4 -d {db_path}".split(), load_ulayfs=fs.load_ulayfs)
 
         runner = Runner("tpcc_start", result_dir=result_dir / fs.name / "start", build_type=build_type)
         runner.build()
-        runner.run(additional_args=f"-w 4 -c 1 -t 200000 -d {db_path}".split(), load_ulayfs=fs.load_ulayfs)
+        runner.run(prog_args=f"-w 4 -c 1 -t 200000 -d {db_path}".split(), load_ulayfs=fs.load_ulayfs)
 
     return result_dir
 

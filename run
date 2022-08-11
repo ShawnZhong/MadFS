@@ -3,9 +3,9 @@
 import argparse
 import logging
 
+from scripts.args import add_common_args, parse_args
 from scripts.fs import available_fs
 from scripts.runner import Runner
-from scripts.utils import add_common_args, parse_args
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger("run")
@@ -25,18 +25,17 @@ if __name__ == "__main__":
     add_common_args(parser)
     # set the default argument of fs to uLayFS
     parser.set_defaults(fs_names=["uLayFS"])
-    args = parse_args(parser)
+    args, run_config = parse_args(parser)
 
     if args.build_type is None:
         args.build_type = "debug" if args.cmake_target.startswith("test") else "release"
-    logger.info(f"args={args}")
+    logger.info(f"args={args}, run_config={run_config}")
 
     for fs_name in args.fs_names:
         fs = available_fs[fs_name]
         runner = Runner(name=args.cmake_target, build_type=args.build_type)
         runner.build(cmake_args=args.cmake_args)
         runner.run(
-            additional_args=args.additional_args,
             fs=fs,
-            trace=args.trace,
+            **run_config
         )
