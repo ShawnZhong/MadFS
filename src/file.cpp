@@ -13,8 +13,8 @@
 
 #include "alloc.h"
 #include "config.h"
-#include "counter.h"
 #include "idx.h"
+#include "timer.h"
 #include "utils.h"
 
 namespace ulayfs::dram {
@@ -226,7 +226,7 @@ error:
 }
 
 int File::fsync() {
-  counter.start_timer<Event::FSYNC>();
+  timer.start<Event::FSYNC>();
   FileState state;
   this->update(&state, /*do_alloc*/ false);
   tx_mgr.flush_tx_entries(meta->get_tx_tail(), state.cursor);
@@ -239,7 +239,7 @@ int File::fsync() {
   if (unlikely(state.cursor.idx.local_idx >= capacity))
     state.cursor.idx.local_idx = capacity - 1;
   meta->set_tx_tail(state.cursor.idx);
-  counter.stop_timer<Event::FSYNC>();
+  timer.stop<Event::FSYNC>();
   return 0;
 }
 
