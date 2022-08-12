@@ -46,6 +46,7 @@ class MemTable {
   tbb::concurrent_vector<std::atomic<pmem::Block*>,
                          zero_allocator<std::atomic<pmem::Block*>>>
       table;
+  static_assert(std::atomic<pmem::Block*>::is_always_lock_free);
 
   // a vector of <addr, length> pairs
   tbb::concurrent_vector<std::tuple<void*, size_t>> mmap_regions;
