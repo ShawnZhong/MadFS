@@ -50,6 +50,10 @@ def add_common_args(argparser: argparse.ArgumentParser):
         "--iter",
         help="Number of iterations for benchmarks",
     )
+    argparser.add_argument(
+        "--repeat",
+        help="Number of repeats for benchmarks",
+    )
 
 
 def parse_args(argparser: argparse.ArgumentParser):
@@ -64,6 +68,10 @@ def parse_args(argparser: argparse.ArgumentParser):
     bm_filter = cmd_args.__dict__.pop("filter")
     if bm_filter:
         run_config["prog_args"] += [f"--benchmark_filter={bm_filter}"]
+
+    bm_repeat = cmd_args.__dict__.pop("repeat")
+    if bm_repeat:
+        run_config["prog_args"] += [f"--benchmark_repetitions={bm_repeat}"]
 
     bm_size = cmd_args.__dict__.pop("size")
     if bm_size:
