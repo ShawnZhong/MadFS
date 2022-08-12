@@ -172,8 +172,9 @@ class Converter {
     // copy data to the new region
     for (VirtualBlockIdx vidx = 0; vidx < virtual_num_blocks; ++vidx)
       pmem::memcpy_persist(new_region[vidx.get()].data_rw(),
-                           file->vidx_to_addr_ro(vidx)->data_ro(), BLOCK_SIZE,
-                           /*fenced*/ true);
+                           file->vidx_to_addr_ro(vidx)->data_ro(), BLOCK_SIZE);
+
+    fence();
 
     // unmap the new region
     ret = posix::munmap(new_region, virtual_size_aligned);

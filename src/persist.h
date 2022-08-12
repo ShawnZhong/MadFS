@@ -23,6 +23,14 @@ void memmove_mov_avx_noflush(char *, const char *, size_t);
 
 namespace ulayfs {
 
+static inline void fence() {
+  if constexpr (BuildOptions::enable_timer) {
+    _mm_mfence();
+  } else {
+    _mm_sfence();
+  }
+}
+
 namespace pmem {
 /**
  * persist the cache line that contains p from any level of the cache
@@ -44,7 +52,7 @@ static inline void persist_cl_unfenced(void *p) {
  */
 static inline void persist_cl_fenced(void *p) {
   persist_cl_unfenced(p);
-  _mm_sfence();
+  fence();
 }
 
 /**
@@ -62,11 +70,10 @@ static inline void persist_unfenced(void *buf, uint64_t len) {
  */
 static inline void persist_fenced(void *buf, uint64_t len) {
   persist_unfenced(buf, len);
-  _mm_sfence();
+  fence();
 }
 
-static inline void memcpy_persist(char *dst, const char *src, size_t size,
-                                  bool fenced = false) {
+static inline void memcpy_persist(char *dst, const char *src, size_t size) {
   if constexpr (BuildOptions::support_avx512f) {
     if constexpr (BuildOptions::support_clwb)
       memmove_movnt_avx512f_clwb(dst, src, size);
@@ -83,7 +90,6 @@ static inline void memcpy_persist(char *dst, const char *src, size_t size,
       memmove_movnt_avx_clflush_wcbarrier(dst, src, size);
     VALGRIND_PMC_DO_FLUSH(dst, size);
   }
-  if (fenced) _mm_sfence();
 }
 }  // namespace pmem
 

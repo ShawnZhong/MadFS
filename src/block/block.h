@@ -41,7 +41,7 @@ union Block {
     bool do_memset = false;
     for (uint16_t cl_idx = cl_idx_begin; cl_idx < cl_idx_end; ++cl_idx)
       do_memset |= zero_init_cl(cl_idx);
-    if (do_memset) _mm_sfence();
+    if (do_memset) fence();
     return do_memset;
   }
 };

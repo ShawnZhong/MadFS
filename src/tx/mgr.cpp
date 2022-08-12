@@ -236,7 +236,7 @@ void TxMgr::flush_tx_entries(TxCursor begin, TxCursor end) {
   end.block->flush_tx_entries(begin.idx.local_idx, end.idx.local_idx);
 
 done:
-  _mm_sfence();
+  fence();
 }
 
 void TxMgr::find_tail(TxEntryIdx& tx_idx, pmem::TxBlock*& tx_block) const {
