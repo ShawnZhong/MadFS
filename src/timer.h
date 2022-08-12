@@ -1,7 +1,5 @@
 #pragma once
 
-#include <emmintrin.h>
-
 #include <chrono>
 #include <magic_enum.hpp>
 #include <mutex>
@@ -13,13 +11,18 @@ namespace ulayfs {
 
 class Timer {
  private:
-  std::array<size_t, magic_enum::enum_count<Event>()> occurrences{};
-  std::array<size_t, magic_enum::enum_count<Event>()> sizes{};
-  std::array<std::chrono::nanoseconds, magic_enum::enum_count<Event>()>
-      durations{};
-  std::array<std::chrono::time_point<std::chrono::high_resolution_clock>,
-             magic_enum::enum_count<Event>()>
+  static constexpr auto NUM_EVENTS = magic_enum::enum_count<Event>();
+
+  std::array<size_t, NUM_EVENTS> occurrences{};
+  std::array<size_t, NUM_EVENTS> sizes{};
+  std::array<std::chrono::nanoseconds, NUM_EVENTS> durations{};
+  std::array<std::chrono::high_resolution_clock::time_point, NUM_EVENTS>
       start_times;
+
+  template <Event event, typename T>
+  constexpr auto&& get(std::array<T, NUM_EVENTS>& arr) {
+    return std::get<magic_enum::enum_integer(event)>(arr);
+  }
 
  public:
   Timer() = default;
@@ -28,28 +31,27 @@ class Timer {
   template <Event event>
   void count() {
     if constexpr (!BuildOptions::enable_timer) return;
-    occurrences[magic_enum::enum_integer(event)]++;
+    get<event>(occurrences)++;
   }
 
   template <Event event>
   void count(size_t size) {
     if constexpr (!BuildOptions::enable_timer) return;
     count<event>();
-    sizes[magic_enum::enum_integer(event)] += size;
+    get<event>(sizes) += size;
   }
 
   template <Event event>
   void start() {
     if constexpr (!BuildOptions::enable_timer) return;
     count<event>();
-    auto now = std::chrono::high_resolution_clock::now();
-    start_times[magic_enum::enum_integer(event)] = now;
+    get<event>(start_times) = std::chrono::high_resolution_clock::now();
   }
 
   template <Event event>
   void start(size_t size) {
     if constexpr (!BuildOptions::enable_timer) return;
-    sizes[magic_enum::enum_integer(event)] += size;
+    get<event>(sizes) += size;
     start<event>();
   }
 
@@ -57,8 +59,8 @@ class Timer {
   void stop() {
     if constexpr (!BuildOptions::enable_timer) return;
     auto end_time = std::chrono::high_resolution_clock::now();
-    auto start_time = start_times[magic_enum::enum_integer(event)];
-    durations[magic_enum::enum_integer(event)] += (end_time - start_time);
+    auto start_time = get<event>(start_times);
+    get<event>(durations) += end_time - start_time;
   }
 
   void clear() {
@@ -80,9 +82,9 @@ class Timer {
     if (is_empty()) return;
     std::lock_guard<std::mutex> guard(print_mutex);
     fprintf(log_file, "    [Thread %d] Timer:\n", tid);
-    magic_enum::enum_for_each<Event>([&](Event event) {
-      auto val = magic_enum::enum_integer(event);
-      size_t occurrence = occurrences[val];
+    magic_enum::enum_for_each<Event>([&](auto val) {
+      constexpr Event event = val;
+      size_t occurrence = get<event>(occurrences);
       if (occurrence == 0) return;
 
       // print name and occurrence
@@ -90,7 +92,7 @@ class Timer {
               magic_enum::enum_name(event).data(), occurrence);
 
       // print duration
-      if (auto duration = durations[val]; duration.count() != 0) {
+      if (auto duration = get<event>(durations); duration.count() != 0) {
         double total_ms =
             std::chrono::duration<double, std::milli>(duration).count();
         double avg_us =
@@ -101,7 +103,7 @@ class Timer {
       }
 
       // print size
-      if (size_t size = sizes[val]; size != 0) {
+      if (size_t size = get<event>(sizes); size != 0) {
         double total_mb = (double)size / 1024.0 / 1024.0;
         double avg_kb = (double)size / 1024.0 / (double)occurrence;
         fprintf(log_file, " (%6.2f KB, %6.2f MB)", avg_kb, total_mb);
