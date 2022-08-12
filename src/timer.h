@@ -111,7 +111,6 @@ class Timer {
     });
   }
 
- private:
   bool is_empty() {
     for (auto count : occurrences)
       if (count != 0) return false;
@@ -120,4 +119,11 @@ class Timer {
 };
 
 extern thread_local Timer timer;
+
+template <Event event>
+struct TimerGuard {
+  TimerGuard() { timer.start<event>(); }
+  explicit TimerGuard(size_t size) { timer.start<event>(size); }
+  ~TimerGuard() { timer.stop<event>(); }
+};
 }  // namespace ulayfs

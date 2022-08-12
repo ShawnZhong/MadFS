@@ -62,11 +62,12 @@ class SingleBlockTx : public CoWTx {
     pmem::memcpy_persist(dst_blocks[0]->data_rw() + local_offset, buf, count);
 
   redo:
-    timer.count<Event::SINGLE_BLOCK_TX_COPY>();
     assert(dst_blocks.size() == 1);
 
     // copy original data
     {
+      TimerGuard<Event::SINGLE_BLOCK_TX_COPY> timer_guard;
+
       char* dst_block = dst_blocks[0]->data_rw();
       const char* src_block =
           file->lidx_to_addr_ro(recycle_image[0])->data_ro();
