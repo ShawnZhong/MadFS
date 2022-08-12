@@ -5,6 +5,7 @@ namespace ulayfs {
 extern "C" {
 int fsync(int fd) {
   if (auto file = get_file(fd)) {
+    TimerGuard<Event::FSYNC> timer_guard;
     LOG_DEBUG("ulayfs::fsync(%d)", fd);
     return file->fsync();
   } else {
@@ -15,6 +16,7 @@ int fsync(int fd) {
 
 int fdatasync(int fd) {
   if (auto file = get_file(fd)) {
+    TimerGuard<Event::FSYNC> timer_guard;
     LOG_DEBUG("ulayfs::fdatasync(%s)", file->path);
     return file->fsync();
   } else {

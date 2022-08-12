@@ -229,7 +229,6 @@ error:
 }
 
 int File::fsync() {
-  timer.start<Event::FSYNC>();
   FileState state;
   this->update(&state, /*do_alloc*/ false);
   tx_mgr.flush_tx_entries(meta->get_tx_tail(), state.cursor);
@@ -242,7 +241,6 @@ int File::fsync() {
   if (unlikely(state.cursor.idx.local_idx >= capacity))
     state.cursor.idx.local_idx = static_cast<uint16_t>(capacity - 1);
   meta->set_tx_tail(state.cursor.idx);
-  timer.stop<Event::FSYNC>();
   return 0;
 }
 

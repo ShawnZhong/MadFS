@@ -38,18 +38,21 @@ ssize_t TxMgr::do_read(char* buf, size_t count) {
 ssize_t TxMgr::do_pwrite(const char* buf, size_t count, size_t offset) {
   // special case that we have everything aligned, no OCC
   if (count % BLOCK_SIZE == 0 && offset % BLOCK_SIZE == 0) {
-    timer.start<Event::ALIGNED_TX>();
-    ssize_t res = AlignedTx(file, this, buf, count, offset).exec();
-    timer.stop<Event::ALIGNED_TX>();
-    return res;
+    TimerGuard<Event::ALIGNED_TX> timer_guard;
+    return AlignedTx(file, this, buf, count, offset).exec();
   }
 
   // another special case where range is within a single block
-  if ((BLOCK_SIZE_TO_IDX(offset)) == BLOCK_SIZE_TO_IDX(offset + count - 1))
+  if ((BLOCK_SIZE_TO_IDX(offset)) == BLOCK_SIZE_TO_IDX(offset + count - 1)) {
+    TimerGuard<Event::SINGLE_BLOCK_TX> timer_guard;
     return SingleBlockTx(file, this, buf, count, offset).exec();
+  }
 
   // unaligned multi-block write
-  return MultiBlockTx(file, this, buf, count, offset).exec();
+  {
+    TimerGuard<Event::MULTI_BLOCK_TX> timer_guard;
+    return MultiBlockTx(file, this, buf, count, offset).exec();
+  }
 }
 
 ssize_t TxMgr::do_write(const char* buf, size_t count) {
