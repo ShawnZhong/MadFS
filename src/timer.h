@@ -54,9 +54,8 @@ class Timer {
   }
 
   template <Event event>
-  void stop(bool fence = false) {
+  void stop() {
     if constexpr (!BuildOptions::enable_timer) return;
-    if (fence) _mm_mfence();
     auto end_time = std::chrono::high_resolution_clock::now();
     auto start_time = start_times[magic_enum::enum_integer(event)];
     durations[magic_enum::enum_integer(event)] += (end_time - start_time);

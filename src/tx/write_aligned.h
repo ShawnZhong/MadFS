@@ -23,8 +23,8 @@ class AlignedTx : public WriteTx {
       rest_buf += num_bytes;
       rest_count -= num_bytes;
     }
-    _mm_sfence();
-    timer.stop<Event::ALIGNED_TX_COPY>(/*fence=*/true);
+    fence();
+    timer.stop<Event::ALIGNED_TX_COPY>();
 
     // for aligned tx, `leftover_bytes` is always zero, so we don't need to know
     // file size before prepare commit entry.

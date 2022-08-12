@@ -188,9 +188,11 @@ class MultiBlockTx : public CoWTx {
     src_last_lidx = recycle_image[num_blocks - 1];
 
     // write data from the buf to the first block
-    char* dst =
-        dst_blocks[0]->data_rw() + BLOCK_SIZE - first_block_overlap_size;
-    pmem::memcpy_persist(dst, buf, first_block_overlap_size);
+    {
+      char* dst =
+          dst_blocks[0]->data_rw() + BLOCK_SIZE - first_block_overlap_size;
+      pmem::memcpy_persist(dst, buf, first_block_overlap_size);
+    }
 
     // write data from the buf to the last block
     pmem::Block* last_dst_block =
@@ -202,23 +204,23 @@ class MultiBlockTx : public CoWTx {
 
   redo:
     timer.count<Event::MULTI_BLOCK_TX_COPY>();
-    // copy first block
+    // copy the data from the first source block if exists
     if (need_copy_first && do_copy_first) {
-      // copy the data from the first source block if exists
-      pmem::memcpy_persist(dst_blocks[0]->data_rw(),
-                           file->lidx_to_addr_ro(src_first_lidx)->data_ro(),
-                           BLOCK_SIZE - first_block_overlap_size);
+      char* dst = dst_blocks[0]->data_rw();
+      const char* src = file->lidx_to_addr_ro(src_first_lidx)->data_ro();
+      size_t size = BLOCK_SIZE - first_block_overlap_size;
+      pmem::memcpy_persist(dst, src, size);
     }
 
-    // copy last block
+    // copy the data from the last source block if exits
     if (need_copy_last && do_copy_last) {
-      // copy the data from the last source block if exits
-      pmem::memcpy_persist(last_dst_block->data_rw() + last_block_overlap_size,
-                           file->lidx_to_addr_ro(src_last_lidx)->data_ro() +
-                               last_block_overlap_size,
-                           BLOCK_SIZE - last_block_overlap_size);
+      char* dst = last_dst_block->data_rw() + last_block_overlap_size;
+      const char* src = file->lidx_to_addr_ro(src_last_lidx)->data_ro() +
+                        last_block_overlap_size;
+      size_t size = BLOCK_SIZE - last_block_overlap_size;
+      pmem::memcpy_persist(dst, src, size);
     }
-    _mm_sfence();
+    fence();
 
     if (is_offset_depend) tx_mgr->offset_mgr.wait_offset(ticket);
 
