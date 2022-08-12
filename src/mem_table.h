@@ -43,7 +43,9 @@ class MemTable {
 
   // map a chunk_idx to addr, where chunk_idx =
   // (lidx - first_region_num_blocks) >> GROW_UNIT_IN_BLOCK_SHIFT
-  tbb::concurrent_vector<pmem::Block*, zero_allocator<pmem::Block*>> table;
+  tbb::concurrent_vector<std::atomic<pmem::Block*>,
+                         zero_allocator<std::atomic<pmem::Block*>>>
+      table;
 
   // a vector of <addr, length> pairs
   tbb::concurrent_vector<std::tuple<void*, size_t>> mmap_regions;
@@ -172,7 +174,7 @@ class MemTable {
   friend std::ostream& operator<<(std::ostream& out, const MemTable& m) {
     out << "MemTable:\n";
     uint32_t chunk_idx = 0;
-    for (const auto mem_addr : m.table) {
+    for (const auto& mem_addr : m.table) {
       LogicalBlockIdx chunk_begin_lidx = chunk_idx << GROW_UNIT_IN_BLOCK_SHIFT;
       out << "\t" << chunk_begin_lidx << " - "
           << chunk_begin_lidx + NUM_BLOCKS_PER_GROW << ": ";
