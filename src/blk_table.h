@@ -30,8 +30,10 @@ class BlkTable {
   File* file;
   TxMgr* tx_mgr;
 
-  tbb::concurrent_vector<LogicalBlockIdx, zero_allocator<LogicalBlockIdx>>
+  tbb::concurrent_vector<std::atomic<LogicalBlockIdx>,
+                         zero_allocator<std::atomic<LogicalBlockIdx>>>
       table;
+  static_assert(std::atomic<LogicalBlockIdx>::is_always_lock_free);
 
   FileState state;
   /**
