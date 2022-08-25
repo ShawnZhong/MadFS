@@ -7,9 +7,9 @@
 namespace ulayfs::dram {
 
 /**
- * @brief A TxCursor is a pointer to a transaction entry
- *
- * It is 16 bytes in size and can be passed around by value in the registers.
+ * @brief A TxCursor is a pointer to a transaction entry. It contains a
+ * TxEntryIdx and a pointer to the block containing the entry. It is 16 bytes in
+ * size and can be passed around by value in the registers.
  */
 struct TxCursor {
   TxEntryIdx idx;
@@ -28,7 +28,7 @@ struct TxCursor {
   /**
    * @return the tx entry pointed to by this cursor
    */
-  pmem::TxEntry get_entry() const {
+  [[nodiscard]] pmem::TxEntry get_entry() const {
     TimerGuard<Event::TX_ENTRY_LOAD> timer_guard;
     assert(addr != nullptr);
     std::atomic<pmem::TxEntry>* entries =
@@ -46,7 +46,7 @@ struct TxCursor {
    * @param hint hint to start the search
    * @return if success, return 0; otherwise, return the entry on the slot
    */
-  pmem::TxEntry try_append(pmem::TxEntry entry) {
+  [[nodiscard]] pmem::TxEntry try_append(pmem::TxEntry entry) const {
     TimerGuard<Event::TX_ENTRY_STORE> timer_guard;
     assert(addr != nullptr);
     std::atomic<pmem::TxEntry>* entries =
