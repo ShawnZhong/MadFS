@@ -2,10 +2,8 @@
 
 #include <sys/mman.h>
 #include <sys/xattr.h>
-#include <unistd.h>
 
 #include <cerrno>
-#include <climits>
 #include <cstdio>
 #include <cstdlib>
 #include <cstring>
@@ -14,6 +12,7 @@
 #include "alloc.h"
 #include "config.h"
 #include "idx.h"
+#include "shm.h"
 #include "timer.h"
 #include "utils.h"
 
@@ -42,17 +41,7 @@ File::File(int fd, const struct stat& stat, int flags,
 
   // only open shared memory if we may write
   if (can_write) {
-    ssize_t rc = fgetxattr(fd, SHM_XATTR_NAME, &shm_path, sizeof(shm_path));
-    if (rc == -1 && errno == ENODATA) {  // no shm_path attribute, create one
-      sprintf(shm_path, "/dev/shm/ulayfs_%016lx_%013lx", stat.st_ino,
-              (stat.st_ctim.tv_sec * 1000000000 + stat.st_ctim.tv_nsec) >> 3);
-      rc = fsetxattr(fd, SHM_XATTR_NAME, shm_path, sizeof(shm_path), 0);
-      PANIC_IF(rc == -1, "failed to set shm_path attribute");
-    } else if (rc == -1) {
-      PANIC("failed to get shm_path attribute");
-    }
-
-    open_shm(stat);
+    bitmap = static_cast<Bitmap*>(shm_mgr.init(fd, stat));
 
     // The first bit corresponds to the meta block which should always be set
     // to 1. If it is not, then bitmap needs to be initialized.
@@ -67,7 +56,6 @@ File::File(int fd, const struct stat& stat, int flags,
       meta->unlock();
     }
   } else {
-    shm_fd = -1;
     bitmap = nullptr;
   }
 
@@ -75,20 +63,18 @@ File::File(int fd, const struct stat& stat, int flags,
 
   if (flags & O_APPEND)
     tx_mgr.offset_mgr.seek_absolute(static_cast<off_t>(file_size));
-#if ULAYFS_DEBUG
-  path = strdup(pathname);
-#endif
+  if constexpr (BuildOptions::debug) {
+    path = strdup(pathname);
+  }
 }
 
 File::~File() {
   pthread_spin_destroy(&spinlock);
   allocators.clear();
   if (fd >= 0) posix::close(fd);
-  if (shm_fd >= 0) posix::close(shm_fd);
-  if (bitmap) posix::munmap(bitmap, SHM_SIZE);
-#if ULAYFS_DEBUG
-  free((void*)path);
-#endif
+  if constexpr (BuildOptions::debug) {
+    free((void*)path);
+  }
 }
 
 /*
@@ -266,85 +252,6 @@ Allocator* File::get_local_allocator() {
  * Helper functions
  */
 
-void File::open_shm(const struct stat& stat) {
-  // use posix::open instead of shm_open since shm_open calls open, which is
-  // overloaded by ulayfs
-  shm_fd =
-      posix::open(shm_path, O_RDWR | O_NOFOLLOW | O_CLOEXEC, S_IRUSR | S_IWUSR);
-
-  // if the file does not exist, create it
-  if (shm_fd < 0) {
-    // We create a temporary file first, and then use `linkat` to put the file
-    // into the directory `/dev/shm`. This ensures the atomicity of the creating
-    // the shared memory file and setting its permission.
-    shm_fd =
-        posix::open("/dev/shm", O_TMPFILE | O_RDWR | O_NOFOLLOW | O_CLOEXEC,
-                    S_IRUSR | S_IWUSR);
-    if (unlikely(shm_fd < 0)) {
-      PANIC("create the temporary file failed");
-    }
-
-    // change permission and ownership of the new shared memory
-    if (fchmod(shm_fd, stat.st_mode) < 0) {
-      posix::close(shm_fd);
-      PANIC("fchmod on shared memory failed");
-    }
-    if (fchown(shm_fd, stat.st_uid, stat.st_gid) < 0) {
-      posix::close(shm_fd);
-      PANIC("fchown on shared memory failed");
-    }
-    // TODO: enable dynamically grow bitmap
-    if (posix::fallocate(shm_fd, 0, 0, static_cast<off_t>(SHM_SIZE)) < 0) {
-      posix::close(shm_fd);
-      PANIC("fallocate on shared memory failed");
-    }
-
-    // publish the created tmpfile.
-    char tmpfile_path[PATH_MAX];
-    sprintf(tmpfile_path, "/proc/self/fd/%d", shm_fd);
-    int rc =
-        linkat(AT_FDCWD, tmpfile_path, AT_FDCWD, shm_path, AT_SYMLINK_FOLLOW);
-    if (rc < 0) {
-      // Another process may have created a new shared memory before us. Retry
-      // opening.
-      posix::close(shm_fd);
-      shm_fd = posix::open(shm_path, O_RDWR | O_NOFOLLOW | O_CLOEXEC,
-                           S_IRUSR | S_IWUSR);
-      if (shm_fd < 0) {
-        PANIC("cannot open or create the shared memory object");
-      }
-    }
-  }
-
-  LOG_TRACE("posix::open(%s) = %d", shm_path, shm_fd);
-
-  // mmap bitmap
-  void* shm = posix::mmap(nullptr, SHM_SIZE, PROT_READ | PROT_WRITE, MAP_SHARED,
-                          shm_fd, 0);
-  if (shm == MAP_FAILED) {
-    posix::close(shm_fd);
-    PANIC("mmap bitmap failed");
-  }
-
-  bitmap = static_cast<Bitmap*>(shm);
-}
-
-static void unlink_shm_impl(const char* shm_path) {
-  int ret = posix::unlink(shm_path);
-  LOG_TRACE("posix::unlink(%s) = %d", shm_path, ret);
-  if (unlikely(ret < 0))
-    LOG_WARN("Could not unlink shm file \"%s\": %m", shm_path);
-}
-
-void File::unlink_shm() { unlink_shm_impl(shm_path); }
-
-void File::unlink_shm(const char* filepath) {
-  char shm_path[SHM_PATH_LEN];
-  if (getxattr(filepath, SHM_XATTR_NAME, &shm_path, sizeof(shm_path)) <= 0)
-    return;
-  unlink_shm_impl(shm_path);
-}
-
 void File::tx_gc() {
   LOG_DEBUG("Garbage Collect for fd %d", fd);
   uint64_t file_size = blk_table.update(/*do_alloc*/ false);
@@ -354,7 +261,7 @@ void File::tx_gc() {
 
 std::ostream& operator<<(std::ostream& out, const File& f) {
   out << "File: fd = " << f.fd << "\n";
-  if (f.can_write) out << "\tshm_path = " << f.shm_path << "\n";
+  if (f.can_write) out << f.shm_mgr;
   out << *f.meta;
   out << f.blk_table;
   out << f.mem_table;
