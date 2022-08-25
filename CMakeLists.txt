@@ -19,7 +19,7 @@ build options
 
 option(ULAYFS_MAP_SYNC "Use MAP_SYNC for mmap" ON)
 option(ULAYFS_MAP_POPULATE "Use MAP_POPULATE for mmap" ON)
-option(ULAYFS_TX_FLUSH_ONLY_FSYNC "Only flush transaction entries in fsync" OFF)
+option(ULAYFS_TX_FLUSH_ONLY_FSYNC "Only flush transaction entries in fsync" ON)
 option(ULAYFS_USE_PMEMCHECK "Enable pmemcheck macros" OFF)
 option(ULAYFS_TIMER "Enable timer" OFF)
 option(ULAYFS_CC_OCC "Use OCC for CC" ON)
