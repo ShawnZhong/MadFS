@@ -148,7 +148,7 @@ class Tx {
         }
       }
       if (!tx_mgr->advance_cursor(&state.cursor, /*do_alloc*/ false)) break;
-      curr_entry = tx_mgr->get_tx_entry(state.cursor);
+      curr_entry = state.cursor.get_entry();
     } while (curr_entry.is_valid());
 
     return has_conflict;

@@ -83,12 +83,6 @@ bool TxMgr::advance_cursor(TxCursor* cursor, bool do_alloc) const {
   return handle_cursor_overflow(cursor, do_alloc);
 }
 
-pmem::TxEntry TxMgr::get_tx_entry(const TxCursor cursor) const {
-  if (cursor.idx.block_idx == 0)
-    return meta->get_tx_entry(cursor.idx.local_idx);
-  return cursor.block->get(cursor.idx.local_idx);
-}
-
 std::tuple<pmem::LogEntry*, pmem::LogEntryBlock*> TxMgr::get_log_entry(
     LogEntryIdx idx, bool init_bitmap) const {
   if (init_bitmap) file->set_allocated(idx.block_idx);
@@ -176,15 +170,12 @@ void TxMgr::update_log_entry_leftover_bytes(LogEntryIdx first_idx,
 pmem::TxEntry TxMgr::try_commit(pmem::TxEntry entry, TxCursor* cursor) {
   handle_cursor_overflow(cursor, true);
 
-  bool is_inline = cursor->idx.block_idx == 0;
-  assert(is_inline == (cursor->block == nullptr));
-
   if (pmem::TxEntry::need_flush(cursor->idx.local_idx)) {
     flush_tx_entries(meta->get_tx_tail(), *cursor);
     meta->set_tx_tail(cursor->idx);
   }
-  return is_inline ? meta->try_append(entry, cursor->idx.local_idx)
-                   : cursor->block->try_append(entry, cursor->idx.local_idx);
+
+  return cursor->try_append(entry);
 }
 
 bool TxMgr::handle_cursor_overflow(TxCursor* cursor, bool do_alloc) const {
@@ -209,9 +200,10 @@ bool TxMgr::handle_cursor_overflow(TxCursor* cursor, bool do_alloc) const {
   return true;
 }
 
-void TxMgr::flush_tx_entries(TxEntryIdx begin, TxCursor end) {
-  flush_tx_entries({begin, &file->lidx_to_addr_rw(begin.block_idx)->tx_block},
-                   end);
+void TxMgr::flush_tx_entries(TxEntryIdx begin_idx, TxCursor end) {
+  TxCursor begin(begin_idx,
+                 &file->lidx_to_addr_rw(begin_idx.block_idx)->tx_block);
+  flush_tx_entries(begin, end);
 }
 
 void TxMgr::flush_tx_entries(TxCursor begin, TxCursor end) {
@@ -262,7 +254,7 @@ void TxMgr::find_tail(TxEntryIdx& tx_idx, pmem::TxBlock*& tx_block) const {
     tx_block = &(file->lidx_to_addr_rw(next_block_idx)->tx_block);
   }
   tx_idx.local_idx = tx_block->find_tail(tx_idx.local_idx);
-};
+}
 
 template <class B>
 std::tuple<LogicalBlockIdx, pmem::TxBlock*> TxMgr::alloc_next_block(
@@ -308,8 +300,7 @@ void TxMgr::gc(const LogicalBlockIdx tail_tx_block_idx, uint64_t file_size) {
   auto new_block = file->lidx_to_addr_rw(first_tx_block_idx);
   memset(&new_block->cache_lines[NUM_CL_PER_BLOCK - 1], 0, CACHELINE_SIZE);
   new_block->tx_block.set_tx_seq(tx_seq++);
-  TxCursor cursor = {.idx = {first_tx_block_idx, 0},
-                     .block = &new_block->tx_block};
+  TxCursor cursor(first_tx_block_idx, &new_block->tx_block);
 
   VirtualBlockIdx begin = 0;
   VirtualBlockIdx i = 1;
@@ -388,10 +379,10 @@ abort:
 std::ostream& operator<<(std::ostream& out, const TxMgr& tx_mgr) {
   out << tx_mgr.offset_mgr;
   out << "Transactions: \n";
-  TxCursor cursor{};
+  TxCursor cursor{tx_mgr.meta};
 
   while (true) {
-    auto tx_entry = tx_mgr.get_tx_entry(cursor);
+    auto tx_entry = cursor.get_entry();
     if (!tx_entry.is_valid()) break;
     if (tx_entry.is_dummy()) goto next;
 

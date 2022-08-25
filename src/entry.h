@@ -224,25 +224,6 @@ union TxEntry {
     return NUM_ENTRIES;
   }
 
-  /**
-   * try to append an entry to a slot in an array of TxEntry; fail if the slot
-   * is taken (likely due to a race condition)
-   *
-   * @param entries a pointer to an array of tx entries
-   * @param entry the entry to append
-   * @param hint hint to start the search
-   * @return if success, return 0; otherwise, return the entry on the slot
-   */
-  static TxEntry try_append(std::atomic<TxEntry> entries[], TxEntry entry,
-                            TxLocalIdx idx) {
-    TxEntry expected = 0;
-    entries[idx].compare_exchange_strong(
-        expected, entry, std::memory_order_acq_rel, std::memory_order_acquire);
-    // if CAS fails, `expected` will be stored the value in entries[idx]
-    // if success, it will return 0
-    return expected;
-  }
-
   // if we are touching a new cacheline, we must flush everything before it
   // if only flush at fsync, always return false
   static bool need_flush(TxLocalIdx idx) {

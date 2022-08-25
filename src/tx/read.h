@@ -65,7 +65,7 @@ class ReadTx : public Tx {
     while (true) {
       // check the tail is still tail
       if (!tx_mgr->handle_cursor_overflow(&state.cursor, false)) break;
-      pmem::TxEntry curr_entry = tx_mgr->get_tx_entry(state.cursor);
+      pmem::TxEntry curr_entry = state.cursor.get_entry();
       if (!curr_entry.is_valid()) break;
 
       // then scan the log and build redo_image; if no redo needed, we are done

@@ -2,6 +2,7 @@
 
 #include "block/tx.h"
 #include "idx.h"
+#include "timer.h"
 
 namespace ulayfs::dram {
 
@@ -12,7 +13,52 @@ namespace ulayfs::dram {
  */
 struct TxCursor {
   TxEntryIdx idx;
-  pmem::TxBlock* block;
+  union {
+    pmem::TxBlock* block;
+    pmem::MetaBlock* meta;
+    void* addr;
+  };
+
+  TxCursor() : idx(), addr(nullptr) {}
+  TxCursor(pmem::MetaBlock* meta) : idx(), addr(meta) {}
+  TxCursor(LogicalBlockIdx block_idx, pmem::TxBlock* block)
+      : idx(block_idx, 0), addr(block) {}
+  TxCursor(TxEntryIdx idx, pmem::TxBlock* block) : idx(idx), addr(block) {}
+
+  /**
+   * @return the tx entry pointed to by this cursor
+   */
+  pmem::TxEntry get_entry() const {
+    TimerGuard<Event::GET_TX_ENTRY> timer_guard;
+    assert(addr != nullptr);
+    std::atomic<pmem::TxEntry>* entries =
+        idx.is_inline() ? meta->tx_entries : block->tx_entries;
+    assert(idx.local_idx <
+           (idx.is_inline() ? NUM_INLINE_TX_ENTRY : NUM_TX_ENTRY_PER_BLOCK));
+    return entries[idx.local_idx].load(std::memory_order_acquire);
+  }
+
+  /**
+   * try to append an entry to a slot in an array of TxEntry; fail if the slot
+   * is taken (likely due to a race condition)
+   *
+   * @param entries a pointer to an array of tx entries
+   * @param entry the entry to append
+   * @param hint hint to start the search
+   * @return if success, return 0; otherwise, return the entry on the slot
+   */
+  pmem::TxEntry try_append(pmem::TxEntry entry) {
+    assert(addr != nullptr);
+    std::atomic<pmem::TxEntry>* entries =
+        idx.is_inline() ? meta->tx_entries : block->tx_entries;
+
+    pmem::TxEntry expected = 0;
+    entries[idx.local_idx].compare_exchange_strong(
+        expected, entry, std::memory_order_acq_rel, std::memory_order_acquire);
+    // if CAS fails, `expected` will be stored the value in entries[idx]
+    // if success, it will return 0
+    return expected;
+  }
 
   friend bool operator==(const TxCursor& lhs, const TxCursor& rhs) {
     return lhs.idx == rhs.idx && lhs.block == rhs.block;

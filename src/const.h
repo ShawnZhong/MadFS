@@ -96,5 +96,7 @@ enum class Event : std::size_t {
   MULTI_BLOCK_TX_START,
   MULTI_BLOCK_TX_COPY,
   MULTI_BLOCK_TX_COMMIT,
+
+  GET_TX_ENTRY,
 };
 }  // namespace ulayfs
