@@ -170,14 +170,12 @@ void TxMgr::update_log_entry_leftover_bytes(LogEntryIdx first_idx,
 pmem::TxEntry TxMgr::try_commit(pmem::TxEntry entry, TxCursor* cursor) {
   handle_cursor_overflow(cursor, true);
 
-  bool is_inline = cursor->idx.block_idx == 0;
-
   if (pmem::TxEntry::need_flush(cursor->idx.local_idx)) {
     flush_tx_entries(meta->get_tx_tail(), *cursor);
     meta->set_tx_tail(cursor->idx);
   }
-  return is_inline ? meta->try_append(entry, cursor->idx.local_idx)
-                   : cursor->block->try_append(entry, cursor->idx.local_idx);
+  
+  return cursor->try_append(entry);
 }
 
 bool TxMgr::handle_cursor_overflow(TxCursor* cursor, bool do_alloc) const {
