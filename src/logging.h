@@ -1,5 +1,8 @@
 #pragma once
 
+#include <syscall.h>
+#include <unistd.h>
+
 #include "config.h"
 
 /*
@@ -54,6 +57,7 @@
 #endif
 
 namespace ulayfs {
-__attribute__((tls_model("initial-exec"))) extern thread_local const pid_t tid;
-extern FILE *log_file;
+inline __attribute__((tls_model("initial-exec"))) thread_local const pid_t tid =
+    static_cast<pid_t>(syscall(SYS_gettid));
+inline FILE *log_file = stderr;
 }  // namespace ulayfs

@@ -15,56 +15,50 @@
 namespace ulayfs::posix {
 
 /*
- * To use a posix function `fn`, you need to:
+ * To use a posix function `fn`, you need to add a line DEFINE_FN(fn); It
+ * declares the function pointer `posix::fn` of type `&::fn`, which is declared
+ * in the system header. The value of is initialized to the value returned by
+ * `dlsym` during runtime. The function pointer is declared as `inline` to avoid
+ * multiple definitions in different translation units.
  *
- * (1) declare the function `posix::fn` by adding `DECL_FN(fn)` below.
- *     The type of `posix::fn` follows from the type of `&::fn`, which is
- *     declared in the system header.
- *
- * (2) define and initialize the function `posix::fn` in `posix.cpp` by adding a
- *     `DEFINE_FN(fn)` statement. This initializes `posix::fn` to the function
- *     pointer returned by `dlsym` during runtime.
- *
- * The functions declared in the system headers are defined in `lib.cpp`, which
+ * The functions declared in the system headers are defined in `ops`, which
  * contains our implementation of the posix functions.
  *
- * For example, `open` in the global namespace is declared in <fcntl.h> and
- * defined in our `lib.cpp`. The use of `extern "C"` makes sure that the symbol
- * for `ulayfs::open` is not mangled by C++, and thus is the same as `open`. The
- * posix version `posix::open` is declared below as an extern variable and
- * initialized via `dlsym` during global variable initialization.
+ * For example, `::open` in the global namespace is declared in <fcntl.h> and
+ * defined in our `ops/open.cpp`. The use of `extern "C"` makes sure that the
+ * symbol for `ulayfs::open` is not mangled by C++, and thus is the same as
+ * `open`. The posix version `posix::open` is declared and defined below.
  */
 
-#define DECL_FN(fn) extern const decltype(&::fn) fn
-
 #define DEFINE_FN(fn)                                                    \
-  const decltype(&::fn) fn = []() noexcept {                             \
+  inline const decltype(&::fn) fn = []() noexcept {                      \
     auto res = reinterpret_cast<decltype(&::fn)>(dlsym(RTLD_NEXT, #fn)); \
     assert(res != nullptr);                                              \
     return res;                                                          \
   }()
 
-DECL_FN(lseek);
-DECL_FN(write);
-DECL_FN(pwrite);
-DECL_FN(read);
-DECL_FN(pread);
-DECL_FN(open);
-DECL_FN(close);
-DECL_FN(mmap);
-DECL_FN(mremap);
-DECL_FN(munmap);
-DECL_FN(fallocate);
-DECL_FN(ftruncate);
-DECL_FN(fsync);
-DECL_FN(fdatasync);
-DECL_FN(flock);
-DECL_FN(fcntl);
-DECL_FN(unlink);
-DECL_FN(rename);
-DECL_FN(__fxstat);
-
-#undef DECL_FN
+DEFINE_FN(lseek);
+DEFINE_FN(write);
+DEFINE_FN(pwrite);
+DEFINE_FN(read);
+DEFINE_FN(pread);
+DEFINE_FN(open);
+DEFINE_FN(fopen);
+DEFINE_FN(close);
+DEFINE_FN(fclose);
+DEFINE_FN(mmap);
+DEFINE_FN(mremap);
+DEFINE_FN(munmap);
+DEFINE_FN(fallocate);
+DEFINE_FN(ftruncate);
+DEFINE_FN(fsync);
+DEFINE_FN(fdatasync);
+DEFINE_FN(flock);
+DEFINE_FN(fcntl);
+DEFINE_FN(unlink);
+DEFINE_FN(rename);
+DEFINE_FN(__xstat);
+DEFINE_FN(__fxstat);
 
 // [lf]stat are wrappers to internal functions in glibc, so we need to hook the
 // actual functions instead

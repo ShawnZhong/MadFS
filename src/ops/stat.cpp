@@ -25,9 +25,7 @@ int __fxstat64([[maybe_unused]] int ver, int fd, struct stat64* buf) {
 }
 
 int __xstat([[maybe_unused]] int ver, const char* pathname, struct stat* buf) {
-  static DEFINE_FN(__xstat);
-
-  if (int rc = __xstat(ver, pathname, buf); unlikely(rc < 0)) {
+  if (int rc = posix::__xstat(ver, pathname, buf); unlikely(rc < 0)) {
     LOG_WARN("posix::stat(%s) = %d: %m", pathname, rc);
     return rc;
   }

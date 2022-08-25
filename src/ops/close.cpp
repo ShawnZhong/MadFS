@@ -16,8 +16,6 @@ int close(int fd) {
 }
 
 int fclose(FILE* stream) {
-  static DEFINE_FN(fclose);
-
   int fd = fileno(stream);
   if (auto file = get_file(fd)) {
     LOG_DEBUG("ulayfs::fclose(%s)", file->path);
@@ -25,7 +23,7 @@ int fclose(FILE* stream) {
     return 0;
   } else {
     LOG_DEBUG("posix::fclose(%p)", stream);
-    return fclose(stream);
+    return posix::fclose(stream);
   }
 }
 }
