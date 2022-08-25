@@ -120,7 +120,7 @@ class Timer {
   }
 };
 
-extern thread_local Timer timer;
+inline thread_local Timer timer;
 
 template <Event event>
 struct TimerGuard {

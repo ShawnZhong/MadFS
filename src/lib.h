@@ -8,8 +8,11 @@
 
 namespace ulayfs {
 
-extern bool initialized;
-extern tbb::concurrent_unordered_map<int, std::shared_ptr<dram::File>> files;
+inline bool initialized = false;
+
+// mapping between fd and in-memory file handle
+// shared across threads within the same process
+inline tbb::concurrent_unordered_map<int, std::shared_ptr<dram::File>> files;
 
 static std::shared_ptr<dram::File> get_file(int fd) {
   if (!initialized) return {};

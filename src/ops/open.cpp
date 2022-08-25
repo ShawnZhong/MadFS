@@ -63,9 +63,7 @@ int openat64([[maybe_unused]] int dirfd, const char* pathname, int flags, ...) {
 }
 
 FILE* fopen(const char* filename, const char* mode) {
-  static DEFINE_FN(fopen);
-
-  FILE* file = fopen(filename, mode);
+  FILE* file = posix::fopen(filename, mode);
   LOG_DEBUG("posix::fopen(%s, %s) = %p", filename, mode, file);
   return file;
 }
