@@ -12,6 +12,10 @@
 #include "posix.h"
 #include "utils.h"
 
+namespace ulayfs::dram {
+struct TxCursor;
+}
+
 namespace ulayfs::pmem {
 
 /*
@@ -29,7 +33,7 @@ class MetaBlock : public noncopyable {
       // all tx entries before it must be flushed
       std::atomic<TxEntryIdx> tx_tail;
 
-      // if inline_tx_entries is used up, this points to the next log block
+      // if inline tx_entries are used up, this points to the next log block
       std::atomic<LogicalBlockIdx> next_tx_block;
     } cl1_meta;
 
@@ -64,10 +68,10 @@ class MetaBlock : public noncopyable {
                 "cl1_meta must be no larger than a cache line");
 
   // 62 cache lines for tx log (~120 txs)
-  std::atomic<TxEntry> inline_tx_entries[NUM_INLINE_TX_ENTRY];
+  std::atomic<TxEntry> tx_entries[NUM_INLINE_TX_ENTRY];
 
-  static_assert(sizeof(inline_tx_entries) == 62 * CACHELINE_SIZE,
-                "inline_tx_entries must be 30 cache lines");
+  static_assert(sizeof(tx_entries) == 62 * CACHELINE_SIZE,
+                "tx_entries must be 30 cache lines");
 
  public:
   /**
@@ -163,7 +167,7 @@ class MetaBlock : public noncopyable {
    * @param begin_idx where to start flush
    */
   void flush_tx_block(TxLocalIdx begin_idx = 0) {
-    persist_unfenced(&inline_tx_entries[begin_idx],
+    persist_unfenced(&tx_entries[begin_idx],
                      sizeof(TxEntry) * (NUM_INLINE_TX_ENTRY - begin_idx));
     persist_cl_unfenced(cl1);
   }
@@ -174,7 +178,7 @@ class MetaBlock : public noncopyable {
    * @param begin_idx
    */
   void flush_tx_entries(TxLocalIdx begin_idx, TxLocalIdx end_idx) {
-    persist_unfenced(&inline_tx_entries[begin_idx],
+    persist_unfenced(&tx_entries[begin_idx],
                      sizeof(TxEntry) * (end_idx - begin_idx));
   }
 
@@ -187,32 +191,24 @@ class MetaBlock : public noncopyable {
   }
 
   [[nodiscard]] TxEntryIdx get_tx_tail() const {
-    auto tx_tail = cl1_meta.tx_tail.load(std::memory_order_relaxed);
-    return tx_tail;
-  }
-
-  [[nodiscard]] TxEntry get_tx_entry(TxLocalIdx idx) const {
-    assert(idx < NUM_INLINE_TX_ENTRY);
-    return inline_tx_entries[idx].load(std::memory_order_acquire);
+    return cl1_meta.tx_tail.load(std::memory_order_relaxed);
   }
 
   /*
    * Methods for inline metadata
    */
   [[nodiscard]] TxLocalIdx find_tail(TxLocalIdx hint = 0) const {
-    return TxEntry::find_tail<NUM_INLINE_TX_ENTRY>(inline_tx_entries, hint);
-  }
-
-  TxEntry try_append(TxEntry entry, TxLocalIdx idx) {
-    return TxEntry::try_append(inline_tx_entries, entry, idx);
+    return TxEntry::find_tail<NUM_INLINE_TX_ENTRY>(tx_entries, hint);
   }
 
   // for garbage collection
   void invalidate_tx_entries() {
-    for (auto& inline_tx_entrie : inline_tx_entries)
-      inline_tx_entrie.store(TxEntry::TxEntryDummy, std::memory_order_relaxed);
-    persist_fenced(inline_tx_entries, sizeof(TxEntry) * NUM_INLINE_TX_ENTRY);
+    for (auto& entry : tx_entries)
+      entry.store(TxEntry::TxEntryDummy, std::memory_order_relaxed);
+    persist_fenced(tx_entries, sizeof(TxEntry) * NUM_INLINE_TX_ENTRY);
   }
+
+  friend struct ::ulayfs::dram::TxCursor;
 
   friend std::ostream& operator<<(std::ostream& out, const MetaBlock& block) {
     out << "MetaBlock: \n";

@@ -174,7 +174,7 @@ pmem::TxEntry TxMgr::try_commit(pmem::TxEntry entry, TxCursor* cursor) {
     flush_tx_entries(meta->get_tx_tail(), *cursor);
     meta->set_tx_tail(cursor->idx);
   }
-  
+
   return cursor->try_append(entry);
 }
 
@@ -254,7 +254,7 @@ void TxMgr::find_tail(TxEntryIdx& tx_idx, pmem::TxBlock*& tx_block) const {
     tx_block = &(file->lidx_to_addr_rw(next_block_idx)->tx_block);
   }
   tx_idx.local_idx = tx_block->find_tail(tx_idx.local_idx);
-};
+}
 
 template <class B>
 std::tuple<LogicalBlockIdx, pmem::TxBlock*> TxMgr::alloc_next_block(

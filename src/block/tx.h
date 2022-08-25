@@ -10,6 +10,10 @@
 #include "logging.h"
 #include "utils.h"
 
+namespace ulayfs::dram {
+struct TxCursor;
+}
+
 namespace ulayfs::pmem {
 
 class TxBlock : public noncopyable {
@@ -28,18 +32,9 @@ class TxBlock : public noncopyable {
     return TxEntry::find_tail<NUM_TX_ENTRY_PER_BLOCK>(tx_entries, hint);
   }
 
-  TxEntry try_append(TxEntry entry, TxLocalIdx idx) {
-    return TxEntry::try_append(tx_entries, entry, idx);
-  }
-
   // THIS FUNCTION IS NOT THREAD SAFE
   void store(TxEntry entry, TxLocalIdx idx) {
     tx_entries[idx].store(entry, std::memory_order_relaxed);
-  }
-
-  [[nodiscard]] TxEntry get(TxLocalIdx idx) const {
-    assert(idx < NUM_TX_ENTRY_PER_BLOCK);
-    return tx_entries[idx].load(std::memory_order_acquire);
   }
 
   // it should be fine not to use any fence since there will be fence for flush
@@ -82,6 +77,8 @@ class TxBlock : public noncopyable {
     persist_unfenced(&tx_entries[begin_idx],
                      sizeof(TxEntry) * (end_idx - begin_idx));
   }
+
+  friend struct ::ulayfs::dram::TxCursor;
 };
 
 static_assert(sizeof(TxBlock) == BLOCK_SIZE,
