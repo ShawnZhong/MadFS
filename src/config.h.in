@@ -78,6 +78,7 @@ constexpr static struct BuildOptions {
 
   friend std::ostream& operator<<(std::ostream& out,
                                   [[maybe_unused]] const BuildOptions& opt) {
+    __msan_scoped_disable_interceptor_checks();
     out << "BuildOptions: \n";
     out << "\tbuild_type: " << build_type << "\n";
     out << "\tuse_pmemcheck: " << use_pmemcheck << "\n";
@@ -96,6 +97,7 @@ constexpr static struct BuildOptions {
     out << "\t\tcc_mutex: " << cc_mutex << "\n";
     out << "\t\tcc_spinlock: " << cc_spinlock << "\n";
     out << "\t\tcc_rwlock: " << cc_rwlock << "\n";
+    __msan_scoped_enable_interceptor_checks();
 
     return out;
   }
