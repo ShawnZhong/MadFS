@@ -29,12 +29,11 @@ struct TxCursor {
    * @return the tx entry pointed to by this cursor
    */
   pmem::TxEntry get_entry() const {
-    TimerGuard<Event::GET_TX_ENTRY> timer_guard;
+    TimerGuard<Event::TX_ENTRY_LOAD> timer_guard;
     assert(addr != nullptr);
     std::atomic<pmem::TxEntry>* entries =
         idx.is_inline() ? meta->tx_entries : block->tx_entries;
-    assert(idx.local_idx <
-           (idx.is_inline() ? NUM_INLINE_TX_ENTRY : NUM_TX_ENTRY_PER_BLOCK));
+    assert(idx.local_idx < idx.get_capacity());
     return entries[idx.local_idx].load(std::memory_order_acquire);
   }
 
@@ -48,6 +47,7 @@ struct TxCursor {
    * @return if success, return 0; otherwise, return the entry on the slot
    */
   pmem::TxEntry try_append(pmem::TxEntry entry) {
+    TimerGuard<Event::TX_ENTRY_STORE> timer_guard;
     assert(addr != nullptr);
     std::atomic<pmem::TxEntry>* entries =
         idx.is_inline() ? meta->tx_entries : block->tx_entries;

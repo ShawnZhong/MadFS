@@ -39,6 +39,7 @@ ssize_t TxMgr::do_pwrite(const char* buf, size_t count, size_t offset) {
   // special case that we have everything aligned, no OCC
   if (count % BLOCK_SIZE == 0 && offset % BLOCK_SIZE == 0) {
     TimerGuard<Event::ALIGNED_TX> timer_guard;
+    timer.start<Event::ALIGNED_TX_CTOR>();
     return AlignedTx(file, this, buf, count, offset).exec();
   }
 
@@ -76,11 +77,6 @@ ssize_t TxMgr::do_write(const char* buf, size_t count) {
   // unaligned multi-block write
   return Tx::exec_and_release_offset<MultiBlockTx>(file, this, buf, count,
                                                    offset, state, ticket);
-}
-
-bool TxMgr::advance_cursor(TxCursor* cursor, bool do_alloc) const {
-  cursor->idx.local_idx++;
-  return handle_cursor_overflow(cursor, do_alloc);
 }
 
 std::tuple<pmem::LogEntry*, pmem::LogEntryBlock*> TxMgr::get_log_entry(
@@ -176,6 +172,10 @@ pmem::TxEntry TxMgr::try_commit(pmem::TxEntry entry, TxCursor* cursor) {
   }
 
   return cursor->try_append(entry);
+}
+bool TxMgr::advance_cursor(TxCursor* cursor, bool do_alloc) const {
+  cursor->idx.local_idx++;
+  return handle_cursor_overflow(cursor, do_alloc);
 }
 
 bool TxMgr::handle_cursor_overflow(TxCursor* cursor, bool do_alloc) const {
