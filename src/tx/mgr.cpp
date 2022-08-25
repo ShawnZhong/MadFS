@@ -79,11 +79,6 @@ ssize_t TxMgr::do_write(const char* buf, size_t count) {
                                                    offset, state, ticket);
 }
 
-bool TxMgr::advance_cursor(TxCursor* cursor, bool do_alloc) const {
-  cursor->idx.local_idx++;
-  return handle_cursor_overflow(cursor, do_alloc);
-}
-
 std::tuple<pmem::LogEntry*, pmem::LogEntryBlock*> TxMgr::get_log_entry(
     LogEntryIdx idx, bool init_bitmap) const {
   if (init_bitmap) file->set_allocated(idx.block_idx);
@@ -177,6 +172,10 @@ pmem::TxEntry TxMgr::try_commit(pmem::TxEntry entry, TxCursor* cursor) {
   }
 
   return cursor->try_append(entry);
+}
+bool TxMgr::advance_cursor(TxCursor* cursor, bool do_alloc) const {
+  cursor->idx.local_idx++;
+  return handle_cursor_overflow(cursor, do_alloc);
 }
 
 bool TxMgr::handle_cursor_overflow(TxCursor* cursor, bool do_alloc) const {
