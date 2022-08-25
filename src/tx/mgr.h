@@ -48,14 +48,6 @@ class TxMgr {
   bool advance_cursor(TxCursor* cursor, bool do_alloc) const;
 
   /**
-   * Read the tx entry from the MetaBlock or TxBlock
-   *
-   * @param cursor the cursor to read from
-   * @return the tx entry
-   */
-  [[nodiscard]] pmem::TxEntry get_tx_entry(TxCursor cursor) const;
-
-  /**
    * Get log entry given the index
    *
    * @param idx the log entry index

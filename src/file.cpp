@@ -25,7 +25,7 @@ File::File(int fd, const struct stat& stat, int flags,
       mem_table(fd, stat.st_size, (flags & O_ACCMODE) == O_RDONLY),
       meta(mem_table.get_meta()),
       tx_mgr(this, meta),
-      blk_table(this, &tx_mgr),
+      blk_table(this, meta, &tx_mgr),
       can_read((flags & O_ACCMODE) == O_RDONLY ||
                (flags & O_ACCMODE) == O_RDWR),
       can_write((flags & O_ACCMODE) == O_WRONLY ||

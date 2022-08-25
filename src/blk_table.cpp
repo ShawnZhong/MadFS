@@ -20,7 +20,7 @@ bool BlkTable::need_update(FileState* result_state, bool do_alloc) const {
     return false;
   // if it's not valid, there is no new tx to the tx history, thus no need to
   // acquire spinlock to update
-  return tx_mgr->get_tx_entry(result_state->cursor).is_valid();
+  return result_state->cursor.get_entry().is_valid();
 }
 
 uint64_t BlkTable::update(bool do_alloc, bool init_bitmap) {
@@ -41,7 +41,7 @@ uint64_t BlkTable::update(bool do_alloc, bool init_bitmap) {
 
   prev_tx_block_idx = 0;
   while (true) {
-    auto tx_entry = tx_mgr->get_tx_entry(cursor);
+    auto tx_entry = cursor.get_entry();
     if (!tx_entry.is_valid()) break;
     if (init_bitmap && cursor.idx.block_idx != prev_tx_block_idx)
       file->set_allocated(cursor.idx.block_idx);

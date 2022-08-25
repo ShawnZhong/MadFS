@@ -2,6 +2,7 @@
 
 #include "block/tx.h"
 #include "idx.h"
+#include "timer.h"
 
 namespace ulayfs::dram {
 
@@ -12,7 +13,22 @@ namespace ulayfs::dram {
  */
 struct TxCursor {
   TxEntryIdx idx;
-  pmem::TxBlock* block;
+  union {
+    pmem::TxBlock* block;
+    pmem::MetaBlock* meta;
+  };
+
+  TxCursor() = default;
+  TxCursor(LogicalBlockIdx block_idx, pmem::TxBlock* block)
+      : idx(block_idx, 0), block(block) {}
+  TxCursor(TxEntryIdx idx, pmem::TxBlock* block) : idx(idx), block(block) {}
+  TxCursor(pmem::MetaBlock* meta) : idx(), meta(meta) {}
+
+  pmem::TxEntry get_entry() const {
+    TimerGuard<Event::GET_TX_ENTRY> timer_guard;
+    return idx.block_idx == 0 ? meta->get_tx_entry(idx.local_idx)
+                              : block->get(idx.local_idx);
+  }
 
   friend bool operator==(const TxCursor& lhs, const TxCursor& rhs) {
     return lhs.idx == rhs.idx && lhs.block == rhs.block;
