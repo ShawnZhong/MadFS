@@ -4,7 +4,7 @@
 #include <magic_enum.hpp>
 #include <mutex>
 
-#include "debug.h"
+#include "const.h"
 #include "logging.h"
 
 namespace ulayfs {
