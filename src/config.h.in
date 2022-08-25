@@ -55,7 +55,9 @@ constexpr static struct BuildOptions {
   static_assert(cc_occ + cc_mutex + cc_spinlock + cc_rwlock == 1);
 
 #ifndef NDEBUG
-#define ULAYFS_DEBUG 1
+  constexpr static bool debug = true;
+#else
+  constexpr static bool debug = false;
 #endif
 
 #ifdef __CLWB__
@@ -80,17 +82,22 @@ constexpr static struct BuildOptions {
                                   [[maybe_unused]] const BuildOptions& opt) {
     __msan_scoped_disable_interceptor_checks();
     out << "BuildOptions: \n";
-    out << "\tbuild_type: " << build_type << "\n";
-    out << "\tuse_pmemcheck: " << use_pmemcheck << "\n";
-    out << "\tmap_sync: " << map_sync << "\n";
-    out << "\tmap_populate: " << map_populate << "\n";
-    out << "\ttx_flush_only_fsync: " << tx_flush_only_fsync << "\n";
-    out << "\tenable_timer: " << enable_timer << "\n";
+
+    out << "\tbuild type:\n";
+    out << "\t\tname: " << build_type << "\n";
+    out << "\t\tdebug: " << debug << "\n";
+    out << "\t\tuse_pmemcheck: " << use_pmemcheck << "\n";
 
     out << "\thardware support:\n";
     out << "\t\tclwb: " << support_clwb << "\n";
     out << "\t\tclflushopt: " << support_clflushopt << "\n";
     out << "\t\tavx512f: " << support_avx512f << "\n";
+
+    out << "\tfeatures: \n";
+    out << "\t\tmap_sync: " << map_sync << "\n";
+    out << "\t\tmap_populate: " << map_populate << "\n";
+    out << "\t\ttx_flush_only_fsync: " << tx_flush_only_fsync << "\n";
+    out << "\t\tenable_timer: " << enable_timer << "\n";
 
     out << "\tconcurrency control:\n";
     out << "\t\tcc_occ: " << cc_occ << "\n";

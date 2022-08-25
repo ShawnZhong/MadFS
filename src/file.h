@@ -22,6 +22,7 @@
 #include "idx.h"
 #include "mem_table.h"
 #include "posix.h"
+#include "shm.h"
 #include "tx/mgr.h"
 #include "tx/offset.h"
 #include "utils.h"
@@ -40,11 +41,10 @@ class File {
   pmem::MetaBlock* meta;
   TxMgr tx_mgr;
   BlkTable blk_table;
+  ShmMgr shm_mgr;
 
-  int shm_fd;
   const bool can_read;
   const bool can_write;
-  char shm_path[SHM_PATH_LEN];
 
   // each thread tid has its local allocator
   // the allocator is a per-thread per-file data structure
@@ -161,27 +161,11 @@ class File {
   }
 
   /**
-   * Open the shared memory object corresponding to this file and save the
-   * mmapped address to bitmap. The leading bit of the bitmap (corresponding to
-   * metablock) indicates if the bitmap needs to be initialized.
-   *
-   * @param[in] stat stat of the original file
-   * @return the file descriptor for the shared memory object on success
-   */
-  void open_shm(const struct stat& stat);
-
-  /**
    * Remove the shared memory object associated with the current file.
    * Try best effort and report no error if unlink fails, since the shared
    * memory object might be removed by kernel.
    */
-  void unlink_shm();
-
-  /**
-   * Remove the shared memory object associated for a given file
-   * @param filepath the path of the file
-   */
-  static void unlink_shm(const char* filepath);
+  void unlink_shm() { shm_mgr.unlink(); }
 
   void tx_gc();
 

@@ -1,19 +1,21 @@
 #include <cstdarg>
 
 #include "lib.h"
+#include "shm.h"
 #include "timer.h"
 
 namespace ulayfs {
+
 extern "C" {
 int unlink(const char* path) {
-  dram::File::unlink_shm(path);
+  dram::ShmMgr::unlink_by_file_path(path);
   int rc = posix::unlink(path);
   LOG_DEBUG("posix::unlink(%s) = %d", path, rc);
   return rc;
 }
 
 int rename(const char* oldpath, const char* newpath) {
-  if (access(newpath, F_OK) == 0) dram::File::unlink_shm(newpath);
+  if (access(newpath, F_OK) == 0) dram::ShmMgr::unlink_by_file_path(newpath);
   int rc = posix::rename(oldpath, newpath);
   LOG_DEBUG("posix::rename(%s, %s) = %d", oldpath, newpath, rc);
   return rc;
