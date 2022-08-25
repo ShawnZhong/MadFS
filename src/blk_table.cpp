@@ -25,7 +25,6 @@ bool BlkTable::need_update(FileState* result_state, bool do_alloc) const {
 
 uint64_t BlkTable::update(bool do_alloc, bool init_bitmap) {
   TxCursor cursor = state.cursor;
-  LogicalBlockIdx prev_tx_block_idx;
 
   // it's possible that the previous update move idx to overflow state
   if (!tx_mgr->handle_cursor_overflow(&cursor, do_alloc)) {
@@ -39,7 +38,7 @@ uint64_t BlkTable::update(bool do_alloc, bool init_bitmap) {
   uint64_t old_ver = version.load(std::memory_order_relaxed);
   version.store(old_ver + 1, std::memory_order_acquire);
 
-  prev_tx_block_idx = 0;
+  LogicalBlockIdx prev_tx_block_idx = 0;
   while (true) {
     auto tx_entry = cursor.get_entry();
     if (!tx_entry.is_valid()) break;
