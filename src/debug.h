@@ -2,33 +2,9 @@
 
 #include <cstddef>
 
+#include "const.h"
+
 namespace ulayfs {
-enum class Event : std::size_t {
-  READ,
-  WRITE,
-  PREAD,
-  PWRITE,
-  OPEN,
-  CLOSE,
-  FSYNC,
-
-  ALIGNED_TX,
-  ALIGNED_TX_COPY,
-  ALIGNED_TX_PREPARE,
-  ALIGNED_TX_UPDATE,
-  ALIGNED_TX_WAIT_OFFSET,
-  ALIGNED_TX_COMMIT,
-
-  SINGLE_BLOCK_TX,
-  SINGLE_BLOCK_TX_START,
-  SINGLE_BLOCK_TX_COPY,
-  SINGLE_BLOCK_TX_COMMIT,
-
-  MULTI_BLOCK_TX,
-  MULTI_BLOCK_TX_START,
-  MULTI_BLOCK_TX_COPY,
-  MULTI_BLOCK_TX_COMMIT,
-};
 
 // The following functions are intended for debug usage. They are declared as
 // weak so other program can include this header without having to link with the

@@ -12,12 +12,13 @@ class AlignedTx : public WriteTx {
       : WriteTx(file, tx_mgr, buf, count, offset, state, ticket) {}
 
   ssize_t exec() {
-    // since everything is block-aligned, we can copy data directly
-    const char* rest_buf = buf;
-    size_t rest_count = count;
-
     {
       TimerGuard<Event::ALIGNED_TX_COPY> timer_guard;
+
+      // since everything is block-aligned, we can copy data directly
+      const char* rest_buf = buf;
+      size_t rest_count = count;
+
       for (auto block : dst_blocks) {
         size_t num_bytes = std::min(rest_count, BITMAP_BYTES_CAPACITY);
         pmem::memcpy_persist(block->data_rw(), rest_buf, num_bytes);
@@ -51,25 +52,26 @@ class AlignedTx : public WriteTx {
       if (is_offset_depend) tx_mgr->offset_mgr.wait_offset(ticket);
     }
 
-  retry:
     if constexpr (BuildOptions::cc_occ) {
-      timer.start<Event::ALIGNED_TX_COMMIT>();
-      pmem::TxEntry conflict_entry =
-          tx_mgr->try_commit(commit_entry, &state.cursor);
-      timer.stop<Event::ALIGNED_TX_COMMIT>();
-      if (!conflict_entry.is_valid()) goto done;
-      // we don't check the return value of handle_conflict here because we
-      // don't care whether there is a conflict, as long as recycle_image gets
-      // updated
-      handle_conflict(conflict_entry, begin_vidx, end_vidx - 1, recycle_image);
-      // aligned transaction will never have leftover bytes, so no need to
-      // recheck commit_entry
-      goto retry;
+      TimerGuard<Event::ALIGNED_TX_COMMIT> timer_guard;
+      while (true) {
+        pmem::TxEntry conflict_entry =
+            tx_mgr->try_commit(commit_entry, &state.cursor);
+        if (!conflict_entry.is_valid()) break;
+
+        // we don't check the return value of handle_conflict here because we
+        // don't care whether there is a conflict, as long as recycle_image gets
+        // updated
+        handle_conflict(conflict_entry, begin_vidx, end_vidx - 1,
+                        recycle_image);
+        // aligned transaction will never have leftover bytes, so no need to
+        // recheck commit_entry
+      }
     } else {
+      TimerGuard<Event::ALIGNED_TX_COMMIT> timer_guard;
       tx_mgr->try_commit(commit_entry, &state.cursor);
     }
 
-  done:
     // recycle the data blocks being overwritten
     allocator->free(recycle_image);
     return static_cast<ssize_t>(count);
