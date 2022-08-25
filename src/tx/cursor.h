@@ -16,16 +16,18 @@ struct TxCursor {
   union {
     pmem::TxBlock* block;
     pmem::MetaBlock* meta;
+    void* addr;
   };
 
-  TxCursor() = default;
+  TxCursor() : idx(), addr(nullptr) {}
   TxCursor(LogicalBlockIdx block_idx, pmem::TxBlock* block)
-      : idx(block_idx, 0), block(block) {}
-  TxCursor(TxEntryIdx idx, pmem::TxBlock* block) : idx(idx), block(block) {}
-  TxCursor(pmem::MetaBlock* meta) : idx(), meta(meta) {}
+      : idx(block_idx, 0), addr(block) {}
+  TxCursor(TxEntryIdx idx, pmem::TxBlock* block) : idx(idx), addr(block) {}
+  TxCursor(pmem::MetaBlock* meta) : idx(), addr(meta) {}
 
   pmem::TxEntry get_entry() const {
     TimerGuard<Event::GET_TX_ENTRY> timer_guard;
+    assert(addr != nullptr);
     return idx.block_idx == 0 ? meta->get_tx_entry(idx.local_idx)
                               : block->get(idx.local_idx);
   }

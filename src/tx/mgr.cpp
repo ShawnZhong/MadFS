@@ -171,7 +171,6 @@ pmem::TxEntry TxMgr::try_commit(pmem::TxEntry entry, TxCursor* cursor) {
   handle_cursor_overflow(cursor, true);
 
   bool is_inline = cursor->idx.block_idx == 0;
-  assert(is_inline == (cursor->block == nullptr));
 
   if (pmem::TxEntry::need_flush(cursor->idx.local_idx)) {
     flush_tx_entries(meta->get_tx_tail(), *cursor);
@@ -382,7 +381,7 @@ abort:
 std::ostream& operator<<(std::ostream& out, const TxMgr& tx_mgr) {
   out << tx_mgr.offset_mgr;
   out << "Transactions: \n";
-  TxCursor cursor{};
+  TxCursor cursor{tx_mgr.meta};
 
   while (true) {
     auto tx_entry = cursor.get_entry();
