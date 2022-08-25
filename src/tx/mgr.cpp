@@ -39,6 +39,7 @@ ssize_t TxMgr::do_pwrite(const char* buf, size_t count, size_t offset) {
   // special case that we have everything aligned, no OCC
   if (count % BLOCK_SIZE == 0 && offset % BLOCK_SIZE == 0) {
     TimerGuard<Event::ALIGNED_TX> timer_guard;
+    timer.start<Event::ALIGNED_TX_CTOR>();
     return AlignedTx(file, this, buf, count, offset).exec();
   }
 

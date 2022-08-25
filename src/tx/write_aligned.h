@@ -12,6 +12,9 @@ class AlignedTx : public WriteTx {
       : WriteTx(file, tx_mgr, buf, count, offset, state, ticket) {}
 
   ssize_t exec() {
+    timer.stop<Event::ALIGNED_TX_CTOR>();
+    timer.start<Event::ALIGNED_TX_EXEC>();
+
     {
       TimerGuard<Event::ALIGNED_TX_COPY> timer_guard;
 
@@ -44,8 +47,12 @@ class AlignedTx : public WriteTx {
 
     // for an aligned tx, leftover_bytes must be zero, so there is no need to
     // validate whether we falsely assume this tx can be inline
-    for (uint32_t i = 0; i < num_blocks; ++i)
-      recycle_image[i] = file->vidx_to_lidx(begin_vidx + i);
+
+    {
+      TimerGuard<Event::ALIGNED_TX_RECYCLE> timer_guard;
+      for (uint32_t i = 0; i < num_blocks; ++i)
+        recycle_image[i] = file->vidx_to_lidx(begin_vidx + i);
+    }
 
     {
       TimerGuard<Event::ALIGNED_TX_WAIT_OFFSET> timer_guard;
@@ -72,8 +79,14 @@ class AlignedTx : public WriteTx {
       tx_mgr->try_commit(commit_entry, &state.cursor);
     }
 
-    // recycle the data blocks being overwritten
-    allocator->free(recycle_image);
+    {
+      TimerGuard<Event::ALIGNED_TX_FREE> timer_guard;
+      // recycle the data blocks being overwritten
+      allocator->free(recycle_image);
+    }
+
+    timer.stop<Event::ALIGNED_TX_EXEC>();
+
     return static_cast<ssize_t>(count);
   }
 };
