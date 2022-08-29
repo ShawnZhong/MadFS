@@ -11,7 +11,6 @@ constexpr static bool debug = true;
 
 constexpr int BLOCK_SIZE = 4096;
 constexpr int MAX_NUM_THREAD = 16;
-constexpr double ZIPF_THETA = 0.9;
 
 const char* filepath = get_filepath();
 int num_iter = get_num_iter();
@@ -25,7 +24,7 @@ enum class Mode {
   ZIPF,
 };
 
-template <Mode mode, int READ_PERCENT = -1>
+template <Mode mode>
 void bench(benchmark::State& state) {
   const auto num_bytes = state.range(0);
 
@@ -49,6 +48,9 @@ void bench(benchmark::State& state) {
       struct stat st;  // NOLINT(cppcoreguidelines-pro-type-member-init)
       fstat(fd, &st);
       if (st.st_size != file_size) {
+        if (st.st_size != 0) {
+          state.SkipWithError("file size is not 0");
+        }
         prefill_file(fd, file_size);
       }
     }
@@ -77,9 +79,11 @@ void bench(benchmark::State& state) {
       }
     }
   } else if constexpr (mode == Mode::UNIF) {
+    const auto read_percent = state.range(1);
+
     bool is_read[num_iter];
     std::generate(is_read, is_read + num_iter,
-                  [&]() { return rand() % 100 < READ_PERCENT; });
+                  [&]() { return rand() % 100 < read_percent; });
 
     int rand_off[num_iter];
     std::generate(rand_off, rand_off + num_iter, [&]() {
@@ -102,15 +106,19 @@ void bench(benchmark::State& state) {
       i++;
     }
   } else if constexpr (mode == Mode::ZIPF) {
-    std::default_random_engine generator;
-    zipfian_int_distribution<int> zipf(1, file_size / BLOCK_SIZE, ZIPF_THETA);
+    const double theta = state.range(1) / 100.0;
 
-    off_t offset[num_iter];
-    std::generate(offset, offset + num_iter, [&]() { return zipf(generator); });
+    std::mt19937 generator(state.thread_index);
+    zipf_distribution<int> zipf(file_size / BLOCK_SIZE, theta);
+
+    off_t offsets[num_iter];
+    std::generate(offsets, offsets + num_iter,
+                  [&]() { return zipf(generator) - 1; });
+
     int i = 0;
     for (auto _ : state) {
       [[maybe_unused]] ssize_t res =
-          pwrite(fd, src_buf, num_bytes, offset[i++] * BLOCK_SIZE);
+          pwrite(fd, src_buf, num_bytes, offsets[i++] * BLOCK_SIZE);
       assert(res == num_bytes);
       fsync(fd);
     }
@@ -144,31 +152,46 @@ void bench(benchmark::State& state) {
   }
 }
 
-template <class F>
-auto register_bm(const char* name, F f, int num_bytes = BLOCK_SIZE) {
-  return benchmark::RegisterBenchmark(name, f)
-      ->Args({num_bytes})
-      ->DenseThreadRange(1, MAX_NUM_THREAD)
-      ->Iterations(num_iter)
-      ->UseRealTime();
-}
-
 int main(int argc, char** argv) {
   benchmark::Initialize(&argc, argv);
   if (benchmark::ReportUnrecognizedArguments(argc, argv)) return 1;
 
   unlink(filepath);
 
-  register_bm("unif_0R", bench<Mode::UNIF, 0>);
-  register_bm("unif_50R", bench<Mode::UNIF, 50>);
-  register_bm("unif_95R", bench<Mode::UNIF, 95>);
-  register_bm("unif_100R", bench<Mode::UNIF, 100>);
+  for (const auto& read_percent : {0, 50, 95, 100}) {
+    auto name = std::string("unif_") + std::to_string(read_percent) + "R";
+    benchmark::RegisterBenchmark(name.c_str(), bench<Mode::UNIF>)
+        ->Args({BLOCK_SIZE, read_percent})
+        ->DenseThreadRange(1, MAX_NUM_THREAD)
+        ->Iterations(num_iter)
+        ->UseRealTime();
+  }
 
-  register_bm("zipf_4k", bench<Mode::ZIPF>, 4096);
-  register_bm("zipf_2k", bench<Mode::ZIPF>, 2048);
+  for (const auto& [name, num_bytes] :
+       {std::pair{"zipf_4k", 4096}, std::pair{"zipf_2k", 2048}}) {
+    benchmark::RegisterBenchmark(name, bench<Mode::UNIF>)
+        ->Args({num_bytes, 90})
+        ->DenseThreadRange(1, MAX_NUM_THREAD)
+        ->Iterations(num_iter)
+        ->UseRealTime();
+  }
 
-  register_bm("append_512", bench<Mode::APPEND>, 512);
-  register_bm("append_4k", bench<Mode::APPEND>);
+  //  for (long theta_x100 = 0; theta_x100 <= 160; theta_x100 += 10) {
+  //    benchmark::RegisterBenchmark("zipf_4k", bench<Mode::ZIPF>)
+  //        ->Args({BLOCK_SIZE, theta_x100})
+  //        ->Threads(8)
+  //        ->Iterations(num_iter)
+  //        ->UseRealTime();
+  //  }
+
+  for (const auto& [name, num_bytes] :
+       {std::pair{"append_4k", 4096}, std::pair{"append_2k", 2048}}) {
+    benchmark::RegisterBenchmark(name, bench<Mode::APPEND>)
+        ->Args({num_bytes})
+        ->DenseThreadRange(1, MAX_NUM_THREAD)
+        ->Iterations(num_iter)
+        ->UseRealTime();
+  }
 
   benchmark::RunSpecifiedBenchmarks();
   return 0;
