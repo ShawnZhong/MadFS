@@ -186,7 +186,7 @@ class SplitFS(Filesystem):
 
 
 all_bench_fs = {fs.name: fs for fs in [ULAYFS(), Ext4DAX(), NOVA(), SplitFS()]}
-all_extra_fs = {fs.name: fs for fs in [ULAYFS_OCC(), ULAYFS_MUTEX(), ULAYFS_SPINLOCK(), ULAYFS_RWLOCK()]}
+all_extra_fs = {fs.name: fs for fs in [ULAYFS_OCC(), ULAYFS_SPINLOCK(), ULAYFS_MUTEX(), ULAYFS_RWLOCK()]}
 all_fs = {**all_bench_fs, **all_extra_fs}
 
 bench_fs = {k: v for k, v in all_bench_fs.items() if v.is_available()}
