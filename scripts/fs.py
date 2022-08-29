@@ -130,17 +130,17 @@ class ULAYFS_OCC(ULAYFS):
 
 
 class ULAYFS_MUTEX(ULAYFS):
-    name = "mutex"
+    name = "Mutex"
     cc = "MUTEX"
 
 
 class ULAYFS_SPINLOCK(ULAYFS):
-    name = "spinlock"
+    name = "Spinlock"
     cc = "SPINLOCK"
 
 
 class ULAYFS_RWLOCK(ULAYFS):
-    name = "rwlock"
+    name = "RwLock"
     cc = "RWLOCK"
 
 
