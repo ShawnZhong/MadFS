@@ -169,7 +169,7 @@ int main(int argc, char** argv) {
 
   for (const auto& [name, num_bytes] :
        {std::pair{"zipf_4k", 4096}, std::pair{"zipf_2k", 2048}}) {
-    benchmark::RegisterBenchmark(name, bench<Mode::UNIF>)
+    benchmark::RegisterBenchmark(name, bench<Mode::ZIPF>)
         ->Args({num_bytes, 90})
         ->DenseThreadRange(1, MAX_NUM_THREAD)
         ->Iterations(num_iter)
