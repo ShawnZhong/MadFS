@@ -28,6 +28,13 @@ def get_sorted_subdirs(path):
     return paths
 
 
+def get_fs_name(path):
+    names = {
+        "uLayFS": "MEFS",
+    }
+    return names.get(path.name, path.name)
+
+
 def read_files(result_dir):
     if not result_dir.exists():
         raise FileNotFoundError(f"{result_dir} does not exist")
@@ -35,7 +42,7 @@ def read_files(result_dir):
     data = pd.DataFrame()
 
     for path in get_sorted_subdirs(result_dir):
-        fs_name = path.name
+        fs_name = get_fs_name(path)
         result_path = path / "result.json"
 
         if not result_path.exists():
@@ -46,7 +53,7 @@ def read_files(result_dir):
             json_data = json.load(f)
             df = pd.DataFrame.from_dict(json_data["benchmarks"])
             df["label"] = fs_name
-            data = data.append(df)
+            data = pd.concat([data, df])
 
     return data
 
@@ -78,15 +85,23 @@ def plot_single_bm(
         name=None,
         post_plot=None,
         figsize=(2.5, 1.5),
+        markers=("o", "^", "s", "D"),
+        colors=(None,),
 ):
     plt.clf()
     fig, ax = plt.subplots(figsize=figsize)
+
     label_groups = df.groupby("label", sort=False)
-    for label, group in label_groups:
+    num_groups = len(label_groups)
+    if len(markers) < num_groups:
+        markers = markers * (num_groups // len(markers) + 1)
+    if len(colors) < num_groups:
+        colors = colors * (num_groups // len(colors) + 1)
+    for (label, group), marker, color in zip(label_groups, markers, colors):
         if barchart:
-            plt.bar(group["x"], group["y"], label=label)
+            plt.bar(group["x"], group["y"], label=label, color=color)
         else:
-            plt.plot(group["x"], group["y"], label=label, marker=".")
+            plt.plot(group["x"], group["y"], label=label, marker=marker, markersize=3, color=color)
 
     if post_plot:
         post_plot(ax=ax, name=name, df=df)
@@ -99,9 +114,10 @@ def plot_single_bm(
         ncol=4,
         loc="center",
         fontsize=8,
-        columnspacing=1,
-        # handlelength=1.5,
+        columnspacing=2,
+        handlelength=0,
         frameon=False,
+        markerscale=1,
     )
     save_fig(figlegend, "legend", result_dir)
 
@@ -118,9 +134,9 @@ def plot_micro_st(result_dir):
         is_cow = name.startswith("cow")
         if is_cow:
             df["x"] = df["name"].apply(parse_name, args=(1,))
-            df["y"] = df["real_time"].apply(lambda x: float(x) / 1000)
+            df["y"] = df["items_per_second"].apply(lambda x: float(x) / 1000 ** 2)
             xunit = "Bytes"
-            ylabel = r"Latency ($\mu$s)"
+            ylabel = r"Throughput (Mops/s)"
         else:
             df["x"] = df["name"].apply(parse_name, args=(1,)).apply(lambda x: f"{int(x) / 1024:1g}")
             df["y"] = df["bytes_per_second"].apply(lambda x: float(x) / 1024 ** 3)
@@ -167,7 +183,10 @@ def plot_micro_mt(result_dir):
     df["x"] = df["name"].apply(parse_name, args=(-1,))
     xlabel = "Threads"
 
-    for name, benchmark in df.groupby("benchmark"):
+    benchmarks = df.groupby("benchmark")
+    is_cc = "OCC" in df["label"].unique()
+
+    for name, benchmark in benchmarks:
         benchmark["y"] = benchmark["bytes_per_second"].apply(lambda x: float(x) / 1024 ** 3)
         ylabel = "Throughput (GB/s)"
 
@@ -203,12 +222,22 @@ def plot_micro_mt(result_dir):
 
             ax.set_title(titles.get(name), pad=3, fontsize=11)
 
-        plot_single_bm(
-            benchmark,
-            name=name,
-            result_dir=result_dir,
-            post_plot=post_plot,
-        )
+        if is_cc:
+            plot_single_bm(
+                benchmark,
+                name=name,
+                result_dir=result_dir,
+                post_plot=post_plot,
+                markers=("o",),
+                colors=("tab:blue", "tab:cyan", "tab:purple", "tab:pink"),
+            )
+        else:
+            plot_single_bm(
+                benchmark,
+                name=name,
+                result_dir=result_dir,
+                post_plot=post_plot,
+            )
 
 
 def plot_micro_meta(result_dir):
