@@ -9,7 +9,8 @@ int num_iter = get_num_iter();
 int fd;
 
 enum class Mode {
-  APPEND,
+  APPEND_WRITE,
+  APPEND_PWRITE,
   SEQ_READ,
   SEQ_WRITE,
   SEQ_PREAD,
@@ -34,11 +35,13 @@ void bench(benchmark::State& state) {
   constexpr bool is_overwrite = mode == Mode::SEQ_WRITE ||
                                 mode == Mode::SEQ_PWRITE ||
                                 mode == Mode::RND_PWRITE || mode == Mode::COW;
+  constexpr bool is_append =
+      mode == Mode::APPEND_WRITE || mode == Mode::APPEND_PWRITE;
 
   // preallocate file
   fd = open(filepath, O_CREAT | O_RDWR | O_APPEND, S_IRUSR | S_IWUSR);
   if (fd < 0) state.SkipWithError("open failed");
-  if constexpr (mode != Mode::APPEND) {
+  if constexpr (!is_append) {
     prefill_file(fd, num_bytes * num_iter);
     if constexpr (is_read) {
       sleep(1);  // wait for the background thread of SplitFS to finish
@@ -51,20 +54,21 @@ void bench(benchmark::State& state) {
     open_flags = O_RDONLY;
   else if constexpr (is_overwrite)
     open_flags = O_RDWR;
-  else if constexpr (mode == Mode::APPEND)
+  else if constexpr (is_append)
     open_flags = O_RDWR | O_APPEND;
 
   fd = open(filepath, open_flags);
   if (fd < 0) state.SkipWithError("open failed");
 
   // run benchmark
-  if constexpr (mode == Mode::APPEND || mode == Mode::SEQ_WRITE) {
+  if constexpr (mode == Mode::APPEND_WRITE || mode == Mode::SEQ_WRITE) {
     for (auto _ : state) {
       [[maybe_unused]] ssize_t res = write(fd, src_buf, num_bytes);
       assert(res == num_bytes);
       fsync(fd);
     }
-  } else if constexpr (mode == Mode::SEQ_PWRITE) {
+  } else if constexpr (mode == Mode::APPEND_PWRITE ||
+                       mode == Mode::SEQ_PWRITE) {
     off_t offset = 0;
     for (auto _ : state) {
       [[maybe_unused]] ssize_t res = pwrite(fd, src_buf, num_bytes, offset);
@@ -88,7 +92,7 @@ void bench(benchmark::State& state) {
     }
   } else if constexpr (mode == Mode::RND_PREAD || mode == Mode::RND_PWRITE) {
     // prepare random offset
-    int rand_off[num_iter];
+    off_t rand_off[num_iter];
     std::generate(rand_off, rand_off + num_iter,
                   [&]() { return rand() % num_iter * num_bytes; });
 
@@ -97,7 +101,6 @@ void bench(benchmark::State& state) {
       for (auto _ : state) {
         [[maybe_unused]] ssize_t res =
             pread(fd, dst_buf, num_bytes, rand_off[i++]);
-
         assert(res == num_bytes);
         assert(memcmp(dst_buf, src_buf, num_bytes) == 0);
       }
@@ -147,7 +150,8 @@ int main(int argc, char** argv) {
            RegisterBenchmark("seq_write", bench<Mode::SEQ_WRITE>),
            RegisterBenchmark("seq_pwrite", bench<Mode::SEQ_PWRITE>),
            RegisterBenchmark("rnd_pwrite", bench<Mode::RND_PWRITE>),
-           RegisterBenchmark("append", bench<Mode::APPEND>),
+           RegisterBenchmark("append_write", bench<Mode::APPEND_WRITE>),
+           RegisterBenchmark("append_pwrite", bench<Mode::APPEND_PWRITE>),
        }) {
     bm->RangeMultiplier(2)->Range(4096, MAX_SIZE)->Iterations(num_iter);
   }
