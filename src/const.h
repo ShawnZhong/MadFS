@@ -79,6 +79,12 @@ enum class Event : std::size_t {
   CLOSE,
   FSYNC,
 
+  READ_TX,
+  READ_TX_CTOR,
+  READ_TX_UPDATE,
+  READ_TX_COPY,
+  READ_TX_VALIDATE,
+
   ALIGNED_TX,
   ALIGNED_TX_CTOR,
   ALIGNED_TX_EXEC,
