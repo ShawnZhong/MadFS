@@ -12,10 +12,10 @@ root_dir = Path(__file__).parent.parent
 
 def init(install_build_deps=False, install_dev_deps=False, configure=False):
     install_dev_deps_cmds = """
-sudo apt install -y clang libstdc++-10-dev clang-format &&    # for sanitizers and formatter
+sudo apt install -y clang-10 libstdc++-10-dev clang-format-10 &&    # for sanitizers and formatter
 sudo apt install -y linux-tools-common linux-tools-generic linux-tools-`uname -r` && # for perf
-sudo apt install -y ndctl numactl &&                          # for managing persistent memory and NUMA
-sudo apt install -y sqlite3                                   # for benchmarking
+sudo apt install -y ndctl numactl &&                                # for managing persistent memory and NUMA
+sudo apt install -y sqlite3                                         # for benchmarking
 """
 
     configure_cmds = ""
@@ -47,7 +47,7 @@ sudo apt install -y sqlite3                                   # for benchmarking
     if install_build_deps or install_dev_deps:
         system("sudo apt update")
     if install_build_deps:
-        system("sudo apt install -y cmake build-essential")
+        system("sudo apt install -y cmake build-essential gcc-10 g++-10")
     if install_dev_deps:
         system(install_dev_deps_cmds)
     if configure and configure_cmds != "":

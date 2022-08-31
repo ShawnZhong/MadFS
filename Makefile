@@ -3,11 +3,11 @@ clang_targets := asan ubsan msan tsan
 
 .PHONY: $(gcc_targets) $(clang_targets) clean
 
-$(gcc_targets): export CC := gcc
-$(gcc_targets): export CXX := g++
+$(gcc_targets): export CC := $(shell command -v gcc-10 2> /dev/null || echo gcc)
+$(gcc_targets): export CXX := $(shell command -v g++-10 2> /dev/null || echo g++)
 
-$(clang_targets): export CC := clang
-$(clang_targets): export CXX := clang++
+$(clang_targets): export CC := $(shell command -v clang-10 2> /dev/null || echo clang)
+$(clang_targets): export CXX := $(shell command -v clang++-10 2> /dev/null || echo clang++)
 
 $(gcc_targets) $(clang_targets):
 	cmake -S . -B build-$@ -DCMAKE_BUILD_TYPE=$@ $(CMAKE_ARGS)
