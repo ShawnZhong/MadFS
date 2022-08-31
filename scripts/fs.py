@@ -9,11 +9,11 @@ logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger("fs")
 
 
-def infer_numa_node(pmem_path: Path):
+def infer_numa_node(pmem_path: Path) -> int:
     if "pmem" in pmem_path.name:
-        numa_str = pmem_path.name.partition("pmem")[2][0]
-        if numa_str.isnumeric():
-            return int(numa_str)
+        numa_str = pmem_path.name.partition("pmem")[2]
+        if len(numa_str) != 0 and numa_str[0].isnumeric():
+            return int(numa_str[0])
 
     logger.warning(f"Cannot infer numa node for {pmem_path}, assuming 0")
     return 0
@@ -62,7 +62,7 @@ class Filesystem:
 
 
 def _get_ext4_path() -> Path:
-    for path in ["/mnt/pmem0-ext4-dax", "/mnt/pmem0", "/mnt/pmem1", "/mnt/pmem_emul"]:
+    for path in ["/mnt/pmem0-ext4-dax", "/mnt/pmem", "/mnt/pmem0", "/mnt/pmem1", "/mnt/pmem_emul"]:
         if Path(path).is_mount():
             return Path(path)
 
