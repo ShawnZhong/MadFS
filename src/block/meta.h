@@ -35,6 +35,10 @@ class MetaBlock : public noncopyable {
 
       // if inline tx_entries are used up, this points to the next log block
       std::atomic<LogicalBlockIdx> next_tx_block;
+
+      // outdated but not yet freed tx blocks are organized as a linked list;
+      // these blocks are freed once they are not referenced by others
+      std::atomic<LogicalBlockIdx> next_outdated_tx_block;
     } cl1_meta;
 
     // padding avoid cache line contention

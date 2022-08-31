@@ -38,7 +38,7 @@ constexpr static uint16_t LOGICAL_BLOCK_IDX_SIZE = 4;
  */
 constexpr static uint16_t TX_ENTRY_SIZE = 8;
 constexpr static uint16_t NUM_TX_ENTRY_PER_BLOCK =
-    (BLOCK_SIZE - 2 * LOGICAL_BLOCK_IDX_SIZE) / TX_ENTRY_SIZE;
+    (BLOCK_SIZE - 2 * LOGICAL_BLOCK_IDX_SIZE - 2 * sizeof(uint32_t)) / TX_ENTRY_SIZE;
 
 // inline data structure count in meta block
 constexpr static uint16_t NUM_TX_ENTRY_PER_CL = CACHELINE_SIZE / TX_ENTRY_SIZE;
