@@ -22,6 +22,8 @@ class ReadTx : public Tx {
   }
 
   ssize_t exec() {
+    timer.stop<Event::READ_TX_CTOR>();
+
     size_t first_block_offset = offset & (BLOCK_SIZE - 1);
     size_t first_block_size = BLOCK_SIZE - first_block_offset;
     if (first_block_size > count) first_block_size = count;
@@ -30,7 +32,11 @@ class ReadTx : public Tx {
     redo_image.clear();
     redo_image.resize(num_blocks, 0);
 
-    if (!is_offset_depend) file->update(&state, /*do_alloc*/ false);
+    {
+      TimerGuard<Event::READ_TX_UPDATE> timer_guard;
+      if (!is_offset_depend) file->update(&state, /*do_alloc*/ false);
+    }
+
     // reach EOF
     if (offset >= state.file_size) return 0;
     if (offset + count > state.file_size) {  // partial read; recalculate end_*
@@ -41,6 +47,8 @@ class ReadTx : public Tx {
 
     // copy the blocks
     {
+      TimerGuard<Event::READ_TX_COPY> timer_guard;
+
       const char* addr = file->vidx_to_addr_ro(begin_vidx)->data_ro();
       addr += first_block_offset;
       size_t contiguous_bytes = first_block_size;
@@ -62,6 +70,7 @@ class ReadTx : public Tx {
     }
 
   redo:
+    timer.start<Event::READ_TX_VALIDATE>();
     while (true) {
       // check the tail is still tail
       if (!tx_mgr->handle_cursor_overflow(&state.cursor, false)) break;
@@ -119,6 +128,7 @@ class ReadTx : public Tx {
       }
     }
 
+    timer.stop<Event::READ_TX_VALIDATE>();
     return static_cast<ssize_t>(count);
   }
 };

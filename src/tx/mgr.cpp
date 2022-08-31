@@ -20,6 +20,8 @@
 namespace ulayfs::dram {
 
 ssize_t TxMgr::do_pread(char* buf, size_t count, size_t offset) {
+  TimerGuard<Event::READ_TX> timer_guard;
+  timer.start<Event::READ_TX_CTOR>();
   return ReadTx(file, this, buf, count, offset).exec();
 }
 
