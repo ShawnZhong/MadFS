@@ -99,6 +99,7 @@ class File {
   void update_with_offset(FileState* state, uint64_t& count,
                           bool stop_at_boundary, uint64_t& ticket,
                           uint64_t& old_offset, bool do_alloc) {
+    TimerGuard<Event::UPDATE_WITH_OFFSET> timer_guard;
     pthread_spin_lock(&spinlock);
     blk_table.update(do_alloc);
     *state = blk_table.get_file_state();

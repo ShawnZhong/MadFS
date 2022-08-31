@@ -67,18 +67,25 @@ ssize_t TxMgr::do_write(const char* buf, size_t count) {
                            /*do_alloc*/ false);
 
   // special case that we have everything aligned, no OCC
-  if (count % BLOCK_SIZE == 0 && offset % BLOCK_SIZE == 0)
+  if (count % BLOCK_SIZE == 0 && offset % BLOCK_SIZE == 0) {
+    TimerGuard<Event::ALIGNED_TX> timer_guard;
     return Tx::exec_and_release_offset<AlignedTx>(file, this, buf, count,
                                                   offset, state, ticket);
+  }
 
   // another special case where range is within a single block
-  if (BLOCK_SIZE_TO_IDX(offset) == BLOCK_SIZE_TO_IDX(offset + count - 1))
+  if (BLOCK_SIZE_TO_IDX(offset) == BLOCK_SIZE_TO_IDX(offset + count - 1)) {
+    TimerGuard<Event::SINGLE_BLOCK_TX> timer_guard;
     return Tx::exec_and_release_offset<SingleBlockTx>(file, this, buf, count,
                                                       offset, state, ticket);
+  }
 
   // unaligned multi-block write
-  return Tx::exec_and_release_offset<MultiBlockTx>(file, this, buf, count,
-                                                   offset, state, ticket);
+  {
+    TimerGuard<Event::MULTI_BLOCK_TX> timer_guard;
+    return Tx::exec_and_release_offset<MultiBlockTx>(file, this, buf, count,
+                                                     offset, state, ticket);
+  }
 }
 
 std::tuple<pmem::LogEntry*, pmem::LogEntryBlock*> TxMgr::get_log_entry(

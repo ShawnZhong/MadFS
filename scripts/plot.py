@@ -8,8 +8,6 @@ from pathlib import Path
 import pandas as pd
 from matplotlib import pyplot as plt
 
-from fs import all_fs
-
 pd.options.display.max_rows = 100
 pd.options.display.max_columns = 100
 pd.options.display.width = None
@@ -20,6 +18,8 @@ plt.set_loglevel('WARNING')
 
 
 def get_sorted_subdirs(path):
+    from fs import all_fs
+    
     order = {k: i for i, k in enumerate(all_fs)}
 
     paths = list(Path(path).glob("*"))
