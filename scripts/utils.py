@@ -1,6 +1,7 @@
 import datetime
 import logging
 import os
+import shutil
 import sys
 from pathlib import Path
 
@@ -58,11 +59,11 @@ def drop_cache():
     system("echo 3 | sudo tee /proc/sys/vm/drop_caches >/dev/null")
 
 
-def is_ulayfs_linked(prog_path):
+def is_ulayfs_linked(prog_path: Path):
     import subprocess
     import re
 
-    output = subprocess.check_output(['ldd', prog_path]).decode("utf-8")
+    output = subprocess.check_output(['ldd', shutil.which(prog_path)]).decode("utf-8")
     for line in output.splitlines():
         match = re.match(r'\t(.*) => (.*) \(0x', line)
         if match and match.group(1) == 'libulayfs.so':
