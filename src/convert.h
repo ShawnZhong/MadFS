@@ -72,8 +72,7 @@ class Converter {
     for (uint32_t i = 0; i < num_bits_left; ++i)
       file->bitmap[num_bitmaps_full].set_allocated(i);
 
-    TxEntryIdx tx_idx{0, 0};
-    pmem::TxBlock* tx_block = nullptr;
+    dram::TxCursor tx_cursor{};
     bool need_le_block = false;
 
     // handle special case with only one block
@@ -82,13 +81,13 @@ class Converter {
         file->tx_mgr.try_commit(
             pmem::TxEntryInline(/*num_blocks*/ 1, /*begin_vidx*/ 0,
                                 /*begin_lidx*/ 1),
-            tx_idx, tx_block);
+            &tx_cursor);
       else {
         auto log_entry_idx = file->tx_mgr.append_log_entry(
             allocator, pmem::LogEntry::Op::LOG_OVERWRITE, leftover_bytes,
             /*total_blocks*/ 1, /*begin_vidx*/ 0, /*begin_lidxs*/ {1});
-        file->tx_mgr.try_commit(pmem::TxEntryIndirect(log_entry_idx), tx_idx,
-                                tx_block);
+        file->tx_mgr.try_commit(pmem::TxEntryIndirect(log_entry_idx),
+                                &tx_cursor);
       }
       goto done;
     }
@@ -96,17 +95,16 @@ class Converter {
     // can we inline the mapping of the first virtual block?
     if (pmem::TxEntryInline::can_inline(/*num_blocks*/ 1, /*begin_vidx*/ 0,
                                         /*begin_lidx*/ num_blocks)) {
-      file->tx_mgr.try_commit(pmem::TxEntryInline(1, 0, num_blocks), tx_idx,
-                              tx_block);
+      file->tx_mgr.try_commit(pmem::TxEntryInline(1, 0, num_blocks),
+                              &tx_cursor);
     } else {
       need_le_block = true;
       auto log_entry_idx = file->tx_mgr.append_log_entry(
           allocator, pmem::LogEntry::Op::LOG_OVERWRITE, /*leftover_bytes*/ 0,
           /*total_blocks*/ 1, /*begin_vidx*/ 0, /*begin_lidxs*/ {num_blocks});
-      file->tx_mgr.try_commit(pmem::TxEntryIndirect(log_entry_idx), tx_idx,
-                              tx_block);
+      file->tx_mgr.try_commit(pmem::TxEntryIndirect(log_entry_idx), &tx_cursor);
     }
-    file->tx_mgr.advance_cursor(tx_idx, tx_block, true);
+    file->tx_mgr.advance_cursor(&tx_cursor, true);
 
     // if it's not full block or MetaBlock does not have the capacity, we still
     // need LogEntryBlock
@@ -122,16 +120,15 @@ class Converter {
         file->tx_mgr.try_commit(
             pmem::TxEntryInline(len, begin_vidx,
                                 LogicalBlockIdx(begin_vidx.get())),
-            tx_idx, tx_block);
-        file->tx_mgr.advance_cursor(tx_idx, tx_block, true);
+            &tx_cursor);
+        file->tx_mgr.advance_cursor(&tx_cursor, true);
       }
     } else {
       auto log_entry_idx = file->tx_mgr.append_log_entry(
           allocator, pmem::LogEntry::Op::LOG_OVERWRITE, leftover_bytes,
           /*total_blocks*/ num_blocks - 1, /*begin_vidx*/ 1,
           /*begin_lidxs*/ {1});
-      file->tx_mgr.try_commit(pmem::TxEntryIndirect(log_entry_idx), tx_idx,
-                              tx_block);
+      file->tx_mgr.try_commit(pmem::TxEntryIndirect(log_entry_idx), &tx_cursor);
     }
 
   done:
