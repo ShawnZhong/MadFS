@@ -5,6 +5,7 @@ import logging
 import re
 from pathlib import Path
 
+import numpy as np
 import pandas as pd
 from matplotlib import pyplot as plt
 
@@ -19,7 +20,7 @@ plt.set_loglevel('WARNING')
 
 def get_sorted_subdirs(path):
     from fs import all_fs
-    
+
     order = {k: i for i, k in enumerate(all_fs)}
 
     paths = list(Path(path).glob("*"))
@@ -28,11 +29,11 @@ def get_sorted_subdirs(path):
     return paths
 
 
-def get_fs_name(path):
+def get_fs_name(name):
     names = {
         "uLayFS": "MEFS",
     }
-    return names.get(path.name, path.name)
+    return names.get(name, name)
 
 
 def read_files(result_dir):
@@ -42,7 +43,7 @@ def read_files(result_dir):
     data = pd.DataFrame()
 
     for path in get_sorted_subdirs(result_dir):
-        fs_name = get_fs_name(path)
+        fs_name = get_fs_name(path.name)
         result_path = path / "result.json"
 
         if not result_path.exists():
@@ -82,11 +83,12 @@ def plot_single_bm(
         df,
         result_dir,
         barchart=False,
-        name=None,
+        name="result",
         post_plot=None,
         figsize=(2.5, 1.5),
         markers=("o", "^", "s", "D"),
         colors=(None,),
+        separate_legend=True,
 ):
     plt.clf()
     fig, ax = plt.subplots(figsize=figsize)
@@ -97,10 +99,17 @@ def plot_single_bm(
         markers = markers * (num_groups // len(markers) + 1)
     if len(colors) < num_groups:
         colors = colors * (num_groups // len(colors) + 1)
-    for (label, group), marker, color in zip(label_groups, markers, colors):
-        if barchart:
-            plt.bar(group["x"], group["y"], label=label, color=color)
-        else:
+
+    if barchart:
+        x = np.arange(len(df["x"].unique()))
+        width = 0.7 / num_groups
+        offsets = np.linspace(-0.3, 0.3, num_groups)
+        for (label, group), color, i in zip(label_groups, colors, range(num_groups)):
+            ax.bar(x + offsets[i], group["y"], width, label=label, color=color)
+        ax.set_xticks(x)
+        ax.set_xticklabels(df["x"].unique())
+    else:
+        for (label, group), marker, color in zip(label_groups, markers, colors):
             plt.plot(group["x"], group["y"], label=label, marker=marker, markersize=3, color=color)
 
     if post_plot:
@@ -108,18 +117,19 @@ def plot_single_bm(
 
     save_fig(fig, name, result_dir)
 
-    figlegend = plt.figure()
-    figlegend.legend(
-        *ax.get_legend_handles_labels(),
-        ncol=4,
-        loc="center",
-        fontsize=8,
-        columnspacing=2,
-        handlelength=0,
-        frameon=False,
-        markerscale=1,
-    )
-    save_fig(figlegend, "legend", result_dir)
+    if separate_legend:
+        figlegend = plt.figure()
+        figlegend.legend(
+            *ax.get_legend_handles_labels(),
+            ncol=4,
+            loc="center",
+            fontsize=8,
+            columnspacing=2,
+            handlelength=0,
+            frameon=False,
+            markerscale=1,
+        )
+        save_fig(figlegend, "legend", result_dir)
 
 
 def parse_name(name, i):
@@ -264,7 +274,7 @@ def plot_micro_meta(result_dir):
 def plot_ycsb(result_dir):
     results = []
     for path in get_sorted_subdirs(result_dir):
-        fs_name = path.name
+        fs_name = get_fs_name(path.name)
 
         for w in ("a", "b", "c", "d", "e", "f"):
             result_path = path / f"{w}-run.log"
@@ -280,26 +290,24 @@ def plot_ycsb(result_dir):
                     float(e) for e in re.findall("Time elapsed: (.+?) us", data)
                 )
                 mops_per_sec = total_num_requests / total_time_us
-                results.append({"x": w, "y": mops_per_sec, "label": fs_name})
+                results.append({"x": w, "y": mops_per_sec, "label": fs_name, "benchmark": "ycsb"})
+
     df = pd.DataFrame(results)
-    df_pivot = pd.pivot_table(df, values="y", index="x", columns="label", sort=False)
-    df_pivot = df_pivot[df["label"].unique()]
-    df_pivot.plot(
-        kind="bar",
+    export_results(result_dir, df)
+
+    def post_plot(ax, **kwargs):
+        plt.xlabel("Workload")
+        plt.ylabel("Throughput (Mops/s)")
+        plt.legend()
+
+    plot_single_bm(
+        df,
+        barchart=True,
         figsize=(5, 2.5),
-        rot=0,
-        legend=False,
-        ylabel="Throughput (Mops/s)",
-        xlabel="Workload",
+        result_dir=result_dir,
+        post_plot=post_plot,
+        separate_legend=False
     )
-    plt.legend()
-    plt.savefig(result_dir / "ycsb.pdf", bbox_inches="tight")
-    if "uLayFS" in df_pivot.columns:
-        for c in df_pivot.columns:
-            df_pivot[f"{c}%"] = df_pivot["uLayFS"] / df_pivot[c] * 100
-    print(df_pivot)
-    with open(result_dir / "ycsb.txt", "w") as f:
-        print(df_pivot, file=f)
 
 
 def plot_tpcc(result_dir):
