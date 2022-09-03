@@ -65,9 +65,10 @@ def export_results(result_dir, data, name="result"):
     with open(result_dir / f"{name}.txt", "w") as f:
         for name, benchmark in data[["benchmark", "label", "x", "y"]].groupby(["benchmark"], sort=False):
             pt = pd.pivot_table(benchmark, values="y", index="x", columns="label", sort=False)
-            if "uLayFS" in pt.columns:
+            ulayfs = get_fs_name("uLayFS")
+            if ulayfs in pt.columns:
                 for c in pt.columns:
-                    pt[f"{c}%"] = pt[c] / pt["uLayFS"] * 100
+                    pt[f"{c}%"] = pt[c] / pt[ulayfs] * 100
             print(name)
             print(pt)
             print(name, file=f)
@@ -87,6 +88,7 @@ def plot_single_bm(
         post_plot=None,
         figsize=(2.5, 1.5),
         markers=("o", "^", "s", "D"),
+        hatches=("//", "\\\\", "--", ".."),
         colors=(None,),
         separate_legend=True,
 ):
@@ -99,13 +101,15 @@ def plot_single_bm(
         markers = markers * (num_groups // len(markers) + 1)
     if len(colors) < num_groups:
         colors = colors * (num_groups // len(colors) + 1)
+    if len(hatches) < num_groups:
+        hatches = hatches * (num_groups // len(hatches) + 1)
 
     if barchart:
         x = np.arange(len(df["x"].unique()))
         width = 0.7 / num_groups
         offsets = np.linspace(-0.3, 0.3, num_groups)
-        for (label, group), color, i in zip(label_groups, colors, range(num_groups)):
-            ax.bar(x + offsets[i], group["y"], width, label=label, color=color)
+        for (label, group), color, hatch, i in zip(label_groups, colors, hatches, range(num_groups)):
+            ax.bar(x + offsets[i], group["y"], width, label=label, color=color, hatch=hatch)
         ax.set_xticks(x)
         ax.set_xticklabels(df["x"].unique())
     else:
@@ -329,34 +333,30 @@ def plot_tpcc(result_dir):
         with open(result_path, "r") as f:
             data = f.read()
 
-            result = {}
+            # result = {}
             total_tx = 0
             total_time_ms = 0
             for i, (name, workload) in enumerate(name_mapping.items()):
                 num_tx = float(re.search(f"\[{i}\] sc:(.+?) lt:", data).group(1))
                 time_ms = float(re.search(f"{workload}: timing = (.+?) nanoseconds", data).group(1)) / 1000 ** 2
-                result[name] = num_tx / time_ms  # kops/s
+                results.append({"x": name, "y": num_tx / time_ms, "label": fs_name, "benchmark": "tpcc"})
                 total_tx += num_tx
                 total_time_ms += time_ms
-            result["Mix"] = total_tx / total_time_ms  # kops/s
-            result["label"] = fs_name
-            results.append(result)
+            results.append(
+                {"x": "Mix", "y": total_tx / total_time_ms, "label": fs_name, "benchmark": "tpcc"})
     df = pd.DataFrame(results)
-    df.set_index("label", inplace=True)
-    df = df.T
-    df.plot(
-        kind="bar",
-        rot=0,
-        figsize=(5, 2.5),
-        legend=False,
-        ylabel="Throughput (k txns/s)",
-        xlabel="Transaction Type",
-    )
-    plt.legend()
-    plt.savefig(result_dir / "tpcc.pdf", bbox_inches="tight")
+    export_results(result_dir, df)
 
-    for c in df.columns:
-        df[f"{c}%"] = df["uLayFS"] / df[c] * 100
-    print(df)
-    with open(result_dir / "tpcc.txt", "w") as f:
-        print(df, file=f)
+    def post_plot(ax, **kwargs):
+        plt.xlabel("Transaction Type")
+        plt.ylabel("Throughput (k txns/s)")
+        plt.legend()
+
+    plot_single_bm(
+        df,
+        barchart=True,
+        figsize=(5, 2.5),
+        result_dir=result_dir,
+        post_plot=post_plot,
+        separate_legend=False
+    )
