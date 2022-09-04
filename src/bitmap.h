@@ -94,7 +94,7 @@ class BitmapEntry : noncopyable {
   [[nodiscard]] bool is_allocated(uint32_t idx) const {
     return entry.load(std::memory_order_relaxed) & (1UL << idx);
   }
-  
+
   [[nodiscard]] uint64_t is_empty() const {
     return entry.load(std::memory_order_relaxed) == 0;
   }
