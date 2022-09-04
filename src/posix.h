@@ -2,6 +2,7 @@
 
 #include <dlfcn.h>
 #include <fcntl.h>
+#include <gnu/lib-names.h>
 #include <sys/file.h>
 #include <sys/mman.h>
 #include <sys/stat.h>
@@ -30,11 +31,13 @@ namespace ulayfs::posix {
  * `open`. The posix version `posix::open` is declared and defined below.
  */
 
-#define DEFINE_FN(fn)                                                    \
-  inline const decltype(&::fn) fn = []() noexcept {                      \
-    auto res = reinterpret_cast<decltype(&::fn)>(dlsym(RTLD_NEXT, #fn)); \
-    assert(res != nullptr);                                              \
-    return res;                                                          \
+inline void* glibc_handle = dlopen(LIBC_SO, RTLD_LAZY);
+
+#define DEFINE_FN(fn)                                                       \
+  inline const decltype(&::fn) fn = []() noexcept {                         \
+    auto res = reinterpret_cast<decltype(&::fn)>(dlsym(glibc_handle, #fn)); \
+    assert(res != nullptr);                                                 \
+    return res;                                                             \
   }()
 
 DEFINE_FN(lseek);
@@ -62,7 +65,7 @@ DEFINE_FN(__fxstat);
 
 // [lf]stat are wrappers to internal functions in glibc, so we need to hook the
 // actual functions instead
-static int fstat(int fd, struct stat *buf) {
+static int fstat(int fd, struct stat* buf) {
   __msan_unpoison(buf, sizeof(struct stat));
   return posix::__fxstat(_STAT_VER, fd, buf);
 }

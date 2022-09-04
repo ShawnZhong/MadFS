@@ -177,8 +177,7 @@ class ShmMgr {
    */
   static void unlink_by_file_path(const char* filepath) {
     char shm_path[SHM_PATH_LEN];
-    if (getxattr(filepath, SHM_XATTR_NAME, &shm_path, SHM_PATH_LEN) <= 0)
-      return;
+    if (getxattr(filepath, SHM_XATTR_NAME, shm_path, SHM_PATH_LEN) <= 0) return;
     unlink_by_shm_path(shm_path);
   }
 

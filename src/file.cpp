@@ -255,6 +255,7 @@ Allocator* File::get_local_allocator() {
  */
 
 std::ostream& operator<<(std::ostream& out, const File& f) {
+  __msan_scoped_disable_interceptor_checks();
   out << "File: fd = " << f.fd << "\n";
   if (f.can_write) out << f.shm_mgr;
   out << *f.meta;
@@ -265,6 +266,7 @@ std::ostream& operator<<(std::ostream& out, const File& f) {
   }
   out << f.tx_mgr;
   out << "\n";
+  __msan_scoped_enable_interceptor_checks();
 
   return out;
 }

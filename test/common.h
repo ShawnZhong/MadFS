@@ -36,12 +36,17 @@ static void print_file(int fd) {
 }
 
 static const char* get_filepath() {
-  char* pmem_path = std::getenv("PMEM_PATH");
-  if (!pmem_path) return "test.txt";
-  static char path[PATH_MAX];
-  strcpy(path, pmem_path);
-  strcat(path, "/test.txt");
-  return path;
+  const char* res = "test.txt";
+
+  if (char* pmem_path = std::getenv("PMEM_PATH"); pmem_path) {
+    static char path[PATH_MAX];
+    strcpy(path, pmem_path);
+    strcat(path, "/test.txt");
+    res = path;
+  }
+
+  fprintf(stderr, "filepath: %s\n", res);
+  return res;
 }
 
 constexpr std::string_view chars =
