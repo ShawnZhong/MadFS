@@ -1,5 +1,7 @@
 #pragma once
 
+#include <sys/xattr.h>
+
 #include <ostream>
 
 #include "const.h"
@@ -8,6 +10,30 @@
 #include "utils.h"
 
 namespace ulayfs::dram {
+
+class PerThreadData {
+  union {
+    struct {
+      uint32_t tx_block_idx;
+    };
+    char cl[SHM_PER_THREAD_SIZE];
+  };
+
+ public:
+  [[nodiscard]] LogicalBlockIdx get_tx_block_idx() const {
+    return tx_block_idx;
+  }
+  void set_tx_block_idx(LogicalBlockIdx block_idx) {
+    tx_block_idx = block_idx.get();
+  }
+  [[nodiscard]] bool is_empty() const { return tx_block_idx == 0; }
+  void clear() { memset(cl, 0, sizeof(cl)); }
+
+  friend std::ostream& operator<<(std::ostream& os, const PerThreadData& data) {
+    os << "tx_block_idx: " << data.tx_block_idx;
+    return os;
+  }
+};
 
 class ShmMgr {
   int fd = -1;
@@ -47,6 +73,21 @@ class ShmMgr {
     }
 
     return addr;
+  }
+
+  [[nodiscard]] PerThreadData* get_per_thread_data(size_t idx) const {
+    assert(idx < MAX_NUM_THREADS);
+    char* starting_addr = static_cast<char*>(addr) + TOTAL_BITMAP_SIZE;
+    return reinterpret_cast<PerThreadData*>(starting_addr) + idx;
+  }
+
+  [[nodiscard]] size_t get_next_shm_thread_idx() const {
+    for (size_t i = 0; i < MAX_NUM_THREADS; i++) {
+      if (get_per_thread_data(i)->is_empty()) {
+        return i;
+      }
+    }
+    PANIC("No empty per-thread data");
   }
 
   /**
@@ -153,8 +194,16 @@ class ShmMgr {
   }
 
   friend std::ostream& operator<<(std::ostream& os, const ShmMgr& mgr) {
-    os << "ShmMgr: fd = " << mgr.fd << ", addr = " << mgr.addr
-       << ", path = " << mgr.path << "\n";
+    os << "ShmMgr:\n"
+       << "\tfd = " << mgr.fd << "\n"
+       << "\taddr = " << mgr.addr << "\n"
+       << "\tpath = " << mgr.path << "\n";
+    for (size_t i = 0; i < MAX_NUM_THREADS; ++i) {
+      if (!mgr.get_per_thread_data(i)->is_empty()) {
+        os << "\tthread " << i << ":\n";
+        os << *mgr.get_per_thread_data(i);
+      }
+    }
     return os;
   }
 };

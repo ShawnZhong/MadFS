@@ -95,7 +95,7 @@ class MemTable {
    * @return the Block pointer if idx is not 0; nullptr for idx == 0, and the
    * caller should handle this case
    */
-  pmem::Block* get(LogicalBlockIdx idx) {
+  pmem::Block* lidx_to_addr_rw(LogicalBlockIdx idx) {
     if (unlikely(idx == 0)) return nullptr;
     // super fast path: within first_region, no need touch concurrent vector
     if (idx < first_region_num_blocks) return &first_region[idx.get()];

@@ -13,14 +13,14 @@
 #include "idx.h"
 #include "mem_table.h"
 #include "posix.h"
+#include "shm.h"
 
 namespace ulayfs::dram {
-class File;
-
 // per-thread data structure
 class Allocator {
-  File* file;
+  MemTable* mem_table;
   Bitmap* bitmap;
+  ShmMgr* shm_mgr;
 
   // free_lists[n-1] means a free list of size n beginning from LogicalBlockIdx
   std::array<std::vector<LogicalBlockIdx>, BITMAP_BLOCK_CAPACITY> free_lists;
@@ -30,29 +30,27 @@ class Allocator {
   // TODO: this may be useful for dynamically growing bitmap
   // BitmapBlockId recent_bitmap_block_id;
   // NOTE: this is the index within recent_bitmap_block
-  BitmapIdx recent_bitmap_idx;
+  BitmapIdx recent_bitmap_idx{};
 
   // the current in-use log entry block
-  pmem::LogEntryBlock* curr_log_block;
-  LogicalBlockIdx curr_log_block_idx;
-  LogLocalOffset curr_log_offset;  // offset of the next available byte
+  pmem::LogEntryBlock* curr_log_block{nullptr};
+  LogicalBlockIdx curr_log_block_idx{0};
+  LogLocalOffset curr_log_offset{0};  // offset of the next available byte
 
   // a tx block may be allocated but unused when another thread does that first
   // this tx block will then be saved here for future use
   // a tx block candidate must have all bytes zero except the sequence number
-  pmem::Block* avail_tx_block;
-  LogicalBlockIdx avail_tx_block_idx;
+  pmem::Block* avail_tx_block{nullptr};
+  LogicalBlockIdx avail_tx_block_idx{0};
+  size_t shm_thread_idx;
 
  public:
-  Allocator(File* file, Bitmap* bitmap)
-      : file(file),
+  Allocator(MemTable* mem_table, Bitmap* bitmap, ShmMgr* shm_mgr,
+            size_t shm_thread_idx)
+      : mem_table(mem_table),
         bitmap(bitmap),
-        recent_bitmap_idx(),
-        curr_log_block(nullptr),
-        curr_log_block_idx(0),
-        curr_log_offset(0),
-        avail_tx_block(nullptr),
-        avail_tx_block_idx(0) {}
+        shm_mgr(shm_mgr),
+        shm_thread_idx(shm_thread_idx) {}
 
   ~Allocator() { return_free_list(); }
 
@@ -99,6 +97,29 @@ class Allocator {
   std::tuple<pmem::LogEntry*, LogEntryIdx, pmem::LogEntryBlock*>
   alloc_log_entry(uint32_t num_blocks);
 
+  /**
+   * @tparam B MetaBlock or TxBlock
+   * @param block the block that needs a next block to be allocated
+   * @return the block id of the allocated block and the new tx block allocated
+   */
+  template <class B>
+  std::tuple<LogicalBlockIdx, pmem::TxBlock*> alloc_next_tx_block(B* block) {
+    auto [new_block_idx, new_block] = alloc_tx_block(block->get_tx_seq() + 1);
+
+    bool success = block->set_next_tx_block(new_block_idx);
+    if (!success) {  // race condition for adding the new blocks
+      free_tx_block(new_block_idx, new_block);
+      new_block_idx = block->get_next_tx_block();
+      new_block = &mem_table->lidx_to_addr_rw(new_block_idx)->tx_block;
+    }
+
+    shm_mgr->get_per_thread_data(shm_thread_idx)
+        ->set_tx_block_idx(new_block_idx);
+
+    return {new_block_idx, new_block};
+  }
+
+ private:
   /**
    * Allocate a tx block
    * @param seq the sequence number of the tx block

@@ -243,7 +243,10 @@ Allocator* File::get_local_allocator() {
     return &it->second;
   }
 
-  auto [it, ok] = allocators.emplace(tid, Allocator(this, bitmap));
+  size_t shm_thread_idx = shm_mgr.get_next_shm_thread_idx();
+
+  auto [it, ok] = allocators.emplace(
+      tid, Allocator(&mem_table, bitmap, &shm_mgr, shm_thread_idx));
   PANIC_IF(!ok, "insert to thread-local allocators failed");
   return &it->second;
 }
@@ -251,13 +254,6 @@ Allocator* File::get_local_allocator() {
 /*
  * Helper functions
  */
-
-void File::tx_gc() {
-  LOG_DEBUG("Garbage Collect for fd %d", fd);
-  uint64_t file_size = blk_table.update(/*do_alloc*/ false);
-  TxEntryIdx tail_tx_idx = blk_table.get_tx_idx();
-  tx_mgr.gc(tail_tx_idx.block_idx, file_size);
-}
 
 std::ostream& operator<<(std::ostream& out, const File& f) {
   out << "File: fd = " << f.fd << "\n";

@@ -31,7 +31,7 @@ include(cmake/tooling.cmake)
 include(cmake/libpmem2.cmake)
 
 configure_file("src/config.h.in" "config.h" @ONLY)
-target_include_directories(ulayfs PUBLIC ${CMAKE_CURRENT_BINARY_DIR})
+include_directories(${CMAKE_CURRENT_BINARY_DIR})
 include_directories(src)
 
 #[[

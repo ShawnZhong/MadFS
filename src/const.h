@@ -62,13 +62,20 @@ constexpr static uint64_t BITMAP_BYTES_CAPACITY = BITMAP_BLOCK_CAPACITY
 // total number of bitmaps in DRAM
 constexpr static uint16_t NUM_BITMAP_PER_BLOCK = BLOCK_SIZE / BITMAP_SIZE;
 
-// we use one hugepage of bitmap, which is sufficient for a 64GB file
-constexpr static uint32_t NUM_BITMAP_BLOCKS = 512;
-constexpr static uint32_t SHM_SIZE = NUM_BITMAP_BLOCKS << BLOCK_SHIFT;
+// we use 511 blocks for bitmap, which is sufficient for ~64GB file
+constexpr static uint32_t NUM_BITMAP_BLOCKS = 511;
 constexpr static uint32_t NUM_BITMAP = NUM_BITMAP_BLOCKS * NUM_BITMAP_PER_BLOCK;
+constexpr static uint32_t TOTAL_BITMAP_SIZE = NUM_BITMAP_BLOCKS * BLOCK_SIZE;
 
 constexpr static uint16_t NUM_CL_PER_BLOCK = BLOCK_SIZE / CACHELINE_SIZE;
 constexpr static uint32_t NUM_OFFSET_QUEUE_SLOT = 16;
+
+// the last one is used for garbage collection
+constexpr static uint32_t SHM_GC_SIZE = BLOCK_SIZE;
+constexpr static uint32_t SHM_PER_THREAD_SIZE = CACHELINE_SIZE;
+constexpr static uint32_t MAX_NUM_THREADS = SHM_GC_SIZE / SHM_PER_THREAD_SIZE;
+constexpr static uint32_t SHM_SIZE =
+    NUM_BITMAP_BLOCKS * BLOCK_SIZE + SHM_GC_SIZE;
 
 enum class Event : std::size_t {
   READ,

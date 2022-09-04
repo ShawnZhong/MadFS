@@ -29,7 +29,8 @@
 
 namespace ulayfs::utility {
 class Converter;
-}
+class GarbageCollector;
+}  // namespace ulayfs::utility
 
 // data structure under this namespace must be in volatile memory (DRAM)
 namespace ulayfs::dram {
@@ -62,6 +63,7 @@ class File {
 
   // transformer will have to do many dirty and inclusive operations
   friend utility::Converter;
+  friend utility::GarbageCollector;
 
  public:
   File(int fd, const struct stat& stat, int flags, const char* pathname,
@@ -120,7 +122,7 @@ class File {
    * A nullptr is returned if the block is not allocated yet (e.g., a hole)
    */
   [[nodiscard]] pmem::Block* lidx_to_addr_rw(LogicalBlockIdx lidx) {
-    pmem::Block* block = mem_table.get(lidx);
+    pmem::Block* block = mem_table.lidx_to_addr_rw(lidx);
     assert(IS_ALIGNED(reinterpret_cast<uintptr_t>(block), BLOCK_SIZE));
     return block;
   }
@@ -167,8 +169,6 @@ class File {
    * memory object might be removed by kernel.
    */
   void unlink_shm() { shm_mgr.unlink(); }
-
-  void tx_gc();
 
   // try to open a file with checking whether the given file is in uLayFS format
   static bool try_open(int& fd, struct stat& stat_buf, const char* pathname,

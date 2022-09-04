@@ -195,8 +195,10 @@ bool TxMgr::handle_cursor_overflow(TxCursor* cursor, bool do_alloc) const {
                                           : cursor->block->get_next_tx_block();
     if (block_idx == 0) {
       if (!do_alloc) return false;
+      auto allocator = file->get_local_allocator();
       const auto& [new_block_idx, new_block] =
-          is_inline ? alloc_next_block(meta) : alloc_next_block(cursor->block);
+          is_inline ? allocator->alloc_next_tx_block(meta)
+                    : allocator->alloc_next_tx_block(cursor->block);
       cursor->idx.block_idx = new_block_idx;
       cursor->block = new_block;
       cursor->idx.local_idx -= capacity;
@@ -264,30 +266,6 @@ void TxMgr::find_tail(TxEntryIdx& tx_idx, pmem::TxBlock*& tx_block) const {
   }
   tx_idx.local_idx = tx_block->find_tail(tx_idx.local_idx);
 }
-
-template <class B>
-std::tuple<LogicalBlockIdx, pmem::TxBlock*> TxMgr::alloc_next_block(
-    B* block) const {
-  // allocate the next block
-  auto allocator = file->get_local_allocator();
-  auto [new_block_idx, new_block] =
-      allocator->alloc_tx_block(block->get_tx_seq() + 1);
-
-  bool success = block->set_next_tx_block(new_block_idx);
-  if (success) {
-    return {new_block_idx, new_block};
-  } else {
-    // there is a race condition for adding the new blocks
-    allocator->free_tx_block(new_block_idx, new_block);
-    new_block_idx = block->get_next_tx_block();
-    return {new_block_idx, &file->lidx_to_addr_rw(new_block_idx)->tx_block};
-  }
-}
-// explicit template instantiations
-template std::tuple<LogicalBlockIdx, pmem::TxBlock*> TxMgr::alloc_next_block(
-    pmem::MetaBlock* block) const;
-template std::tuple<LogicalBlockIdx, pmem::TxBlock*> TxMgr::alloc_next_block(
-    pmem::TxBlock* block) const;
 
 void TxMgr::gc(const LogicalBlockIdx tail_tx_block_idx, uint64_t file_size) {
   // skip if tail_tx_block is meta block, it directly follows meta or there is

@@ -153,7 +153,7 @@ Allocator::alloc_log_entry(uint32_t num_blocks) {
     // no enough space left, do block allocation
     curr_log_block_idx = alloc(1);
     curr_log_block =
-        &file->lidx_to_addr_rw(curr_log_block_idx)->log_entry_block;
+        &mem_table->lidx_to_addr_rw(curr_log_block_idx)->log_entry_block;
     curr_log_offset = 0;
   }
 
@@ -186,7 +186,7 @@ Allocator::alloc_log_entry(uint32_t num_blocks) {
     if (BLOCK_SIZE - curr_log_offset < min_required_size) {
       curr_log_block_idx = alloc(1);
       curr_log_block =
-          &file->lidx_to_addr_rw(curr_log_block_idx)->log_entry_block;
+          &mem_table->lidx_to_addr_rw(curr_log_block_idx)->log_entry_block;
       curr_log_offset = 0;
       curr_entry->is_next_same_block = false;
       curr_entry->next.block_idx = curr_log_block_idx;
@@ -209,7 +209,7 @@ std::tuple<LogicalBlockIdx, pmem::TxBlock*> Allocator::alloc_tx_block(
   }
 
   LogicalBlockIdx new_block_idx = alloc(1);
-  pmem::Block* tx_block = file->lidx_to_addr_rw(new_block_idx);
+  pmem::Block* tx_block = mem_table->lidx_to_addr_rw(new_block_idx);
   memset(&tx_block->cache_lines[NUM_CL_PER_BLOCK - 1], 0, CACHELINE_SIZE);
   tx_block->tx_block.set_tx_seq(seq);
   pmem::persist_cl_unfenced(&tx_block->cache_lines[NUM_CL_PER_BLOCK - 1]);
