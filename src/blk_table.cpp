@@ -23,7 +23,7 @@ bool BlkTable::need_update(FileState* result_state, bool do_alloc) const {
   return result_state->cursor.get_entry().is_valid();
 }
 
-uint64_t BlkTable::update(bool do_alloc, bool init_bitmap) {
+uint64_t BlkTable::update(bool do_alloc, BitmapMgr* bitmap_mgr) {
   TxCursor cursor = state.cursor;
 
   // it's possible that the previous update move idx to overflow state
@@ -42,19 +42,20 @@ uint64_t BlkTable::update(bool do_alloc, bool init_bitmap) {
   while (true) {
     auto tx_entry = cursor.get_entry();
     if (!tx_entry.is_valid()) break;
-    if (init_bitmap && cursor.idx.block_idx != prev_tx_block_idx)
-      file->set_allocated(cursor.idx.block_idx);
+    if (bitmap_mgr && cursor.idx.block_idx != prev_tx_block_idx)
+      bitmap_mgr->set_allocated(cursor.idx.block_idx);
     if (tx_entry.is_inline())
       apply_inline_tx(tx_entry.inline_entry);
     else
-      apply_indirect_tx(tx_entry.indirect_entry, init_bitmap);
+      apply_indirect_tx(tx_entry.indirect_entry, bitmap_mgr);
     prev_tx_block_idx = cursor.idx.block_idx;
     if (!tx_mgr->advance_cursor(&cursor, do_alloc)) break;
   }
 
   // mark all live data blocks in bitmap
-  if (init_bitmap)
-    for (const auto& logical_idx : table) file->set_allocated(logical_idx);
+  if (bitmap_mgr)
+    for (const auto& logical_idx : table)
+      bitmap_mgr->set_allocated(logical_idx);
 
   state.cursor = cursor;
 
@@ -70,9 +71,9 @@ void BlkTable::grow_to_fit(VirtualBlockIdx idx) {
 }
 
 void BlkTable::apply_indirect_tx(pmem::TxEntryIndirect tx_entry,
-                                 bool init_bitmap) {
+                                 BitmapMgr* bitmap_mgr) {
   auto [curr_entry, curr_block] =
-      tx_mgr->get_log_entry(tx_entry.get_log_entry_idx(), init_bitmap);
+      tx_mgr->get_log_entry(tx_entry.get_log_entry_idx(), bitmap_mgr);
 
   uint32_t num_blocks;
   VirtualBlockIdx begin_vidx, end_vidx;
@@ -87,12 +88,12 @@ void BlkTable::apply_indirect_tx(pmem::TxEntryIndirect tx_entry,
 
     for (uint32_t offset = 0; offset < curr_entry->num_blocks; ++offset)
       table[begin_vidx.get() + offset] =
-          curr_entry->begin_lidxs[offset / BITMAP_BLOCK_CAPACITY] +
-          offset % BITMAP_BLOCK_CAPACITY;
+          curr_entry->begin_lidxs[offset / BITMAP_ENTRY_BLOCKS_CAPACITY] +
+          offset % BITMAP_ENTRY_BLOCKS_CAPACITY;
     // only the last one matters, so this variable will keep being overwritten
     leftover_bytes = curr_entry->leftover_bytes;
     const auto& [next_entry, next_block] =
-        tx_mgr->get_next_log_entry(curr_entry, curr_block, init_bitmap);
+        tx_mgr->get_next_log_entry(curr_entry, curr_block, bitmap_mgr);
     if (next_entry == nullptr) break;
     curr_entry = next_entry;
     curr_block = next_block;

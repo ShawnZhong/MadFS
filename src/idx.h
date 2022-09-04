@@ -115,8 +115,8 @@ static_assert(NUM_TX_ENTRY_PER_BLOCK - 1 <=
                   std::numeric_limits<TxLocalIdx>::max(),
               "NUM_TX_ENTRY - 1 should be representable with TxLocalIdx");
 static_assert(
-    NUM_BITMAP_PER_BLOCK - 1 <= std::numeric_limits<BitmapIdx>::max(),
-    "NUM_BITMAP_PER_BLOCK - 1 should be representable with BitmapIdx");
+    NUM_BITMAP_ENTRIES_PER_BLOCK - 1 <= std::numeric_limits<BitmapIdx>::max(),
+    "NUM_BITMAP_ENTRIES_PER_BLOCK - 1 should be representable with BitmapIdx");
 
 // this ensures 32-bit idx won't overflow
 #define BLOCK_IDX_TO_SIZE(idx) \

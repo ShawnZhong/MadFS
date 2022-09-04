@@ -89,8 +89,8 @@ ssize_t TxMgr::do_write(const char* buf, size_t count) {
 }
 
 std::tuple<pmem::LogEntry*, pmem::LogEntryBlock*> TxMgr::get_log_entry(
-    LogEntryIdx idx, bool init_bitmap) const {
-  if (init_bitmap) file->set_allocated(idx.block_idx);
+    LogEntryIdx idx, BitmapMgr* bitmap_mgr) const {
+  if (bitmap_mgr) bitmap_mgr->set_allocated(idx.block_idx);
   pmem::LogEntryBlock* curr_block =
       &file->lidx_to_addr_rw(idx.block_idx)->log_entry_block;
   return {curr_block->get(idx.local_offset), curr_block};
@@ -99,7 +99,7 @@ std::tuple<pmem::LogEntry*, pmem::LogEntryBlock*> TxMgr::get_log_entry(
 [[nodiscard]] std::tuple<pmem::LogEntry*, pmem::LogEntryBlock*>
 TxMgr::get_next_log_entry(const pmem::LogEntry* curr_entry,
                           pmem::LogEntryBlock* curr_block,
-                          bool init_bitmap) const {
+                          BitmapMgr* bitmap_mgr) const {
   // check if we are at the end of the linked list
   if (!curr_entry->has_next) return {nullptr, nullptr};
 
@@ -109,7 +109,7 @@ TxMgr::get_next_log_entry(const pmem::LogEntry* curr_entry,
 
   // move to the next block
   LogicalBlockIdx next_block_idx = curr_entry->next.block_idx;
-  if (init_bitmap) file->set_allocated(next_block_idx);
+  if (bitmap_mgr) bitmap_mgr->set_allocated(next_block_idx);
   const auto next_block =
       &file->lidx_to_addr_rw(next_block_idx)->log_entry_block;
   // if the next entry is on another block, it must be from the first byte
@@ -143,7 +143,7 @@ LogEntryIdx TxMgr::append_log_entry(
       curr_entry = next_entry;
       curr_block = next_block;
       i += j;
-      begin_vidx += (j << BITMAP_BLOCK_CAPACITY_SHIFT);
+      begin_vidx += (j << BITMAP_ENTRY_BLOCKS_CAPACITY_SHIFT);
     } else {  // last entry
       curr_entry->leftover_bytes = leftover_bytes;
       curr_entry->persist();

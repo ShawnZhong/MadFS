@@ -167,9 +167,9 @@ class MultiBlockTx : public CoWTx {
         size_t num_bytes = rest_full_count;
         if (dst_blocks.size() > 1) {
           if (i == 0 && need_copy_first)
-            num_bytes = BITMAP_BYTES_CAPACITY - BLOCK_SIZE;
+            num_bytes = BITMAP_ENTRY_BYTES_CAPACITY - BLOCK_SIZE;
           else if (i < dst_blocks.size() - 1)
-            num_bytes = BITMAP_BYTES_CAPACITY;
+            num_bytes = BITMAP_ENTRY_BYTES_CAPACITY;
         }
         // actual memcpy
         pmem::memcpy_persist(full_blocks->data_rw(), rest_buf, num_bytes);
@@ -198,7 +198,7 @@ class MultiBlockTx : public CoWTx {
     // write data from the buf to the last block
     pmem::Block* last_dst_block =
         dst_blocks.back() + (end_full_vidx - begin_vidx) -
-        BITMAP_BLOCK_CAPACITY * (dst_blocks.size() - 1);
+        BITMAP_ENTRY_BLOCKS_CAPACITY * (dst_blocks.size() - 1);
     const char* buf_src = buf + (count - last_block_overlap_size);
     pmem::memcpy_persist(last_dst_block->data_rw(), buf_src,
                          last_block_overlap_size);

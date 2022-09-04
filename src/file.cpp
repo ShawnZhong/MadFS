@@ -41,22 +41,21 @@ File::File(int fd, const struct stat& stat, int flags,
 
   // only open shared memory if we may write
   if (can_write) {
-    bitmap = static_cast<Bitmap*>(shm_mgr.init(fd, stat));
+    bitmap_mgr.entries = static_cast<BitmapEntry*>(shm_mgr.init(fd, stat));
 
     // The first bit corresponds to the meta block which should always be set
     // to 1. If it is not, then bitmap needs to be initialized.
-    // Bitmap::is_allocated is not thread safe but we don't yet have concurrency
-    if (!bitmap[0].is_allocated(0)) {
+    // BitmapEntry::is_allocated is not thread safe but we don't yet have
+    // concurrency
+    if (!bitmap_mgr.entries[0].is_allocated(0)) {
       meta->lock();
-      if (!bitmap[0].is_allocated(0)) {
-        file_size = blk_table.update(/*do_alloc*/ false, /*init_bitmap*/ true);
+      if (!bitmap_mgr.entries[0].is_allocated(0)) {
+        file_size = blk_table.update(/*do_alloc*/ false, &bitmap_mgr);
         file_size_updated = true;
-        bitmap[0].set_allocated(0);
+        bitmap_mgr.entries[0].set_allocated(0);
       }
       meta->unlock();
     }
-  } else {
-    bitmap = nullptr;
   }
 
   if (!file_size_updated) file_size = blk_table.update(/*do_alloc*/ false);
@@ -246,7 +245,7 @@ Allocator* File::get_local_allocator() {
   size_t shm_thread_idx = shm_mgr.get_next_shm_thread_idx();
 
   auto [it, ok] = allocators.emplace(
-      tid, Allocator(&mem_table, bitmap, &shm_mgr, shm_thread_idx));
+      tid, Allocator(&mem_table, &bitmap_mgr, &shm_mgr, shm_thread_idx));
   PANIC_IF(!ok, "insert to thread-local allocators failed");
   return &it->second;
 }
@@ -262,13 +261,7 @@ std::ostream& operator<<(std::ostream& out, const File& f) {
   out << f.blk_table;
   out << f.mem_table;
   if (f.can_write) {
-    out << "Bitmap: \n";
-    auto num_bitmaps = f.meta->get_num_logical_blocks() / BITMAP_BLOCK_CAPACITY;
-    for (size_t i = 0; i < num_bitmaps; ++i) {
-      out << "\t" << std::setw(6) << std::right << i * BITMAP_BLOCK_CAPACITY
-          << " - " << std::setw(6) << std::left
-          << (i + 1) * BITMAP_BLOCK_CAPACITY - 1 << ": " << f.bitmap[i] << "\n";
-    }
+    out << f.bitmap_mgr;
   }
   out << f.tx_mgr;
   out << "\n";
