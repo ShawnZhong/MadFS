@@ -27,3 +27,6 @@ jobs:
 
       - name: test_sync
         run: ./run test_sync -b ${{matrix.build_type}}
+
+      - name: test_gc
+        run: ./run test_gc -b ${{matrix.build_type}}

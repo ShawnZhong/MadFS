@@ -12,18 +12,22 @@ namespace ulayfs::utility {
  **/
 class GarbageCollector {
  public:
-  dram::File* file;
+  std::unique_ptr<dram::File> file;
 
   explicit GarbageCollector(dram::File* file) : file(file) {}
   explicit GarbageCollector(const char* pathname) {
     int fd;
     struct stat stat_buf;
-    if (dram::File::try_open(fd, stat_buf, pathname, O_RDWR, 0)) {
-      PANIC("Fail to open file");
+    bool success = dram::File::try_open(fd, stat_buf, pathname, O_RDWR, 0);
+    if (!success) {
+      PANIC("Fail to open file \"%s\"", pathname);
     }
 
-    file = new dram::File(fd, stat_buf, O_RDWR, nullptr, /*guard*/ false);
+    file = std::make_unique<dram::File>(fd, stat_buf, O_RDWR, pathname,
+                                        /*guard*/ false);
   }
+
+  [[nodiscard]] dram::File* get_file() const { return file.get(); }
 
   [[nodiscard]] size_t get_smallest_tx_idx() const {
     size_t smallest_tx_idx = std::numeric_limits<size_t>::max();
@@ -125,11 +129,12 @@ class GarbageCollector {
                                           orig_first_tx_block_idx))
       ;
     // FIXME: use better API to flush the first cache line
-    pmem::persist_cl_fenced(&file->meta);
+    pmem::persist_cl_fenced(file->meta);
 
     // invalidate tx in meta block so we can free the log blocks they point to
     file->meta->invalidate_tx_entries();
 
+    LOG_INFO("GarbageCollector: done");
     return;
 
   abort:
@@ -141,6 +146,7 @@ class GarbageCollector {
       new_tx_blk_idx = next_tx_blk_idx;
     } while (new_tx_blk_idx != tail_tx_block_idx && new_tx_blk_idx != 0);
     allocator->return_free_list();
+    LOG_INFO("GarbageCollector: aborted");
   }
 };
 
