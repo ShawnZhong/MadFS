@@ -15,6 +15,8 @@ struct TestOpt {
   int init_offset = 0;
 };
 
+const char* filepath = get_filepath();
+
 void test(TestOpt test_opt) {
   const auto& [num_bytes_per_iter, num_iter, init_offset] = test_opt;
 

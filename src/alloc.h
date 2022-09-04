@@ -114,8 +114,8 @@ class Allocator {
       new_block = &mem_table->lidx_to_addr_rw(new_block_idx)->tx_block;
     }
 
-    shm_mgr->get_per_thread_data(shm_thread_idx)
-        ->set_tx_block_idx(new_block_idx);
+    shm_mgr->get_per_thread_data(shm_thread_idx)->tx_block_idx =
+        new_block_idx.get();
 
     return {new_block_idx, new_block};
   }

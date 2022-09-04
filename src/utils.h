@@ -13,9 +13,6 @@
 #include "logging.h"
 #include "posix.h"
 
-#define likely(x) __builtin_expect(!!(x), 1)
-#define unlikely(x) __builtin_expect(!!(x), 0)
-
 // adopted from `include/linux/align.h`
 #define ALIGN_MASK(x, mask) (((x) + (mask)) & ~(mask))
 #define ALIGN_UP(x, a) ALIGN_MASK((x), ((typeof(x))(a)-1))
@@ -29,8 +26,6 @@ struct FileInitException : public std::exception {
   [[nodiscard]] const char *what() const noexcept override { return msg; }
   const char *msg;
 };
-
-struct FatalException : public std::exception {};
 
 /**
  * @return the next power of 2 greater than x. If x is already a power of 2,

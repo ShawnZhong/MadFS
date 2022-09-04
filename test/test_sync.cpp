@@ -9,6 +9,8 @@
 constexpr auto NUM_BYTES = 128;
 constexpr auto BYTES_PER_THREAD = 2;
 
+const char* filepath = get_filepath();
+
 int main() {
   [[maybe_unused]] ssize_t ret;
 
