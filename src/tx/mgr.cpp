@@ -267,106 +267,11 @@ void TxMgr::find_tail(TxEntryIdx& tx_idx, pmem::TxBlock*& tx_block) const {
   tx_idx.local_idx = tx_block->find_tail(tx_idx.local_idx);
 }
 
-void TxMgr::gc(const LogicalBlockIdx tail_tx_block_idx, uint64_t file_size) {
-  // skip if tail_tx_block is meta block, it directly follows meta or there is
-  // only one tx block between meta and tail_tx_block
-  LogicalBlockIdx orig_tx_block_idx = meta->get_next_tx_block();
-  if (tail_tx_block_idx == 0 || orig_tx_block_idx == tail_tx_block_idx ||
-      file->lidx_to_addr_ro(orig_tx_block_idx)->tx_block.get_next_tx_block() ==
-          tail_tx_block_idx)
-    return;
-
-  auto allocator = file->get_local_allocator();
-
-  auto tail_block = file->lidx_to_addr_rw(tail_tx_block_idx);
-  auto num_blocks = BLOCK_SIZE_TO_IDX(ALIGN_UP(file_size, BLOCK_SIZE));
-  auto leftover_bytes = ALIGN_UP(file_size, BLOCK_SIZE) - file_size;
-
-  uint32_t tx_seq = 1;
-  auto first_tx_block_idx = allocator->alloc(1);
-  auto new_block = file->lidx_to_addr_rw(first_tx_block_idx);
-  memset(&new_block->cache_lines[NUM_CL_PER_BLOCK - 1], 0, CACHELINE_SIZE);
-  new_block->tx_block.set_tx_seq(tx_seq++);
-  TxCursor cursor(first_tx_block_idx, &new_block->tx_block);
-
-  VirtualBlockIdx begin = 0;
-  VirtualBlockIdx i = 1;
-  for (; i < num_blocks; i++) {
-    auto curr_blk_idx = file->vidx_to_lidx(i);
-    auto prev_blk_idx = file->vidx_to_lidx(i - 1);
-    if (curr_blk_idx == 0) break;
-    // continuous blocks can be placed in 1 tx
-    if (curr_blk_idx - prev_blk_idx == 1 &&
-        i - begin <= /*TODO: pmem::TxEntryIndirect::NUM_BLOCKS_MAX*/ 63)
-      continue;
-
-    auto commit_entry =
-        pmem::TxEntryInline(i - begin, begin, file->vidx_to_lidx(begin));
-    cursor.block->store(commit_entry, cursor.idx.local_idx);
-    if (!advance_cursor(&cursor, false)) {
-      // current block is full, flush it and allocate a new block
-      auto new_tx_block_idx = allocator->alloc(1);
-      cursor.block->set_next_tx_block(new_tx_block_idx);
-      pmem::persist_unfenced(cursor.block, BLOCK_SIZE);
-      new_block = file->lidx_to_addr_rw(new_tx_block_idx);
-      memset(&new_block->cache_lines[NUM_CL_PER_BLOCK - 1], 0, CACHELINE_SIZE);
-      new_block->tx_block.set_tx_seq(tx_seq++);
-      cursor.block = &new_block->tx_block;
-      cursor.idx = {new_tx_block_idx, 0};
-    }
-    begin = i;
-  }
-
-  // add the last commit entry
-  {
-    if (leftover_bytes == 0) {
-      auto commit_entry =
-          pmem::TxEntryInline(i - begin, begin, file->vidx_to_lidx(begin));
-      cursor.block->store(commit_entry, cursor.idx.local_idx);
-    } else {
-      // since i - begin <= 63, this can fit into one log entry
-      auto begin_lidx = std::vector{file->vidx_to_lidx(begin)};
-      auto log_head_idx =
-          append_log_entry(allocator, pmem::LogEntry::Op::LOG_OVERWRITE,
-                           leftover_bytes, i - begin, begin, begin_lidx);
-      auto commit_entry = pmem::TxEntryIndirect(log_head_idx);
-      cursor.block->store(commit_entry, cursor.idx.local_idx);
-    }
-  }
-  // pad the last block with dummy tx entries
-  while (advance_cursor(&cursor, false))
-    cursor.block->store(pmem::TxEntry::TxEntryDummy, cursor.idx.local_idx);
-  // last block points to the tail, meta points to the first block
-  cursor.block->set_next_tx_block(tail_tx_block_idx);
-  // abort if new transaction history is longer than the old one
-  if (tail_block->tx_block.get_tx_seq() <= cursor.block->get_tx_seq())
-    goto abort;
-  pmem::persist_fenced(cursor.block, BLOCK_SIZE);
-  while (!meta->set_next_tx_block(first_tx_block_idx, orig_tx_block_idx))
-    ;
-  // FIXME: use better API to flush the first cache line
-  pmem::persist_cl_fenced(&meta);
-
-  // invalidate tx in meta block so we can free the log blocks they point to
-  meta->invalidate_tx_entries();
-
-  return;
-
-abort:
-  // free the new tx blocks
-  auto new_tx_blk_idx = first_tx_block_idx;
-  do {
-    auto next_tx_blk_idx = cursor.block->get_next_tx_block();
-    allocator->free(new_tx_blk_idx, 1);
-    new_tx_blk_idx = next_tx_blk_idx;
-  } while (new_tx_blk_idx != tail_tx_block_idx && new_tx_blk_idx != 0);
-  allocator->return_free_list();
-}
-
 std::ostream& operator<<(std::ostream& out, const TxMgr& tx_mgr) {
   out << tx_mgr.offset_mgr;
   out << "Transactions: \n";
   TxCursor cursor{tx_mgr.meta};
+  int count = 1;
 
   while (true) {
     auto tx_entry = cursor.get_entry();
@@ -374,7 +279,7 @@ std::ostream& operator<<(std::ostream& out, const TxMgr& tx_mgr) {
     if (tx_entry.is_dummy()) goto next;
 
     // print tx entry
-    out << "\t" << cursor.idx << " -> " << tx_entry << "\n";
+    out << "\t" << count++ << ": " << cursor.idx << " -> " << tx_entry << "\n";
 
     // print log entries if the tx is not inlined
     if (!tx_entry.is_inline()) {

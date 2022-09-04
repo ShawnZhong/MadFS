@@ -15,6 +15,8 @@ char buff[STR_LEN + 1]{};
 size_t sz = 0;
 int rc = 0;
 
+const char* filepath = get_filepath();
+
 void test_write() {
   fprintf(stderr, "test_write\n");
 

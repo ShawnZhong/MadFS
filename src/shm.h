@@ -11,7 +11,7 @@
 
 namespace ulayfs::dram {
 
-class PerThreadData {
+struct PerThreadData {
   union {
     struct {
       uint32_t tx_block_idx;
@@ -20,19 +20,8 @@ class PerThreadData {
   };
 
  public:
-  [[nodiscard]] LogicalBlockIdx get_tx_block_idx() const {
-    return tx_block_idx;
-  }
-  void set_tx_block_idx(LogicalBlockIdx block_idx) {
-    tx_block_idx = block_idx.get();
-  }
   [[nodiscard]] bool is_empty() const { return tx_block_idx == 0; }
   void clear() { memset(cl, 0, sizeof(cl)); }
-
-  friend std::ostream& operator<<(std::ostream& os, const PerThreadData& data) {
-    os << "tx_block_idx: " << data.tx_block_idx;
-    return os;
-  }
 };
 
 class ShmMgr {
@@ -200,8 +189,8 @@ class ShmMgr {
        << "\tpath = " << mgr.path << "\n";
     for (size_t i = 0; i < MAX_NUM_THREADS; ++i) {
       if (!mgr.get_per_thread_data(i)->is_empty()) {
-        os << "\tthread " << i << ":\n";
-        os << *mgr.get_per_thread_data(i);
+        os << "\tthread " << i << ": tail_tx_block_idx = "
+           << mgr.get_per_thread_data(i)->tx_block_idx << "\n";
       }
     }
     return os;
