@@ -1,5 +1,8 @@
 #pragma once
 
+#include <fmt/core.h>
+#include <fmt/ostream.h>
+
 #include <atomic>
 #include <cassert>
 #include <cstdint>
@@ -167,7 +170,7 @@ struct alignas(8) TxEntryIdx {
   bool operator!=(const TxEntryIdx& rhs) const { return !(rhs == *this); }
 
   friend std::ostream& operator<<(std::ostream& out, const TxEntryIdx& idx) {
-    out << "TxEntryIdx{" << idx.block_idx << "," << idx.local_idx << "}";
+    out << fmt::format("TxIdx({:3}, {:3})", idx.block_idx.get(), idx.local_idx);
     return out;
   }
 };
@@ -179,3 +182,6 @@ static_assert(std::is_trivial<TxEntryIdx>::value,
               "TxEntryIdx must be a trivial type");
 
 }  // namespace ulayfs
+
+template <>
+struct fmt::formatter<ulayfs::TxEntryIdx> : ostream_formatter {};

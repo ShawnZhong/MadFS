@@ -23,11 +23,9 @@ namespace ulayfs::dram {
 class File;
 
 // All member functions are thread-safe and require no locks
-class BitmapEntry : noncopyable {
- private:
+struct BitmapEntry : noncopyable {
   std::atomic<uint64_t> entry;
 
- public:
   constexpr static uint64_t BITMAP_ALL_USED =
       std::numeric_limits<uint64_t>::max();
 
@@ -97,13 +95,6 @@ class BitmapEntry : noncopyable {
 
   [[nodiscard]] uint64_t is_empty() const {
     return entry.load(std::memory_order_relaxed) == 0;
-  }
-
-  friend std::ostream& operator<<(std::ostream& out, const BitmapEntry& b) {
-    for (size_t i = 0; i < BITMAP_ENTRY_BLOCKS_CAPACITY; ++i) {
-      out << (b.entry.load(std::memory_order_relaxed) & (1ul << i) ? "1" : "0");
-    }
-    return out;
   }
 };
 
@@ -195,10 +186,9 @@ class BitmapMgr : noncopyable {
     out << "BitmapMgr: \n";
     for (size_t i = 0; i < NUM_BITMAP_ENTRIES; ++i) {
       if (b.entries[i].is_empty()) continue;
-      out << "\t" << std::setw(6) << std::right
-          << i * BITMAP_ENTRY_BLOCKS_CAPACITY << " - " << std::setw(6)
-          << std::left << (i + 1) * BITMAP_ENTRY_BLOCKS_CAPACITY - 1 << ": "
-          << b.entries[i] << "\n";
+      out << fmt::format(
+          "\t{:>6} - {:<6}: {:b}\n", i * BITMAP_ENTRY_BLOCKS_CAPACITY,
+          (i + 1) * BITMAP_ENTRY_BLOCKS_CAPACITY - 1, b.entries[i].entry);
     }
     return out;
   }

@@ -1,5 +1,8 @@
 #pragma once
 
+#include <fmt/core.h>
+#include <fmt/ostream.h>
+
 #include <atomic>
 #include <cassert>
 #include <iostream>
@@ -172,11 +175,16 @@ struct __attribute__((packed)) TxEntryInline {
 
   friend std::ostream& operator<<(std::ostream& out,
                                   const TxEntryInline& entry) {
-    out << "TxEntryInline{";
-    out << "n_blk=" << entry.num_blocks << ", ";
-    out << "vidx=" << entry.begin_virtual_idx << ", ";
-    out << "lidx=" << entry.begin_logical_idx;
-    out << "}";
+    if (entry.num_blocks == 1) {
+      out << fmt::format("Inline({} -> {})", entry.begin_logical_idx,
+                         entry.begin_virtual_idx);
+    } else {
+      out << fmt::format("Inline([{}, {}] -> [{}, {}])",
+                         entry.begin_logical_idx,
+                         entry.begin_logical_idx + entry.num_blocks - 1,
+                         entry.begin_virtual_idx,
+                         entry.begin_virtual_idx + entry.num_blocks - 1);
+    }
     return out;
   }
 };
@@ -240,3 +248,6 @@ union TxEntry {
 
 static_assert(sizeof(TxEntry) == TX_ENTRY_SIZE, "TxEntry must be 64 bits");
 }  // namespace ulayfs::pmem
+
+template <>
+struct fmt::formatter<ulayfs::pmem::TxEntry> : ostream_formatter {};

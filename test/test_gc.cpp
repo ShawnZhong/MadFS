@@ -8,7 +8,7 @@
 
 const char* filepath = get_filepath();
 
-static constexpr int SIZE_PER_ITER = 4096;
+static constexpr int SIZE_PER_ITER = ulayfs::BLOCK_SIZE * 2;
 static constexpr int NUM_ITER =
     ulayfs::NUM_INLINE_TX_ENTRY + ulayfs::NUM_TX_ENTRY_PER_BLOCK * 4 + 3;
 

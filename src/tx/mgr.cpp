@@ -1,8 +1,10 @@
 #include "mgr.h"
 
+#include <fmt/core.h>
+#include <fmt/ostream.h>
+
 #include <cassert>
 #include <cstddef>
-#include <cstring>
 #include <vector>
 
 #include "alloc.h"
@@ -279,7 +281,7 @@ std::ostream& operator<<(std::ostream& out, const TxMgr& tx_mgr) {
     if (tx_entry.is_dummy()) goto next;
 
     // print tx entry
-    out << "\t" << count++ << ": " << cursor.idx << " -> " << tx_entry << "\n";
+    out << fmt::format("\t{:4}: {} -> {}\n", count++, cursor.idx, tx_entry);
 
     // print log entries if the tx is not inlined
     if (!tx_entry.is_inline()) {

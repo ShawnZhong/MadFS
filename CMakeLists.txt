@@ -43,11 +43,20 @@ FetchContent_Declare(
     GIT_REPOSITORY https://github.com/Neargye/magic_enum.git
     GIT_TAG v0.8.0
 )
-FetchContent_Declare(tbb URL https://github.com/oneapi-src/oneTBB/releases/download/v2021.5.0/oneapi-tbb-2021.5.0-lin.tgz)
-FetchContent_MakeAvailable(magic-enum tbb)
+FetchContent_Declare(
+    tbb
+    URL https://github.com/oneapi-src/oneTBB/releases/download/v2021.5.0/oneapi-tbb-2021.5.0-lin.tgz
+)
+FetchContent_Declare(
+    fmt
+    GIT_REPOSITORY https://github.com/fmtlib/fmt
+    GIT_TAG 9.1.0
+)
+FetchContent_MakeAvailable(magic-enum tbb fmt)
 
+set_property(TARGET fmt PROPERTY POSITION_INDEPENDENT_CODE ON)
 find_package(TBB REQUIRED HINTS ${tbb_SOURCE_DIR}/lib/cmake/tbb)
-target_link_libraries(ulayfs pmem2 dl pthread atomic TBB::tbb magic_enum::magic_enum)
+target_link_libraries(ulayfs pmem2 dl pthread atomic TBB::tbb magic_enum::magic_enum fmt::fmt)
 
 #[[
 tests, benchmarks, and tools
