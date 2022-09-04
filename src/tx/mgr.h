@@ -109,14 +109,6 @@ class TxMgr {
   pmem::TxEntry try_commit(pmem::TxEntry entry, TxCursor* cursor);
 
   /**
-   * @tparam B MetaBlock or TxBlock
-   * @param block the block that needs a next block to be allocated
-   * @return the block id of the allocated block and the new tx block allocated
-   */
-  template <class B>
-  std::tuple<LogicalBlockIdx, pmem::TxBlock*> alloc_next_block(B* block) const;
-
-  /**
    * If the given cursor is in an overflow state, update it if allowed.
    *
    * @param cursor the cursor to update
