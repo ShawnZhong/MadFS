@@ -51,11 +51,11 @@ class TxMgr {
    * Get log entry given the index
    *
    * @param idx the log entry index
-   * @param init_bitmap whether to initialize the bitmap
+   * @param bitmap_mgr if set, initialize the bitmap
    * @return a tuple of (log entry, the block containing the entry)
    */
   [[nodiscard]] std::tuple<pmem::LogEntry*, pmem::LogEntryBlock*> get_log_entry(
-      LogEntryIdx idx, bool init_bitmap = false) const;
+      LogEntryIdx idx, BitmapMgr* bitmap_mgr = nullptr) const;
 
   /**
    * get the next log entry
@@ -63,13 +63,13 @@ class TxMgr {
    * @param curr_entry the current log entry
    * @param curr_block the current log entry block; will be updated if
    * move on to the next block
-   * @param init_bitmap whether set related LogEntryBlock as used in bitmap
+   * @param bitmap_mgr if passed, initialized the bitmap
    * @return a tuple of (next_log_entry, next_log_entry_block)
    */
   [[nodiscard]] std::tuple<pmem::LogEntry*, pmem::LogEntryBlock*>
   get_next_log_entry(const pmem::LogEntry* curr_entry,
                      pmem::LogEntryBlock* curr_block,
-                     bool init_bitmap = false) const;
+                     BitmapMgr* bitmap_mgr = nullptr) const;
 
   /**
    * populate log entries required by a single transaction; do persist but not

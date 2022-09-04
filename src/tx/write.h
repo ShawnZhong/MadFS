@@ -41,7 +41,7 @@ class WriteTx : public Tx {
     uint32_t rest_num_blocks = num_blocks;
     while (rest_num_blocks > 0) {
       uint32_t chunk_num_blocks =
-          std::min(rest_num_blocks, BITMAP_BLOCK_CAPACITY);
+          std::min(rest_num_blocks, BITMAP_ENTRY_BLOCKS_CAPACITY);
       auto lidx = allocator->alloc(chunk_num_blocks);
       dst_lidxs.push_back(lidx);
       rest_num_blocks -= chunk_num_blocks;

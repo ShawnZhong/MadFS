@@ -77,7 +77,7 @@ class ShmMgr {
 
   [[nodiscard]] PerThreadData* get_per_thread_data(size_t idx) const {
     assert(idx < MAX_NUM_THREADS);
-    char* starting_addr = static_cast<char*>(addr) + TOTAL_BITMAP_SIZE;
+    char* starting_addr = static_cast<char*>(addr) + TOTAL_NUM_BITMAP_BYTES;
     return reinterpret_cast<PerThreadData*>(starting_addr) + idx;
   }
 

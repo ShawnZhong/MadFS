@@ -19,11 +19,12 @@ namespace ulayfs::dram {
 // per-thread data structure
 class Allocator {
   MemTable* mem_table;
-  Bitmap* bitmap;
+  BitmapMgr* bitmap_mgr;
   ShmMgr* shm_mgr;
 
   // free_lists[n-1] means a free list of size n beginning from LogicalBlockIdx
-  std::array<std::vector<LogicalBlockIdx>, BITMAP_BLOCK_CAPACITY> free_lists;
+  std::array<std::vector<LogicalBlockIdx>, BITMAP_ENTRY_BLOCKS_CAPACITY>
+      free_lists;
 
   // used as a hint for search; recent is defined to be "the next one to search"
   // keep id for idx translation
@@ -45,10 +46,10 @@ class Allocator {
   size_t shm_thread_idx;
 
  public:
-  Allocator(MemTable* mem_table, Bitmap* bitmap, ShmMgr* shm_mgr,
+  Allocator(MemTable* mem_table, BitmapMgr* bitmap_mgr, ShmMgr* shm_mgr,
             size_t shm_thread_idx)
       : mem_table(mem_table),
-        bitmap(bitmap),
+        bitmap_mgr(bitmap_mgr),
         shm_mgr(shm_mgr),
         shm_thread_idx(shm_thread_idx) {}
 
@@ -79,9 +80,9 @@ class Allocator {
    * Return all the blocks in the free list to the bitmap
    */
   void return_free_list() {
-    for (uint32_t n = 0; n < BITMAP_BLOCK_CAPACITY; ++n)
+    for (uint32_t n = 0; n < BITMAP_ENTRY_BLOCKS_CAPACITY; ++n)
       for (LogicalBlockIdx lidx : free_lists[n])
-        Bitmap::free(bitmap, static_cast<BitmapIdx>(lidx.get()), n + 1);
+        bitmap_mgr->free(static_cast<BitmapIdx>(lidx.get()), n + 1);
   }
 
   /**

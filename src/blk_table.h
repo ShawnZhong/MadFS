@@ -8,6 +8,7 @@
 #include <ostream>
 #include <type_traits>
 
+#include "bitmap.h"
 #include "block/block.h"
 #include "const.h"
 #include "entry.h"
@@ -67,9 +68,9 @@ class BlkTable {
    * Update the block table by applying the transactions; not thread-safe
    *
    * @param do_alloc whether we allow allocation when iterating the tx_idx
-   * @param init_bitmap whether we need to initialize the bitmap
+   * @param bitmap_mgr if passed, initialized the bitmap
    */
-  uint64_t update(bool do_alloc, bool init_bitmap = false);
+  uint64_t update(bool do_alloc, BitmapMgr* bitmap_mgr = nullptr);
 
   /**
    * Quick check if update is necessary; thread safe
@@ -93,9 +94,9 @@ class BlkTable {
    * Apply an indirect transaction to the block table
    *
    * @param tx_entry the entry to be applied
-   * @param init_bitmap whether we need to initialize the bitmap object
+   * @param bitmap_mgr if passed, initialized the bitmap
    */
-  void apply_indirect_tx(pmem::TxEntryIndirect tx_entry, bool init_bitmap);
+  void apply_indirect_tx(pmem::TxEntryIndirect tx_entry, BitmapMgr* bitmap_mgr);
 
   /**
    * Apply an inline transaction to the block table

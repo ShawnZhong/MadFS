@@ -37,7 +37,7 @@ namespace ulayfs::dram {
 
 class File {
   int fd;
-  Bitmap* bitmap;
+  BitmapMgr bitmap_mgr;
   MemTable mem_table;
   pmem::MetaBlock* meta;
   TxMgr tx_mgr;
@@ -87,9 +87,6 @@ class File {
    */
   [[nodiscard]] Allocator* get_local_allocator();
 
-  /*
-   * exported interface for update; init_bitmap is always false
-   */
   void update(FileState* state, bool do_alloc) {
     if (!blk_table.need_update(state, do_alloc)) return;
     pthread_spin_lock(&spinlock);
@@ -152,15 +149,6 @@ class File {
    */
   [[nodiscard]] const pmem::Block* vidx_to_addr_ro(VirtualBlockIdx vidx) {
     return lidx_to_addr_ro(vidx_to_lidx(vidx));
-  }
-
-  /**
-   * Mark the logical block as allocated. This is not thread safe and should
-   * only be used on startup if the bitmap is newly created.
-   */
-  void set_allocated(LogicalBlockIdx block_idx) {
-    bitmap[block_idx >> BITMAP_BLOCK_CAPACITY_SHIFT].set_allocated(
-        block_idx & (BITMAP_BLOCK_CAPACITY - 1));
   }
 
   /**

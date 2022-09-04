@@ -65,14 +65,15 @@ struct LogEntry {
 
   /*** some helper functions ***/
   [[nodiscard]] constexpr uint32_t get_lidxs_len() const {
-    return ALIGN_UP(static_cast<uint32_t>(num_blocks), BITMAP_BLOCK_CAPACITY) >>
-           BITMAP_BLOCK_CAPACITY_SHIFT;
+    return ALIGN_UP(static_cast<uint32_t>(num_blocks),
+                    BITMAP_ENTRY_BLOCKS_CAPACITY) >>
+           BITMAP_ENTRY_BLOCKS_CAPACITY_SHIFT;
   }
 
   // every element in lidxs corresponds to a mapping of length 64 blocks except
   // the last one
   [[nodiscard]] constexpr uint32_t get_last_lidx_num_blocks() const {
-    return num_blocks % BITMAP_BLOCK_CAPACITY;
+    return num_blocks % BITMAP_ENTRY_BLOCKS_CAPACITY;
   }
 
   void persist() {
