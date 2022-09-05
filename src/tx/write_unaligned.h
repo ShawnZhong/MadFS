@@ -50,10 +50,19 @@ class SingleBlockTx : public CoWTx {
     timer.count<Event::SINGLE_BLOCK_TX_START>();
     bool need_redo;
 
+    LogicalBlockIdx pinned_tx_block_idx = allocator->get_pinned_tx_block_idx();
+    if (pinned_tx_block_idx == 0) {  // no tx_block is pinned yet
+      // this should trigger a shared memory slot allocation
+      // because we will start the first log replay, we will need to read the
+      // whole tx history, so gc threads must not reclaim any blocks before we
+      // are done
+      allocator->pin_tx_block(0);
+    }
+
     // must acquire the tx tail before any get
     if (!is_offset_depend) file->update(&state, /*do_alloc*/ true);
 
-    if (allocator->get_pinned_tx_block_idx() != state.get_tx_block_idx())
+    if (pinned_tx_block_idx != state.get_tx_block_idx())
       allocator->reset_log_entry();
 
     prepare_commit_entry();
@@ -195,10 +204,19 @@ class MultiBlockTx : public CoWTx {
       }
     }
 
+    LogicalBlockIdx pinned_tx_block_idx = allocator->get_pinned_tx_block_idx();
+    if (pinned_tx_block_idx == 0) {  // no tx_block is pinned yet
+      // this should trigger a shared memory slot allocation
+      // because we will start the first log replay, we will need to read the
+      // whole tx history, so gc threads must not reclaim any blocks before we
+      // are done
+      allocator->pin_tx_block(0);
+    }
+
     // only get a snapshot of the tail when starting critical piece
     if (!is_offset_depend) file->update(&state, /*do_alloc*/ true);
 
-    if (allocator->get_pinned_tx_block_idx() != state.get_tx_block_idx())
+    if (pinned_tx_block_idx != state.get_tx_block_idx())
       allocator->reset_log_entry();
 
     prepare_commit_entry();

@@ -142,9 +142,18 @@ class Allocator {
   /**
    * Update the shared memory to notify this thread has moved to a new tx block;
    * do nothing if there is no moving
-   * @param tx_block_idx the index of the currently referenced tx block
+   * @param tx_block_idx the index of the currently referenced tx block; zero if
+   * this is the first time this thread try to pin a tx block. if this is the
+   * first time this thread tries to pin, it must acquire a slot on the shared
+   * memory and then publish a zero. this notify gc threads that there is a
+   * thread performing the initial log replaying and do not reclaim any blocks.
    */
   void pin_tx_block(LogicalBlockIdx tx_block_idx) {
+    if (!notify_addr) {
+      assert(tx_block_idx == 0);
+      // TODO: allocate from shared memory!
+      return;
+    }
     if (pinned_tx_block_idx == tx_block_idx) return;
     pinned_tx_block_idx = tx_block_idx;
     // TODO: uncomment this line after setting shared memory
