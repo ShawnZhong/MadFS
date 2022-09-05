@@ -6,30 +6,33 @@
 #include <cstdint>
 
 #include "const.h"
-#include "file.h"
 #include "idx.h"
+#include "tx/mgr.h"
 
 namespace ulayfs::dram {
 
-bool BlkTable::need_update(FileState* result_state, bool do_alloc) const {
+bool BlkTable::need_update(FileState* result_state,
+                           Allocator* allocator) const {
   uint64_t curr_ver = version.load(std::memory_order_acquire);
   if (curr_ver & 1) return true;  // old version means inconsistency
   *result_state = state;
   if (curr_ver != version.load(std::memory_order_acquire)) return true;
-  if (!tx_mgr->handle_cursor_overflow(&result_state->cursor, do_alloc))
+  bool success = result_state->cursor.handle_overflow(mem_table, allocator);
+  if (!success) {
     return false;
+  }
   // if it's not valid, there is no new tx to the tx history, thus no need to
   // acquire spinlock to update
   return result_state->cursor.get_entry().is_valid();
 }
 
-uint64_t BlkTable::update(bool do_alloc, BitmapMgr* bitmap_mgr) {
+uint64_t BlkTable::update(Allocator* allocator, BitmapMgr* bitmap_mgr) {
   TxCursor cursor = state.cursor;
 
   // it's possible that the previous update move idx to overflow state
-  if (!tx_mgr->handle_cursor_overflow(&cursor, do_alloc)) {
-    // if still overflow, do_alloc must be unset
-    assert(!do_alloc);
+  if (bool success = cursor.handle_overflow(mem_table, allocator); !success) {
+    // if still overflow, allocator must be not available
+    assert(!allocator);
     // if still overflow, we must have reached the tail already
     return state.file_size;
   }
@@ -49,7 +52,7 @@ uint64_t BlkTable::update(bool do_alloc, BitmapMgr* bitmap_mgr) {
     else
       apply_indirect_tx(tx_entry.indirect_entry, bitmap_mgr);
     prev_tx_block_idx = cursor.idx.block_idx;
-    if (!tx_mgr->advance_cursor(&cursor, do_alloc)) break;
+    if (bool success = cursor.advance(mem_table, allocator); !success) break;
   }
 
   // mark all live data blocks in bitmap

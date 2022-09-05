@@ -101,7 +101,6 @@ static_assert(sizeof(LogEntry) == LogEntry::FIXED_SIZE,
  * Points to the head of a linked list of LogEntry
  */
 struct __attribute__((packed)) TxEntryIndirect {
- private:
   friend union TxEntry;
 
  private:
@@ -131,7 +130,6 @@ static_assert(sizeof(TxEntryIndirect) == TX_ENTRY_SIZE,
               "TxEntryIndirect must be 64 bits");
 
 struct __attribute__((packed)) TxEntryInline {
- private:
   constexpr static const int NUM_BLOCKS_BITS = 6;
   constexpr static const int BEGIN_VIRTUAL_IDX_BITS = 28;
   constexpr static const int BEGIN_LOGICAL_IDX_BITS = 29;
@@ -185,7 +183,6 @@ static_assert(sizeof(TxEntryInline) == TX_ENTRY_SIZE,
               "TxEntryInline must be 64 bits");
 
 union TxEntry {
- public:
   uint64_t raw_bits;
   TxEntryIndirect indirect_entry;
   TxEntryInline inline_entry;

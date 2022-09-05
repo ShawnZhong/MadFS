@@ -107,7 +107,7 @@ class Allocator {
   std::tuple<LogicalBlockIdx, pmem::TxBlock*> alloc_next_tx_block(B* block) {
     auto [new_block_idx, new_block] = alloc_tx_block(block->get_tx_seq() + 1);
 
-    bool success = block->set_next_tx_block(new_block_idx);
+    bool success = block->try_set_next_tx_block(new_block_idx);
     if (!success) {  // race condition for adding the new blocks
       free_tx_block(new_block_idx, new_block);
       new_block_idx = block->get_next_tx_block();

@@ -49,7 +49,7 @@ class WriteTx : public Tx {
     assert(!dst_lidxs.empty());
 
     for (auto lidx : dst_lidxs)
-      dst_blocks.push_back(file->lidx_to_addr_rw(lidx));
+      dst_blocks.push_back(tx_mgr->mem_table->lidx_to_addr_rw(lidx));
     assert(!dst_blocks.empty());
   }
 

@@ -23,8 +23,8 @@ File::File(int fd, const struct stat& stat, int flags,
     : fd(fd),
       mem_table(fd, stat.st_size, (flags & O_ACCMODE) == O_RDONLY),
       meta(mem_table.get_meta()),
-      tx_mgr(this, meta),
-      blk_table(this, meta, &tx_mgr),
+      tx_mgr(this, &mem_table, meta),
+      blk_table(&mem_table, meta, &tx_mgr),
       can_read((flags & O_ACCMODE) == O_RDONLY ||
                (flags & O_ACCMODE) == O_RDWR),
       can_write((flags & O_ACCMODE) == O_WRONLY ||
@@ -50,7 +50,7 @@ File::File(int fd, const struct stat& stat, int flags,
     if (!bitmap_mgr.entries[0].is_allocated(0)) {
       meta->lock();
       if (!bitmap_mgr.entries[0].is_allocated(0)) {
-        file_size = blk_table.update(/*do_alloc*/ false, &bitmap_mgr);
+        file_size = blk_table.update(/*allocator=*/nullptr, &bitmap_mgr);
         file_size_updated = true;
         bitmap_mgr.entries[0].set_allocated(0);
       }
@@ -58,7 +58,7 @@ File::File(int fd, const struct stat& stat, int flags,
     }
   }
 
-  if (!file_size_updated) file_size = blk_table.update(/*do_alloc*/ false);
+  if (!file_size_updated) file_size = blk_table.update();
 
   if (flags & O_APPEND)
     tx_mgr.offset_mgr.seek_absolute(static_cast<off_t>(file_size));
@@ -121,7 +121,7 @@ off_t File::lseek(off_t offset, int whence) {
   int64_t ret;
 
   pthread_spin_lock(&spinlock);
-  uint64_t file_size = blk_table.update(/*do_alloc*/ false);
+  uint64_t file_size = blk_table.update();
 
   switch (whence) {
     case SEEK_SET:
@@ -215,8 +215,8 @@ error:
 
 int File::fsync() {
   FileState state;
-  this->update(&state, /*do_alloc*/ false);
-  tx_mgr.flush_tx_entries(meta->get_tx_tail(), state.cursor);
+  this->update(&state);
+  TxCursor::flush_up_to(&mem_table, state.cursor);
   // we keep an invariant that tx_tail must be a valid (non-overflow) idx
   // an overflow index implies that the `next` pointer of the block is not set
   // (and thus not flushed) yet, so we cannot assume it is equivalent to the
@@ -230,7 +230,7 @@ int File::fsync() {
 }
 
 void File::stat(struct stat* buf) {
-  buf->st_size = static_cast<off_t>(blk_table.update(/*do_alloc*/ false));
+  buf->st_size = static_cast<off_t>(blk_table.update());
 }
 
 /*

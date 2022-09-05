@@ -105,7 +105,7 @@ class Converter {
           /*total_blocks*/ 1, /*begin_vidx*/ 0, /*begin_lidxs*/ {num_blocks});
       file->tx_mgr.try_commit(pmem::TxEntryIndirect(log_entry_idx), &tx_cursor);
     }
-    file->tx_mgr.advance_cursor(&tx_cursor, true);
+    tx_cursor.advance(&file->mem_table, allocator);
 
     // if it's not full block or MetaBlock does not have the capacity, we still
     // need LogEntryBlock
@@ -123,7 +123,7 @@ class Converter {
             pmem::TxEntryInline(len, begin_vidx,
                                 LogicalBlockIdx(begin_vidx.get())),
             &tx_cursor);
-        file->tx_mgr.advance_cursor(&tx_cursor, true);
+        tx_cursor.advance(&file->mem_table, allocator);
       }
     } else {
       auto log_entry_idx = file->tx_mgr.append_log_entry(
@@ -150,7 +150,7 @@ class Converter {
       return -1;
     }
 
-    uint64_t virtual_size = file->blk_table.update(/*do_alloc*/ false);
+    uint64_t virtual_size = file->blk_table.update();
     uint64_t virtual_size_aligned = ALIGN_UP(virtual_size, BLOCK_SIZE);
     uint32_t virtual_num_blocks =
         BLOCK_SIZE_TO_IDX(ALIGN_UP(virtual_size_aligned, BLOCK_SIZE));

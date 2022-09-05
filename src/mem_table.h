@@ -122,6 +122,13 @@ class MemTable {
     return chunk_addr + chunk_local_idx;
   }
 
+  [[nodiscard]] const pmem::Block* lidx_to_addr_ro(LogicalBlockIdx lidx) {
+    constexpr static const char __attribute__((aligned(BLOCK_SIZE)))
+    empty_block[BLOCK_SIZE]{};
+    if (lidx == 0) return reinterpret_cast<const pmem::Block*>(&empty_block);
+    return lidx_to_addr_rw(lidx);
+  }
+
  private:
   // ask more blocks for the kernel filesystem, so that idx is valid
   void grow_to_fit(LogicalBlockIdx idx) {

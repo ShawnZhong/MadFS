@@ -149,7 +149,7 @@ class Tx {
           curr_le_block = next_le_block;
         }
       }
-      if (!tx_mgr->advance_cursor(&state.cursor, /*do_alloc*/ false)) break;
+      if (!state.cursor.advance(tx_mgr->mem_table)) break;
       curr_entry = state.cursor.get_entry();
     } while (curr_entry.is_valid());
 

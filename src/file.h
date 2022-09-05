@@ -87,20 +87,21 @@ class File {
    */
   [[nodiscard]] Allocator* get_local_allocator();
 
-  void update(FileState* state, bool do_alloc) {
-    if (!blk_table.need_update(state, do_alloc)) return;
+  void update(FileState* state, Allocator* allocator = nullptr) {
+    if (!blk_table.need_update(state, allocator)) return;
     pthread_spin_lock(&spinlock);
-    blk_table.update(do_alloc);
+    blk_table.update(allocator);
     *state = blk_table.get_file_state();
     pthread_spin_unlock(&spinlock);
   }
 
   void update_with_offset(FileState* state, uint64_t& count,
                           bool stop_at_boundary, uint64_t& ticket,
-                          uint64_t& old_offset, bool do_alloc) {
+                          uint64_t& old_offset,
+                          Allocator* allocator = nullptr) {
     TimerGuard<Event::UPDATE_WITH_OFFSET> timer_guard;
     pthread_spin_lock(&spinlock);
-    blk_table.update(do_alloc);
+    blk_table.update(allocator);
     *state = blk_table.get_file_state();
     old_offset = tx_mgr.offset_mgr.acquire_offset(count, state->file_size,
                                                   stop_at_boundary, ticket);
@@ -113,50 +114,14 @@ class File {
   [[nodiscard]] LogicalBlockIdx vidx_to_lidx(VirtualBlockIdx vidx) {
     return blk_table.get(vidx);
   }
-
-  /**
-   * @return a writable pointer to the block given a logical block index
-   * A nullptr is returned if the block is not allocated yet (e.g., a hole)
-   */
-  [[nodiscard]] pmem::Block* lidx_to_addr_rw(LogicalBlockIdx lidx) {
-    pmem::Block* block = mem_table.lidx_to_addr_rw(lidx);
-    assert(IS_ALIGNED(reinterpret_cast<uintptr_t>(block), BLOCK_SIZE));
-    return block;
-  }
-
-  /**
-   * @return a read-only pointer to the block given a logical block index
-   * An empty block is returned if the block is not allocated yet (e.g., a hole)
-   */
-  [[nodiscard]] const pmem::Block* lidx_to_addr_ro(LogicalBlockIdx lidx) {
-    constexpr static const char __attribute__((aligned(BLOCK_SIZE)))
-    empty_block[BLOCK_SIZE]{};
-    if (lidx == 0) return reinterpret_cast<const pmem::Block*>(&empty_block);
-    return lidx_to_addr_rw(lidx);
-  }
-
-  /**
-   * @return a writable pointer to the block given a virtual block index
-   * A nullptr is returned if the block is not allocated yet (e.g., a hole)
-   */
-  [[nodiscard]] pmem::Block* vidx_to_addr_rw(VirtualBlockIdx vidx) {
-    return lidx_to_addr_rw(vidx_to_lidx(vidx));
-  }
-
+  
   /**
    * @return a read-only pointer to the block given a virtual block index
    * An empty block is returned if the block is not allocated yet (e.g., a hole)
    */
   [[nodiscard]] const pmem::Block* vidx_to_addr_ro(VirtualBlockIdx vidx) {
-    return lidx_to_addr_ro(vidx_to_lidx(vidx));
+    return mem_table.lidx_to_addr_ro(vidx_to_lidx(vidx));
   }
-
-  /**
-   * Remove the shared memory object associated with the current file.
-   * Try best effort and report no error if unlink fails, since the shared
-   * memory object might be removed by kernel.
-   */
-  void unlink_shm() { shm_mgr.unlink(); }
 
   // try to open a file with checking whether the given file is in uLayFS format
   static bool try_open(int& fd, struct stat& stat_buf, const char* pathname,
