@@ -9,6 +9,7 @@ const char* filepath = get_filepath();
 using ulayfs::BLOCK_SIZE;
 using ulayfs::NUM_INLINE_TX_ENTRY;
 using ulayfs::NUM_TX_ENTRY_PER_BLOCK;
+using ulayfs::debug::clear_count;
 using ulayfs::debug::print_file;
 using ulayfs::utility::GarbageCollector;
 
@@ -35,16 +36,20 @@ void test(TestOpt test_opt) {
 
   close(fd);
 
+  clear_count();
+
   GarbageCollector garbage_collector(filepath);
   garbage_collector.gc();
   if (print) std::cerr << *garbage_collector.get_file();
 }
 
 int main() {
+  //  test({1, 1'000'000, false});
+  //  test({BLOCK_SIZE * 64, 1'000'000, false});
   test({BLOCK_SIZE, 1});
   test({BLOCK_SIZE, NUM_INLINE_TX_ENTRY + 1});
   test({BLOCK_SIZE, NUM_INLINE_TX_ENTRY + NUM_TX_ENTRY_PER_BLOCK});
-  test({BLOCK_SIZE, NUM_INLINE_TX_ENTRY + NUM_TX_ENTRY_PER_BLOCK * 3 + 1});
+  test({BLOCK_SIZE, NUM_INLINE_TX_ENTRY + NUM_TX_ENTRY_PER_BLOCK * 2 + 1});
   if constexpr (!ulayfs::BuildOptions::use_pmemcheck) {
     // the following tests are too slow for pmemcheck
     test({BLOCK_SIZE * 63});

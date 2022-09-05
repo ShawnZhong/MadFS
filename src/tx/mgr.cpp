@@ -1,6 +1,7 @@
 #include "mgr.h"
 
 #include <cassert>
+#include <cmath>
 #include <cstddef>
 #include <vector>
 
@@ -182,16 +183,22 @@ pmem::TxEntry TxMgr::try_commit(pmem::TxEntry entry, TxCursor* cursor) const {
 std::ostream& operator<<(std::ostream& out, const TxMgr& tx_mgr) {
   out << tx_mgr.offset_mgr;
   out << "Transactions: \n";
+
   TxCursor cursor({}, tx_mgr.meta);
-  int count = 1;
+  int count = 0;
 
   while (true) {
     auto tx_entry = cursor.get_entry();
     if (!tx_entry.is_valid()) break;
     if (tx_entry.is_dummy()) goto next;
 
-    // print tx entry
-    out << "\t" << count++ << ": " << cursor.idx << " -> " << tx_entry << "\n";
+    count++;
+    if (count > 100) {
+      if (count % static_cast<int>(exp10(floor(log10(count)) - 1)) != 0)
+        goto next;
+    }
+
+    out << "\t" << count << ": " << cursor.idx << " -> " << tx_entry << "\n";
 
     // print log entries if the tx is not inlined
     if (!tx_entry.is_inline()) {
@@ -208,9 +215,12 @@ std::ostream& operator<<(std::ostream& out, const TxMgr& tx_mgr) {
         curr_block = next_block;
       }
     }
+
   next:
     if (bool success = cursor.advance(tx_mgr.mem_table); !success) break;
   }
+
+  out << "\ttotal = " << count++ << "\n";
 
   return out;
 }

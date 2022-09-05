@@ -14,7 +14,7 @@ class GarbageCollector {
  public:
   std::unique_ptr<dram::File> file;
   uint64_t file_size;
-  TxEntryIdx tail_tx_idx;
+  dram::TxCursor old_cursor;
 
   explicit GarbageCollector(const char* pathname) {
     int fd;
@@ -26,8 +26,9 @@ class GarbageCollector {
 
     file = std::make_unique<dram::File>(fd, stat_buf, O_RDWR, pathname,
                                         /*guard*/ false);
-    file_size = file->blk_table.update();
-    tail_tx_idx = file->blk_table.get_tx_idx();
+    auto state = file->blk_table.get_file_state();
+    file_size = state.file_size;
+    old_cursor = state.cursor;
   }
 
   [[nodiscard]] dram::File* get_file() const { return file.get(); }
@@ -62,12 +63,12 @@ class GarbageCollector {
 
   [[nodiscard]] bool need_gc() const {
     // skip if tail_tx_block is meta block
-    if (tail_tx_idx.block_idx == 0) return false;
+    if (old_cursor.idx.block_idx == 0) return false;
 
     LogicalBlockIdx first_tx_idx = file->meta->get_next_tx_block();
 
     // skip if the tail directly follows meta
-    if (first_tx_idx == tail_tx_idx.block_idx) return false;
+    if (first_tx_idx == old_cursor.idx.block_idx) return false;
 
     // skip if there is only one tx block between meta and tail
     if (file->mem_table.lidx_to_addr_ro(first_tx_idx)
@@ -85,13 +86,15 @@ class GarbageCollector {
     auto new_block = file->mem_table.lidx_to_addr_rw(first_tx_block_idx);
     memset(&new_block->cache_lines[NUM_CL_PER_BLOCK - 1], 0, CACHELINE_SIZE);
     new_block->tx_block.set_tx_seq(tx_seq++);
-    dram::TxCursor cursor({first_tx_block_idx, 0}, &new_block->tx_block);
+    dram::TxCursor new_cursor({first_tx_block_idx, 0}, &new_block->tx_block);
 
     VirtualBlockIdx begin = 0;
     VirtualBlockIdx i = 1;
 
-    // replay and create new linked list
+    // create new linked list from the block table
     {
+      TimerGuard<Event::GC_CREATE> timer_guard;
+
       auto num_blocks = BLOCK_SIZE_TO_IDX(ALIGN_UP(file_size, BLOCK_SIZE));
       for (; i < num_blocks; i++) {
         auto curr_blk_idx = file->vidx_to_lidx(i);
@@ -103,18 +106,18 @@ class GarbageCollector {
           continue;
         auto entry =
             pmem::TxEntryInline(i - begin, begin, file->vidx_to_lidx(begin));
-        cursor.block->store(entry, cursor.idx.local_idx);
-        if (bool success = cursor.advance(&file->mem_table); !success) {
+        new_cursor.block->store(entry, new_cursor.idx.local_idx);
+        if (bool success = new_cursor.advance(&file->mem_table); !success) {
           // current block is full, flush it and allocate a new block
           auto new_tx_block_idx = allocator->alloc(1);
-          cursor.block->try_set_next_tx_block(new_tx_block_idx);
-          pmem::persist_unfenced(cursor.block, BLOCK_SIZE);
+          new_cursor.block->try_set_next_tx_block(new_tx_block_idx);
+          pmem::persist_unfenced(new_cursor.block, BLOCK_SIZE);
           new_block = file->mem_table.lidx_to_addr_rw(new_tx_block_idx);
           memset(&new_block->cache_lines[NUM_CL_PER_BLOCK - 1], 0,
                  CACHELINE_SIZE);
           new_block->tx_block.set_tx_seq(tx_seq++);
-          cursor.block = &new_block->tx_block;
-          cursor.idx = {new_tx_block_idx, 0};
+          new_cursor.block = &new_block->tx_block;
+          new_cursor.idx = {new_tx_block_idx, 0};
         }
         begin = i;
       }
@@ -126,7 +129,7 @@ class GarbageCollector {
       if (leftover_bytes == 0) {
         auto commit_entry =
             pmem::TxEntryInline(i - begin, begin, file->vidx_to_lidx(begin));
-        cursor.block->store(commit_entry, cursor.idx.local_idx);
+        new_cursor.block->store(commit_entry, new_cursor.idx.local_idx);
       } else {
         // since i - begin <= 63, this can fit into one log entry
         auto begin_lidx = std::vector{file->vidx_to_lidx(begin)};
@@ -134,29 +137,31 @@ class GarbageCollector {
             allocator, pmem::LogEntry::Op::LOG_OVERWRITE, leftover_bytes,
             i - begin, begin, begin_lidx);
         auto commit_entry = pmem::TxEntryIndirect(log_head_idx);
-        cursor.block->store(commit_entry, cursor.idx.local_idx);
+        new_cursor.block->store(commit_entry, new_cursor.idx.local_idx);
       }
     }
 
     // pad the last block with dummy tx entries
-    while (!cursor.advance(&file->mem_table))
-      cursor.block->store(pmem::TxEntry::TxEntryDummy, cursor.idx.local_idx);
+    while (!new_cursor.advance(&file->mem_table))
+      new_cursor.block->store(pmem::TxEntry::TxEntryDummy,
+                              new_cursor.idx.local_idx);
     // last block points to the tail, meta points to the first block
-    cursor.block->try_set_next_tx_block(tail_tx_idx.block_idx);
+    new_cursor.block->try_set_next_tx_block(old_cursor.idx.block_idx);
     // abort if new transaction history is longer than the old one
-    auto tail_block = file->mem_table.lidx_to_addr_rw(tail_tx_idx.block_idx);
-    if (tail_block->tx_block.get_tx_seq() <= cursor.block->get_tx_seq()) {
+    auto tail_block = file->mem_table.lidx_to_addr_rw(old_cursor.idx.block_idx);
+    if (tail_block->tx_block.get_tx_seq() <= new_cursor.block->get_tx_seq()) {
       // abort, free the new tx blocks
       auto new_tx_blk_idx = first_tx_block_idx;
       do {
-        auto next_tx_blk_idx = cursor.block->get_next_tx_block();
+        auto next_tx_blk_idx = new_cursor.block->get_next_tx_block();
         allocator->free(new_tx_blk_idx, 1);
         new_tx_blk_idx = next_tx_blk_idx;
-      } while (new_tx_blk_idx != tail_tx_idx.block_idx && new_tx_blk_idx != 0);
+      } while (new_tx_blk_idx != old_cursor.idx.block_idx &&
+               new_tx_blk_idx != 0);
       allocator->return_free_list();
       return false;
     }
-    pmem::persist_fenced(cursor.block, BLOCK_SIZE);
+    pmem::persist_fenced(new_cursor.block, BLOCK_SIZE);
     file->meta->set_next_tx_block(first_tx_block_idx);
 
     // invalidate tx in meta block, so we can free the log blocks they point to
