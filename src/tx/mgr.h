@@ -14,38 +14,22 @@
 
 namespace ulayfs::dram {
 
-class File;
-
 class TxMgr {
- private:
+ public:
   File* file;
+  MemTable* mem_table;
   pmem::MetaBlock* meta;
 
- public:
   Lock lock;  // nop lock is used by default
   OffsetMgr offset_mgr;
 
- public:
-  TxMgr(File* file, pmem::MetaBlock* meta)
-      : file(file), meta(meta), offset_mgr(this) {}
+  TxMgr(File* file, MemTable* mem_table, pmem::MetaBlock* meta)
+      : file(file), mem_table(mem_table), meta(meta), offset_mgr(this) {}
 
   ssize_t do_pread(char* buf, size_t count, size_t offset);
   ssize_t do_read(char* buf, size_t count);
   ssize_t do_pwrite(const char* buf, size_t count, size_t offset);
   ssize_t do_write(const char* buf, size_t count);
-
-  /**
-   * Advance cursor to the next transaction entry
-   *
-   * @param cursor the cursor to advance
-   * @param do_alloc whether allocation is allowed when reaching the end of
-   * a block
-   *
-   * @return true on success; false when reaches the end of a block and do_alloc
-   * is false. The advance would happen anyway but in the case of false, it is
-   * in a overflow state
-   */
-  bool advance_cursor(TxCursor* cursor, bool do_alloc) const;
 
   /**
    * Get log entry given the index
@@ -106,34 +90,7 @@ class TxMgr {
    * @param cursor the cursor to commit to (might be updated under overflow)
    * @return empty entry on success; conflict entry otherwise
    */
-  pmem::TxEntry try_commit(pmem::TxEntry entry, TxCursor* cursor);
-
-  /**
-   * If the given cursor is in an overflow state, update it if allowed.
-   *
-   * @param cursor the cursor to update
-   * @param do_alloc whether allocation is allowed
-   * @return true if the idx is not in overflow state; false otherwise
-   */
-  bool handle_cursor_overflow(TxCursor* cursor, bool do_alloc) const;
-
-  /**
-   * Flush tx entries
-   *
-   * @param begin the start cursor of the entries to flush, exclusive
-   * @param end the end cursor of the entries to flush, inclusive
-   */
-  void flush_tx_entries(TxCursor begin, TxCursor end);
-  void flush_tx_entries(TxEntryIdx begin, TxCursor end);
-
- private:
-  /**
-   * Move along the linked list of TxBlock and find the tail. The returned
-   * tail may not be up-to-date due to race condition. No new blocks will be
-   * allocated. If the end of TxBlock is reached, just return NUM_TX_ENTRY as
-   * the TxLocalIdx.
-   */
-  void find_tail(TxEntryIdx& curr_idx, pmem::TxBlock*& curr_block) const;
+  pmem::TxEntry try_commit(pmem::TxEntry entry, TxCursor* cursor) const;
 
  public:
   friend std::ostream& operator<<(std::ostream& out, const TxMgr& tx_mgr);

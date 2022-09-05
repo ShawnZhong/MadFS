@@ -51,7 +51,7 @@ class SingleBlockTx : public CoWTx {
     bool need_redo;
 
     // must acquire the tx tail before any get
-    if (!is_offset_depend) file->update(&state, /*do_alloc*/ true);
+    if (!is_offset_depend) file->update(&state, allocator);
 
     prepare_commit_entry();
 
@@ -70,7 +70,7 @@ class SingleBlockTx : public CoWTx {
 
       char* dst_block = dst_blocks[0]->data_rw();
       const char* src_block =
-          file->lidx_to_addr_ro(recycle_image[0])->data_ro();
+          tx_mgr->mem_table->lidx_to_addr_ro(recycle_image[0])->data_ro();
 
       // copy the left part of the block
       if (local_offset != 0) {
@@ -179,7 +179,7 @@ class MultiBlockTx : public CoWTx {
     }
 
     // only get a snapshot of the tail when starting critical piece
-    if (!is_offset_depend) file->update(&state, /*do_alloc*/ true);
+    if (!is_offset_depend) file->update(&state, allocator);
 
     prepare_commit_entry();
 
@@ -208,7 +208,8 @@ class MultiBlockTx : public CoWTx {
     // copy the data from the first source block if exists
     if (need_copy_first && do_copy_first) {
       char* dst = dst_blocks[0]->data_rw();
-      const char* src = file->lidx_to_addr_ro(src_first_lidx)->data_ro();
+      const char* src =
+          tx_mgr->mem_table->lidx_to_addr_ro(src_first_lidx)->data_ro();
       size_t size = BLOCK_SIZE - first_block_overlap_size;
       pmem::memcpy_persist(dst, src, size);
     }
@@ -216,8 +217,9 @@ class MultiBlockTx : public CoWTx {
     // copy the data from the last source block if exits
     if (need_copy_last && do_copy_last) {
       char* dst = last_dst_block->data_rw() + last_block_overlap_size;
-      const char* src = file->lidx_to_addr_ro(src_last_lidx)->data_ro() +
-                        last_block_overlap_size;
+      const char* src =
+          tx_mgr->mem_table->lidx_to_addr_ro(src_last_lidx)->data_ro() +
+          last_block_overlap_size;
       size_t size = BLOCK_SIZE - last_block_overlap_size;
       pmem::memcpy_persist(dst, src, size);
     }

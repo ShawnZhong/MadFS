@@ -42,7 +42,7 @@ class AlignedTx : public WriteTx {
 
     {
       TimerGuard<Event::ALIGNED_TX_UPDATE> timer_guard;
-      if (!is_offset_depend) file->update(&state, /*do_alloc*/ true);
+      if (!is_offset_depend) file->update(&state, allocator);
     }
 
     // for an aligned tx, leftover_bytes must be zero, so there is no need to

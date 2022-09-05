@@ -44,8 +44,7 @@ class MetaBlock : public noncopyable {
   static_assert(std::atomic<TxEntryIdx>::is_always_lock_free,
                 "cl1_meta.tx_tail must be lock-free");
 
-  static_assert(sizeof(cl1_meta) <= CACHELINE_SIZE,
-                "cl1_meta must be no larger than a cache line");
+  static_assert(sizeof(cl1_meta) <= CACHELINE_SIZE);
 
   // move mutex to another cache line to avoid contention on reading the
   // metadata above
@@ -64,14 +63,12 @@ class MetaBlock : public noncopyable {
     char cl2[CACHELINE_SIZE];
   };
 
-  static_assert(sizeof(cl2_meta) <= CACHELINE_SIZE,
-                "cl1_meta must be no larger than a cache line");
+  static_assert(sizeof(cl2_meta) <= CACHELINE_SIZE);
 
   // 62 cache lines for tx log (~120 txs)
   std::atomic<TxEntry> tx_entries[NUM_INLINE_TX_ENTRY];
 
-  static_assert(sizeof(tx_entries) == 62 * CACHELINE_SIZE,
-                "tx_entries must be 30 cache lines");
+  static_assert(sizeof(tx_entries) == 62 * CACHELINE_SIZE);
 
  public:
   /**
@@ -140,11 +137,16 @@ class MetaBlock : public noncopyable {
    * No flush+fence but leave it to flush_tx_block
    * @return true on success, false if there is a race condition
    */
-  bool set_next_tx_block(LogicalBlockIdx block_idx,
-                         LogicalBlockIdx expected = 0) {
+  bool try_set_next_tx_block(LogicalBlockIdx block_idx) {
+    LogicalBlockIdx expected = 0;
     return cl1_meta.next_tx_block.compare_exchange_strong(
         expected, block_idx, std::memory_order_acq_rel,
         std::memory_order_acquire);
+  }
+
+  void set_next_tx_block(LogicalBlockIdx block_idx) {
+    cl1_meta.next_tx_block.store(block_idx, std::memory_order_release);
+    persist_cl_unfenced(&cl1_meta);
   }
 
   /**

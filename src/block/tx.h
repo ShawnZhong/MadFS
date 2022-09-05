@@ -49,7 +49,7 @@ class TxBlock : public noncopyable {
    * Set the next block index
    * @return true on success, false if there is a race condition
    */
-  bool set_next_tx_block(LogicalBlockIdx block_idx) {
+  bool try_set_next_tx_block(LogicalBlockIdx block_idx) {
     LogicalBlockIdx expected = 0;
     return next.compare_exchange_strong(expected, block_idx,
                                         std::memory_order_acq_rel,
