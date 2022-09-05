@@ -20,11 +20,11 @@ namespace ulayfs::dram {
 
 File::File(int fd, const struct stat& stat, int flags,
            const char* pathname [[maybe_unused]], bool guard)
-    : fd(fd),
-      mem_table(fd, stat.st_size, (flags & O_ACCMODE) == O_RDONLY),
+    : mem_table(fd, stat.st_size, (flags & O_ACCMODE) == O_RDONLY),
+      tx_mgr(this, &mem_table),
+      blk_table(&mem_table, &tx_mgr),
       meta(mem_table.get_meta()),
-      tx_mgr(this, &mem_table, meta),
-      blk_table(&mem_table, meta, &tx_mgr),
+      fd(fd),
       can_read((flags & O_ACCMODE) == O_RDONLY ||
                (flags & O_ACCMODE) == O_RDWR),
       can_write((flags & O_ACCMODE) == O_WRONLY ||
