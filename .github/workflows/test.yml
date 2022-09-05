@@ -29,4 +29,5 @@ jobs:
         run: ./run test_sync -b ${{matrix.build_type}}
 
       - name: test_gc
+        if: ${{matrix.build_type}} != 'pmemcheck'
         run: ./run test_gc -b ${{matrix.build_type}}
