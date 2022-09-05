@@ -27,6 +27,7 @@ bool BlkTable::need_update(FileState* result_state,
 }
 
 uint64_t BlkTable::update(Allocator* allocator, BitmapMgr* bitmap_mgr) {
+  TimerGuard<Event::UPDATE> timer_guard;
   TxCursor cursor = state.cursor;
 
   // it's possible that the previous update move idx to overflow state
@@ -132,9 +133,12 @@ std::ostream& operator<<(std::ostream& out, const BlkTable& b) {
   out << "\tfile_size: " << b.state.file_size << "\n";
   out << "\ttail_tx_idx: " << b.state.cursor.idx << "\n";
   for (size_t i = 0; i < b.table.size(); ++i) {
-    if (b.table[i].load() != 0) {
-      out << "\t" << i << " -> " << b.table[i] << "\n";
+    if (b.table[i].load() == 0) continue;
+    if (i >= 100) {
+      out << "\t...\n";
+      break;
     }
+    out << "\t" << i << " -> " << b.table[i] << "\n";
   }
   return out;
 }

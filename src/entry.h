@@ -89,7 +89,8 @@ struct LogEntry {
     out << "lidxs=[" << entry.begin_lidxs[0];
     for (uint32_t i = 1; i < entry.get_lidxs_len(); ++i)
       out << "," << entry.begin_lidxs[i];
-    out << "]}";
+    out << "], ";
+    out << "leftover_bytes=" << entry.leftover_bytes << "}";
     return out;
   }
 };
@@ -118,7 +119,9 @@ struct __attribute__((packed)) TxEntryIndirect {
     block_idx = log_entry_idx.block_idx.get();
   }
 
-  LogEntryIdx get_log_entry_idx() { return {block_idx, local_offset}; }
+  [[nodiscard]] LogEntryIdx get_log_entry_idx() const {
+    return {block_idx, local_offset};
+  }
 
   friend std::ostream& operator<<(std::ostream& out, const TxEntryIndirect& e) {
     out << "TxEntryIndirect{" << e.block_idx << "," << e.local_offset << "}";

@@ -88,7 +88,7 @@ enum class Event : std::size_t {
   CLOSE,
   FSYNC,
 
-  UPDATE_WITH_OFFSET,
+  UPDATE,
 
   READ_TX,
   READ_TX_CTOR,
@@ -119,5 +119,7 @@ enum class Event : std::size_t {
 
   TX_ENTRY_LOAD,
   TX_ENTRY_STORE,
+
+  GC_CREATE,
 };
 }  // namespace ulayfs

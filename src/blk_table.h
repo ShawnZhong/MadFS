@@ -85,7 +85,6 @@ class BlkTable {
   [[nodiscard]] bool need_update(FileState* result_state,
                                  Allocator* allocator) const;
 
-  [[nodiscard]] TxEntryIdx get_tx_idx() const { return state.cursor.idx; }
   [[nodiscard]] FileState get_file_state() const { return state; }
 
  private:
