@@ -41,8 +41,14 @@ void test(TestOpt test_opt) {
 }
 
 int main() {
-  test({BLOCK_SIZE});
-  test({BLOCK_SIZE * 63});
-  test({BLOCK_SIZE * 64});
-  test({BLOCK_SIZE * 65});
+  test({BLOCK_SIZE, 1});
+  test({BLOCK_SIZE, NUM_INLINE_TX_ENTRY + 1});
+  test({BLOCK_SIZE, NUM_INLINE_TX_ENTRY + NUM_TX_ENTRY_PER_BLOCK});
+  test({BLOCK_SIZE, NUM_INLINE_TX_ENTRY + NUM_TX_ENTRY_PER_BLOCK * 3 + 1});
+  if constexpr (!ulayfs::BuildOptions::use_pmemcheck) {
+    // the following tests are too slow for pmemcheck
+    test({BLOCK_SIZE * 63});
+    test({BLOCK_SIZE * 64});
+    test({BLOCK_SIZE * 65});
+  }
 }
