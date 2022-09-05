@@ -125,10 +125,10 @@ def plot_single_bm(
         figlegend = plt.figure()
         figlegend.legend(
             *ax.get_legend_handles_labels(),
-            ncol=4,
+            ncol=num_groups,
             loc="center",
             fontsize=8,
-            columnspacing=2,
+            columnspacing=1,
             handlelength=0,
             frameon=False,
             markerscale=1,
@@ -188,6 +188,8 @@ def plot_micro_st(result_dir):
             name=name,
             result_dir=result_dir,
             post_plot=post_plot,
+            markers=("o", "^", "s", "D", "D"),
+            colors=("tab:blue", "tab:orange", "tab:green", "tab:red", "tab:pink"),
         )
 
 

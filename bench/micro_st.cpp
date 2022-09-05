@@ -43,9 +43,7 @@ void bench(benchmark::State& state) {
   if (fd < 0) state.SkipWithError("open failed");
   if constexpr (!is_append) {
     prefill_file(fd, num_bytes * num_iter);
-    if constexpr (is_read) {
-      sleep(1);  // wait for the background thread of SplitFS to finish
-    }
+    //    sleep(1);  // wait for the background thread of SplitFS to finish
   }
   close(fd);
 
