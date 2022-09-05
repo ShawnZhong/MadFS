@@ -21,8 +21,6 @@ if __name__ == "__main__":
     parser.set_defaults(fs_names=["uLayFS"])
     args, run_config = parse_args(parser)
 
-    if args.build_type is None:
-        args.build_type = "debug" if args.cmake_target.startswith("test") else "release"
     logger.info(f"args={args}, run_config={run_config}")
 
     for fs_name in args.fs_names:
