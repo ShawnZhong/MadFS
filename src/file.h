@@ -114,7 +114,7 @@ class File {
   [[nodiscard]] LogicalBlockIdx vidx_to_lidx(VirtualBlockIdx vidx) {
     return blk_table.get(vidx);
   }
-  
+
   /**
    * @return a read-only pointer to the block given a virtual block index
    * An empty block is returned if the block is not allocated yet (e.g., a hole)
