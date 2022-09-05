@@ -2,7 +2,6 @@
 
 #include <cassert>
 #include <cstddef>
-#include <cstring>
 #include <vector>
 
 #include "alloc.h"
@@ -10,7 +9,6 @@
 #include "entry.h"
 #include "file.h"
 #include "idx.h"
-#include "persist.h"
 #include "tx/cursor.h"
 #include "tx/read.h"
 #include "tx/write_aligned.h"
