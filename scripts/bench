@@ -96,7 +96,7 @@ class TpccBenchmark(Benchmark):
         if run_config["prog_args"]:
             logging.warning("prog_args will be ignored for tpcc benchmark")
         del run_config["prog_args"]
-        
+
         result_dir = get_result_dir("tpcc")
 
         for fs_name in fs_names:
@@ -155,7 +155,6 @@ if __name__ == "__main__":
         type=Path,
         help="If set, plot the results in the given directory w/o running the benchmark",
     )
-    argparser.set_defaults(fs_names=available_fs.keys(), build_type="release")
     add_common_args(argparser)
 
     args, run_cfg = parse_args(argparser)

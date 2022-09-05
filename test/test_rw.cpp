@@ -1,6 +1,5 @@
 #include <fcntl.h>
 
-#include <cassert>
 #include <iostream>
 
 #include "common.h"
@@ -40,7 +39,7 @@ void test(TestOpt test_opt) {
     for (int i = 0; i < num_iter; ++i) {
       fill_buff(src_buf, num_bytes_per_iter, num_bytes_per_iter * i);
       ret = write(fd, src_buf, num_bytes_per_iter);
-      assert(ret == num_bytes_per_iter);
+      ASSERT(ret == num_bytes_per_iter);
     }
     fsync(fd);
     close(fd);
@@ -56,7 +55,7 @@ void test(TestOpt test_opt) {
     char* expected = new char[init_offset];
 
     ret = read(fd, actual, init_offset);
-    assert(ret == init_offset);
+    ASSERT(ret == init_offset);
     memset(expected, 0, init_offset);
 
     CHECK_RESULT(expected, actual, init_offset, fd);
@@ -71,7 +70,7 @@ void test(TestOpt test_opt) {
     char* expected = new char[length];
 
     ret = read(fd, actual, length);
-    assert(ret == length);
+    ASSERT(ret == length);
     fill_buff(expected, length);
 
     CHECK_RESULT(expected, actual, length, fd);

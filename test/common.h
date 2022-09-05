@@ -12,6 +12,7 @@
 #include "common.h"
 #include "const.h"
 #include "debug.h"
+#include "logging.h"
 
 #define CHECK_RESULT(expected, actual, length, fd)                \
   do {                                                            \
@@ -27,13 +28,7 @@
     }                                                             \
   } while (0)
 
-static void print_file(int fd) {
-  if (ulayfs::is_linked()) {
-    ulayfs::debug::print_file(fd);
-  } else {
-    printf("uLayFS not linked\n");
-  }
-}
+#define ASSERT(x) PANIC_IF(!(x), "assertion failed: " #x)
 
 static const char* get_filepath() {
   const char* res = "test.txt";
