@@ -32,17 +32,20 @@ class AlignedTx : public WriteTx {
     }
 
     {
+      TimerGuard<Event::ALIGNED_TX_UPDATE> timer_guard;
+      if (!is_offset_depend) file->update(&state, /*do_alloc*/ true);
+    }
+
+    if (allocator->get_pinned_tx_block_idx() != state.get_tx_block_idx())
+      allocator->reset_log_entry();
+
+    {
       TimerGuard<Event::ALIGNED_TX_PREPARE> timer_guard;
       // for aligned tx, `leftover_bytes` is always zero, so we don't need to
       // know file size before prepare commit entry. thus, we move it before
       // `file->update` to shrink the critical section
       leftover_bytes = 0;
       prepare_commit_entry(/*skip_update_leftover_bytes*/ true);
-    }
-
-    {
-      TimerGuard<Event::ALIGNED_TX_UPDATE> timer_guard;
-      if (!is_offset_depend) file->update(&state, /*do_alloc*/ true);
     }
 
     // for an aligned tx, leftover_bytes must be zero, so there is no need to
@@ -66,11 +69,22 @@ class AlignedTx : public WriteTx {
             tx_mgr->try_commit(commit_entry, &state.cursor);
         if (!conflict_entry.is_valid()) break;
 
+        bool into_new_block = false;
         // we don't check the return value of handle_conflict here because we
         // don't care whether there is a conflict, as long as recycle_image gets
         // updated
-        handle_conflict(conflict_entry, begin_vidx, end_vidx - 1,
-                        recycle_image);
+        handle_conflict(conflict_entry, begin_vidx, end_vidx - 1, recycle_image,
+                        commit_entry.is_inline() ? nullptr : &into_new_block);
+        if (into_new_block) {
+          assert(!commit_entry.is_inline());
+          LogEntryIdx first_idx =
+              commit_entry.indirect_entry.get_log_entry_idx();
+          auto [first_entry, first_block] = tx_mgr->get_log_entry(first_idx);
+          allocator->free_log_entry(first_entry, first_idx, first_block);
+          allocator->reset_log_entry();
+          // re-prepare (incl. append new log entries)
+          prepare_commit_entry(/*skip_update_leftover_bytes*/ true);
+        }
         // aligned transaction will never have leftover bytes, so no need to
         // recheck commit_entry
       }
@@ -84,6 +98,9 @@ class AlignedTx : public WriteTx {
       // recycle the data blocks being overwritten
       allocator->free(recycle_image);
     }
+
+    // update the pinned tx block
+    allocator->pin_tx_block(state.get_tx_block_idx());
 
     timer.stop<Event::ALIGNED_TX_EXEC>();
 

@@ -37,15 +37,18 @@ class TxMgr {
   /**
    * Advance cursor to the next transaction entry
    *
-   * @param cursor the cursor to advance
-   * @param do_alloc whether allocation is allowed when reaching the end of
+   * @param[in] cursor the cursor to advance
+   * @param[in] do_alloc whether allocation is allowed when reaching the end of
    * a block
+   * @param[out] into_new_block if not nullptr, return whether the cursor is
+   * advanced into a new tx block
    *
    * @return true on success; false when reaches the end of a block and do_alloc
    * is false. The advance would happen anyway but in the case of false, it is
    * in a overflow state
    */
-  bool advance_cursor(TxCursor* cursor, bool do_alloc) const;
+  bool advance_cursor(TxCursor* cursor, bool do_alloc,
+                      bool* into_new_block = nullptr) const;
 
   /**
    * Get log entry given the index
@@ -119,11 +122,13 @@ class TxMgr {
   /**
    * If the given cursor is in an overflow state, update it if allowed.
    *
-   * @param cursor the cursor to update
-   * @param do_alloc whether allocation is allowed
+   * @param[in] cursor the cursor to update
+   * @param[in] do_alloc whether allocation is allowed
+   * @param[out] is_overflow if not nullptr, return whether there is an overflow
    * @return true if the idx is not in overflow state; false otherwise
    */
-  bool handle_cursor_overflow(TxCursor* cursor, bool do_alloc) const;
+  bool handle_cursor_overflow(TxCursor* cursor, bool do_alloc,
+                              bool* is_overflow = nullptr) const;
 
   /**
    * Flush tx entries

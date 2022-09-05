@@ -79,8 +79,8 @@ ssize_t TxMgr::do_write(const char* buf, size_t count) {
                                                    offset, state, ticket);
 }
 
-std::tuple<pmem::LogEntry*, pmem::LogEntryBlock*> TxMgr::get_log_entry(
-    LogEntryIdx idx, bool init_bitmap) const {
+[[nodiscard]] std::tuple<pmem::LogEntry*, pmem::LogEntryBlock*>
+TxMgr::get_log_entry(LogEntryIdx idx, bool init_bitmap) const {
   if (init_bitmap) file->set_allocated(idx.block_idx);
   pmem::LogEntryBlock* curr_block =
       &file->lidx_to_addr_rw(idx.block_idx)->log_entry_block;
@@ -173,15 +173,18 @@ pmem::TxEntry TxMgr::try_commit(pmem::TxEntry entry, TxCursor* cursor) {
 
   return cursor->try_append(entry);
 }
-bool TxMgr::advance_cursor(TxCursor* cursor, bool do_alloc) const {
+bool TxMgr::advance_cursor(TxCursor* cursor, bool do_alloc,
+                           bool* into_new_block) const {
   cursor->idx.local_idx++;
-  return handle_cursor_overflow(cursor, do_alloc);
+  return handle_cursor_overflow(cursor, do_alloc, into_new_block);
 }
 
-bool TxMgr::handle_cursor_overflow(TxCursor* cursor, bool do_alloc) const {
+bool TxMgr::handle_cursor_overflow(TxCursor* cursor, bool do_alloc,
+                                   bool* is_overflow) const {
   const bool is_inline = cursor->idx.is_inline();
   uint16_t capacity = cursor->idx.get_capacity();
   if (unlikely(cursor->idx.local_idx >= capacity)) {
+    if (is_overflow) *is_overflow = true;
     LogicalBlockIdx block_idx = is_inline ? meta->get_next_tx_block()
                                           : cursor->block->get_next_tx_block();
     if (block_idx == 0) {
@@ -196,6 +199,8 @@ bool TxMgr::handle_cursor_overflow(TxCursor* cursor, bool do_alloc) const {
       cursor->idx.local_idx -= capacity;
       cursor->block = &file->lidx_to_addr_rw(cursor->idx.block_idx)->tx_block;
     }
+  } else {
+    if (is_overflow) *is_overflow = false;
   }
   return true;
 }

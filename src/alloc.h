@@ -43,6 +43,12 @@ class Allocator {
   pmem::Block* avail_tx_block;
   LogicalBlockIdx avail_tx_block_idx;
 
+  // each thread will pin a tx block so that the garbage collector will not
+  // reclaim this block and blocks after it
+  LogicalBlockIdx pinned_tx_block_idx;
+  LogicalBlockIdx* notify_addr;
+  // TODO: a pointer to a shared memory location to publish this value
+
  public:
   Allocator(File* file, Bitmap* bitmap)
       : file(file),
@@ -52,7 +58,9 @@ class Allocator {
         curr_log_block_idx(0),
         curr_log_offset(0),
         avail_tx_block(nullptr),
-        avail_tx_block_idx(0) {}
+        avail_tx_block_idx(0),
+        pinned_tx_block_idx(0),
+        notify_addr(nullptr) {}
 
   ~Allocator() { return_free_list(); }
 
@@ -100,11 +108,25 @@ class Allocator {
   alloc_log_entry(uint32_t num_blocks);
 
   /**
+   * a log entry is discarded because reset_log_entry() is called before commit;
+   * the uncommitted entry must be (semi-)freed to prevent memory leak
+   */
+  void free_log_entry(pmem::LogEntry* first_entry, LogEntryIdx first_idx,
+                      pmem::LogEntryBlock* first_block);
+
+  /**
+   * when moving into a new tx block, reset states associated with log entry
+   * allocation so that the next time calling alloc_log_entry will allocate from
+   * a new log entry block
+   */
+  void reset_log_entry();
+
+  /**
    * Allocate a tx block
-   * @param seq the sequence number of the tx block
+   * @param tx_seq the tx sequence number of the tx block (gc_seq = 0)
    * @return a tuple of the block index and the block address
    */
-  std::tuple<LogicalBlockIdx, pmem::TxBlock*> alloc_tx_block(uint32_t seq);
+  std::tuple<LogicalBlockIdx, pmem::TxBlock*> alloc_tx_block(uint32_t tx_seq);
 
   /**
    * Free a tx block
@@ -112,6 +134,22 @@ class Allocator {
    * @param tx_block the address of the tx block to free
    */
   void free_tx_block(LogicalBlockIdx tx_block_idx, pmem::TxBlock* tx_block);
+
+  [[nodiscard]] LogicalBlockIdx get_pinned_tx_block_idx() const {
+    return pinned_tx_block_idx;
+  }
+
+  /**
+   * Update the shared memory to notify this thread has moved to a new tx block;
+   * do nothing if there is no moving
+   * @param tx_block_idx the index of the currently referenced tx block
+   */
+  void pin_tx_block(LogicalBlockIdx tx_block_idx) {
+    if (pinned_tx_block_idx == tx_block_idx) return;
+    pinned_tx_block_idx = tx_block_idx;
+    // TODO: uncomment this line after setting shared memory
+    // *notify_addr = tx_block_idx;
+  }
 };
 
 }  // namespace ulayfs::dram

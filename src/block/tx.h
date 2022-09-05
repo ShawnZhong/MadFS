@@ -49,6 +49,7 @@ class TxBlock : public noncopyable {
   // it should be fine not to use any fence since there will be fence for flush
   // gc_seq must be zero for apps; it can only be set to nonzero by gc threads
   void set_tx_seq(uint32_t tx_seq, uint32_t gc_seq = 0) {
+    assert(tx_seq > 0); // 0 is an invalid tx_seq
     this->tx_seq = tx_seq;
     this->gc_seq = gc_seq;
   }

@@ -19,6 +19,12 @@ namespace ulayfs::dram {
 struct FileState {
   TxCursor cursor;
   uint64_t file_size;
+
+  // each thread will `pin` the tx block that it is currently reading so gc
+  // won't reclaim this tx block and associated log entry block
+  [[nodiscard]] LogicalBlockIdx get_tx_block_idx() const {
+    return cursor.idx.block_idx;
+  }
 };
 static_assert(sizeof(FileState) == 24);
 
