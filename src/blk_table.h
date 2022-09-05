@@ -47,8 +47,11 @@ class BlkTable {
   std::atomic<uint64_t> version;
 
  public:
-  explicit BlkTable(MemTable* mem_table, pmem::MetaBlock* meta, TxMgr* tx_mgr)
-      : mem_table(mem_table), tx_mgr(tx_mgr), state{{{}, meta}, 0}, version(0) {
+  explicit BlkTable(MemTable* mem_table, TxMgr* tx_mgr)
+      : mem_table(mem_table),
+        tx_mgr(tx_mgr),
+        state{{{}, mem_table->get_meta()}, 0},
+        version(0) {
     table.grow_to_at_least(NUM_BLOCKS_PER_GROW);
   }
 

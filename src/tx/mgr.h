@@ -23,8 +23,11 @@ class TxMgr {
   Lock lock;  // nop lock is used by default
   OffsetMgr offset_mgr;
 
-  TxMgr(File* file, MemTable* mem_table, pmem::MetaBlock* meta)
-      : file(file), mem_table(mem_table), meta(meta), offset_mgr(this) {}
+  TxMgr(File* file, MemTable* mem_table)
+      : file(file),
+        mem_table(mem_table),
+        meta(mem_table->get_meta()),
+        offset_mgr(this) {}
 
   ssize_t do_pread(char* buf, size_t count, size_t offset);
   ssize_t do_read(char* buf, size_t count);

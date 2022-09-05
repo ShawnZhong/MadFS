@@ -36,14 +36,17 @@ class GarbageCollector;
 namespace ulayfs::dram {
 
 class File {
-  int fd;
+ public:
   BitmapMgr bitmap_mgr;
   MemTable mem_table;
-  pmem::MetaBlock* meta;
   TxMgr tx_mgr;
   BlkTable blk_table;
   ShmMgr shm_mgr;
+  pmem::MetaBlock* const meta;
+  const char* path;  // only set at debug mode
 
+ private:
+  int fd;
   const bool can_read;
   const bool can_write;
 
@@ -57,13 +60,8 @@ class File {
     char cl[CACHELINE_SIZE];
   };
 
- public:
-  // only set at debug mode
-  const char* path;
-
   // transformer will have to do many dirty and inclusive operations
   friend utility::Converter;
-  friend utility::GarbageCollector;
 
  public:
   File(int fd, const struct stat& stat, int flags, const char* pathname,
