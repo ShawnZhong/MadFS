@@ -15,7 +15,7 @@ namespace ulayfs::dram {
 class PerThreadData {
   union {
     struct {
-      bool initialized;
+      std::atomic<bool> initialized;
 
       size_t index;
 
@@ -24,35 +24,57 @@ class PerThreadData {
       uint32_t tx_block_idx;
 
       pthread_mutex_t mutex;
-    };
+    } data;
     char cl[SHM_PER_THREAD_SIZE];
   };
 
  public:
-  [[nodiscard]] bool is_initialized() const { return initialized; }
-  void initialize(size_t i) {
-    initialized = true;
-    index = i;
-    tx_block_idx = 0;
+  [[nodiscard]] bool is_initialized() const {
+    // TODO: check if the robust mutex is valid
+    return data.initialized;
+  }
+
+  /**
+   * initialize the per-thread data
+   * @param index the index of this per-thread data
+   * @return true if initialization succeeded
+   */
+  bool initialize(size_t index) {
+    bool expected = false;
+    if (!data.initialized.compare_exchange_strong(expected, true)) {
+      // TODO: check if the robust mutex is valid
+      return false;
+    }
+
+    data.index = index;
+    data.tx_block_idx = 0;
     pthread_mutexattr_t attr;
     pthread_mutexattr_init(&attr);
     pthread_mutexattr_setrobust(&attr, PTHREAD_MUTEX_ROBUST);
-    pthread_mutex_init(&mutex, &attr);
-    LOG_DEBUG("PerThreadData %ld initialized by tid %d", index, tid);
+    pthread_mutex_init(&data.mutex, &attr);
+    LOG_DEBUG("PerThreadData %ld initialized by tid %d", data.index, tid);
+    return true;
   }
+
+  /**
+   * destroy the per-thread data
+   */
   void reset() {
-    LOG_DEBUG("PerThreadData %ld reset by tid %d", index, tid);
-    pthread_mutex_destroy(&mutex);
+    LOG_DEBUG("PerThreadData %ld reset by tid %d", data.index, tid);
+    pthread_mutex_destroy(&data.mutex);
     memset(cl, 0, sizeof(cl));
   }
 
   [[nodiscard]] LogicalBlockIdx get_tx_block_idx() const {
-    return tx_block_idx;
+    return data.tx_block_idx;
   }
+
   void set_tx_block_idx(LogicalBlockIdx tx_block_idx) {
-    this->tx_block_idx = tx_block_idx.get();
+    this->data.tx_block_idx = tx_block_idx.get();
   }
 };
+
+static_assert(sizeof(PerThreadData) == SHM_PER_THREAD_SIZE);
 
 class ShmMgr {
   int fd = -1;
@@ -125,7 +147,8 @@ class ShmMgr {
     for (size_t i = 0; i < MAX_NUM_THREADS; i++) {
       PerThreadData* per_thread_data = get_per_thread_data(i);
       if (!per_thread_data->is_initialized()) {
-        per_thread_data->initialize(i);
+        bool success = per_thread_data->initialize(i);
+        if (!success) continue;
         return per_thread_data;
       }
     }
