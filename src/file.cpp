@@ -22,7 +22,7 @@ File::File(int fd, const struct stat& stat, int flags,
            const char* pathname [[maybe_unused]], bool guard)
     : mem_table(fd, stat.st_size, (flags & O_ACCMODE) == O_RDONLY),
       tx_mgr(this, &mem_table),
-      blk_table(&mem_table, &tx_mgr),
+      blk_table(&mem_table),
       shm_mgr(fd, stat),
       meta(mem_table.get_meta()),
       fd(fd),

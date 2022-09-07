@@ -5,6 +5,10 @@
 
 namespace ulayfs::dram {
 
+/**
+ * A LogCursor is a pointer to a log entry. It does not store the mem_table and
+ * needs the caller to pass it in to advance it.
+ */
 struct LogCursor {
   LogEntryIdx idx;
   pmem::LogEntryBlock* block;
