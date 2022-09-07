@@ -68,8 +68,8 @@ void test(TestOpt test_opt) {
 int main() {
   srand(0);  // NOLINT(cert-msc51-cpp)
 
-  //  test({1, 1'000'000, false});
-  //  test({BLOCK_SIZE * 64, 1'000'000, false});
+  //  test({1, 1'000'000});
+  //  test({BLOCK_SIZE * 64, 1'000'000});
   test({.num_bytes_per_iter = BLOCK_SIZE,
         .num_iter = NUM_INLINE_TX_ENTRY + NUM_TX_ENTRY_PER_BLOCK + 1,
         .print = true,

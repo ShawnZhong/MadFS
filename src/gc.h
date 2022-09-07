@@ -138,6 +138,7 @@ class GarbageCollector {
         auto commit_entry = pmem::TxEntryIndirect(log_head_idx);
         new_cursor.block->store(commit_entry, new_cursor.idx.local_idx);
       }
+      pmem::persist_unfenced(new_cursor.block, BLOCK_SIZE);
     }
 
     // pad the last block with dummy tx entries
@@ -146,6 +147,7 @@ class GarbageCollector {
                               new_cursor.idx.local_idx);
     // last block points to the tail, meta points to the first block
     new_cursor.block->try_set_next_tx_block(old_cursor.idx.block_idx);
+    pmem::persist_unfenced(new_cursor.block, BLOCK_SIZE);
     // abort if new transaction history is longer than the old one
     auto tail_block = file->mem_table.lidx_to_addr_rw(old_cursor.idx.block_idx);
     if (tail_block->tx_block.get_tx_seq() <= new_cursor.block->get_tx_seq()) {
