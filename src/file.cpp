@@ -23,6 +23,7 @@ File::File(int fd, const struct stat& stat, int flags,
     : mem_table(fd, stat.st_size, (flags & O_ACCMODE) == O_RDONLY),
       tx_mgr(this, &mem_table),
       blk_table(&mem_table, &tx_mgr),
+      shm_mgr(fd, stat),
       meta(mem_table.get_meta()),
       fd(fd),
       can_read((flags & O_ACCMODE) == O_RDONLY ||
@@ -41,7 +42,7 @@ File::File(int fd, const struct stat& stat, int flags,
 
   // only open shared memory if we may write
   if (can_write) {
-    bitmap_mgr.entries = static_cast<BitmapEntry*>(shm_mgr.init(fd, stat));
+    bitmap_mgr.entries = static_cast<BitmapEntry*>(shm_mgr.get_bitmap_addr());
 
     // The first bit corresponds to the meta block which should always be set
     // to 1. If it is not, then bitmap needs to be initialized.
@@ -244,7 +245,8 @@ Allocator* File::get_local_allocator() {
 
   auto [it, ok] = allocators.emplace(
       std::piecewise_construct, std::forward_as_tuple(tid),
-      std::forward_as_tuple(&mem_table, &bitmap_mgr, &shm_mgr));
+      std::forward_as_tuple(&mem_table, &bitmap_mgr,
+                            shm_mgr.alloc_per_thread_data()));
   PANIC_IF(!ok, "insert to thread-local allocators failed");
   return &it->second;
 }

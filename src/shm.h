@@ -1,5 +1,6 @@
 #pragma once
 
+#include <pthread.h>
 #include <sys/xattr.h>
 
 #include <ostream>
@@ -11,40 +12,74 @@
 
 namespace ulayfs::dram {
 
-struct PerThreadData {
+class PerThreadData {
   union {
     struct {
+      bool initialized;
+
+      size_t index;
+
+      // each thread will pin a tx block so that the garbage collector will not
+      // reclaim this block and blocks after it
       uint32_t tx_block_idx;
+
+      pthread_mutex_t mutex;
     };
     char cl[SHM_PER_THREAD_SIZE];
   };
 
  public:
-  [[nodiscard]] bool is_empty() const { return tx_block_idx == 0; }
-  void clear() { memset(cl, 0, sizeof(cl)); }
+  [[nodiscard]] bool is_initialized() const { return initialized; }
+  void initialize(size_t i) {
+    initialized = true;
+    index = i;
+    tx_block_idx = 0;
+    pthread_mutexattr_t attr;
+    pthread_mutexattr_init(&attr);
+    pthread_mutexattr_setrobust(&attr, PTHREAD_MUTEX_ROBUST);
+    pthread_mutex_init(&mutex, &attr);
+    LOG_DEBUG("PerThreadData %ld initialized by tid %d", index, tid);
+  }
+  void reset() {
+    LOG_DEBUG("PerThreadData %ld reset by tid %d", index, tid);
+    pthread_mutex_destroy(&mutex);
+    memset(cl, 0, sizeof(cl));
+  }
+
+  [[nodiscard]] LogicalBlockIdx get_tx_block_idx() const {
+    return tx_block_idx;
+  }
+  void set_tx_block_idx(LogicalBlockIdx tx_block_idx) {
+    this->tx_block_idx = tx_block_idx.get();
+  }
 };
 
 class ShmMgr {
   int fd = -1;
   void* addr = nullptr;
-  char path[SHM_PATH_LEN];
+  char path[SHM_PATH_LEN]{};
 
  public:
-  ~ShmMgr() {
-    if (fd >= 0) posix::close(fd);
-    if (addr != nullptr) posix::munmap(addr, SHM_SIZE);
-  }
-
   /**
    * Open and memory map the shared memory. If the shared memory does not exist,
    * create it.
    *
    * @param file_fd the file descriptor of the file that uses this shared memory
    * @param stat the stat of the file that uses this shared memory
-   * @return the starting address of the shared memory
    */
-  void* init(int file_fd, const struct stat& stat) {
-    init_shm_path(file_fd, stat, path);
+  ShmMgr(int file_fd, const struct stat& stat) {
+    // get or set the path of the shared memory
+    {
+      ssize_t rc = fgetxattr(file_fd, SHM_XATTR_NAME, path, SHM_PATH_LEN);
+      if (rc == -1 && errno == ENODATA) {  // no shm_path attribute, create one
+        sprintf(path, "/dev/shm/ulayfs_%016lx_%013lx", stat.st_ino,
+                (stat.st_ctim.tv_sec * 1000000000 + stat.st_ctim.tv_nsec) >> 3);
+        rc = fsetxattr(file_fd, SHM_XATTR_NAME, path, SHM_PATH_LEN, 0);
+        PANIC_IF(rc == -1, "failed to set shm_path attribute");
+      } else if (rc == -1) {
+        PANIC("failed to get shm_path attribute");
+      }
+    }
 
     // use posix::open instead of shm_open since shm_open calls open, which is
     // overloaded by ulayfs
@@ -60,20 +95,38 @@ class ShmMgr {
       posix::close(fd);
       PANIC("mmap shared memory failed");
     }
-
-    return addr;
   }
 
+  ~ShmMgr() {
+    if (fd >= 0) posix::close(fd);
+    if (addr != nullptr) posix::munmap(addr, SHM_SIZE);
+  }
+
+  [[nodiscard]] void* get_bitmap_addr() const { return addr; }
+
+  /**
+   * Get the address of the per-thread data of the current thread.
+   * Shall only be called by the garbage collector.
+   *
+   * @param idx the index of the per-thread data
+   * @return the address of the per-thread data
+   */
   [[nodiscard]] PerThreadData* get_per_thread_data(size_t idx) const {
     assert(idx < MAX_NUM_THREADS);
     char* starting_addr = static_cast<char*>(addr) + TOTAL_NUM_BITMAP_BYTES;
     return reinterpret_cast<PerThreadData*>(starting_addr) + idx;
   }
 
-  [[nodiscard]] size_t get_next_shm_thread_idx() const {
+  /**
+   * Allocate a new per-thread data for the current thread.
+   * @return the address of the per-thread data
+   */
+  [[nodiscard]] PerThreadData* alloc_per_thread_data() const {
     for (size_t i = 0; i < MAX_NUM_THREADS; i++) {
-      if (get_per_thread_data(i)->is_empty()) {
-        return i;
+      PerThreadData* per_thread_data = get_per_thread_data(i);
+      if (!per_thread_data->is_initialized()) {
+        per_thread_data->initialize(i);
+        return per_thread_data;
       }
     }
     PANIC("No empty per-thread data");
@@ -83,28 +136,7 @@ class ShmMgr {
    * Remove the shared memory object associated.
    */
   void unlink() const { unlink_by_shm_path(path); }
-
-  /**
-   * Initialize the path of the shared memory object. Read from the xattr of the
-   * file if it exists. Otherwise, generate a new path and set to the xattr.
-   *
-   * @param[in] file_fd the file descriptor of the file that uses this shared
-   * memory
-   * @param[in] stat the stat of the file that uses this shared memory
-   * @param[out] path the returned path of the shared memory object
-   */
-  static void init_shm_path(int file_fd, const struct stat& stat, char* path) {
-    ssize_t rc = fgetxattr(file_fd, SHM_XATTR_NAME, path, SHM_PATH_LEN);
-    if (rc == -1 && errno == ENODATA) {  // no shm_path attribute, create one
-      sprintf(path, "/dev/shm/ulayfs_%016lx_%013lx", stat.st_ino,
-              (stat.st_ctim.tv_sec * 1000000000 + stat.st_ctim.tv_nsec) >> 3);
-      rc = fsetxattr(file_fd, SHM_XATTR_NAME, path, SHM_PATH_LEN, 0);
-      PANIC_IF(rc == -1, "failed to set shm_path attribute");
-    } else if (rc == -1) {
-      PANIC("failed to get shm_path attribute");
-    }
-  }
-
+  
   /**
    * Create a shared memory object.
    *
@@ -187,9 +219,9 @@ class ShmMgr {
        << "\taddr = " << mgr.addr << "\n"
        << "\tpath = " << mgr.path << "\n";
     for (size_t i = 0; i < MAX_NUM_THREADS; ++i) {
-      if (!mgr.get_per_thread_data(i)->is_empty()) {
+      if (mgr.get_per_thread_data(i)->is_initialized()) {
         os << "\tthread " << i << ": tail_tx_block_idx = "
-           << mgr.get_per_thread_data(i)->tx_block_idx << "\n";
+           << mgr.get_per_thread_data(i)->get_tx_block_idx() << "\n";
       }
     }
     return os;
