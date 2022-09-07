@@ -136,7 +136,7 @@ class ShmMgr {
    * Remove the shared memory object associated.
    */
   void unlink() const { unlink_by_shm_path(path); }
-  
+
   /**
    * Create a shared memory object.
    *
