@@ -85,8 +85,8 @@ ssize_t TxMgr::do_write(const char* buf, size_t count) {
   }
 }
 
-std::tuple<pmem::LogEntry*, pmem::LogEntryBlock*> TxMgr::get_log_entry(
-    LogEntryIdx idx, BitmapMgr* bitmap_mgr) const {
+[[nodiscard]] std::tuple<pmem::LogEntry*, pmem::LogEntryBlock*>
+TxMgr::get_log_entry(LogEntryIdx idx, BitmapMgr* bitmap_mgr) const {
   if (bitmap_mgr) bitmap_mgr->set_allocated(idx.block_idx);
   pmem::LogEntryBlock* curr_block =
       &mem_table->lidx_to_addr_rw(idx.block_idx)->log_entry_block;

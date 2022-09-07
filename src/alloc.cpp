@@ -201,12 +201,47 @@ Allocator::alloc_log_entry(uint32_t num_blocks) {
   }
 }
 
+// return log entry blocks that are exclusively taken by this log entry; if
+// there is other log entries on this block, leave this block alone
+void Allocator::free_log_entry(pmem::LogEntry* first_entry,
+                               LogEntryIdx first_idx,
+                               pmem::LogEntryBlock* first_block) {
+  pmem::LogEntry* curr_entry = first_entry;
+  pmem::LogEntryBlock* curr_block = first_block;
+  LogicalBlockIdx curr_block_idx = first_idx.block_idx;
+
+  // NOTE: we assume free() will always keep the block in the local free list
+  //       instead of publishing it immediately. this makes it safe to read the
+  //       log entry block even after calling free()
+
+  // do we need to free the first le block? no if there is other le ahead
+  if (first_idx.local_offset == 0) free(curr_block_idx);
+
+  while (curr_entry->has_next) {
+    if (curr_entry->is_next_same_block) {
+      curr_entry = curr_block->get(curr_entry->next.local_offset);
+    } else {
+      curr_block_idx = curr_entry->next.block_idx;
+      curr_block = &mem_table->lidx_to_addr_rw(curr_block_idx)->log_entry_block;
+      curr_entry = curr_block->get(0);
+      free(curr_block_idx);
+    }
+  }
+}
+
+void Allocator::reset_log_entry() {
+  // this is to trigger new log entry block allocation
+  curr_log_block_idx = 0;
+  // technically, setting curr_log_block and curr_log_offset are unnecessary
+  // because they are guarded by setting curr_log_block_idx zero
+}
+
 std::tuple<LogicalBlockIdx, pmem::TxBlock*> Allocator::alloc_tx_block(
-    uint32_t seq) {
+    uint32_t tx_seq) {
   if (avail_tx_block) {
     pmem::Block* tx_block = avail_tx_block;
     avail_tx_block = nullptr;
-    tx_block->tx_block.set_tx_seq(seq);
+    tx_block->tx_block.set_tx_seq(tx_seq);
     pmem::persist_cl_fenced(&tx_block->cache_lines[NUM_CL_PER_BLOCK - 1]);
     return {avail_tx_block_idx, &tx_block->tx_block};
   }
@@ -214,7 +249,7 @@ std::tuple<LogicalBlockIdx, pmem::TxBlock*> Allocator::alloc_tx_block(
   LogicalBlockIdx new_block_idx = alloc(1);
   pmem::Block* tx_block = mem_table->lidx_to_addr_rw(new_block_idx);
   memset(&tx_block->cache_lines[NUM_CL_PER_BLOCK - 1], 0, CACHELINE_SIZE);
-  tx_block->tx_block.set_tx_seq(seq);
+  tx_block->tx_block.set_tx_seq(tx_seq);
   pmem::persist_cl_unfenced(&tx_block->cache_lines[NUM_CL_PER_BLOCK - 1]);
   tx_block->zero_init(0, NUM_CL_PER_BLOCK - 1);
   return {new_block_idx, &tx_block->tx_block};
