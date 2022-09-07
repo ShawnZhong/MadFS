@@ -31,13 +31,13 @@ class AlignedTx : public WriteTx {
       fence();
     }
 
-    LogicalBlockIdx pinned_tx_block_idx = allocator->get_pinned_tx_block_idx();
+    LogicalBlockIdx pinned_tx_block_idx = allocator->tx_block.get_pinned_idx();
     if (pinned_tx_block_idx == 0) {  // no tx_block is pinned yet
       // this should trigger a shared memory slot allocation
       // because we will start the first log replay, we will need to read the
       // whole tx history, so gc threads must not reclaim any blocks before we
       // are done
-      allocator->pin_tx_block(0);
+      allocator->tx_block.pin(0);
     }
 
     {
@@ -46,7 +46,7 @@ class AlignedTx : public WriteTx {
     }
 
     if (pinned_tx_block_idx != state.get_tx_block_idx())
-      allocator->reset_log_entry();
+      allocator->log_entry.reset();
 
     {
       TimerGuard<Event::ALIGNED_TX_PREPARE> timer_guard;
@@ -86,8 +86,8 @@ class AlignedTx : public WriteTx {
           LogEntryIdx first_idx =
               commit_entry.indirect_entry.get_log_entry_idx();
           auto [first_entry, first_block] = tx_mgr->get_log_entry(first_idx);
-          allocator->free_log_entry(first_entry, first_idx, first_block);
-          allocator->reset_log_entry();
+          allocator->log_entry.free(first_entry, first_idx, first_block);
+          allocator->log_entry.reset();
           // re-prepare (incl. append new log entries)
           prepare_commit_entry(/*skip_update_leftover_bytes*/ true);
         }
@@ -102,11 +102,11 @@ class AlignedTx : public WriteTx {
     {
       TimerGuard<Event::ALIGNED_TX_FREE> timer_guard;
       // recycle the data blocks being overwritten
-      allocator->free(recycle_image);
+      allocator->block.free(recycle_image);
     }
 
     // update the pinned tx block
-    allocator->pin_tx_block(state.get_tx_block_idx());
+    allocator->tx_block.pin(state.get_tx_block_idx());
 
     timer.stop<Event::ALIGNED_TX_EXEC>();
 

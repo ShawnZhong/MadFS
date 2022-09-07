@@ -5,7 +5,7 @@
 #include <ostream>
 #include <vector>
 
-#include "alloc.h"
+#include "alloc/alloc.h"
 #include "block/block.h"
 #include "entry.h"
 #include "idx.h"

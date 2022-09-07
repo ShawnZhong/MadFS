@@ -9,7 +9,7 @@
 #include <cstring>
 #include <iomanip>
 
-#include "alloc.h"
+#include "alloc/alloc.h"
 #include "config.h"
 #include "idx.h"
 #include "shm.h"
@@ -242,10 +242,9 @@ Allocator* File::get_local_allocator() {
     return &it->second;
   }
 
-  size_t shm_thread_idx = shm_mgr.get_next_shm_thread_idx();
-
   auto [it, ok] = allocators.emplace(
-      tid, Allocator(&mem_table, &bitmap_mgr, &shm_mgr, shm_thread_idx));
+      std::piecewise_construct, std::forward_as_tuple(tid),
+      std::forward_as_tuple(&mem_table, &bitmap_mgr, &shm_mgr));
   PANIC_IF(!ok, "insert to thread-local allocators failed");
   return &it->second;
 }

@@ -5,7 +5,7 @@
 #include <cstddef>
 #include <vector>
 
-#include "alloc.h"
+#include "alloc/alloc.h"
 #include "const.h"
 #include "entry.h"
 #include "file.h"
@@ -118,7 +118,7 @@ LogEntryIdx TxMgr::append_log_entry(
     uint32_t num_blocks, VirtualBlockIdx begin_vidx,
     const std::vector<LogicalBlockIdx>& begin_lidxs) const {
   const auto& [first_entry, first_idx, first_block] =
-      allocator->alloc_log_entry(num_blocks);
+      allocator->log_entry.alloc(num_blocks);
 
   pmem::LogEntry* curr_entry = first_entry;
   pmem::LogEntryBlock* curr_block = first_block;

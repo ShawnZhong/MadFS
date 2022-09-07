@@ -1,6 +1,6 @@
 #include <cstring>
 
-#include "alloc.h"
+#include "alloc/alloc.h"
 #include "bitmap.h"
 #include "block/block.h"
 #include "const.h"
@@ -64,7 +64,7 @@ class Converter {
     // allocator when preparing log entries
     dram::File* file = new dram::File(fd, stat_buf, O_RDWR, pathname, false);
     dram::Allocator* allocator = file->get_local_allocator();
-    allocator->return_free_list();
+    allocator->block.return_free_list();
     uint32_t num_bitmaps_full =
         (num_blocks + 1) >> BITMAP_ENTRY_BLOCKS_CAPACITY_SHIFT;
     uint32_t num_bits_left = (num_blocks + 1) % BITMAP_ENTRY_BLOCKS_CAPACITY;
