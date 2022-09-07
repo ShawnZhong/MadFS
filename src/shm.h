@@ -68,7 +68,7 @@ class PerThreadData {
   [[nodiscard]] LogicalBlockIdx get_tx_block_idx() const {
     return data.tx_block_idx;
   }
-  
+
   void set_tx_block_idx(LogicalBlockIdx tx_block_idx) {
     this->data.tx_block_idx = tx_block_idx.get();
   }
