@@ -17,6 +17,7 @@ class WriteTx : public Tx {
 
   // the tx entry to be committed (may or may not inline)
   pmem::TxEntry commit_entry;
+  LogCursor log_cursor;
   uint16_t leftover_bytes;
 
   WriteTx(File* file, TxMgr* tx_mgr, const char* buf, size_t count,
@@ -79,14 +80,14 @@ class WriteTx : public Tx {
       commit_entry = pmem::TxEntryInline(num_blocks, begin_vidx, dst_lidxs[0]);
     } else {
       // it's fine that we append log first as long we don't publish it by tx
-      auto log_entry_idx = tx_mgr->append_log_entry(
+      log_cursor = tx_mgr->append_log_entry(
           allocator, pmem::LogEntry::Op::LOG_OVERWRITE,  // op
           leftover_bytes,                                // leftover_bytes
           num_blocks,                                    // total_blocks
           begin_vidx,                                    // begin_virtual_idx
           dst_lidxs                                      // begin_logical_idxs
       );
-      commit_entry = pmem::TxEntryIndirect(log_entry_idx);
+      commit_entry = pmem::TxEntryIndirect(log_cursor.idx);
     }
   }
 
@@ -104,8 +105,7 @@ class WriteTx : public Tx {
       // the previously allocated log entries should be recycled, but for now,
       // we just leave them there waiting for gc.
     }
-    auto log_entry_idx = commit_entry.indirect_entry.get_log_entry_idx();
-    tx_mgr->update_log_entry_leftover_bytes(log_entry_idx, leftover_bytes);
+    log_cursor.update_leftover_bytes(tx_mgr->mem_table, leftover_bytes);
   }
 };
 }  // namespace ulayfs::dram

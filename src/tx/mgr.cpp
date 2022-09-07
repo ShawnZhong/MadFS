@@ -85,88 +85,34 @@ ssize_t TxMgr::do_write(const char* buf, size_t count) {
   }
 }
 
-[[nodiscard]] std::tuple<pmem::LogEntry*, pmem::LogEntryBlock*>
-TxMgr::get_log_entry(LogEntryIdx idx, BitmapMgr* bitmap_mgr) const {
-  if (bitmap_mgr) bitmap_mgr->set_allocated(idx.block_idx);
-  pmem::LogEntryBlock* curr_block =
-      &mem_table->lidx_to_addr_rw(idx.block_idx)->log_entry_block;
-  return {curr_block->get(idx.local_offset), curr_block};
-}
-
-[[nodiscard]] std::tuple<pmem::LogEntry*, pmem::LogEntryBlock*>
-TxMgr::get_next_log_entry(const pmem::LogEntry* curr_entry,
-                          pmem::LogEntryBlock* curr_block,
-                          BitmapMgr* bitmap_mgr) const {
-  // check if we are at the end of the linked list
-  if (!curr_entry->has_next) return {nullptr, nullptr};
-
-  // next entry is in the same block
-  if (curr_entry->is_next_same_block)
-    return {curr_block->get(curr_entry->next.local_offset), curr_block};
-
-  // move to the next block
-  LogicalBlockIdx next_block_idx = curr_entry->next.block_idx;
-  if (bitmap_mgr) bitmap_mgr->set_allocated(next_block_idx);
-  const auto next_block =
-      &mem_table->lidx_to_addr_rw(next_block_idx)->log_entry_block;
-  // if the next entry is on another block, it must be from the first byte
-  return {next_block->get(0), next_block};
-}
-
-LogEntryIdx TxMgr::append_log_entry(
+LogCursor TxMgr::append_log_entry(
     Allocator* allocator, pmem::LogEntry::Op op, uint16_t leftover_bytes,
     uint32_t num_blocks, VirtualBlockIdx begin_vidx,
     const std::vector<LogicalBlockIdx>& begin_lidxs) const {
-  const auto& [first_entry, first_idx, first_block] =
-      allocator->log_entry.alloc(num_blocks);
-
-  pmem::LogEntry* curr_entry = first_entry;
-  pmem::LogEntryBlock* curr_block = first_block;
+  LogCursor log_cursor = allocator->log_entry.alloc(num_blocks);
 
   // i to iterate through begin_lidxs across entries
   // j to iterate within each entry
   uint32_t i, j;
   i = 0;
   while (true) {
-    curr_entry->op = op;
-    curr_entry->begin_vidx = begin_vidx;
-    for (j = 0; j < curr_entry->get_lidxs_len(); ++j)
-      curr_entry->begin_lidxs[j] = begin_lidxs[i + j];
-    const auto& [next_entry, next_block] =
-        get_next_log_entry(curr_entry, curr_block);
-    if (next_entry != nullptr) {
-      curr_entry->leftover_bytes = 0;
-      curr_entry->persist();
-      curr_entry = next_entry;
-      curr_block = next_block;
+    log_cursor->op = op;
+    log_cursor->begin_vidx = begin_vidx;
+    for (j = 0; j < log_cursor->get_lidxs_len(); ++j)
+      log_cursor->begin_lidxs[j] = begin_lidxs[i + j];
+    if (log_cursor->has_next) {
+      log_cursor->leftover_bytes = 0;
+      log_cursor->persist();
       i += j;
       begin_vidx += (j << BITMAP_ENTRY_BLOCKS_CAPACITY_SHIFT);
+      log_cursor.advance(mem_table);
     } else {  // last entry
-      curr_entry->leftover_bytes = leftover_bytes;
-      curr_entry->persist();
+      log_cursor->leftover_bytes = leftover_bytes;
+      log_cursor->persist();
       break;
     }
   }
-  return first_idx;
-}
-
-void TxMgr::update_log_entry_leftover_bytes(LogEntryIdx first_idx,
-                                            uint16_t leftover_bytes) const {
-  const auto& [first_entry, first_block] = get_log_entry(first_idx);
-  pmem::LogEntry* curr_entry = first_entry;
-  pmem::LogEntryBlock* curr_block = first_block;
-  while (true) {
-    const auto& [next_entry, next_block] =
-        get_next_log_entry(curr_entry, curr_block);
-    if (next_entry != nullptr) {
-      curr_entry = next_entry;
-      curr_block = next_block;
-    } else {
-      curr_entry->leftover_bytes = leftover_bytes;
-      curr_entry->persist();
-      break;
-    }
-  }
+  return log_cursor;
 }
 
 pmem::TxEntry TxMgr::try_commit(pmem::TxEntry entry, TxCursor* cursor) const {
@@ -202,18 +148,10 @@ std::ostream& operator<<(std::ostream& out, const TxMgr& tx_mgr) {
 
     // print log entries if the tx is not inlined
     if (!tx_entry.is_inline()) {
-      auto [curr_entry, curr_block] =
-          tx_mgr.get_log_entry(tx_entry.indirect_entry.get_log_entry_idx());
-      assert(curr_entry && curr_block);
-
-      while (true) {
-        out << "\t\t" << *curr_entry << "\n";
-        const auto& [next_entry, next_block] =
-            tx_mgr.get_next_log_entry(curr_entry, curr_block);
-        if (!next_entry) break;
-        curr_entry = next_entry;
-        curr_block = next_block;
-      }
+      LogCursor log_cursor(tx_entry.indirect_entry, tx_mgr.mem_table);
+      do {
+        out << "\t\t" << *log_cursor << "\n";
+      } while (log_cursor.advance(tx_mgr.mem_table));
     }
 
   next:

@@ -1,6 +1,7 @@
 #pragma once
 
 #include "alloc/block.h"
+#include "tx/log_cursor.h"
 
 namespace ulayfs::dram {
 
@@ -22,13 +23,9 @@ class LogEntryAllocator {
    * length
    *
    * @param num_blocks how long this mapping should be
-   * @return a tuple containing
-   *    1. the head of the linked list,
-   *    2. the log entry index of the head of the linked list, and
-   *    3. the log entry block where the head locates
+   * @return a log cursor pointing to the first log entry
    */
-  std::tuple<pmem::LogEntry*, LogEntryIdx, pmem::LogEntryBlock*> alloc(
-      uint32_t num_blocks) {
+  LogCursor alloc(uint32_t num_blocks) {
     // for a log entry with only one logical block index, it takes 16 bytes
     // if smaller than that, do not try to allocate log entry there
     constexpr uint32_t min_required_size =
@@ -59,7 +56,7 @@ class LogEntryAllocator {
         curr_entry->has_next = false;
         curr_entry->num_blocks = num_blocks;
         curr_log_offset += needed_lidxs_cnt * sizeof(LogicalBlockIdx);
-        return {first_entry, first_idx, first_block};
+        return {first_idx, first_block, first_entry};
       }
 
       curr_entry->has_next = true;
@@ -92,18 +89,17 @@ class LogEntryAllocator {
    * return log entry blocks that are exclusively taken by this log entry; if
    * there is other log entries on this block, leave this block alone
    */
-  void free(pmem::LogEntry* first_entry, LogEntryIdx first_idx,
-            pmem::LogEntryBlock* first_block) {
-    pmem::LogEntry* curr_entry = first_entry;
-    pmem::LogEntryBlock* curr_block = first_block;
-    LogicalBlockIdx curr_block_idx = first_idx.block_idx;
+  void free(const LogCursor& log_cursor) {
+    pmem::LogEntry* curr_entry = log_cursor.entry;
+    pmem::LogEntryBlock* curr_block = log_cursor.block;
+    LogicalBlockIdx curr_block_idx = log_cursor.idx.block_idx;
 
     // NOTE: we assume free() will always keep the block in the local free list
     //       instead of publishing it immediately. this makes it safe to read
     //       the log entry block even after calling free()
 
     // do we need to free the first le block? no if there is other le ahead
-    if (first_idx.local_offset == 0) block_allocator->free(curr_block_idx);
+    if (log_cursor.idx.local_offset == 0) block_allocator->free(curr_block_idx);
 
     while (curr_entry->has_next) {
       if (curr_entry->is_next_same_block) {
