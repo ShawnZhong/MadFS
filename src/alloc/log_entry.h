@@ -56,7 +56,7 @@ class LogEntryAllocator {
         curr_entry->has_next = false;
         curr_entry->num_blocks = num_blocks;
         curr_log_offset += needed_lidxs_cnt * sizeof(LogicalBlockIdx);
-        return {first_idx, first_block, first_entry};
+        return {first_idx, first_block};
       }
 
       curr_entry->has_next = true;
@@ -90,7 +90,7 @@ class LogEntryAllocator {
    * there is other log entries on this block, leave this block alone
    */
   void free(const LogCursor& log_cursor) {
-    pmem::LogEntry* curr_entry = log_cursor.entry;
+    pmem::LogEntry* curr_entry = log_cursor.entry();
     pmem::LogEntryBlock* curr_block = log_cursor.block;
     LogicalBlockIdx curr_block_idx = log_cursor.idx.block_idx;
 
