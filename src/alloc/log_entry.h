@@ -36,8 +36,6 @@ class LogEntryAllocator {
     if (curr_log_block_idx == 0 ||
         BLOCK_SIZE - curr_log_offset < min_required_size) {
       // no enough space left, do block allocation
-      LOG_WARN("log entry block exhausted, allocating new one: %p",
-               block_allocator);
       curr_log_block_idx = block_allocator->alloc(1);
       curr_log_block =
           &mem_table->lidx_to_addr_rw(curr_log_block_idx)->log_entry_block;

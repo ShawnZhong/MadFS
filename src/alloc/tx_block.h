@@ -8,8 +8,7 @@ namespace ulayfs::dram {
 class TxBlockAllocator {
   BlockAllocator* block_allocator;
   MemTable* mem_table;
-  ShmMgr* shm_mgr;
-  size_t shm_thread_idx;
+  PerThreadData* per_thread_data;
 
   // a tx block may be allocated but unused when another thread does that first
   // this tx block will then be saved here for future use
@@ -17,21 +16,20 @@ class TxBlockAllocator {
   pmem::Block* avail_tx_block{nullptr};
   LogicalBlockIdx avail_tx_block_idx{0};
 
-  // each thread will pin a tx block so that the garbage collector will not
-  // reclaim this block and blocks after it
-  LogicalBlockIdx pinned_tx_block_idx{0};
-  LogicalBlockIdx* notify_addr{nullptr};
-
  public:
   TxBlockAllocator(BlockAllocator* block_allocator, MemTable* mem_table,
-                   ShmMgr* shm_mgr)
+                   PerThreadData* per_thread_data)
       : block_allocator(block_allocator),
         mem_table(mem_table),
-        shm_mgr(shm_mgr),
-        shm_thread_idx(shm_mgr->get_next_shm_thread_idx()) {}
+        per_thread_data(per_thread_data) {}
+
+  ~TxBlockAllocator() {
+    if (avail_tx_block) block_allocator->free(avail_tx_block_idx);
+    per_thread_data->reset();
+  }
 
   [[nodiscard]] LogicalBlockIdx get_pinned_idx() const {
-    return pinned_tx_block_idx;
+    return per_thread_data->get_tx_block_idx();
   }
 
   /**
@@ -44,15 +42,7 @@ class TxBlockAllocator {
    * thread performing the initial log replaying and do not reclaim any blocks.
    */
   void pin(LogicalBlockIdx tx_block_idx) {
-    //    if (!notify_addr) {
-    //      assert(tx_block_idx == 0);
-    //      // TODO: allocate from shared memory!
-    //      return;
-    //    }
-    //    if (pinned_tx_block_idx == tx_block_idx) return;
-    pinned_tx_block_idx = tx_block_idx;
-    // TODO: uncomment this line after setting shared memory
-    // *notify_addr = tx_block_idx;
+    per_thread_data->set_tx_block_idx(tx_block_idx);
   }
 
   /**
@@ -70,9 +60,6 @@ class TxBlockAllocator {
       new_block_idx = block->get_next_tx_block();
       new_block = &mem_table->lidx_to_addr_rw(new_block_idx)->tx_block;
     }
-
-    shm_mgr->get_per_thread_data(shm_thread_idx)->tx_block_idx =
-        new_block_idx.get();
 
     return {new_block_idx, new_block};
   }
