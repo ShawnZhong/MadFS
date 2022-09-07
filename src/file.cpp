@@ -148,7 +148,7 @@ off_t File::lseek(off_t offset, int whence) {
 }
 
 void* File::mmap(void* addr_hint, size_t length, int prot, int mmap_flags,
-                 size_t offset) {
+                 size_t offset) const {
   if (offset % BLOCK_SIZE != 0) {
     errno = EINVAL;
     return MAP_FAILED;

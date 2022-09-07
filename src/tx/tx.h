@@ -1,6 +1,7 @@
 #pragma once
 
 #include "file.h"
+#include "log_cursor.h"
 #include "mgr.h"
 #include "timer.h"
 
@@ -118,39 +119,33 @@ class Tx {
         if (possible_file_size > state.file_size)
           state.file_size = possible_file_size;
       } else {  // non-inline tx entry
-        auto [curr_le_entry, curr_le_block] = tx_mgr->get_log_entry(
-            curr_entry.indirect_entry.get_log_entry_idx());
+        LogCursor log_cursor(curr_entry.indirect_entry, tx_mgr->mem_table);
 
-        while (true) {
+        do {
           uint32_t i;
-          for (i = 0; i < curr_le_entry->get_lidxs_len() - 1; ++i) {
+          for (i = 0; i < log_cursor->get_lidxs_len() - 1; ++i) {
             has_conflict |= get_conflict_image(
                 first_vidx, last_vidx,
-                curr_le_entry->begin_vidx +
+                log_cursor->begin_vidx +
                     (i << BITMAP_ENTRY_BLOCKS_CAPACITY_SHIFT),
-                curr_le_entry->begin_lidxs[i], BITMAP_ENTRY_BLOCKS_CAPACITY,
+                log_cursor->begin_lidxs[i], BITMAP_ENTRY_BLOCKS_CAPACITY,
                 conflict_image);
           }
           has_conflict |= get_conflict_image(
               first_vidx, last_vidx,
-              curr_le_entry->begin_vidx +
+              log_cursor->begin_vidx +
                   (i << BITMAP_ENTRY_BLOCKS_CAPACITY_SHIFT),
-              curr_le_entry->begin_lidxs[i],
-              curr_le_entry->get_last_lidx_num_blocks(), conflict_image);
-          VirtualBlockIdx end_vidx = curr_le_entry->begin_vidx +
+              log_cursor->begin_lidxs[i],
+              log_cursor->get_last_lidx_num_blocks(), conflict_image);
+          VirtualBlockIdx end_vidx = log_cursor->begin_vidx +
                                      (i << BITMAP_ENTRY_BLOCKS_CAPACITY_SHIFT) +
-                                     curr_le_entry->get_last_lidx_num_blocks();
+                                     log_cursor->get_last_lidx_num_blocks();
           uint64_t possible_file_size =
-              BLOCK_IDX_TO_SIZE(end_vidx) - curr_le_entry->leftover_bytes;
+              BLOCK_IDX_TO_SIZE(end_vidx) - log_cursor->leftover_bytes;
           if (possible_file_size > state.file_size)
             state.file_size = possible_file_size;
-
-          const auto& [next_le_entry, next_le_block] =
-              tx_mgr->get_next_log_entry(curr_le_entry, curr_le_block);
-          if (next_le_entry == nullptr) break;
-          curr_le_entry = next_le_entry;
-          curr_le_block = next_le_block;
-        }
+          
+        } while (log_cursor.advance(tx_mgr->mem_table));
       }
       // only update into_new_block if it is not nullptr and not set true yet
       if (!state.cursor.advance(

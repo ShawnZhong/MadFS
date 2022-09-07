@@ -114,9 +114,7 @@ class SingleBlockTx : public CoWTx {
                           commit_entry.is_inline() ? nullptr : &into_new_block);
       if (into_new_block) {
         assert(!commit_entry.is_inline());
-        LogEntryIdx first_idx = commit_entry.indirect_entry.get_log_entry_idx();
-        auto [first_entry, first_block] = tx_mgr->get_log_entry(first_idx);
-        allocator->log_entry.free(first_entry, first_idx, first_block);
+        allocator->log_entry.free(log_cursor);
         allocator->log_entry.reset();
         // re-prepare (incl. append new log entries)
         prepare_commit_entry();
@@ -281,9 +279,7 @@ class MultiBlockTx : public CoWTx {
           commit_entry.is_inline() ? nullptr : &into_new_block);
       if (into_new_block) {
         assert(!commit_entry.is_inline());
-        LogEntryIdx first_idx = commit_entry.indirect_entry.get_log_entry_idx();
-        auto [first_entry, first_block] = tx_mgr->get_log_entry(first_idx);
-        allocator->log_entry.free(first_entry, first_idx, first_block);
+        allocator->log_entry.free(log_cursor);
         allocator->log_entry.reset();
         // re-prepare (incl. append new log entries)
         prepare_commit_entry();

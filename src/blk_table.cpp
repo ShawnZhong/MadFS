@@ -7,6 +7,7 @@
 
 #include "const.h"
 #include "idx.h"
+#include "tx/cursor.h"
 #include "tx/mgr.h"
 
 namespace ulayfs::dram {
@@ -76,32 +77,25 @@ void BlkTable::grow_to_fit(VirtualBlockIdx idx) {
 
 void BlkTable::apply_indirect_tx(pmem::TxEntryIndirect tx_entry,
                                  BitmapMgr* bitmap_mgr) {
-  auto [curr_entry, curr_block] =
-      tx_mgr->get_log_entry(tx_entry.get_log_entry_idx(), bitmap_mgr);
+  LogCursor log_cursor(tx_entry, mem_table, bitmap_mgr);
 
   uint32_t num_blocks;
   VirtualBlockIdx begin_vidx, end_vidx;
   uint16_t leftover_bytes;
 
-  while (true) {
-    assert(curr_entry && curr_block);
-    begin_vidx = curr_entry->begin_vidx;
-    num_blocks = curr_entry->num_blocks;
+  do {
+    begin_vidx = log_cursor->begin_vidx;
+    num_blocks = log_cursor->num_blocks;
     end_vidx = begin_vidx + num_blocks;
     grow_to_fit(end_vidx);
 
-    for (uint32_t offset = 0; offset < curr_entry->num_blocks; ++offset)
+    for (uint32_t offset = 0; offset < log_cursor->num_blocks; ++offset)
       table[begin_vidx.get() + offset] =
-          curr_entry->begin_lidxs[offset / BITMAP_ENTRY_BLOCKS_CAPACITY] +
+          log_cursor->begin_lidxs[offset / BITMAP_ENTRY_BLOCKS_CAPACITY] +
           offset % BITMAP_ENTRY_BLOCKS_CAPACITY;
     // only the last one matters, so this variable will keep being overwritten
-    leftover_bytes = curr_entry->leftover_bytes;
-    const auto& [next_entry, next_block] =
-        tx_mgr->get_next_log_entry(curr_entry, curr_block, bitmap_mgr);
-    if (next_entry == nullptr) break;
-    curr_entry = next_entry;
-    curr_block = next_block;
-  }
+    leftover_bytes = log_cursor->leftover_bytes;
+  } while (log_cursor.advance(mem_table, bitmap_mgr));
 
   if (uint64_t new_file_size = BLOCK_IDX_TO_SIZE(end_vidx) - leftover_bytes;
       new_file_size > state.file_size) {

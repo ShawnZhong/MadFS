@@ -35,30 +35,6 @@ class TxMgr {
   ssize_t do_write(const char* buf, size_t count);
 
   /**
-   * Get log entry given the index
-   *
-   * @param idx the log entry index
-   * @param bitmap_mgr if set, initialize the bitmap
-   * @return a tuple of (log entry, the block containing the entry)
-   */
-  [[nodiscard]] std::tuple<pmem::LogEntry*, pmem::LogEntryBlock*> get_log_entry(
-      LogEntryIdx idx, BitmapMgr* bitmap_mgr = nullptr) const;
-
-  /**
-   * get the next log entry
-   *
-   * @param curr_entry the current log entry
-   * @param curr_block the current log entry block; will be updated if
-   * move on to the next block
-   * @param bitmap_mgr if passed, initialized the bitmap
-   * @return a tuple of (next_log_entry, next_log_entry_block)
-   */
-  [[nodiscard]] std::tuple<pmem::LogEntry*, pmem::LogEntryBlock*>
-  get_next_log_entry(const pmem::LogEntry* curr_entry,
-                     pmem::LogEntryBlock* curr_block,
-                     BitmapMgr* bitmap_mgr = nullptr) const;
-
-  /**
    * populate log entries required by a single transaction; do persist but not
    * fenced
    *
@@ -72,19 +48,10 @@ class TxMgr {
    * @return index of the first LogHeadEntry for later retrival of the whole
    *         group of entries
    */
-  LogEntryIdx append_log_entry(
+  LogCursor append_log_entry(
       Allocator* allocator, pmem::LogEntry::Op op, uint16_t leftover_bytes,
       uint32_t num_blocks, VirtualBlockIdx begin_vidx,
       const std::vector<LogicalBlockIdx>& begin_lidxs) const;
-
-  /**
-   * reset leftover_bytes that was previously passed into append_log_entry
-   *
-   * @param first_idx return value of append_log_entry
-   * @param leftover_bytes new value of leftover_bytes
-   */
-  void update_log_entry_leftover_bytes(LogEntryIdx first_idx,
-                                       uint16_t leftover_bytes) const;
 
   /**
    * Try to commit an entry
