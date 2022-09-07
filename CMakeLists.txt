@@ -32,6 +32,7 @@ include(cmake/libpmem2.cmake)
 
 configure_file("src/config.h.in" "config.h" @ONLY)
 include_directories(${CMAKE_CURRENT_BINARY_DIR})
+include_directories(src)
 
 #[[
 dependencies
@@ -62,10 +63,12 @@ if (ULAYFS_BUILD_TESTS)
     add_executable(test_basic test/test_basic.cpp test/common.h)
     add_executable(test_rw test/test_rw.cpp test/common.h)
     add_executable(test_sync test/test_sync.cpp test/common.h)
+    add_executable(test_gc test/test_gc.cpp test/common.h)
 
     target_link_libraries(test_basic ulayfs)
     target_link_libraries(test_rw ulayfs)
     target_link_libraries(test_sync ulayfs pthread)
+    target_link_libraries(test_gc ulayfs)
 endif ()
 
 if (ULAYFS_BUILD_TOOLS)

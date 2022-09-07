@@ -3,20 +3,30 @@
 #include <syscall.h>
 #include <unistd.h>
 
+#include <cassert>
+#include <chrono>
+
 #include "config.h"
+
+#define likely(x) __builtin_expect(!!(x), 1)
+#define unlikely(x) __builtin_expect(!!(x), 0)
+
+namespace ulayfs {
+struct FatalException : public std::exception {};
+}  // namespace ulayfs
 
 /*
  * The following macros used for assertion and logging
  * Defined as macros since we want to have access to __FILE__ and __LINE__
  */
-#define ULAYFS_FPRINTF(file, fmt, ...)                                      \
-  do {                                                                      \
-    auto now = std::chrono::high_resolution_clock::now();                   \
-    std::chrono::duration<double> sec = now.time_since_epoch();             \
-    const char *s = strrchr(__FILE__, '/');                                 \
-    const char *caller_filename = s ? s + 1 : __FILE__;                     \
-    fprintf(file, "[Thread %d] %f [%14s:%-3d] " fmt "\n", tid, sec.count(), \
-            caller_filename, __LINE__, ##__VA_ARGS__);                      \
+#define ULAYFS_FPRINTF(file, fmt, ...)                                   \
+  do {                                                                   \
+    auto now = std::chrono::high_resolution_clock::now();                \
+    std::chrono::duration<double> sec = now.time_since_epoch();          \
+    const char *s = strrchr(__FILE__, '/');                              \
+    const char *caller_filename = s ? s + 1 : __FILE__;                  \
+    fprintf(file, "[Thread %d] %f [%14s:%-3d] " fmt "\n", ::ulayfs::tid, \
+            sec.count(), caller_filename, __LINE__, ##__VA_ARGS__);      \
   } while (0)
 
 // PANIC_IF is active for both debug and release modes
@@ -25,7 +35,7 @@
     if (likely(!(expr))) break;                                   \
     ULAYFS_FPRINTF(stderr, "[PANIC] " msg ": %m", ##__VA_ARGS__); \
     assert(false);                                                \
-    throw FatalException();                                       \
+    throw ::ulayfs::FatalException();                             \
   } while (0)
 #define PANIC(msg, ...) PANIC_IF(true, msg, ##__VA_ARGS__)
 

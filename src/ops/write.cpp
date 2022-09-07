@@ -21,7 +21,8 @@ ssize_t pwrite(int fd, const void* buf, size_t count, off_t offset) {
   if (auto file = get_file(fd)) {
     TimerGuard<Event::PWRITE> timer_guard(count);
     ssize_t res = file->pwrite(buf, count, static_cast<size_t>(offset));
-    LOG_DEBUG("ulayfs::pwrite(%s, buf, %zu) = %zu", file->path, count, res);
+    LOG_DEBUG("ulayfs::pwrite(%s, buf, %zu, %zu) = %zu", file->path, count,
+              offset, res);
     return res;
   } else {
     LOG_DEBUG("posix::pwrite(%d, buf, %zu, %ld)", fd, count, offset);

@@ -1,6 +1,6 @@
 #pragma once
 
-#include <sys/mman.h>
+#include <linux/mman.h>
 #include <tbb/concurrent_vector.h>
 
 #include <cerrno>
@@ -95,7 +95,7 @@ class MemTable {
    * @return the Block pointer if idx is not 0; nullptr for idx == 0, and the
    * caller should handle this case
    */
-  pmem::Block* get(LogicalBlockIdx idx) {
+  pmem::Block* lidx_to_addr_rw(LogicalBlockIdx idx) {
     if (unlikely(idx == 0)) return nullptr;
     // super fast path: within first_region, no need touch concurrent vector
     if (idx < first_region_num_blocks) return &first_region[idx.get()];
@@ -120,6 +120,13 @@ class MemTable {
         MAP_POPULATE);
     table[chunk_idx] = chunk_addr;
     return chunk_addr + chunk_local_idx;
+  }
+
+  [[nodiscard]] const pmem::Block* lidx_to_addr_ro(LogicalBlockIdx lidx) {
+    constexpr static const char __attribute__((aligned(BLOCK_SIZE)))
+    empty_block[BLOCK_SIZE]{};
+    if (lidx == 0) return reinterpret_cast<const pmem::Block*>(&empty_block);
+    return lidx_to_addr_rw(lidx);
   }
 
  private:

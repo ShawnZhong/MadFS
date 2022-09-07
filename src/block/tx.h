@@ -20,12 +20,21 @@ class TxBlock : public noncopyable {
   std::atomic<TxEntry> tx_entries[NUM_TX_ENTRY_PER_BLOCK];
   // next is placed after tx_entires so that it could be flushed with tx_entries
   std::atomic<LogicalBlockIdx> next;
-  // seq is used to construct total order between tx entries, so it must
+  // outdated blocks are organized as a to-be-freed list, which will be recycled
+  // once they are not referenced
+  // if this tx block is the latest, this field must be 0.
+  std::atomic<LogicalBlockIdx> next_outdated;
+
+  // tx seq is used to construct total order between tx entries, so it must
   // increase monotonically
   // when compare two TxEntryIdx
   // if within same block, compare local index
   // if not, compare their block's seq number
   uint32_t tx_seq;
+  // each garbage collection operation has a unique, monotonically increasing
+  // sequence number; this can be viewed as a "version number" of tx_seq so that
+  // tx seq number can be reused
+  uint32_t gc_seq;
 
  public:
   [[nodiscard]] TxLocalIdx find_tail(TxLocalIdx hint = 0) const {
@@ -38,18 +47,32 @@ class TxBlock : public noncopyable {
   }
 
   // it should be fine not to use any fence since there will be fence for flush
-  void set_tx_seq(uint32_t seq) { tx_seq = seq; }
-  [[nodiscard]] uint32_t get_tx_seq() const { return tx_seq; }
+  // gc_seq must be zero for apps; it can only be set to nonzero by gc threads
+  void set_tx_seq(uint32_t tx_seq, uint32_t gc_seq = 0) {
+    assert(tx_seq > 0); // 0 is an invalid tx_seq
+    this->tx_seq = tx_seq;
+    this->gc_seq = gc_seq;
+  }
+  // return tx_seq (which is mostly commonly used) as return value; if user asks
+  // for gc_seq, return it through pointer
+  [[nodiscard]] uint32_t get_tx_seq(uint32_t* gc_seq_addr = nullptr) const {
+    if (gc_seq_addr) *gc_seq_addr = gc_seq;
+    return tx_seq;
+  }
 
   [[nodiscard]] LogicalBlockIdx get_next_tx_block() const {
     return next.load(std::memory_order_acquire);
+  }
+
+  [[nodiscard]] LogicalBlockIdx get_next_outdated_tx_block() const {
+    return next_outdated.load(std::memory_order_acquire);
   }
 
   /**
    * Set the next block index
    * @return true on success, false if there is a race condition
    */
-  bool set_next_tx_block(LogicalBlockIdx block_idx) {
+  bool try_set_next_tx_block(LogicalBlockIdx block_idx) {
     LogicalBlockIdx expected = 0;
     return next.compare_exchange_strong(expected, block_idx,
                                         std::memory_order_acq_rel,

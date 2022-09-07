@@ -38,7 +38,8 @@ constexpr static uint16_t LOGICAL_BLOCK_IDX_SIZE = 4;
  */
 constexpr static uint16_t TX_ENTRY_SIZE = 8;
 constexpr static uint16_t NUM_TX_ENTRY_PER_BLOCK =
-    (BLOCK_SIZE - 2 * LOGICAL_BLOCK_IDX_SIZE) / TX_ENTRY_SIZE;
+    (BLOCK_SIZE - 2 * LOGICAL_BLOCK_IDX_SIZE - 2 * sizeof(uint32_t)) /
+    TX_ENTRY_SIZE;
 
 // inline data structure count in meta block
 constexpr static uint16_t NUM_TX_ENTRY_PER_CL = CACHELINE_SIZE / TX_ENTRY_SIZE;
@@ -50,25 +51,34 @@ constexpr static uint16_t NUM_INLINE_TX_ENTRY =
 /*
  * bitmap
  */
-constexpr static uint16_t BITMAP_SIZE = 8;
-constexpr static uint32_t BITMAP_BLOCK_CAPACITY_SHIFT = 6;
+constexpr static uint16_t BITMAP_ENTRY_SIZE = 8;
+constexpr static uint32_t BITMAP_ENTRY_BLOCKS_CAPACITY_SHIFT = 6;
 // how many blocks a bitmap can manage
-constexpr static uint32_t BITMAP_BLOCK_CAPACITY =
-    1 << BITMAP_BLOCK_CAPACITY_SHIFT;
+constexpr static uint32_t BITMAP_ENTRY_BLOCKS_CAPACITY =
+    1 << BITMAP_ENTRY_BLOCKS_CAPACITY_SHIFT;
 // how many bytes a bitmap can manage
-constexpr static uint64_t BITMAP_BYTES_CAPACITY = BITMAP_BLOCK_CAPACITY
-                                                  << BLOCK_SHIFT;
+constexpr static uint64_t BITMAP_ENTRY_BYTES_CAPACITY =
+    BITMAP_ENTRY_BLOCKS_CAPACITY << BLOCK_SHIFT;
 
-// total number of bitmaps in DRAM
-constexpr static uint16_t NUM_BITMAP_PER_BLOCK = BLOCK_SIZE / BITMAP_SIZE;
+constexpr static uint16_t NUM_BITMAP_ENTRIES_PER_BLOCK =
+    BLOCK_SIZE / BITMAP_ENTRY_SIZE;
 
-// we use one hugepage of bitmap, which is sufficient for a 64GB file
-constexpr static uint32_t NUM_BITMAP_BLOCKS = 512;
-constexpr static uint32_t SHM_SIZE = NUM_BITMAP_BLOCKS << BLOCK_SHIFT;
-constexpr static uint32_t NUM_BITMAP = NUM_BITMAP_BLOCKS * NUM_BITMAP_PER_BLOCK;
+// we use 511 blocks for bitmap, which is sufficient for ~64GB file
+constexpr static uint32_t NUM_BITMAP_BLOCKS = 511;
+constexpr static uint32_t NUM_BITMAP_ENTRIES =
+    NUM_BITMAP_BLOCKS * NUM_BITMAP_ENTRIES_PER_BLOCK;
+constexpr static uint32_t TOTAL_NUM_BITMAP_BYTES =
+    NUM_BITMAP_BLOCKS * BLOCK_SIZE;
 
 constexpr static uint16_t NUM_CL_PER_BLOCK = BLOCK_SIZE / CACHELINE_SIZE;
 constexpr static uint32_t NUM_OFFSET_QUEUE_SLOT = 16;
+
+// the last one is used for garbage collection
+constexpr static uint32_t SHM_GC_SIZE = BLOCK_SIZE;
+constexpr static uint32_t SHM_PER_THREAD_SIZE = CACHELINE_SIZE;
+constexpr static uint32_t MAX_NUM_THREADS = SHM_GC_SIZE / SHM_PER_THREAD_SIZE;
+constexpr static uint32_t SHM_SIZE =
+    NUM_BITMAP_BLOCKS * BLOCK_SIZE + SHM_GC_SIZE;
 
 enum class Event : std::size_t {
   READ,
@@ -78,6 +88,14 @@ enum class Event : std::size_t {
   OPEN,
   CLOSE,
   FSYNC,
+
+  UPDATE,
+
+  READ_TX,
+  READ_TX_CTOR,
+  READ_TX_UPDATE,
+  READ_TX_COPY,
+  READ_TX_VALIDATE,
 
   ALIGNED_TX,
   ALIGNED_TX_CTOR,
@@ -102,5 +120,7 @@ enum class Event : std::size_t {
 
   TX_ENTRY_LOAD,
   TX_ENTRY_STORE,
+
+  GC_CREATE,
 };
 }  // namespace ulayfs

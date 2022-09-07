@@ -8,6 +8,7 @@ def add_common_args(argparser: argparse.ArgumentParser):
     argparser.add_argument(
         "-b",
         "--build_type",
+        default="release",
         choices=build_types,
     )
     argparser.add_argument(

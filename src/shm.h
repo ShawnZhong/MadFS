@@ -1,5 +1,7 @@
 #pragma once
 
+#include <sys/xattr.h>
+
 #include <ostream>
 
 #include "const.h"
@@ -8,6 +10,19 @@
 #include "utils.h"
 
 namespace ulayfs::dram {
+
+struct PerThreadData {
+  union {
+    struct {
+      uint32_t tx_block_idx;
+    };
+    char cl[SHM_PER_THREAD_SIZE];
+  };
+
+ public:
+  [[nodiscard]] bool is_empty() const { return tx_block_idx == 0; }
+  void clear() { memset(cl, 0, sizeof(cl)); }
+};
 
 class ShmMgr {
   int fd = -1;
@@ -47,6 +62,21 @@ class ShmMgr {
     }
 
     return addr;
+  }
+
+  [[nodiscard]] PerThreadData* get_per_thread_data(size_t idx) const {
+    assert(idx < MAX_NUM_THREADS);
+    char* starting_addr = static_cast<char*>(addr) + TOTAL_NUM_BITMAP_BYTES;
+    return reinterpret_cast<PerThreadData*>(starting_addr) + idx;
+  }
+
+  [[nodiscard]] size_t get_next_shm_thread_idx() const {
+    for (size_t i = 0; i < MAX_NUM_THREADS; i++) {
+      if (get_per_thread_data(i)->is_empty()) {
+        return i;
+      }
+    }
+    PANIC("No empty per-thread data");
   }
 
   /**
@@ -147,14 +177,21 @@ class ShmMgr {
    */
   static void unlink_by_file_path(const char* filepath) {
     char shm_path[SHM_PATH_LEN];
-    if (getxattr(filepath, SHM_XATTR_NAME, &shm_path, SHM_PATH_LEN) <= 0)
-      return;
+    if (getxattr(filepath, SHM_XATTR_NAME, shm_path, SHM_PATH_LEN) <= 0) return;
     unlink_by_shm_path(shm_path);
   }
 
   friend std::ostream& operator<<(std::ostream& os, const ShmMgr& mgr) {
-    os << "ShmMgr: fd = " << mgr.fd << ", addr = " << mgr.addr
-       << ", path = " << mgr.path << "\n";
+    os << "ShmMgr:\n"
+       << "\tfd = " << mgr.fd << "\n"
+       << "\taddr = " << mgr.addr << "\n"
+       << "\tpath = " << mgr.path << "\n";
+    for (size_t i = 0; i < MAX_NUM_THREADS; ++i) {
+      if (!mgr.get_per_thread_data(i)->is_empty()) {
+        os << "\tthread " << i << ": tail_tx_block_idx = "
+           << mgr.get_per_thread_data(i)->tx_block_idx << "\n";
+      }
+    }
     return os;
   }
 };

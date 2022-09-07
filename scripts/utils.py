@@ -1,6 +1,7 @@
 import datetime
 import logging
 import os
+import shutil
 import sys
 from pathlib import Path
 
@@ -12,10 +13,10 @@ root_dir = Path(__file__).parent.parent
 
 def init(install_build_deps=False, install_dev_deps=False, configure=False):
     install_dev_deps_cmds = """
-sudo apt install -y clang libstdc++-10-dev clang-format &&    # for sanitizers and formatter
+sudo apt install -y clang-10 libstdc++-10-dev clang-format-10 &&    # for sanitizers and formatter
 sudo apt install -y linux-tools-common linux-tools-generic linux-tools-`uname -r` && # for perf
-sudo apt install -y ndctl numactl &&                          # for managing persistent memory and NUMA
-sudo apt install -y sqlite3                                   # for benchmarking
+sudo apt install -y ndctl numactl &&                                # for managing persistent memory and NUMA
+sudo apt install -y sqlite3                                         # for benchmarking
 """
 
     configure_cmds = ""
@@ -47,7 +48,7 @@ sudo apt install -y sqlite3                                   # for benchmarking
     if install_build_deps or install_dev_deps:
         system("sudo apt update")
     if install_build_deps:
-        system("sudo apt install -y cmake build-essential")
+        system("sudo apt install -y cmake build-essential gcc-10 g++-10")
     if install_dev_deps:
         system(install_dev_deps_cmds)
     if configure and configure_cmds != "":
@@ -58,11 +59,11 @@ def drop_cache():
     system("echo 3 | sudo tee /proc/sys/vm/drop_caches >/dev/null")
 
 
-def is_ulayfs_linked(prog_path):
+def is_ulayfs_linked(prog_path: Path):
     import subprocess
     import re
 
-    output = subprocess.check_output(['ldd', prog_path]).decode("utf-8")
+    output = subprocess.check_output(['ldd', shutil.which(prog_path)]).decode("utf-8")
     for line in output.splitlines():
         match = re.match(r'\t(.*) => (.*) \(0x', line)
         if match and match.group(1) == 'libulayfs.so':
