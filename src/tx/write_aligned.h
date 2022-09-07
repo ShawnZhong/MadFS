@@ -23,7 +23,7 @@ class AlignedTx : public WriteTx {
       size_t rest_count = count;
 
       for (auto block : dst_blocks) {
-        size_t num_bytes = std::min(rest_count, BITMAP_BYTES_CAPACITY);
+        size_t num_bytes = std::min(rest_count, BITMAP_ENTRY_BYTES_CAPACITY);
         pmem::memcpy_persist(block->data_rw(), rest_buf, num_bytes);
         rest_buf += num_bytes;
         rest_count -= num_bytes;
@@ -42,7 +42,7 @@ class AlignedTx : public WriteTx {
 
     {
       TimerGuard<Event::ALIGNED_TX_UPDATE> timer_guard;
-      if (!is_offset_depend) file->update(&state, /*do_alloc*/ true);
+      if (!is_offset_depend) file->update(&state, allocator);
     }
 
     if (pinned_tx_block_idx != state.get_tx_block_idx())

@@ -20,11 +20,11 @@ namespace ulayfs::dram {
 
 File::File(int fd, const struct stat& stat, int flags,
            const char* pathname [[maybe_unused]], bool guard)
-    : fd(fd),
-      mem_table(fd, stat.st_size, (flags & O_ACCMODE) == O_RDONLY),
+    : mem_table(fd, stat.st_size, (flags & O_ACCMODE) == O_RDONLY),
+      tx_mgr(this, &mem_table),
+      blk_table(&mem_table, &tx_mgr),
       meta(mem_table.get_meta()),
-      tx_mgr(this, meta),
-      blk_table(this, meta, &tx_mgr),
+      fd(fd),
       can_read((flags & O_ACCMODE) == O_RDONLY ||
                (flags & O_ACCMODE) == O_RDWR),
       can_write((flags & O_ACCMODE) == O_WRONLY ||
@@ -41,25 +41,24 @@ File::File(int fd, const struct stat& stat, int flags,
 
   // only open shared memory if we may write
   if (can_write) {
-    bitmap = static_cast<Bitmap*>(shm_mgr.init(fd, stat));
+    bitmap_mgr.entries = static_cast<BitmapEntry*>(shm_mgr.init(fd, stat));
 
     // The first bit corresponds to the meta block which should always be set
     // to 1. If it is not, then bitmap needs to be initialized.
-    // Bitmap::is_allocated is not thread safe but we don't yet have concurrency
-    if (!bitmap[0].is_allocated(0)) {
+    // BitmapEntry::is_allocated is not thread safe but we don't yet have
+    // concurrency
+    if (!bitmap_mgr.entries[0].is_allocated(0)) {
       meta->lock();
-      if (!bitmap[0].is_allocated(0)) {
-        file_size = blk_table.update(/*do_alloc*/ false, /*init_bitmap*/ true);
+      if (!bitmap_mgr.entries[0].is_allocated(0)) {
+        file_size = blk_table.update(/*allocator=*/nullptr, &bitmap_mgr);
         file_size_updated = true;
-        bitmap[0].set_allocated(0);
+        bitmap_mgr.entries[0].set_allocated(0);
       }
       meta->unlock();
     }
-  } else {
-    bitmap = nullptr;
   }
 
-  if (!file_size_updated) file_size = blk_table.update(/*do_alloc*/ false);
+  if (!file_size_updated) file_size = blk_table.update();
 
   if (flags & O_APPEND)
     tx_mgr.offset_mgr.seek_absolute(static_cast<off_t>(file_size));
@@ -122,7 +121,7 @@ off_t File::lseek(off_t offset, int whence) {
   int64_t ret;
 
   pthread_spin_lock(&spinlock);
-  uint64_t file_size = blk_table.update(/*do_alloc*/ false);
+  uint64_t file_size = blk_table.update();
 
   switch (whence) {
     case SEEK_SET:
@@ -216,8 +215,8 @@ error:
 
 int File::fsync() {
   FileState state;
-  this->update(&state, /*do_alloc*/ false);
-  tx_mgr.flush_tx_entries(meta->get_tx_tail(), state.cursor);
+  this->update(&state);
+  TxCursor::flush_up_to(&mem_table, state.cursor);
   // we keep an invariant that tx_tail must be a valid (non-overflow) idx
   // an overflow index implies that the `next` pointer of the block is not set
   // (and thus not flushed) yet, so we cannot assume it is equivalent to the
@@ -231,7 +230,7 @@ int File::fsync() {
 }
 
 void File::stat(struct stat* buf) {
-  buf->st_size = static_cast<off_t>(blk_table.update(/*do_alloc*/ false));
+  buf->st_size = static_cast<off_t>(blk_table.update());
 }
 
 /*
@@ -243,7 +242,10 @@ Allocator* File::get_local_allocator() {
     return &it->second;
   }
 
-  auto [it, ok] = allocators.emplace(tid, Allocator(this, bitmap));
+  size_t shm_thread_idx = shm_mgr.get_next_shm_thread_idx();
+
+  auto [it, ok] = allocators.emplace(
+      tid, Allocator(&mem_table, &bitmap_mgr, &shm_mgr, shm_thread_idx));
   PANIC_IF(!ok, "insert to thread-local allocators failed");
   return &it->second;
 }
@@ -252,30 +254,19 @@ Allocator* File::get_local_allocator() {
  * Helper functions
  */
 
-void File::tx_gc() {
-  LOG_DEBUG("Garbage Collect for fd %d", fd);
-  uint64_t file_size = blk_table.update(/*do_alloc*/ false);
-  TxEntryIdx tail_tx_idx = blk_table.get_tx_idx();
-  tx_mgr.gc(tail_tx_idx.block_idx, file_size);
-}
-
 std::ostream& operator<<(std::ostream& out, const File& f) {
+  __msan_scoped_disable_interceptor_checks();
   out << "File: fd = " << f.fd << "\n";
   if (f.can_write) out << f.shm_mgr;
   out << *f.meta;
   out << f.blk_table;
   out << f.mem_table;
   if (f.can_write) {
-    out << "Bitmap: \n";
-    auto num_bitmaps = f.meta->get_num_logical_blocks() / BITMAP_BLOCK_CAPACITY;
-    for (size_t i = 0; i < num_bitmaps; ++i) {
-      out << "\t" << std::setw(6) << std::right << i * BITMAP_BLOCK_CAPACITY
-          << " - " << std::setw(6) << std::left
-          << (i + 1) * BITMAP_BLOCK_CAPACITY - 1 << ": " << f.bitmap[i] << "\n";
-    }
+    out << f.bitmap_mgr;
   }
   out << f.tx_mgr;
   out << "\n";
+  __msan_scoped_enable_interceptor_checks();
 
   return out;
 }

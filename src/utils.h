@@ -13,14 +13,11 @@
 #include "logging.h"
 #include "posix.h"
 
-#define likely(x) __builtin_expect(!!(x), 1)
-#define unlikely(x) __builtin_expect(!!(x), 0)
-
 // adopted from `include/linux/align.h`
 #define ALIGN_MASK(x, mask) (((x) + (mask)) & ~(mask))
-#define ALIGN_UP(x, a) ALIGN_MASK((x), ((typeof(x))(a)-1))
-#define ALIGN_DOWN(x, a) ((x) & ~((typeof(x))(a)-1))
-#define IS_ALIGNED(x, a) (((x) & ((typeof(x))(a)-1)) == 0)
+#define ALIGN_UP(x, a) ALIGN_MASK((x), (static_cast<decltype(x)>(a) - 1))
+#define ALIGN_DOWN(x, a) ((x) & ~(static_cast<decltype(x)>(a) - 1))
+#define IS_ALIGNED(x, a) (((x) & (static_cast<decltype(x)>(a) - 1)) == 0)
 
 namespace ulayfs {
 
@@ -29,8 +26,6 @@ struct FileInitException : public std::exception {
   [[nodiscard]] const char *what() const noexcept override { return msg; }
   const char *msg;
 };
-
-struct FatalException : public std::exception {};
 
 /**
  * @return the next power of 2 greater than x. If x is already a power of 2,
@@ -65,6 +60,7 @@ class zero_allocator : public tbb::cache_aligned_allocator<T> {
  */
 class noncopyable {
  public:
+  noncopyable() = default;
   noncopyable(const noncopyable &) = delete;
   noncopyable &operator=(const noncopyable &) = delete;
 };

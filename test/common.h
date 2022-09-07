@@ -9,13 +9,15 @@
 #include <cstdio>
 #include <cstring>
 
+#include "common.h"
 #include "const.h"
 #include "debug.h"
+#include "logging.h"
 
 #define CHECK_RESULT(expected, actual, length, fd)                \
   do {                                                            \
     if (memcmp(expected, actual, length) != 0) {                  \
-      print_file(fd);                                             \
+      ulayfs::debug::print_file(fd);                              \
       std::cerr << "expected: \"";                                \
       for (int i = 0; i < length; ++i) putc(expected[i], stderr); \
       std::cerr << "\"\n";                                        \
@@ -26,32 +28,31 @@
     }                                                             \
   } while (0)
 
-void print_file(int fd) {
-  if (ulayfs::is_linked()) {
-    ulayfs::debug::print_file(fd);
-  } else {
-    printf("uLayFS not linked\n");
-  }
-}
+#define ASSERT(x) PANIC_IF(!(x), "assertion failed: " #x)
 
-const char* filepath = []() -> const char* {
-  char* pmem_path = std::getenv("PMEM_PATH");
-  if (!pmem_path) return "test.txt";
-  static char path[PATH_MAX];
-  strcpy(path, pmem_path);
-  strcat(path, "/test.txt");
-  return path;
-}();
+static const char* get_filepath() {
+  const char* res = "test.txt";
+
+  if (char* pmem_path = std::getenv("PMEM_PATH"); pmem_path) {
+    static char path[PATH_MAX];
+    strcpy(path, pmem_path);
+    strcat(path, "/test.txt");
+    res = path;
+  }
+
+  fprintf(stderr, "filepath: %s\n", res);
+  return res;
+}
 
 constexpr std::string_view chars =
     "0123456789abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ";
 
-void fill_buff(char* buff, int num_elem, int init = 0) {
+static void fill_buff(char* buff, int num_elem, int init = 0) {
   std::generate(buff, buff + num_elem,
                 [i = init]() mutable { return chars[i++ % chars.length()]; });
 }
 
-std::string random_string(int length) {
+static std::string random_string(int length) {
   std::string str;
   str.reserve(length);
   for (int i = 0; i < length; ++i)

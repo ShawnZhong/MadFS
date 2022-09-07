@@ -6,55 +6,60 @@
 #include <cstdint>
 
 #include "const.h"
-#include "file.h"
 #include "idx.h"
+#include "tx/mgr.h"
 
 namespace ulayfs::dram {
 
-bool BlkTable::need_update(FileState* result_state, bool do_alloc) const {
+bool BlkTable::need_update(FileState* result_state,
+                           Allocator* allocator) const {
   uint64_t curr_ver = version.load(std::memory_order_acquire);
   if (curr_ver & 1) return true;  // old version means inconsistency
   *result_state = state;
-  if (curr_ver != version.load(std::memory_order_release)) return true;
-  if (!tx_mgr->handle_cursor_overflow(&result_state->cursor, do_alloc))
+  if (curr_ver != version.load(std::memory_order_acquire)) return true;
+  bool success = result_state->cursor.handle_overflow(mem_table, allocator);
+  if (!success) {
     return false;
+  }
   // if it's not valid, there is no new tx to the tx history, thus no need to
   // acquire spinlock to update
   return result_state->cursor.get_entry().is_valid();
 }
 
-uint64_t BlkTable::update(bool do_alloc, bool init_bitmap) {
+uint64_t BlkTable::update(Allocator* allocator, BitmapMgr* bitmap_mgr) {
+  TimerGuard<Event::UPDATE> timer_guard;
   TxCursor cursor = state.cursor;
 
   // it's possible that the previous update move idx to overflow state
-  if (!tx_mgr->handle_cursor_overflow(&cursor, do_alloc)) {
-    // if still overflow, do_alloc must be unset
-    assert(!do_alloc);
+  if (bool success = cursor.handle_overflow(mem_table, allocator); !success) {
+    // if still overflow, allocator must be not available
+    assert(!allocator);
     // if still overflow, we must have reached the tail already
     return state.file_size;
   }
 
   // inc the version into an odd number to indicate temporarily inconsistency
   uint64_t old_ver = version.load(std::memory_order_relaxed);
-  version.store(old_ver + 1, std::memory_order_acquire);
+  version.store(old_ver + 1, std::memory_order_release);
 
   LogicalBlockIdx prev_tx_block_idx = 0;
   while (true) {
     auto tx_entry = cursor.get_entry();
     if (!tx_entry.is_valid()) break;
-    if (init_bitmap && cursor.idx.block_idx != prev_tx_block_idx)
-      file->set_allocated(cursor.idx.block_idx);
+    if (bitmap_mgr && cursor.idx.block_idx != prev_tx_block_idx)
+      bitmap_mgr->set_allocated(cursor.idx.block_idx);
     if (tx_entry.is_inline())
       apply_inline_tx(tx_entry.inline_entry);
     else
-      apply_indirect_tx(tx_entry.indirect_entry, init_bitmap);
+      apply_indirect_tx(tx_entry.indirect_entry, bitmap_mgr);
     prev_tx_block_idx = cursor.idx.block_idx;
-    if (!tx_mgr->advance_cursor(&cursor, do_alloc)) break;
+    if (bool success = cursor.advance(mem_table, allocator); !success) break;
   }
 
   // mark all live data blocks in bitmap
-  if (init_bitmap)
-    for (const auto& logical_idx : table) file->set_allocated(logical_idx);
+  if (bitmap_mgr)
+    for (const auto& logical_idx : table)
+      bitmap_mgr->set_allocated(logical_idx);
 
   state.cursor = cursor;
 
@@ -70,9 +75,9 @@ void BlkTable::grow_to_fit(VirtualBlockIdx idx) {
 }
 
 void BlkTable::apply_indirect_tx(pmem::TxEntryIndirect tx_entry,
-                                 bool init_bitmap) {
+                                 BitmapMgr* bitmap_mgr) {
   auto [curr_entry, curr_block] =
-      tx_mgr->get_log_entry(tx_entry.get_log_entry_idx(), init_bitmap);
+      tx_mgr->get_log_entry(tx_entry.get_log_entry_idx(), bitmap_mgr);
 
   uint32_t num_blocks;
   VirtualBlockIdx begin_vidx, end_vidx;
@@ -87,12 +92,12 @@ void BlkTable::apply_indirect_tx(pmem::TxEntryIndirect tx_entry,
 
     for (uint32_t offset = 0; offset < curr_entry->num_blocks; ++offset)
       table[begin_vidx.get() + offset] =
-          curr_entry->begin_lidxs[offset / BITMAP_BLOCK_CAPACITY] +
-          offset % BITMAP_BLOCK_CAPACITY;
+          curr_entry->begin_lidxs[offset / BITMAP_ENTRY_BLOCKS_CAPACITY] +
+          offset % BITMAP_ENTRY_BLOCKS_CAPACITY;
     // only the last one matters, so this variable will keep being overwritten
     leftover_bytes = curr_entry->leftover_bytes;
     const auto& [next_entry, next_block] =
-        tx_mgr->get_next_log_entry(curr_entry, curr_block, init_bitmap);
+        tx_mgr->get_next_log_entry(curr_entry, curr_block, bitmap_mgr);
     if (next_entry == nullptr) break;
     curr_entry = next_entry;
     curr_block = next_block;
@@ -128,9 +133,12 @@ std::ostream& operator<<(std::ostream& out, const BlkTable& b) {
   out << "\tfile_size: " << b.state.file_size << "\n";
   out << "\ttail_tx_idx: " << b.state.cursor.idx << "\n";
   for (size_t i = 0; i < b.table.size(); ++i) {
-    if (b.table[i].load() != 0) {
-      out << "\t" << i << " -> " << b.table[i] << "\n";
+    if (b.table[i].load() == 0) continue;
+    if (i >= 100) {
+      out << "\t...\n";
+      break;
     }
+    out << "\t" << i << " -> " << b.table[i] << "\n";
   }
   return out;
 }

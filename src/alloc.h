@@ -13,54 +13,51 @@
 #include "idx.h"
 #include "mem_table.h"
 #include "posix.h"
+#include "shm.h"
 
 namespace ulayfs::dram {
-class File;
-
 // per-thread data structure
 class Allocator {
-  File* file;
-  Bitmap* bitmap;
+  MemTable* mem_table;
+  BitmapMgr* bitmap_mgr;
+  ShmMgr* shm_mgr;
 
   // free_lists[n-1] means a free list of size n beginning from LogicalBlockIdx
-  std::array<std::vector<LogicalBlockIdx>, BITMAP_BLOCK_CAPACITY> free_lists;
+  std::array<std::vector<LogicalBlockIdx>, BITMAP_ENTRY_BLOCKS_CAPACITY>
+      free_lists;
 
   // used as a hint for search; recent is defined to be "the next one to search"
   // keep id for idx translation
   // TODO: this may be useful for dynamically growing bitmap
   // BitmapBlockId recent_bitmap_block_id;
   // NOTE: this is the index within recent_bitmap_block
-  BitmapIdx recent_bitmap_idx;
+  BitmapIdx recent_bitmap_idx{};
 
   // the current in-use log entry block
-  pmem::LogEntryBlock* curr_log_block;
-  LogicalBlockIdx curr_log_block_idx;
-  LogLocalOffset curr_log_offset;  // offset of the next available byte
+  pmem::LogEntryBlock* curr_log_block{nullptr};
+  LogicalBlockIdx curr_log_block_idx{0};
+  LogLocalOffset curr_log_offset{0};  // offset of the next available byte
 
   // a tx block may be allocated but unused when another thread does that first
   // this tx block will then be saved here for future use
   // a tx block candidate must have all bytes zero except the sequence number
-  pmem::Block* avail_tx_block;
-  LogicalBlockIdx avail_tx_block_idx;
+  pmem::Block* avail_tx_block{nullptr};
+  LogicalBlockIdx avail_tx_block_idx{0};
+  size_t shm_thread_idx;
 
   // each thread will pin a tx block so that the garbage collector will not
   // reclaim this block and blocks after it
-  LogicalBlockIdx pinned_tx_block_idx;
-  LogicalBlockIdx* notify_addr;
+  LogicalBlockIdx pinned_tx_block_idx{0};
+  LogicalBlockIdx* notify_addr{nullptr};
   // TODO: a pointer to a shared memory location to publish this value
 
  public:
-  Allocator(File* file, Bitmap* bitmap)
-      : file(file),
-        bitmap(bitmap),
-        recent_bitmap_idx(),
-        curr_log_block(nullptr),
-        curr_log_block_idx(0),
-        curr_log_offset(0),
-        avail_tx_block(nullptr),
-        avail_tx_block_idx(0),
-        pinned_tx_block_idx(0),
-        notify_addr(nullptr) {}
+  Allocator(MemTable* mem_table, BitmapMgr* bitmap_mgr, ShmMgr* shm_mgr,
+            size_t shm_thread_idx)
+      : mem_table(mem_table),
+        bitmap_mgr(bitmap_mgr),
+        shm_mgr(shm_mgr),
+        shm_thread_idx(shm_thread_idx) {}
 
   ~Allocator() { return_free_list(); }
 
@@ -89,9 +86,9 @@ class Allocator {
    * Return all the blocks in the free list to the bitmap
    */
   void return_free_list() {
-    for (uint32_t n = 0; n < BITMAP_BLOCK_CAPACITY; ++n)
+    for (uint32_t n = 0; n < BITMAP_ENTRY_BLOCKS_CAPACITY; ++n)
       for (LogicalBlockIdx lidx : free_lists[n])
-        Bitmap::free(bitmap, static_cast<BitmapIdx>(lidx.get()), n + 1);
+        bitmap_mgr->free(static_cast<BitmapIdx>(lidx.get()), n + 1);
   }
 
   /**
@@ -121,6 +118,7 @@ class Allocator {
    */
   void reset_log_entry();
 
+ private:
   /**
    * Allocate a tx block
    * @param tx_seq the tx sequence number of the tx block (gc_seq = 0)

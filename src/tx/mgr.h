@@ -14,20 +14,20 @@
 
 namespace ulayfs::dram {
 
-class File;
-
 class TxMgr {
- private:
+ public:
   File* file;
+  MemTable* mem_table;
   pmem::MetaBlock* meta;
 
- public:
   Lock lock;  // nop lock is used by default
   OffsetMgr offset_mgr;
 
- public:
-  TxMgr(File* file, pmem::MetaBlock* meta)
-      : file(file), meta(meta), offset_mgr(this) {}
+  TxMgr(File* file, MemTable* mem_table)
+      : file(file),
+        mem_table(mem_table),
+        meta(mem_table->get_meta()),
+        offset_mgr(this) {}
 
   ssize_t do_pread(char* buf, size_t count, size_t offset);
   ssize_t do_read(char* buf, size_t count);
@@ -35,30 +35,14 @@ class TxMgr {
   ssize_t do_write(const char* buf, size_t count);
 
   /**
-   * Advance cursor to the next transaction entry
-   *
-   * @param[in] cursor the cursor to advance
-   * @param[in] do_alloc whether allocation is allowed when reaching the end of
-   * a block
-   * @param[out] into_new_block if not nullptr, return whether the cursor is
-   * advanced into a new tx block
-   *
-   * @return true on success; false when reaches the end of a block and do_alloc
-   * is false. The advance would happen anyway but in the case of false, it is
-   * in a overflow state
-   */
-  bool advance_cursor(TxCursor* cursor, bool do_alloc,
-                      bool* into_new_block = nullptr) const;
-
-  /**
    * Get log entry given the index
    *
    * @param idx the log entry index
-   * @param init_bitmap whether to initialize the bitmap
+   * @param bitmap_mgr if set, initialize the bitmap
    * @return a tuple of (log entry, the block containing the entry)
    */
   [[nodiscard]] std::tuple<pmem::LogEntry*, pmem::LogEntryBlock*> get_log_entry(
-      LogEntryIdx idx, bool init_bitmap = false) const;
+      LogEntryIdx idx, BitmapMgr* bitmap_mgr = nullptr) const;
 
   /**
    * get the next log entry
@@ -66,13 +50,13 @@ class TxMgr {
    * @param curr_entry the current log entry
    * @param curr_block the current log entry block; will be updated if
    * move on to the next block
-   * @param init_bitmap whether set related LogEntryBlock as used in bitmap
+   * @param bitmap_mgr if passed, initialized the bitmap
    * @return a tuple of (next_log_entry, next_log_entry_block)
    */
   [[nodiscard]] std::tuple<pmem::LogEntry*, pmem::LogEntryBlock*>
   get_next_log_entry(const pmem::LogEntry* curr_entry,
                      pmem::LogEntryBlock* curr_block,
-                     bool init_bitmap = false) const;
+                     BitmapMgr* bitmap_mgr = nullptr) const;
 
   /**
    * populate log entries required by a single transaction; do persist but not
@@ -109,59 +93,7 @@ class TxMgr {
    * @param cursor the cursor to commit to (might be updated under overflow)
    * @return empty entry on success; conflict entry otherwise
    */
-  pmem::TxEntry try_commit(pmem::TxEntry entry, TxCursor* cursor);
-
-  /**
-   * @tparam B MetaBlock or TxBlock
-   * @param block the block that needs a next block to be allocated
-   * @return the block id of the allocated block and the new tx block allocated
-   */
-  template <class B>
-  std::tuple<LogicalBlockIdx, pmem::TxBlock*> alloc_next_block(B* block) const;
-
-  /**
-   * If the given cursor is in an overflow state, update it if allowed.
-   *
-   * @param[in] cursor the cursor to update
-   * @param[in] do_alloc whether allocation is allowed
-   * @param[out] is_overflow if not nullptr, return whether there is an overflow
-   * @return true if the idx is not in overflow state; false otherwise
-   */
-  bool handle_cursor_overflow(TxCursor* cursor, bool do_alloc,
-                              bool* is_overflow = nullptr) const;
-
-  /**
-   * Flush tx entries
-   *
-   * @param begin the start cursor of the entries to flush, exclusive
-   * @param end the end cursor of the entries to flush, inclusive
-   */
-  void flush_tx_entries(TxCursor begin, TxCursor end);
-  void flush_tx_entries(TxEntryIdx begin, TxCursor end);
-
-  /**
-   * Garbage collecting transaction blocks and log blocks. This function builds
-   * a new transaction history from block table and uses it to replace the old
-   * transaction history. We assume that a dedicated single-threaded process
-   * will run this function so it is safe to directly access blk_table. Note
-   * that old tx blocks and log blocks are not immediately recycled but when
-   * rebuilding the bitmap
-   *
-   * @param tail_tx_block the tail transaction block index: this and following
-   * transaction blocks will be appended to the new transaction history and will
-   * not be touched
-   * @param file_size size of this file
-   */
-  void gc(LogicalBlockIdx tail_tx_block, uint64_t file_size);
-
- private:
-  /**
-   * Move along the linked list of TxBlock and find the tail. The returned
-   * tail may not be up-to-date due to race condition. No new blocks will be
-   * allocated. If the end of TxBlock is reached, just return NUM_TX_ENTRY as
-   * the TxLocalIdx.
-   */
-  void find_tail(TxEntryIdx& curr_idx, pmem::TxBlock*& curr_block) const;
+  pmem::TxEntry try_commit(pmem::TxEntry entry, TxCursor* cursor) const;
 
  public:
   friend std::ostream& operator<<(std::ostream& out, const TxMgr& tx_mgr);

@@ -18,7 +18,7 @@ struct TxCursor;
 class OffsetMgr {
   union TicketSlot {
     struct {
-      std::atomic_uint64_t ticket;
+      std::atomic<uint64_t> ticket;
       TxCursor cursor;
     } ticket_slot;
     char cl[CACHELINE_SIZE];

@@ -30,34 +30,34 @@ class Timer {
 
   template <Event event>
   void count() {
-    if constexpr (!BuildOptions::enable_timer) return;
+    if constexpr (!is_enabled<event>()) return;
     get<event>(occurrences)++;
   }
 
   template <Event event>
   void count(size_t size) {
-    if constexpr (!BuildOptions::enable_timer) return;
+    if constexpr (!is_enabled<event>()) return;
     count<event>();
     get<event>(sizes) += size;
   }
 
   template <Event event>
   void start() {
-    if constexpr (!BuildOptions::enable_timer) return;
+    if constexpr (!is_enabled<event>()) return;
     count<event>();
     get<event>(start_times) = std::chrono::high_resolution_clock::now();
   }
 
   template <Event event>
   void start(size_t size) {
-    if constexpr (!BuildOptions::enable_timer) return;
+    if constexpr (!is_enabled<event>()) return;
     get<event>(sizes) += size;
     start<event>();
   }
 
   template <Event event>
   void stop() {
-    if constexpr (!BuildOptions::enable_timer) return;
+    if constexpr (!is_enabled<event>()) return;
     auto end_time = std::chrono::high_resolution_clock::now();
     auto start_time = get<event>(start_times);
     get<event>(durations) += end_time - start_time;
@@ -88,7 +88,7 @@ class Timer {
       if (occurrence == 0) return;
 
       // print name and occurrence
-      fprintf(log_file, "        %-25s: %6zu",
+      fprintf(log_file, "        %-25s: %7zu",
               magic_enum::enum_name(event).data(), occurrence);
 
       // print duration
@@ -99,7 +99,7 @@ class Timer {
             std::chrono::duration<double, std::micro>(duration).count() /
             (double)occurrence;
 
-        fprintf(log_file, " (%6.3f us, %6.2f ms)", avg_us, total_ms);
+        fprintf(log_file, " (%6.3f us, %7.2f ms)", avg_us, total_ms);
       }
 
       // print size
@@ -117,6 +117,25 @@ class Timer {
     for (auto count : occurrences)
       if (count != 0) return false;
     return true;
+  }
+
+  template <Event event>
+  static constexpr bool is_enabled() {
+    for (auto disabled_event : {
+             Event::READ_TX_CTOR,
+             Event::ALIGNED_TX_CTOR,
+             Event::ALIGNED_TX_EXEC,
+             Event::ALIGNED_TX_PREPARE,
+             Event::ALIGNED_TX_RECYCLE,
+             Event::ALIGNED_TX_WAIT_OFFSET,
+             Event::ALIGNED_TX_FREE,
+             Event::TX_ENTRY_LOAD,
+             Event::TX_ENTRY_STORE,
+         }) {
+      if (disabled_event == event) return false;
+    }
+
+    return BuildOptions::enable_timer;
   }
 };
 

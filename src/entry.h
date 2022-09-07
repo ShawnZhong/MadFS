@@ -65,14 +65,15 @@ struct LogEntry {
 
   /*** some helper functions ***/
   [[nodiscard]] constexpr uint32_t get_lidxs_len() const {
-    return ALIGN_UP(static_cast<uint32_t>(num_blocks), BITMAP_BLOCK_CAPACITY) >>
-           BITMAP_BLOCK_CAPACITY_SHIFT;
+    return ALIGN_UP(static_cast<uint32_t>(num_blocks),
+                    BITMAP_ENTRY_BLOCKS_CAPACITY) >>
+           BITMAP_ENTRY_BLOCKS_CAPACITY_SHIFT;
   }
 
   // every element in lidxs corresponds to a mapping of length 64 blocks except
   // the last one
   [[nodiscard]] constexpr uint32_t get_last_lidx_num_blocks() const {
-    return num_blocks % BITMAP_BLOCK_CAPACITY;
+    return num_blocks % BITMAP_ENTRY_BLOCKS_CAPACITY;
   }
 
   void persist() {
@@ -88,7 +89,8 @@ struct LogEntry {
     out << "lidxs=[" << entry.begin_lidxs[0];
     for (uint32_t i = 1; i < entry.get_lidxs_len(); ++i)
       out << "," << entry.begin_lidxs[i];
-    out << "]}";
+    out << "], ";
+    out << "leftover_bytes=" << entry.leftover_bytes << "}";
     return out;
   }
 };
@@ -100,7 +102,6 @@ static_assert(sizeof(LogEntry) == LogEntry::FIXED_SIZE,
  * Points to the head of a linked list of LogEntry
  */
 struct __attribute__((packed)) TxEntryIndirect {
- private:
   friend union TxEntry;
 
  private:
@@ -118,7 +119,9 @@ struct __attribute__((packed)) TxEntryIndirect {
     block_idx = log_entry_idx.block_idx.get();
   }
 
-  LogEntryIdx get_log_entry_idx() { return {block_idx, local_offset}; }
+  [[nodiscard]] LogEntryIdx get_log_entry_idx() const {
+    return {block_idx, local_offset};
+  }
 
   friend std::ostream& operator<<(std::ostream& out, const TxEntryIndirect& e) {
     out << "TxEntryIndirect{" << e.block_idx << "," << e.local_offset << "}";
@@ -130,7 +133,6 @@ static_assert(sizeof(TxEntryIndirect) == TX_ENTRY_SIZE,
               "TxEntryIndirect must be 64 bits");
 
 struct __attribute__((packed)) TxEntryInline {
- private:
   constexpr static const int NUM_BLOCKS_BITS = 6;
   constexpr static const int BEGIN_VIRTUAL_IDX_BITS = 28;
   constexpr static const int BEGIN_LOGICAL_IDX_BITS = 29;
@@ -184,7 +186,6 @@ static_assert(sizeof(TxEntryInline) == TX_ENTRY_SIZE,
               "TxEntryInline must be 64 bits");
 
 union TxEntry {
- public:
   uint64_t raw_bits;
   TxEntryIndirect indirect_entry;
   TxEntryInline inline_entry;

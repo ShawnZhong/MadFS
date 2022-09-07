@@ -7,6 +7,9 @@
 
 - uLayFS is developed on Ubuntu 20.04.3 LTS (with Linux kernel 5.4)
 
+- We recommend using Python 3.8.10, CMake 3.16.3, GCC 10.3.0 (or 9.4.0), and
+  Clang 10.0.0, but other versions should also work.
+
 - Install dependencies and configure the system
 
     ```shell

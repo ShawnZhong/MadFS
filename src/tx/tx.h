@@ -126,17 +126,19 @@ class Tx {
           for (i = 0; i < curr_le_entry->get_lidxs_len() - 1; ++i) {
             has_conflict |= get_conflict_image(
                 first_vidx, last_vidx,
-                curr_le_entry->begin_vidx + (i << BITMAP_BLOCK_CAPACITY_SHIFT),
-                curr_le_entry->begin_lidxs[i], BITMAP_BLOCK_CAPACITY,
+                curr_le_entry->begin_vidx +
+                    (i << BITMAP_ENTRY_BLOCKS_CAPACITY_SHIFT),
+                curr_le_entry->begin_lidxs[i], BITMAP_ENTRY_BLOCKS_CAPACITY,
                 conflict_image);
           }
           has_conflict |= get_conflict_image(
               first_vidx, last_vidx,
-              curr_le_entry->begin_vidx + (i << BITMAP_BLOCK_CAPACITY_SHIFT),
+              curr_le_entry->begin_vidx +
+                  (i << BITMAP_ENTRY_BLOCKS_CAPACITY_SHIFT),
               curr_le_entry->begin_lidxs[i],
               curr_le_entry->get_last_lidx_num_blocks(), conflict_image);
           VirtualBlockIdx end_vidx = curr_le_entry->begin_vidx +
-                                     (i << BITMAP_BLOCK_CAPACITY_SHIFT) +
+                                     (i << BITMAP_ENTRY_BLOCKS_CAPACITY_SHIFT) +
                                      curr_le_entry->get_last_lidx_num_blocks();
           uint64_t possible_file_size =
               BLOCK_IDX_TO_SIZE(end_vidx) - curr_le_entry->leftover_bytes;
@@ -151,8 +153,8 @@ class Tx {
         }
       }
       // only update into_new_block if it is not nullptr and not set true yet
-      if (!tx_mgr->advance_cursor(
-              &state.cursor, /*do_alloc*/ false,
+      if (!state.cursor.advance(
+              tx_mgr->mem_table,
               into_new_block && !*into_new_block ? into_new_block : nullptr))
         break;
       curr_entry = state.cursor.get_entry();

@@ -35,18 +35,18 @@ jobs:
 
       - name: leveldb_ycsb
         run: |
-          ./run leveldb_ycsb -- -f bench/ycsb-traces/a-load.txt
-          ./run leveldb_ycsb -- -f bench/ycsb-traces/a-run.txt
-          ./run leveldb_ycsb -- -f bench/ycsb-traces/b-load.txt
-          ./run leveldb_ycsb -- -f bench/ycsb-traces/b-run.txt
-          ./run leveldb_ycsb -- -f bench/ycsb-traces/c-load.txt
-          ./run leveldb_ycsb -- -f bench/ycsb-traces/c-run.txt
-          ./run leveldb_ycsb -- -f bench/ycsb-traces/d-load.txt
-          ./run leveldb_ycsb -- -f bench/ycsb-traces/d-run.txt
-          ./run leveldb_ycsb -- -f bench/ycsb-traces/e-load.txt
-          ./run leveldb_ycsb -- -f bench/ycsb-traces/e-run.txt
-          ./run leveldb_ycsb -- -f bench/ycsb-traces/f-load.txt
-          ./run leveldb_ycsb -- -f bench/ycsb-traces/f-run.txt
+          ./run leveldb_ycsb -- -f data/ycsb-1k/a-load.txt
+          ./run leveldb_ycsb -- -f data/ycsb-1k/a-run.txt
+          ./run leveldb_ycsb -- -f data/ycsb-1k/b-load.txt
+          ./run leveldb_ycsb -- -f data/ycsb-1k/b-run.txt
+          ./run leveldb_ycsb -- -f data/ycsb-1k/c-load.txt
+          ./run leveldb_ycsb -- -f data/ycsb-1k/c-run.txt
+          ./run leveldb_ycsb -- -f data/ycsb-1k/d-load.txt
+          ./run leveldb_ycsb -- -f data/ycsb-1k/d-run.txt
+          ./run leveldb_ycsb -- -f data/ycsb-1k/e-load.txt
+          ./run leveldb_ycsb -- -f data/ycsb-1k/e-run.txt
+          ./run leveldb_ycsb -- -f data/ycsb-1k/f-load.txt
+          ./run leveldb_ycsb -- -f data/ycsb-1k/f-run.txt
 
   tpcc:
     name: SQLite
@@ -57,6 +57,6 @@ jobs:
       - name: run
         run: |
           LD_PRELOAD=./build-release/libulayfs.so \
-            sqlite3 tpcc.db '.read bench/tpcc.sql'
+            sqlite3 tpcc.db '.read data/tpcc.sql'
           ./run tpcc_load -- -w 1
           ./run tpcc_start -- -w 4 -c 1 -t 10
