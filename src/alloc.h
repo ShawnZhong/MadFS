@@ -118,21 +118,6 @@ class Allocator {
    */
   void reset_log_entry();
 
- private:
-  /**
-   * Allocate a tx block
-   * @param tx_seq the tx sequence number of the tx block (gc_seq = 0)
-   * @return a tuple of the block index and the block address
-   */
-  std::tuple<LogicalBlockIdx, pmem::TxBlock*> alloc_tx_block(uint32_t tx_seq);
-
-  /**
-   * Free a tx block
-   * @param tx_block_idx the index of the tx block
-   * @param tx_block the address of the tx block to free
-   */
-  void free_tx_block(LogicalBlockIdx tx_block_idx, pmem::TxBlock* tx_block);
-
   [[nodiscard]] LogicalBlockIdx get_pinned_tx_block_idx() const {
     return pinned_tx_block_idx;
   }
@@ -157,6 +142,43 @@ class Allocator {
     // TODO: uncomment this line after setting shared memory
     // *notify_addr = tx_block_idx;
   }
+
+  /**
+   * @tparam B MetaBlock or TxBlock
+   * @param block the block that needs a next block to be allocated
+   * @return the block id of the allocated block and the new tx block allocated
+   */
+  template <class B>
+  std::tuple<LogicalBlockIdx, pmem::TxBlock*> alloc_next_tx_block(B* block) {
+    auto [new_block_idx, new_block] = alloc_tx_block(block->get_tx_seq() + 1);
+
+    bool success = block->try_set_next_tx_block(new_block_idx);
+    if (!success) {  // race condition for adding the new blocks
+      free_tx_block(new_block_idx, new_block);
+      new_block_idx = block->get_next_tx_block();
+      new_block = &mem_table->lidx_to_addr_rw(new_block_idx)->tx_block;
+    }
+
+    shm_mgr->get_per_thread_data(shm_thread_idx)->tx_block_idx =
+        new_block_idx.get();
+
+    return {new_block_idx, new_block};
+  }
+
+ private:
+  /**
+   * Allocate a tx block
+   * @param tx_seq the tx sequence number of the tx block (gc_seq = 0)
+   * @return a tuple of the block index and the block address
+   */
+  std::tuple<LogicalBlockIdx, pmem::TxBlock*> alloc_tx_block(uint32_t tx_seq);
+
+  /**
+   * Free a tx block
+   * @param tx_block_idx the index of the tx block
+   * @param tx_block the address of the tx block to free
+   */
+  void free_tx_block(LogicalBlockIdx tx_block_idx, pmem::TxBlock* tx_block);
 };
 
 }  // namespace ulayfs::dram

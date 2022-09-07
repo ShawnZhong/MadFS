@@ -222,7 +222,7 @@ void Allocator::free_log_entry(pmem::LogEntry* first_entry,
       curr_entry = curr_block->get(curr_entry->next.local_offset);
     } else {
       curr_block_idx = curr_entry->next.block_idx;
-      curr_block = &file->lidx_to_addr_rw(curr_block_idx)->log_entry_block;
+      curr_block = &mem_table->lidx_to_addr_rw(curr_block_idx)->log_entry_block;
       curr_entry = curr_block->get(0);
       free(curr_block_idx);
     }

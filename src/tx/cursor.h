@@ -62,14 +62,18 @@ struct TxCursor {
   /**
    * If the given cursor is in an overflow state, update it if allowed.
    *
-   * @param allocator allocator to allocate new blocks
-   * @param mem_table used to find the memory address of the next block
+   * @param[in] allocator allocator to allocate new blocks
+   * @param[in] mem_table used to find the memory address of the next block
+   * @param[out] into_new_block if not nullptr, return whether the cursor is
+   * advanced into a new tx block
    * @return true if the idx is not in overflow state; false otherwise
    */
-  bool handle_overflow(MemTable* mem_table, Allocator* allocator = nullptr) {
+  bool handle_overflow(MemTable* mem_table, Allocator* allocator = nullptr,
+                       bool* is_overflow = nullptr) {
     const bool is_inline = idx.is_inline();
     uint16_t capacity = idx.get_capacity();
     if (unlikely(idx.local_idx >= capacity)) {
+      if (is_overflow) *is_overflow = true;
       LogicalBlockIdx block_idx =
           is_inline ? meta->get_next_tx_block() : block->get_next_tx_block();
       if (block_idx == 0) {
@@ -85,6 +89,8 @@ struct TxCursor {
         idx.local_idx -= capacity;
         block = &mem_table->lidx_to_addr_rw(idx.block_idx)->tx_block;
       }
+    } else {
+      if (is_overflow) *is_overflow = false;
     }
     return true;
   }
@@ -92,17 +98,20 @@ struct TxCursor {
   /**
    * Advance cursor to the next transaction entry
    *
-   * @param cursor the cursor to advance
-   * @param allocator if given, allocate new blocks when reaching the end of
+   * @param[in] cursor the cursor to advance
+   * @param[in] allocator if given, allocate new blocks when reaching the end of
    * a block
+   * @param[out] into_new_block if not nullptr, return whether the cursor is
+   * advanced into a new tx block
    *
    * @return true on success; false when reaches the end of a block and
    * allocator is not given. The advance would happen anyway but in the case
    * of false, it is in a overflow state
    */
-  bool advance(MemTable* mem_table, Allocator* allocator = nullptr) {
+  bool advance(MemTable* mem_table, Allocator* allocator = nullptr,
+               bool* into_new_block = nullptr) {
     idx.local_idx++;
-    return handle_overflow(mem_table, allocator);
+    return handle_overflow(mem_table, allocator, into_new_block);
   }
 
   static void flush_up_to(MemTable* mem_table, TxCursor end) {

@@ -155,6 +155,7 @@ class Tx {
       // only update into_new_block if it is not nullptr and not set true yet
       if (!state.cursor.advance(
               tx_mgr->mem_table,
+              /*allocator=*/nullptr,
               into_new_block && !*into_new_block ? into_new_block : nullptr))
         break;
       curr_entry = state.cursor.get_entry();
