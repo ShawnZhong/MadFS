@@ -132,12 +132,12 @@ class Allocator {
    * thread performing the initial log replaying and do not reclaim any blocks.
    */
   void pin_tx_block(LogicalBlockIdx tx_block_idx) {
-    if (!notify_addr) {
-      assert(tx_block_idx == 0);
-      // TODO: allocate from shared memory!
-      return;
-    }
-    if (pinned_tx_block_idx == tx_block_idx) return;
+    //    if (!notify_addr) {
+    //      assert(tx_block_idx == 0);
+    //      // TODO: allocate from shared memory!
+    //      return;
+    //    }
+    //    if (pinned_tx_block_idx == tx_block_idx) return;
     pinned_tx_block_idx = tx_block_idx;
     // TODO: uncomment this line after setting shared memory
     // *notify_addr = tx_block_idx;
