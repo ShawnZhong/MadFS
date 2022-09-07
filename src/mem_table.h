@@ -181,12 +181,14 @@ class MemTable {
  public:
   friend std::ostream& operator<<(std::ostream& out, const MemTable& m) {
     out << "MemTable:\n";
-    uint32_t chunk_idx = 0;
+    out << "\t" << 0 << " - " << m.first_region_num_blocks << ": "
+        << m.first_region << "\n";
+
+    uint32_t chunk_idx = m.first_region_num_blocks >> GROW_UNIT_IN_BLOCK_SHIFT;
     for (const auto& mem_addr : m.table) {
       LogicalBlockIdx chunk_begin_lidx = chunk_idx << GROW_UNIT_IN_BLOCK_SHIFT;
       out << "\t" << chunk_begin_lidx << " - "
-          << chunk_begin_lidx + NUM_BLOCKS_PER_GROW << ": ";
-      out << mem_addr << " - " << mem_addr + NUM_BLOCKS_PER_GROW << "\n";
+          << chunk_begin_lidx + NUM_BLOCKS_PER_GROW << ": " << mem_addr << "\n";
       ++chunk_idx;
     }
     return out;

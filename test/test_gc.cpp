@@ -18,11 +18,14 @@ struct TestOpt {
   int num_bytes_per_iter = BLOCK_SIZE;
   int num_iter = NUM_INLINE_TX_ENTRY + NUM_TX_ENTRY_PER_BLOCK + 1;
   bool print = false;
-  bool random_offset = false;
+
+  // if set, the offset will be random in [0, random_block_range * BLOCK_SIZE)
+  int random_block_range = 0;
 };
 
 void test(TestOpt test_opt) {
-  const auto& [num_bytes_per_iter, num_iter, print, random_offset] = test_opt;
+  const auto& [num_bytes_per_iter, num_iter, print, random_block_range] =
+      test_opt;
 
   unlink(filepath);
   int fd = open(filepath, O_CREAT | O_RDWR, S_IRUSR | S_IWUSR);
@@ -31,8 +34,8 @@ void test(TestOpt test_opt) {
 
   for (int i = 0; i < num_iter; ++i) {
     ssize_t ret;
-    if (random_offset) {
-      off_t offset = (rand() % num_iter) * num_bytes_per_iter;
+    if (random_block_range) {
+      off_t offset = (rand() % random_block_range) * BLOCK_SIZE;
       ret = pwrite(fd, src_buf.get(), num_bytes_per_iter, offset);
     } else {
       ret = pwrite(fd, src_buf.get(), num_bytes_per_iter, 0);
@@ -58,20 +61,20 @@ void test(TestOpt test_opt) {
   {
     int new_fd = open(filepath, O_CREAT | O_RDWR, S_IRUSR | S_IWUSR);
     auto new_file = ulayfs::get_file(new_fd);
-    //    ASSERT(new_file->blk_table.get_file_state().file_size == file_size);
+    ASSERT(new_file->blk_table.get_file_state().file_size == file_size);
   }
 }
 
 int main() {
+  srand(0);  // NOLINT(cert-msc51-cpp)
+
   //  test({1, 1'000'000, false});
   //  test({BLOCK_SIZE * 64, 1'000'000, false});
   test({.num_bytes_per_iter = BLOCK_SIZE,
-        .num_iter = NUM_INLINE_TX_ENTRY + NUM_TX_ENTRY_PER_BLOCK * 2 + 1,
+        .num_iter = NUM_INLINE_TX_ENTRY + NUM_TX_ENTRY_PER_BLOCK + 1,
         .print = true,
-        .random_offset = true});
-  test({BLOCK_SIZE, NUM_INLINE_TX_ENTRY + 1});
-  test({BLOCK_SIZE, NUM_INLINE_TX_ENTRY + NUM_TX_ENTRY_PER_BLOCK});
-  test({BLOCK_SIZE, NUM_INLINE_TX_ENTRY + NUM_TX_ENTRY_PER_BLOCK * 2 + 1});
+        .random_block_range = 1000});
+  test({BLOCK_SIZE});
   if constexpr (!ulayfs::BuildOptions::use_pmemcheck) {
     // the following tests are too slow for pmemcheck
     test({BLOCK_SIZE * 63});

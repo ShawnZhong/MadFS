@@ -43,7 +43,6 @@ class GarbageCollector {
 
     bool success = create_new_linked_list();
     if (!success) {
-      PANIC("GarbageCollector: fail to create new linked list");
       return;
     }
 
@@ -99,7 +98,7 @@ class GarbageCollector {
       for (; i < num_blocks; i++) {
         auto curr_blk_idx = file->vidx_to_lidx(i);
         auto prev_blk_idx = file->vidx_to_lidx(i - 1);
-        if (curr_blk_idx == 0) break;
+        if (curr_blk_idx == 0) continue;
         // continuous blocks can be placed in 1 tx
         if (curr_blk_idx - prev_blk_idx == 1 &&
             i - begin < pmem::TxEntryInline::NUM_BLOCKS_MAX)
@@ -159,6 +158,7 @@ class GarbageCollector {
       } while (new_tx_blk_idx != old_cursor.idx.block_idx &&
                new_tx_blk_idx != 0);
       allocator->return_free_list();
+      LOG_WARN("GarbageCollector: new tx history is longer than the old one");
       return false;
     }
     pmem::persist_fenced(new_cursor.block, BLOCK_SIZE);
