@@ -173,11 +173,15 @@ struct __attribute__((packed)) TxEntryInline {
 
   friend std::ostream& operator<<(std::ostream& out,
                                   const TxEntryInline& entry) {
-    out << "TxEntryInline{";
-    out << "n_blk=" << entry.num_blocks << ", ";
-    out << "vidx=" << entry.begin_virtual_idx << ", ";
-    out << "lidx=" << entry.begin_logical_idx;
-    out << "}";
+    if (entry.num_blocks == 1) {
+      out << "TxEntryInline{" << entry.begin_virtual_idx << " -> "
+          << entry.begin_logical_idx << "}";
+    } else {
+      out << "TxEntryInline{[" << entry.begin_virtual_idx << ", "
+          << entry.begin_virtual_idx + entry.num_blocks - 1 << "] -> ["
+          << entry.begin_logical_idx << ", "
+          << entry.begin_logical_idx + entry.num_blocks - 1 << "]}";
+    }
     return out;
   }
 };

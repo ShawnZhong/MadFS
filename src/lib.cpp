@@ -4,8 +4,6 @@
 #include <iostream>
 
 #include "config.h"
-#include "file.h"
-#include "timer.h"
 
 namespace ulayfs {
 extern "C" {

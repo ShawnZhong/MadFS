@@ -108,7 +108,7 @@ class File {
   /**
    * @return the logical block index corresponding to the virtual index
    */
-  [[nodiscard]] LogicalBlockIdx vidx_to_lidx(VirtualBlockIdx vidx) {
+  [[nodiscard]] LogicalBlockIdx vidx_to_lidx(VirtualBlockIdx vidx) const {
     return blk_table.get(vidx);
   }
 

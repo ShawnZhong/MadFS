@@ -43,7 +43,6 @@ class GarbageCollector {
 
     bool success = create_new_linked_list();
     if (!success) {
-      PANIC("GarbageCollector: fail to create new linked list");
       return;
     }
 
@@ -99,7 +98,7 @@ class GarbageCollector {
       for (; i < num_blocks; i++) {
         auto curr_blk_idx = file->vidx_to_lidx(i);
         auto prev_blk_idx = file->vidx_to_lidx(i - 1);
-        if (curr_blk_idx == 0) break;
+        if (curr_blk_idx == 0) continue;
         // continuous blocks can be placed in 1 tx
         if (curr_blk_idx - prev_blk_idx == 1 &&
             i - begin < pmem::TxEntryInline::NUM_BLOCKS_MAX)
@@ -139,6 +138,7 @@ class GarbageCollector {
         auto commit_entry = pmem::TxEntryIndirect(log_head_idx);
         new_cursor.block->store(commit_entry, new_cursor.idx.local_idx);
       }
+      pmem::persist_unfenced(new_cursor.block, BLOCK_SIZE);
     }
 
     // pad the last block with dummy tx entries
@@ -147,6 +147,7 @@ class GarbageCollector {
                               new_cursor.idx.local_idx);
     // last block points to the tail, meta points to the first block
     new_cursor.block->try_set_next_tx_block(old_cursor.idx.block_idx);
+    pmem::persist_unfenced(new_cursor.block, BLOCK_SIZE);
     // abort if new transaction history is longer than the old one
     auto tail_block = file->mem_table.lidx_to_addr_rw(old_cursor.idx.block_idx);
     if (tail_block->tx_block.get_tx_seq() <= new_cursor.block->get_tx_seq()) {
@@ -159,6 +160,7 @@ class GarbageCollector {
       } while (new_tx_blk_idx != old_cursor.idx.block_idx &&
                new_tx_blk_idx != 0);
       allocator->return_free_list();
+      LOG_WARN("GarbageCollector: new tx history is longer than the old one");
       return false;
     }
     pmem::persist_fenced(new_cursor.block, BLOCK_SIZE);
