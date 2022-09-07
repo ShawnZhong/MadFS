@@ -81,7 +81,7 @@ class GarbageCollector {
     auto allocator = file->get_local_allocator();
 
     uint32_t tx_seq = 1;
-    auto first_tx_block_idx = allocator->alloc(1);
+    auto first_tx_block_idx = allocator->block.alloc(1);
     auto new_block = file->mem_table.lidx_to_addr_rw(first_tx_block_idx);
     memset(&new_block->cache_lines[NUM_CL_PER_BLOCK - 1], 0, CACHELINE_SIZE);
     new_block->tx_block.set_tx_seq(tx_seq++);
@@ -108,7 +108,7 @@ class GarbageCollector {
         new_cursor.block->store(entry, new_cursor.idx.local_idx);
         if (bool success = new_cursor.advance(&file->mem_table); !success) {
           // current block is full, flush it and allocate a new block
-          auto new_tx_block_idx = allocator->alloc(1);
+          auto new_tx_block_idx = allocator->block.alloc(1);
           new_cursor.block->try_set_next_tx_block(new_tx_block_idx);
           pmem::persist_unfenced(new_cursor.block, BLOCK_SIZE);
           new_block = file->mem_table.lidx_to_addr_rw(new_tx_block_idx);
@@ -155,11 +155,11 @@ class GarbageCollector {
       auto new_tx_blk_idx = first_tx_block_idx;
       do {
         auto next_tx_blk_idx = new_cursor.block->get_next_tx_block();
-        allocator->free(new_tx_blk_idx, 1);
+        allocator->block.free(new_tx_blk_idx, 1);
         new_tx_blk_idx = next_tx_blk_idx;
       } while (new_tx_blk_idx != old_cursor.idx.block_idx &&
                new_tx_blk_idx != 0);
-      allocator->return_free_list();
+      allocator->block.return_free_list();
       LOG_WARN("GarbageCollector: new tx history is longer than the old one");
       return false;
     }

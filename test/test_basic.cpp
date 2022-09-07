@@ -172,7 +172,7 @@ void test_stream() {
 void test_unlink() {
   fprintf(stderr, "test_unlink\n");
 
-  system("rm -rf /dev/shm/ulayfs_*");
+  rc = system("rm -rf /dev/shm/ulayfs_*");
 
   int fd = open(filepath, O_CREAT | O_RDWR, S_IRUSR | S_IWUSR);
   ASSERT(fd >= 0);

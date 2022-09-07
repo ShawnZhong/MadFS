@@ -12,7 +12,7 @@
 #include <iostream>
 #include <stdexcept>
 
-#include "alloc.h"
+#include "alloc/alloc.h"
 #include "bitmap.h"
 #include "blk_table.h"
 #include "block/block.h"

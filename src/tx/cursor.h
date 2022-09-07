@@ -1,6 +1,6 @@
 #pragma once
 
-#include "alloc.h"
+#include "alloc/alloc.h"
 #include "block/tx.h"
 #include "idx.h"
 #include "mem_table.h"
@@ -79,8 +79,8 @@ struct TxCursor {
       if (block_idx == 0) {
         if (!allocator) return false;
         const auto& [new_block_idx, new_block] =
-            is_inline ? allocator->alloc_next_tx_block(meta)
-                      : allocator->alloc_next_tx_block(block);
+            is_inline ? allocator->tx_block.alloc_next(meta)
+                      : allocator->tx_block.alloc_next(block);
         idx.block_idx = new_block_idx;
         block = new_block;
         idx.local_idx -= capacity;
