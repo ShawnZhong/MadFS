@@ -80,6 +80,10 @@ struct LogEntry {
     auto size = FIXED_SIZE + sizeof(LogicalBlockIdx) * get_lidxs_len();
     persist_unfenced(this, size);
   }
+
+  // a log entry can be very large (e.g. a full block), but sometimes only the
+  // header gets updated and needs persistence
+  void persist_header() { persist_unfenced(this, 8); }
   // more advanced iteration helpers are in TxMgr, since they require MemTable
 
   friend std::ostream& operator<<(std::ostream& out, const LogEntry& entry) {
