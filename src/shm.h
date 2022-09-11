@@ -175,13 +175,16 @@ class ShmMgr {
    * @return the address of the per-thread data
    */
   [[nodiscard]] PerThreadData* alloc_per_thread_data() const {
-    meta->lock();
+    // TODO: make sure that only one thread can allocate a per-thread data at a
+    //  time. Otherwise, a thread crashes during PerThreadData::try_init will
+    //  result in a leak (e.g., state == INITIALIZING but the thread is dead).
+    // meta->lock();
     for (size_t i = 0; i < MAX_NUM_THREADS; i++) {
       PerThreadData* per_thread_data = get_per_thread_data(i);
       bool success = per_thread_data->try_init(i);
       if (success) return per_thread_data;
     }
-    meta->unlock();
+    // meta->unlock();
     PANIC("No empty per-thread data");
   }
 
