@@ -20,8 +20,7 @@ namespace ulayfs::dram {
 
 File::File(int fd, const struct stat& stat, int flags,
            const char* pathname [[maybe_unused]], bool guard)
-    :  // TODO: pass in `(flags & O_ACCMODE) == O_RDONLY` for `read_only`
-      mem_table(fd, stat.st_size, /*read_only=*/false),
+    : mem_table(fd, stat.st_size, (flags & O_ACCMODE) == O_RDONLY),
       tx_mgr(this, &mem_table),
       blk_table(&mem_table),
       shm_mgr(fd, stat, mem_table.get_meta()),
