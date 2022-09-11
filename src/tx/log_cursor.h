@@ -51,11 +51,11 @@ struct LogCursor {
             BitmapMgr* bitmap_mgr = nullptr)
       : LogCursor(tx_entry.get_log_entry_idx(), mem_table, bitmap_mgr) {}
 
-  [[nodiscard]] pmem::LogEntry* entry() const {
+  [[nodiscard]] pmem::LogEntry* get_entry() const {
     return block->get(idx.local_offset);
   }
-  pmem::LogEntry* operator->() const { return entry(); }
-  pmem::LogEntry& operator*() const { return *entry(); }
+  pmem::LogEntry* operator->() const { return get_entry(); }
+  pmem::LogEntry& operator*() const { return *get_entry(); }
 
   /**
    * @brief Advance the cursor to the next log entry.
@@ -66,17 +66,19 @@ struct LogCursor {
    * @return true if the cursor is advanced to the next log entry
    */
   bool advance(MemTable* mem_table, BitmapMgr* bitmap_mgr = nullptr) {
+    pmem::LogEntry* entry = get_entry();
+
     // check if we are at the end of the linked list
-    if (!entry()->has_next) return false;
+    if (!entry->has_next) return false;
 
     // next entry is in the same block
-    if (entry()->is_next_same_block) {
-      idx.local_offset = entry()->next.local_offset;
+    if (entry->is_next_same_block) {
+      idx.local_offset = entry->next.local_offset;
       return true;
     }
 
     // move to the next block
-    idx.block_idx = entry()->next.block_idx;
+    idx.block_idx = entry->next.block_idx;
     idx.local_offset = 0;  // must be the first on in the next block
     block = &mem_table->lidx_to_addr_rw(idx.block_idx)->log_entry_block;
     if (bitmap_mgr) bitmap_mgr->set_allocated(idx.block_idx);
@@ -94,7 +96,7 @@ struct LogCursor {
     while (log_cursor.advance(mem_table))
       ;
     log_cursor->leftover_bytes = leftover_bytes;
-    log_cursor->persist();
+    log_cursor->persist_header();
   }
 };
 

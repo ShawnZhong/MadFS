@@ -90,7 +90,7 @@ class LogEntryAllocator {
    * there is other log entries on this block, leave this block alone
    */
   void free(const LogCursor& log_cursor) {
-    pmem::LogEntry* curr_entry = log_cursor.entry();
+    pmem::LogEntry* curr_entry = log_cursor.get_entry();
     pmem::LogEntryBlock* curr_block = log_cursor.block;
     LogicalBlockIdx curr_block_idx = log_cursor.idx.block_idx;
 

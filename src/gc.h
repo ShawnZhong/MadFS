@@ -54,8 +54,8 @@ class GarbageCollector {
         std::numeric_limits<LogicalBlockIdx>::max();
     for (size_t i = 0; i < MAX_NUM_THREADS; ++i) {
       auto per_thread_data = file->shm_mgr.get_per_thread_data(i);
-      if (!per_thread_data->is_initialized()) continue;
-      LogicalBlockIdx curr_tx_idx = per_thread_data->get_tx_block_idx();
+      if (!per_thread_data->is_valid()) continue;
+      LogicalBlockIdx curr_tx_idx = per_thread_data->tx_block_idx;
       if (curr_tx_idx < smallest_tx_idx) smallest_tx_idx = curr_tx_idx;
     }
     return smallest_tx_idx;
