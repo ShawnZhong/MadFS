@@ -12,71 +12,101 @@
 
 namespace ulayfs::dram {
 
-class PerThreadData {
-  union {
-    struct {
-      std::atomic<bool> initialized;
-
-      size_t index;
-
-      // each thread will pin a tx block so that the garbage collector will not
-      // reclaim this block and blocks after it
-      uint32_t tx_block_idx;
-
-      pthread_mutex_t mutex;
-    } data;
-    char cl[SHM_PER_THREAD_SIZE];
+class alignas(SHM_PER_THREAD_SIZE) PerThreadData {
+  enum State : uint8_t {
+    UNINITIALIZED,
+    INITIALIZING,
+    INITIALIZED,
   };
 
+  std::atomic<enum State> state;
+
  public:
-  [[nodiscard]] bool is_initialized() const {
-    // TODO: check if the robust mutex is valid
-    return data.initialized;
+  // mutex used to indicate the liveness of the thread
+  // shall only be read when state == INITIALIZED
+  pthread_mutex_t mutex;
+
+  // the index within the shared memory region
+  size_t index;
+
+  // each thread will pin a tx block so that the garbage collector will not
+  // reclaim this block and blocks after it
+  LogicalBlockIdx tx_block_idx;
+
+  /**
+   * @return true if this PerThreadData is initialized and the thread is not
+   * dead.
+   */
+  [[nodiscard]] bool is_valid() {
+    if (state != INITIALIZED) return false;
+    return is_thread_alive();
   }
 
   /**
-   * initialize the per-thread data
-   * @param index the index of this per-thread data
+   * Try to initialize the per-thread data. There should be only one thread
+   * calling this function at a time.
+   *
+   * @param i the index of this per-thread data
    * @return true if initialization succeeded
    */
-  bool initialize(size_t index) {
-    bool expected = false;
-    if (!data.initialized.compare_exchange_strong(expected, true)) {
-      // TODO: check if the robust mutex is valid
+  bool try_init(size_t i) {
+    State expected = UNINITIALIZED;
+    if (!state.compare_exchange_strong(expected, INITIALIZING)) {
+      // If the state is not UNINITIALIZED, then it must be INITIALIZED.
+      // It cannot be INITIALIZING because there should be only one thread
+      // calling this function.
       return false;
     }
 
-    data.index = index;
-    data.tx_block_idx = 0;
+    index = i;
+    tx_block_idx = 0;
+
     pthread_mutexattr_t attr;
     pthread_mutexattr_init(&attr);
     pthread_mutexattr_setrobust(&attr, PTHREAD_MUTEX_ROBUST);
-    pthread_mutex_init(&data.mutex, &attr);
-    LOG_DEBUG("PerThreadData %ld initialized by tid %d", data.index, tid);
+    pthread_mutex_init(&mutex, &attr);
+    state = State::INITIALIZED;
     return true;
   }
 
   /**
-   * destroy the per-thread data
+   * Destroy the per-thread data
    */
   void reset() {
-    LOG_DEBUG("PerThreadData %ld reset by tid %d", data.index, tid);
-    pthread_mutex_destroy(&data.mutex);
-    memset(cl, 0, sizeof(cl));
+    LOG_DEBUG("PerThreadData %ld reset by tid %d", index, tid);
+    state = State::UNINITIALIZED;
+    pthread_mutex_destroy(&mutex);
   }
 
-  [[nodiscard]] LogicalBlockIdx get_tx_block_idx() const {
-    return data.tx_block_idx;
-  }
-
-  void set_tx_block_idx(LogicalBlockIdx tx_block_idx) {
-    this->data.tx_block_idx = tx_block_idx.get();
+ private:
+  /**
+   * Check the robust mutex to see if the thread is alive.
+   *
+   * This function can only be called when state == INITIALIZED, since trying to
+   * lock an uninitialized mutex will cause undefined behavior.
+   *
+   * @return true if the thread is alive
+   */
+  bool is_thread_alive() {
+    assert(state == State::INITIALIZED);
+    int rc = pthread_mutex_trylock(&mutex);
+    if (rc == 0) {
+      // if we can lock the mutex, then the thread is dead
+      pthread_mutex_unlock(&mutex);
+      return false;
+    } else if (rc == EBUSY) {
+      // if the mutex is already locked, then the thread is alive
+      return true;
+    } else {
+      PANIC("pthread_mutex_trylock failed: %s", strerror(rc));
+    }
   }
 };
 
 static_assert(sizeof(PerThreadData) == SHM_PER_THREAD_SIZE);
 
 class ShmMgr {
+  pmem::MetaBlock* meta;
   int fd = -1;
   void* addr = nullptr;
   char path[SHM_PATH_LEN]{};
@@ -89,7 +119,8 @@ class ShmMgr {
    * @param file_fd the file descriptor of the file that uses this shared memory
    * @param stat the stat of the file that uses this shared memory
    */
-  ShmMgr(int file_fd, const struct stat& stat) {
+  ShmMgr(int file_fd, const struct stat& stat, pmem::MetaBlock* meta)
+      : meta(meta) {
     // get or set the path of the shared memory
     {
       ssize_t rc = fgetxattr(file_fd, SHM_XATTR_NAME, path, SHM_PATH_LEN);
@@ -144,14 +175,13 @@ class ShmMgr {
    * @return the address of the per-thread data
    */
   [[nodiscard]] PerThreadData* alloc_per_thread_data() const {
+    meta->lock();
     for (size_t i = 0; i < MAX_NUM_THREADS; i++) {
       PerThreadData* per_thread_data = get_per_thread_data(i);
-      if (!per_thread_data->is_initialized()) {
-        bool success = per_thread_data->initialize(i);
-        if (!success) continue;
-        return per_thread_data;
-      }
+      bool success = per_thread_data->try_init(i);
+      if (success) return per_thread_data;
     }
+    meta->unlock();
     PANIC("No empty per-thread data");
   }
 
@@ -242,9 +272,9 @@ class ShmMgr {
        << "\taddr = " << mgr.addr << "\n"
        << "\tpath = " << mgr.path << "\n";
     for (size_t i = 0; i < MAX_NUM_THREADS; ++i) {
-      if (mgr.get_per_thread_data(i)->is_initialized()) {
+      if (mgr.get_per_thread_data(i)->is_valid()) {
         os << "\tthread " << i << ": tail_tx_block_idx = "
-           << mgr.get_per_thread_data(i)->get_tx_block_idx() << "\n";
+           << mgr.get_per_thread_data(i)->tx_block_idx << "\n";
       }
     }
     return os;

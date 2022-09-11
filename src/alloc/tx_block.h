@@ -29,7 +29,7 @@ class TxBlockAllocator {
   }
 
   [[nodiscard]] LogicalBlockIdx get_pinned_idx() const {
-    return per_thread_data->get_tx_block_idx();
+    return per_thread_data->tx_block_idx;
   }
 
   /**
@@ -42,7 +42,7 @@ class TxBlockAllocator {
    * thread performing the initial log replaying and do not reclaim any blocks.
    */
   void pin(LogicalBlockIdx tx_block_idx) {
-    per_thread_data->set_tx_block_idx(tx_block_idx);
+    per_thread_data->tx_block_idx = tx_block_idx;
   }
 
   /**
