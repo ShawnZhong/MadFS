@@ -3,6 +3,7 @@
 #include "alloc/block.h"
 #include "alloc/log_entry.h"
 #include "alloc/tx_block.h"
+#include "shm.h"
 
 namespace ulayfs::dram {
 class Allocator {
@@ -11,10 +12,9 @@ class Allocator {
   TxBlockAllocator tx_block;
   LogEntryAllocator log_entry;
 
-  Allocator(MemTable* mem_table, BitmapMgr* bitmap_mgr,
-            PerThreadData* per_thread_data)
+  Allocator(MemTable* mem_table, BitmapMgr* bitmap_mgr, ShmMgr* shm_mgr)
       : block(mem_table, bitmap_mgr),
-        tx_block(&block, mem_table, per_thread_data),
+        tx_block(&block, mem_table, shm_mgr),
         log_entry(&block, mem_table) {}
 };
 

@@ -8,6 +8,7 @@ namespace ulayfs::dram {
 class TxBlockAllocator {
   BlockAllocator* block_allocator;
   MemTable* mem_table;
+  ShmMgr* shm_mgr;
   PerThreadData* per_thread_data;
 
   // a tx block may be allocated but unused when another thread does that first
@@ -18,18 +19,20 @@ class TxBlockAllocator {
 
  public:
   TxBlockAllocator(BlockAllocator* block_allocator, MemTable* mem_table,
-                   PerThreadData* per_thread_data)
+                   ShmMgr* shm_mgr)
       : block_allocator(block_allocator),
         mem_table(mem_table),
-        per_thread_data(per_thread_data) {}
+        shm_mgr(shm_mgr),
+        per_thread_data(nullptr) {}
 
   ~TxBlockAllocator() {
     if (avail_tx_block) block_allocator->free(avail_tx_block_idx);
-    per_thread_data->reset();
+    if (per_thread_data) per_thread_data->reset();
   }
 
   [[nodiscard]] LogicalBlockIdx get_pinned_idx() const {
-    return per_thread_data->tx_block_idx;
+    assert(per_thread_data);
+    return per_thread_data->get_tx_block_idx();
   }
 
   /**
@@ -42,7 +45,11 @@ class TxBlockAllocator {
    * thread performing the initial log replaying and do not reclaim any blocks.
    */
   void pin(LogicalBlockIdx tx_block_idx) {
-    per_thread_data->tx_block_idx = tx_block_idx;
+    if (unlikely(!per_thread_data)) {
+      per_thread_data = shm_mgr->alloc_per_thread_data(tx_block_idx);
+      return;
+    }
+    per_thread_data->set_tx_block_idx(tx_block_idx);
   }
 
   /**

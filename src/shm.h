@@ -3,9 +3,11 @@
 #include <pthread.h>
 #include <sys/xattr.h>
 
+#include <atomic>
 #include <ostream>
 
 #include "const.h"
+#include "idx.h"
 #include "logging.h"
 #include "posix.h"
 #include "utils.h"
@@ -15,13 +17,12 @@ namespace ulayfs::dram {
 class alignas(SHM_PER_THREAD_SIZE) PerThreadData {
   enum State : uint8_t {
     UNINITIALIZED,
-    INITIALIZING,
+    PENDING,  // the state is inconsistent (initializing or destorying)
     INITIALIZED,
   };
 
   std::atomic<enum State> state;
 
- public:
   // mutex used to indicate the liveness of the thread
   // shall only be read when state == INITIALIZED
   pthread_mutex_t mutex;
@@ -31,8 +32,9 @@ class alignas(SHM_PER_THREAD_SIZE) PerThreadData {
 
   // each thread will pin a tx block so that the garbage collector will not
   // reclaim this block and blocks after it
-  LogicalBlockIdx tx_block_idx;
+  std::atomic<LogicalBlockIdx> tx_block_idx;
 
+ public:
   /**
    * @return true if this PerThreadData is initialized and the thread is not
    * dead.
@@ -49,9 +51,11 @@ class alignas(SHM_PER_THREAD_SIZE) PerThreadData {
    * @param i the index of this per-thread data
    * @return true if initialization succeeded
    */
-  bool try_init(size_t i) {
+  bool try_init(size_t i, LogicalBlockIdx pinned_idx) {
     State expected = UNINITIALIZED;
-    if (!state.compare_exchange_strong(expected, INITIALIZING)) {
+    if (!state.compare_exchange_strong(expected, PENDING,
+                                       std::memory_order_acq_rel,
+                                       std::memory_order_acquire)) {
       // If the state is not UNINITIALIZED, then it must be INITIALIZED.
       // It cannot be INITIALIZING because there should be only one thread
       // calling this function.
@@ -59,13 +63,13 @@ class alignas(SHM_PER_THREAD_SIZE) PerThreadData {
     }
 
     index = i;
-    tx_block_idx = 0;
+    tx_block_idx.store(pinned_idx, std::memory_order_relaxed);
 
     pthread_mutexattr_t attr;
     pthread_mutexattr_init(&attr);
     pthread_mutexattr_setrobust(&attr, PTHREAD_MUTEX_ROBUST);
     pthread_mutex_init(&mutex, &attr);
-    state = State::INITIALIZED;
+    state.store(State::INITIALIZED, std::memory_order_release);
     return true;
   }
 
@@ -74,8 +78,20 @@ class alignas(SHM_PER_THREAD_SIZE) PerThreadData {
    */
   void reset() {
     LOG_DEBUG("PerThreadData %ld reset by tid %d", index, tid);
-    state = State::UNINITIALIZED;
+    assert(state.load(std::memory_order_acquire) == State::INITIALIZED);
+    state.store(State::PENDING, std::memory_order_acq_rel);
+    index = 0;
+    tx_block_idx.store(0, std::memory_order_relaxed);
     pthread_mutex_destroy(&mutex);
+    state.store(State::UNINITIALIZED, std::memory_order_release);
+  }
+
+  void set_tx_block_idx(LogicalBlockIdx idx) {
+    tx_block_idx.store(idx, std::memory_order_relaxed);
+  }
+
+  [[nodiscard]] LogicalBlockIdx get_tx_block_idx() const {
+    return tx_block_idx.load(std::memory_order_relaxed);
   }
 
  private:
@@ -88,7 +104,7 @@ class alignas(SHM_PER_THREAD_SIZE) PerThreadData {
    * @return true if the thread is alive
    */
   bool is_thread_alive() {
-    assert(state == State::INITIALIZED);
+    assert(state.load(std::memory_order_acquire) == State::INITIALIZED);
     int rc = pthread_mutex_trylock(&mutex);
     if (rc == 0) {
       // if we can lock the mutex, then the thread is dead
@@ -174,14 +190,15 @@ class ShmMgr {
    * Allocate a new per-thread data for the current thread.
    * @return the address of the per-thread data
    */
-  [[nodiscard]] PerThreadData* alloc_per_thread_data() const {
+  [[nodiscard]] PerThreadData* alloc_per_thread_data(
+      LogicalBlockIdx pinned_idx) const {
     // TODO: make sure that only one thread can allocate a per-thread data at a
     //  time. Otherwise, a thread crashes during PerThreadData::try_init will
-    //  result in a leak (e.g., state == INITIALIZING but the thread is dead).
+    //  result in a leak (e.g., state == PENDING but the thread is dead).
     // meta->lock();
     for (size_t i = 0; i < MAX_NUM_THREADS; i++) {
       PerThreadData* per_thread_data = get_per_thread_data(i);
-      bool success = per_thread_data->try_init(i);
+      bool success = per_thread_data->try_init(i, pinned_idx);
       if (success) return per_thread_data;
     }
     // meta->unlock();
@@ -277,7 +294,7 @@ class ShmMgr {
     for (size_t i = 0; i < MAX_NUM_THREADS; ++i) {
       if (mgr.get_per_thread_data(i)->is_valid()) {
         os << "\tthread " << i << ": tail_tx_block_idx = "
-           << mgr.get_per_thread_data(i)->tx_block_idx << "\n";
+           << mgr.get_per_thread_data(i)->get_tx_block_idx() << "\n";
       }
     }
     return os;
