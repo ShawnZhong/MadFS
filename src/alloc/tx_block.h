@@ -31,7 +31,7 @@ class TxBlockAllocator {
   }
 
   [[nodiscard]] LogicalBlockIdx get_pinned_idx() const {
-    assert(per_thread_data);
+    if (per_thread_data == nullptr) return 0;
     return per_thread_data->get_tx_block_idx();
   }
 
