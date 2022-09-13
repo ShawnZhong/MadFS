@@ -64,11 +64,7 @@ class alignas(SHM_PER_THREAD_SIZE) PerThreadData {
 
     index = i;
     tx_block_idx.store(pinned_idx, std::memory_order_relaxed);
-
-    pthread_mutexattr_t attr;
-    pthread_mutexattr_init(&attr);
-    pthread_mutexattr_setrobust(&attr, PTHREAD_MUTEX_ROBUST);
-    pthread_mutex_init(&mutex, &attr);
+    init_robust_mutex(&mutex);
     state.store(State::INITIALIZED, std::memory_order_release);
     return true;
   }

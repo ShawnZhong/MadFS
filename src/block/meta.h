@@ -81,10 +81,7 @@ class MetaBlock : public noncopyable {
    */
   void init() {
     // initialize the mutex
-    pthread_mutexattr_t attr;
-    pthread_mutexattr_init(&attr);
-    pthread_mutexattr_setrobust(&attr, PTHREAD_MUTEX_ROBUST);
-    pthread_mutex_init(&cl2_meta.mutex, &attr);
+    init_robust_mutex(&cl2_meta.mutex);
 
     // initialize the signature
     memcpy(cl1_meta.signature, FILE_SIGNATURE, SIGNATURE_SIZE);
