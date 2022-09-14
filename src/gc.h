@@ -51,12 +51,14 @@ class GarbageCollector {
 
     if (!need_new_linked_list()) {
       LOG_INFO("GarbageCollector: no need to gc");
-    } else {
-      create_new_linked_list();
+      return;
+    }
+    if (!create_new_linked_list()) {
+      LOG_WARN("GarbageCollector: new tx history is longer than the old one");
+      return;
     }
 
     recycle();
-
     LOG_INFO("GarbageCollector: done");
   }
 
@@ -169,11 +171,10 @@ class GarbageCollector {
       auto new_tx_blk_idx = first_tx_block_idx;
       do {
         auto next_tx_blk_idx = new_cursor.block->get_next_tx_block();
-        allocator->block.free(new_tx_blk_idx, 1);
+        allocator->block.free(new_tx_blk_idx);
         new_tx_blk_idx = next_tx_blk_idx;
       } while (new_tx_blk_idx != old_tail.idx && new_tx_blk_idx != 0);
       allocator->block.return_free_list();
-      LOG_WARN("GarbageCollector: new tx history is longer than the old one");
       return false;
     }
     pmem::persist_fenced(new_cursor.block, BLOCK_SIZE);
@@ -184,23 +185,23 @@ class GarbageCollector {
     return true;
   }
 
-  [[nodiscard]] LogicalBlockIdx get_smallest_tx_idx() const {
-    LogicalBlockIdx smallest_tx_idx = LogicalBlockIdx::max();
+  [[nodiscard]] TxBlockCursor get_min_tx_cursor() const {
+    TxBlockCursor min_cursor = TxBlockCursor::max();
     for (size_t i = 0; i < MAX_NUM_THREADS; ++i) {
       auto per_thread_data = file->shm_mgr.get_per_thread_data(i);
       if (!per_thread_data->is_data_valid()) continue;
-      LogicalBlockIdx curr_tx_idx = per_thread_data->get_tx_block_idx();
-      if (curr_tx_idx < smallest_tx_idx) smallest_tx_idx = curr_tx_idx;
+      TxBlockCursor curr_cursor(per_thread_data->get_tx_block_idx(),
+                                &file->mem_table);
+      if (curr_cursor < min_cursor) min_cursor = curr_cursor;
     }
-    return smallest_tx_idx;
+    return min_cursor;
   }
 
   void recycle() const {
-    LogicalBlockIdx idx = get_smallest_tx_idx();
-    LOG_DEBUG("GarbageCollector: smallest tx idx: %u", idx.get());
     // blocks before the pivot can be immediately recycled, blocks after the
     // pivot needs to be recycled later.
-    const TxBlockCursor pivot(idx, &file->mem_table);
+    const TxBlockCursor pivot = get_min_tx_cursor();
+    LOG_DEBUG("GarbageCollector: min tx idx: %u", pivot.idx.get());
 
     TxBlockCursor curr = old_head;
     while (curr < pivot) {  // free up to the pivot

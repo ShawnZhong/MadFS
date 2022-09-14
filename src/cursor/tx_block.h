@@ -27,6 +27,8 @@ struct TxBlockCursor {
         addr(idx == LogicalBlockIdx::max() ? nullptr
                                            : mem_table->lidx_to_addr_rw(idx)) {}
 
+  static TxBlockCursor max() { return {LogicalBlockIdx::max(), nullptr}; }
+
   /**
    * Advance to the first entry of the next tx block
    * @param mem_table used to find the memory address of the next block
@@ -69,18 +71,25 @@ struct TxBlockCursor {
                     : block->get_next_orphan_block();
   }
 
+  /**
+   * NOTE: the ordering of two tx_blocks denotes "at some points, one block is
+   * ahead of the other block on the linked list," and this is only determined
+   * by their tx_seq. if two blocks has the same tx_seq but different gc_seq,
+   * neither of them is ordered before the other because they are never linked
+   * into a list. this function will return true/false anyway, but it is the
+   * caller's responsibility to ensure such ordering is meaningful.
+   */
   friend bool operator<(const TxBlockCursor& lhs, const TxBlockCursor& rhs) {
     if (lhs.idx == rhs.idx) return false;
     if (lhs.idx == LogicalBlockIdx::max()) return false;
     if (rhs.idx == LogicalBlockIdx::max()) return true;
     if (lhs.idx == 0) return true;
     if (rhs.idx == 0) return false;
-    auto lhs_gc_seq = lhs.block->get_gc_seq();
-    auto rhs_gc_seq = rhs.block->get_gc_seq();
-    if (lhs_gc_seq == rhs_gc_seq) {
-      return lhs.block->get_tx_seq() < rhs.block->get_tx_seq();
-    }
-    return lhs_gc_seq < rhs_gc_seq;
+
+    // this is only one check
+    assert(lhs.block->get_tx_seq() == rhs.block->get_tx_seq() &&
+           lhs.block->get_gc_seq() != rhs.block->get_gc_seq());
+    return lhs.block->get_tx_seq() < rhs.block->get_tx_seq();
   }
 };
 
