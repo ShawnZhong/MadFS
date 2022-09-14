@@ -31,7 +31,6 @@ class AlignedTx : public WriteTx {
       fence();
     }
 
-
     {
       TimerGuard<Event::ALIGNED_TX_UPDATE> timer_guard;
       if (!is_offset_depend) file->update(&state, allocator);
@@ -64,7 +63,7 @@ class AlignedTx : public WriteTx {
       TimerGuard<Event::ALIGNED_TX_COMMIT> timer_guard;
       while (true) {
         pmem::TxEntry conflict_entry =
-            tx_mgr->try_commit(commit_entry, &state.cursor);
+            state.cursor.try_commit(commit_entry, mem_table, allocator);
         if (!conflict_entry.is_valid()) break;
 
         bool into_new_block = false;
@@ -85,7 +84,7 @@ class AlignedTx : public WriteTx {
       }
     } else {
       TimerGuard<Event::ALIGNED_TX_COMMIT> timer_guard;
-      tx_mgr->try_commit(commit_entry, &state.cursor);
+      state.cursor.try_commit(commit_entry, mem_table, allocator);
     }
 
     {

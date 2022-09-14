@@ -29,9 +29,9 @@ class MetaBlock : public noncopyable {
       // file signature
       char signature[SIGNATURE_SIZE];
 
-      // hint to find tx log tail; not necessarily up-to-date
       // all tx entries before it must be flushed
-      std::atomic<TxEntryIdx> tx_tail;
+      std::atomic<TxEntryIdx> flushed_tx_tail;
+      static_assert(std::atomic<TxEntryIdx>::is_always_lock_free);
 
       // if inline tx_entries are used up, this points to the next log block
       std::atomic<LogicalBlockIdx> next_tx_block;
@@ -44,9 +44,6 @@ class MetaBlock : public noncopyable {
     // padding avoid cache line contention
     char cl1[CACHELINE_SIZE];
   };
-
-  static_assert(std::atomic<TxEntryIdx>::is_always_lock_free,
-                "cl1_meta.tx_tail must be lock-free");
 
   static_assert(sizeof(cl1_meta) <= CACHELINE_SIZE);
 
@@ -158,9 +155,10 @@ class MetaBlock : public noncopyable {
    * @param tx_tail tail value to set
    * @param fenced whether use fence
    */
-  void set_tx_tail(TxEntryIdx tx_tail) {
-    cl1_meta.tx_tail.store(tx_tail, std::memory_order_relaxed);
-    VALGRIND_PMC_SET_CLEAN(&cl1_meta.tx_tail, sizeof(cl1_meta.tx_tail));
+  void set_flushed_tx_tail(TxEntryIdx flushed_tx_tail) {
+    cl1_meta.flushed_tx_tail.store(flushed_tx_tail, std::memory_order_relaxed);
+    VALGRIND_PMC_SET_CLEAN(&cl1_meta.flushed_tx_tail,
+                           sizeof(cl1_meta.flushed_tx_tail));
   }
 
   /**
@@ -193,8 +191,8 @@ class MetaBlock : public noncopyable {
     return cl1_meta.next_tx_block.load(std::memory_order_acquire);
   }
 
-  [[nodiscard]] TxEntryIdx get_tx_tail() const {
-    return cl1_meta.tx_tail.load(std::memory_order_relaxed);
+  [[nodiscard]] TxEntryIdx get_flushed_tx_tail() const {
+    return cl1_meta.flushed_tx_tail.load(std::memory_order_relaxed);
   }
 
   /*
@@ -221,7 +219,8 @@ class MetaBlock : public noncopyable {
     out << "\tnext_tx_block: "
         << block.cl1_meta.next_tx_block.load(std::memory_order_acquire) << "\n";
     out << "\ttx_tail: "
-        << block.cl1_meta.tx_tail.load(std::memory_order_acquire) << "\n";
+        << block.cl1_meta.flushed_tx_tail.load(std::memory_order_acquire)
+        << "\n";
     return out;
   }
 };

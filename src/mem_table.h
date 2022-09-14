@@ -32,7 +32,7 @@ constexpr static uint32_t GROW_UNIT_IN_BLOCK_MASK =
 //   the addr
 // - if this block is not even allocated from kernel filesystem, grow_to_fit and
 //   map it, and return the address
-class MemTable {
+class MemTable : noncopyable {
   pmem::MetaBlock* meta;
   int fd;
   int prot;

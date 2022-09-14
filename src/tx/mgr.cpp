@@ -1,6 +1,5 @@
 #include "mgr.h"
 
-#include <cassert>
 #include <cmath>
 #include <cstddef>
 #include <vector>
@@ -14,7 +13,6 @@
 #include "tx/tx_cursor.h"
 #include "tx/write_aligned.h"
 #include "tx/write_unaligned.h"
-#include "utils.h"
 
 namespace ulayfs::dram {
 
@@ -115,22 +113,11 @@ LogCursor TxMgr::append_log_entry(
   return log_cursor;
 }
 
-pmem::TxEntry TxMgr::try_commit(pmem::TxEntry entry, TxCursor* cursor) const {
-  cursor->handle_overflow(mem_table, file->get_local_allocator());
-
-  if (pmem::TxEntry::need_flush(cursor->idx.local_idx)) {
-    TxCursor::flush_up_to(mem_table, *cursor);
-    meta->set_tx_tail(cursor->idx);
-  }
-
-  return cursor->try_append(entry);
-}
-
 std::ostream& operator<<(std::ostream& out, const TxMgr& tx_mgr) {
   out << tx_mgr.offset_mgr;
   out << "Transactions: \n";
 
-  TxCursor cursor({}, tx_mgr.meta);
+  TxCursor cursor(tx_mgr.file->meta);
   int count = 0;
 
   while (true) {

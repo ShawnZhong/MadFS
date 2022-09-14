@@ -76,8 +76,7 @@ class ReadTx : public Tx {
     timer.start<Event::READ_TX_VALIDATE>();
     while (true) {
       // check the tail is still tail
-      if (bool success = state.cursor.handle_overflow(tx_mgr->mem_table);
-          !success) {
+      if (bool success = state.cursor.handle_overflow(mem_table); !success) {
         break;
       }
       pmem::TxEntry curr_entry = state.cursor.get_entry();
@@ -93,8 +92,7 @@ class ReadTx : public Tx {
       // first handle the first block (which might not be full block)
       redo_lidx = redo_image[0];
       if (redo_lidx != 0) {
-        const pmem::Block* curr_block =
-            tx_mgr->mem_table->lidx_to_addr_ro(redo_lidx);
+        const pmem::Block* curr_block = mem_table->lidx_to_addr_ro(redo_lidx);
         dram::memcpy(buf, curr_block->data_ro() + first_block_offset,
                      first_block_size);
         redo_image[0] = 0;
@@ -106,8 +104,7 @@ class ReadTx : public Tx {
       for (curr_vidx = begin_vidx + 1; curr_vidx < end_vidx - 1; ++curr_vidx) {
         redo_lidx = redo_image[curr_vidx - begin_vidx];
         if (redo_lidx != 0) {
-          const pmem::Block* curr_block =
-              tx_mgr->mem_table->lidx_to_addr_ro(redo_lidx);
+          const pmem::Block* curr_block = mem_table->lidx_to_addr_ro(redo_lidx);
           dram::memcpy(buf + buf_offset, curr_block->data_ro(), BLOCK_SIZE);
           redo_image[curr_vidx - begin_vidx] = 0;
         }
@@ -118,8 +115,7 @@ class ReadTx : public Tx {
       if (begin_vidx != end_vidx - 1) {
         redo_lidx = redo_image[curr_vidx - begin_vidx];
         if (redo_lidx != 0) {
-          const pmem::Block* curr_block =
-              tx_mgr->mem_table->lidx_to_addr_ro(redo_lidx);
+          const pmem::Block* curr_block = mem_table->lidx_to_addr_ro(redo_lidx);
           dram::memcpy(buf + buf_offset, curr_block->data_ro(),
                        count - buf_offset);
           redo_image[curr_vidx - begin_vidx] = 0;

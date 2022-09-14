@@ -82,7 +82,7 @@ class SingleBlockTx : public CoWTx {
 
       char* dst_block = dst_blocks[0]->data_rw();
       const char* src_block =
-          tx_mgr->mem_table->lidx_to_addr_ro(recycle_image[0])->data_ro();
+          mem_table->lidx_to_addr_ro(recycle_image[0])->data_ro();
 
       // copy the left part of the block
       if (local_offset != 0) {
@@ -104,7 +104,7 @@ class SingleBlockTx : public CoWTx {
       timer.count<Event::SINGLE_BLOCK_TX_COMMIT>();
       // try to commit the tx entry
       pmem::TxEntry conflict_entry =
-          tx_mgr->try_commit(commit_entry, &state.cursor);
+          state.cursor.try_commit(commit_entry, mem_table, allocator);
       if (!conflict_entry.is_valid()) goto done;  // success, no conflict
 
       bool into_new_block = false;
@@ -126,7 +126,7 @@ class SingleBlockTx : public CoWTx {
       else
         goto redo;
     } else {
-      tx_mgr->try_commit(commit_entry, &state.cursor);
+      state.cursor.try_commit(commit_entry, mem_table, allocator);
     }
 
   done:
@@ -171,7 +171,6 @@ class MultiBlockTx : public CoWTx {
     bool do_copy_first = true;
     bool do_copy_last = true;
     bool need_redo;
-    pmem::TxEntry conflict_entry;
     LogicalBlockIdx src_first_lidx, src_last_lidx;
 
     // copy full blocks first
@@ -235,8 +234,7 @@ class MultiBlockTx : public CoWTx {
     // copy the data from the first source block if exists
     if (need_copy_first && do_copy_first) {
       char* dst = dst_blocks[0]->data_rw();
-      const char* src =
-          tx_mgr->mem_table->lidx_to_addr_ro(src_first_lidx)->data_ro();
+      const char* src = mem_table->lidx_to_addr_ro(src_first_lidx)->data_ro();
       size_t size = BLOCK_SIZE - first_block_overlap_size;
       pmem::memcpy_persist(dst, src, size);
     }
@@ -244,9 +242,8 @@ class MultiBlockTx : public CoWTx {
     // copy the data from the last source block if exits
     if (need_copy_last && do_copy_last) {
       char* dst = last_dst_block->data_rw() + last_block_overlap_size;
-      const char* src =
-          tx_mgr->mem_table->lidx_to_addr_ro(src_last_lidx)->data_ro() +
-          last_block_overlap_size;
+      const char* src = mem_table->lidx_to_addr_ro(src_last_lidx)->data_ro() +
+                        last_block_overlap_size;
       size_t size = BLOCK_SIZE - last_block_overlap_size;
       pmem::memcpy_persist(dst, src, size);
     }
@@ -258,7 +255,8 @@ class MultiBlockTx : public CoWTx {
     if constexpr (BuildOptions::cc_occ) {
       timer.count<Event::MULTI_BLOCK_TX_COMMIT>();
       // try to commit the transaction
-      conflict_entry = tx_mgr->try_commit(commit_entry, &state.cursor);
+      pmem::TxEntry conflict_entry =
+          state.cursor.try_commit(commit_entry, mem_table, allocator);
       if (!conflict_entry.is_valid()) goto done;  // success
       // make a copy of the first and last again
       src_first_lidx = recycle_image[0];
@@ -288,7 +286,7 @@ class MultiBlockTx : public CoWTx {
           goto retry;
       }
     } else {
-      tx_mgr->try_commit(commit_entry, &state.cursor);
+      state.cursor.try_commit(commit_entry, mem_table, allocator);
     }
 
   done:

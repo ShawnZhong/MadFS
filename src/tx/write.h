@@ -48,7 +48,7 @@ class WriteTx : public Tx {
     assert(!dst_lidxs.empty());
 
     for (auto lidx : dst_lidxs)
-      dst_blocks.push_back(tx_mgr->mem_table->lidx_to_addr_rw(lidx));
+      dst_blocks.push_back(mem_table->lidx_to_addr_rw(lidx));
     assert(!dst_blocks.empty());
   }
 
@@ -103,7 +103,7 @@ class WriteTx : public Tx {
       // the previously allocated log entries should be recycled, but for now,
       // we just leave them there waiting for gc.
     }
-    log_cursor.update_leftover_bytes(tx_mgr->mem_table, leftover_bytes);
+    log_cursor.update_leftover_bytes(mem_table, leftover_bytes);
   }
 };
 }  // namespace ulayfs::dram
