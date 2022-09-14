@@ -32,7 +32,10 @@ inline thread_local class ThreadExitHandler {
  public:
   ~ThreadExitHandler() {
     for (auto& [fd, file] : files) {
-      file->remove_local_allocator();
+      auto allocator = file->get_allocator();
+      if (allocator.has_value()) {
+        allocator.value()->tx_block.reset_per_thread_data();
+      }
     }
   }
 } thread_exit_handler;

@@ -2,7 +2,7 @@ This folder contains code for allocation.
 
 The main entry point is the `alloc.h` file, which exposes `class Allocator`.
 This class is a per-thread data structure that is constructed and retrieved by
-`File::get_local_allocator()`.
+`File::get_or_create_allocator()`.
 
 The class contains the following public members:
 

@@ -78,7 +78,13 @@ class alignas(SHM_PER_THREAD_SIZE) PerThreadData {
    */
   void reset() {
     LOG_DEBUG("PerThreadData %ld to be reset by tid %d", index, tid);
-    assert(state.load(std::memory_order_acquire) == State::INITIALIZED);
+    State expected = State::INITIALIZED;
+    if (!state.compare_exchange_strong(expected, State::PENDING,
+                                       std::memory_order_acq_rel,
+                                       std::memory_order_acquire)) {
+      assert(expected != State::PENDING);
+      return;
+    }
     // TODO: uncomment this
     //    if (is_thread_alive()) pthread_mutex_unlock(&mutex);
     state.store(State::PENDING, std::memory_order_acq_rel);

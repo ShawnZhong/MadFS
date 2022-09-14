@@ -63,7 +63,7 @@ class Converter {
     // first mark all these blocks as used, so that they won't be occupied by
     // allocator when preparing log entries
     dram::File* file = new dram::File(fd, stat_buf, O_RDWR, pathname);
-    dram::Allocator* allocator = file->get_local_allocator();
+    dram::Allocator* allocator = file->get_or_create_allocator();
     allocator->block.return_free_list();
     uint32_t num_bitmaps_full =
         (num_blocks + 1) >> BITMAP_ENTRY_BLOCKS_CAPACITY_SHIFT;

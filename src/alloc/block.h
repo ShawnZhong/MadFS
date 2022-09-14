@@ -176,8 +176,6 @@ class BlockAllocator {
     for (uint32_t n = 0; n < BITMAP_ENTRY_BLOCKS_CAPACITY; ++n)
       for (LogicalBlockIdx lidx : free_lists[n])
         bitmap_mgr->free(static_cast<BitmapIdx>(lidx.get()), n + 1);
-
-    free_lists = {};
   }
 };
 }  // namespace ulayfs::dram

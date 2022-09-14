@@ -54,8 +54,8 @@ class File {
    * `allocators` is a map from thread id to allocator
    *
    * Allocator is a per-thread per-file data structure. It is created upon first
-   * call to `get_local_allocator` and destroyed when the file is closed (~File)
-   * or the thread exits (ThreadExitHandler).
+   * call to `get_or_create_allocator` and destroyed when the file is closed
+   * (~File) or the thread exits (ThreadExitHandler).
    */
   tbb::concurrent_unordered_map<pid_t, Allocator> allocators;
 
@@ -86,11 +86,12 @@ class File {
   void stat(struct stat* buf);
 
   /**
-   * @return the allocator for the current thread
+   * @return the allocator for the current thread. Create one if it does not
+   * exist.
    */
-  [[nodiscard]] Allocator* get_local_allocator() {
-    if (auto it = allocators.find(tid); it != allocators.end()) {
-      return &it->second;
+  [[nodiscard]] Allocator* get_or_create_allocator() {
+    if (auto allocator = get_allocator(); allocator.has_value()) {
+      return allocator.value();
     }
 
     auto [it, ok] = allocators.emplace(
@@ -103,14 +104,14 @@ class File {
   }
 
   /**
-   * Remove the thread-local allocator for the current thread.
-   * Called when the thread exits.
+   * @return the allocator for the current thread, or std::nullopt if it does
+   * not exist
    */
-  void remove_local_allocator() {
+  [[nodiscard]] std::optional<Allocator*> get_allocator() {
     if (auto it = allocators.find(tid); it != allocators.end()) {
-      // call destructor explicitly without freeing the memory
-      it->second.~Allocator();
+      return &it->second;
     }
+    return {};
   }
 
   void update(FileState* state, Allocator* allocator = nullptr) {

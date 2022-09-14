@@ -25,9 +25,10 @@ class TxBlockAllocator {
 
   ~TxBlockAllocator() {
     if (avail_tx_block) block_allocator->free(avail_tx_block_idx);
-    if (per_thread_data) per_thread_data->reset();
-    per_thread_data = nullptr;
+    reset_per_thread_data();
   }
+
+  void reset_per_thread_data() { per_thread_data->reset(); }
 
   [[nodiscard]] LogicalBlockIdx get_pinned_idx() const {
     return per_thread_data->get_tx_block_idx();

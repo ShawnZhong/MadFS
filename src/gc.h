@@ -91,7 +91,7 @@ class GarbageCollector {
   }
 
   [[nodiscard]] bool create_new_linked_list() const {
-    auto allocator = file->get_local_allocator();
+    auto allocator = file->get_or_create_allocator();
 
     LogicalBlockIdx old_first_tx_block_idx = file->meta->get_next_tx_block();
     assert(old_first_tx_block_idx != 0);

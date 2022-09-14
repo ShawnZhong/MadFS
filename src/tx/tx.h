@@ -66,7 +66,7 @@ class Tx {
       : file(file),
         tx_mgr(tx_mgr),
         mem_table(tx_mgr->mem_table),
-        allocator(file->get_local_allocator()),
+        allocator(file->get_or_create_allocator()),
 
         // input properties
         count(count),
