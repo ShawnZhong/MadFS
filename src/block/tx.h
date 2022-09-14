@@ -21,10 +21,10 @@ class TxBlock : public noncopyable {
   std::atomic<TxEntry> tx_entries[NUM_TX_ENTRY_PER_BLOCK];
   // next is placed after tx_entires so that it could be flushed with tx_entries
   std::atomic<LogicalBlockIdx> next;
-  // outdated blocks are organized as a to-be-freed list, which will be recycled
+  // orphan blocks are organized as an orphan list, which will be recycled
   // once they are not referenced
   // if this tx block is the latest, this field must be 0.
-  std::atomic<LogicalBlockIdx> next_outdated;
+  std::atomic<LogicalBlockIdx> next_orphan;
 
   // tx seq is used to construct total order between tx entries, so it must
   // increase monotonically
@@ -62,10 +62,6 @@ class TxBlock : public noncopyable {
     return next.load(std::memory_order_acquire);
   }
 
-  [[nodiscard]] LogicalBlockIdx get_next_outdated_tx_block() const {
-    return next_outdated.load(std::memory_order_acquire);
-  }
-
   /**
    * Set the next block index
    * @return true on success, false if there is a race condition
@@ -75,6 +71,15 @@ class TxBlock : public noncopyable {
     return next.compare_exchange_strong(expected, block_idx,
                                         std::memory_order_acq_rel,
                                         std::memory_order_acquire);
+  }
+
+  [[nodiscard]] LogicalBlockIdx get_next_orphan_block() const {
+    return next_orphan.load(std::memory_order_acquire);
+  }
+
+  void set_next_orphan_block(LogicalBlockIdx block_idx) {
+    next_orphan.store(block_idx, std::memory_order_release);
+    persist_cl_unfenced(&next_orphan);
   }
 
   /**
@@ -103,7 +108,7 @@ class TxBlock : public noncopyable {
 
   friend std::ostream &operator<<(std::ostream &os, const TxBlock &block) {
     os << "TxBlock{gc_seq=" << block.gc_seq << ", tx_seq=" << block.tx_seq
-       << ", next=" << block.next << ", next_outdated=" << block.next_outdated
+       << ", next=" << block.next << ", next_orphan=" << block.next_orphan
        << "}";
     return os;
   }

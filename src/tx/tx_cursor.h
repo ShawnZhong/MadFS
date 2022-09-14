@@ -24,15 +24,7 @@ struct TxCursor {
   TxCursor() : idx(), addr(nullptr) {}
   TxCursor(TxEntryIdx idx, void* addr) : idx(idx), addr(addr) {}
 
-  static TxCursor head(pmem::MetaBlock* meta) { return {{}, meta}; }
-
-  static TxCursor from_idx(TxEntryIdx idx, MemTable* mem_table) {
-    return {idx, mem_table->lidx_to_addr_rw(idx.block_idx)};
-  }
-
-  static TxCursor from_idx(LogicalBlockIdx idx, MemTable* mem_table) {
-    return TxCursor::from_idx({idx, 0}, mem_table);
-  }
+  static TxCursor from_meta(pmem::MetaBlock* meta) { return {{}, meta}; }
 
   /**
    * @return the tx entry pointed to by this cursor
@@ -44,11 +36,6 @@ struct TxCursor {
         idx.is_inline() ? meta->tx_entries : block->tx_entries;
     assert(idx.local_idx < idx.get_capacity());
     return entries[idx.local_idx].load(std::memory_order_acquire);
-  }
-
-  [[nodiscard]] LogicalBlockIdx get_next_block_idx() const {
-    return idx.is_inline() ? meta->get_next_tx_block()
-                           : block->get_next_tx_block();
   }
 
   /**
@@ -66,7 +53,8 @@ struct TxCursor {
     uint16_t capacity = idx.get_capacity();
     if (unlikely(idx.local_idx >= capacity)) {
       if (into_new_block) *into_new_block = true;
-      LogicalBlockIdx block_idx = get_next_block_idx();
+      LogicalBlockIdx block_idx = idx.is_inline() ? meta->get_next_tx_block()
+                                                  : block->get_next_tx_block();
       if (block_idx == 0) {
         if (!allocator) return false;
         const auto& [new_block_idx, new_block] =
@@ -103,20 +91,6 @@ struct TxCursor {
                bool* into_new_block = nullptr) {
     idx.local_idx++;
     return handle_overflow(mem_table, allocator, into_new_block);
-  }
-
-  /**
-   * Advance to the first entry of the next tx block
-   * @param mem_table used to find the memory address of the next block
-   * @return true on success; false when reaches the end
-   */
-  bool advance_to_next_block(MemTable* mem_table) {
-    LogicalBlockIdx block_idx = get_next_block_idx();
-    if (block_idx == 0) return false;
-    idx.block_idx = block_idx;
-    idx.local_idx = 0;
-    addr = mem_table->lidx_to_addr_rw(idx.block_idx);
-    return true;
   }
 
   /**
@@ -268,4 +242,81 @@ struct TxCursor {
 };
 
 static_assert(sizeof(TxCursor) == 16);
+
+struct TxBlockCursor {
+  LogicalBlockIdx idx;
+  union {
+    pmem::TxBlock* block;
+    pmem::MetaBlock* meta;
+    void* addr;
+  };
+
+  explicit TxBlockCursor(pmem::MetaBlock* meta) : idx(), meta(meta) {}
+
+  explicit TxBlockCursor(TxCursor cursor)
+      : idx(cursor.idx.block_idx), block(cursor.block) {}
+
+  TxBlockCursor(LogicalBlockIdx idx, MemTable* mem_table)
+      : idx(idx),
+        addr(idx == LogicalBlockIdx::max() ? nullptr
+                                           : mem_table->lidx_to_addr_rw(idx)) {}
+
+  /**
+   * Advance to the first entry of the next tx block
+   * @param mem_table used to find the memory address of the next block
+   * @return true on success; false when reaches the end
+   */
+  bool advance_to_next_block(MemTable* mem_table) {
+    assert(addr != nullptr);
+    LogicalBlockIdx next_idx =
+        idx == 0 ? meta->get_next_tx_block() : block->get_next_tx_block();
+    if (next_idx == 0) return false;
+    idx = next_idx;
+    addr = mem_table->lidx_to_addr_rw(idx);
+    return true;
+  }
+
+  /**
+   * Advance to the next orphan tx block
+   * @param mem_table used to find the memory address of the next block
+   * @return true on success; false when reaches the end
+   */
+  bool advance_to_next_orphan(MemTable* mem_table) {
+    assert(addr != nullptr);
+    LogicalBlockIdx next_idx = idx == 0 ? meta->get_next_orphan_block()
+                                        : block->get_next_orphan_block();
+    if (next_idx == 0) return false;
+    idx = next_idx;
+    addr = mem_table->lidx_to_addr_rw(idx);
+    return true;
+  }
+
+  void set_next_orphan_block(LogicalBlockIdx block_idx) const {
+    assert(addr != nullptr);
+    return idx == 0 ? meta->set_next_orphan_block(block_idx)
+                    : block->set_next_orphan_block(block_idx);
+  }
+
+  [[nodiscard]] LogicalBlockIdx get_next_orphan_block() const {
+    assert(addr != nullptr);
+    return idx == 0 ? meta->get_next_orphan_block()
+                    : block->get_next_orphan_block();
+  }
+
+  friend bool operator<(const TxBlockCursor& lhs, const TxBlockCursor& rhs) {
+    if (lhs.idx == rhs.idx) return false;
+    if (lhs.idx == LogicalBlockIdx::max()) return false;
+    if (rhs.idx == LogicalBlockIdx::max()) return true;
+    if (lhs.idx == 0) return true;
+    if (rhs.idx == 0) return false;
+    auto lhs_gc_seq = lhs.block->get_gc_seq();
+    auto rhs_gc_seq = rhs.block->get_gc_seq();
+    if (lhs_gc_seq == rhs_gc_seq) {
+      return lhs.block->get_tx_seq() < rhs.block->get_tx_seq();
+    }
+    return lhs_gc_seq < rhs_gc_seq;
+  }
+};
+
+static_assert(sizeof(TxBlockCursor) == 16);
 }  // namespace ulayfs::dram

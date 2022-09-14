@@ -7,6 +7,8 @@
 
 namespace ulayfs::utility {
 
+using dram::TxBlockCursor;
+
 /**
  * Garbage collecting transaction blocks and log blocks. This function builds
  * a new transaction history from block table and uses it to replace the old
@@ -17,8 +19,8 @@ class GarbageCollector {
  public:
   const std::unique_ptr<dram::File> file;
   const uint64_t file_size;
-  const dram::TxCursor old_tail;
-  const dram::TxCursor old_head;
+  const TxBlockCursor old_tail;
+  const TxBlockCursor old_head;
   dram::Allocator* allocator;
 
   explicit GarbageCollector(const char* pathname)
@@ -35,8 +37,7 @@ class GarbageCollector {
         }()),
         file_size(file->blk_table.get_file_state().file_size),
         old_tail(file->blk_table.get_file_state().cursor),
-        old_head(dram::TxCursor::from_idx(file->meta->get_next_tx_block(),
-                                          &file->mem_table)),
+        old_head(file->meta->get_next_tx_block(), &file->mem_table),
         allocator(file->get_local_allocator()) {
     // we don't care the per-thread data for the gc thread
     allocator->tx_block.reset_per_thread_data();
@@ -47,14 +48,10 @@ class GarbageCollector {
   void do_gc() const {
     LOG_INFO("GarbageCollector: start transaction & log gc");
 
-    if (!need_gc()) {
+    if (!need_new_linked_list()) {
       LOG_INFO("GarbageCollector: no need to gc");
-      return;
-    }
-
-    bool success = create_new_linked_list();
-    if (!success) {
-      return;
+    } else {
+      create_new_linked_list();
     }
 
     recycle();
@@ -62,16 +59,16 @@ class GarbageCollector {
     LOG_INFO("GarbageCollector: done");
   }
 
-  [[nodiscard]] bool need_gc() const {
-    LOG_DEBUG("GarbageCollector: old_tail=%d", old_tail.idx.block_idx.get());
+  [[nodiscard]] bool need_new_linked_list() const {
+    LOG_DEBUG("GarbageCollector: old_tail=%d", old_tail.idx.get());
 
     // skip if tail_tx_block is meta block
-    if (old_tail.idx.block_idx == 0) return false;
+    if (old_tail.idx == 0) return false;
 
     LogicalBlockIdx first_tx_idx = file->meta->get_next_tx_block();
 
     // skip if the tail directly follows meta
-    if (first_tx_idx == old_tail.idx.block_idx) return false;
+    if (first_tx_idx == old_tail.idx) return false;
 
     LogicalBlockIdx tx_block_idx = first_tx_idx;
     const pmem::TxBlock* tx_block =
@@ -79,12 +76,11 @@ class GarbageCollector {
 
     // skip if there is only one tx block between meta and tail, because at best
     // we can only make this single block into one block
-    if (tx_block->get_next_tx_block() == old_tail.idx.block_idx) return false;
+    if (tx_block->get_next_tx_block() == old_tail.idx) return false;
 
     // skip if there is no tx block with gc_seq == 0 before the tail, which
     // means there is no work can be done since last gc
-    while ((tx_block_idx = tx_block->get_next_tx_block()) !=
-           old_tail.idx.block_idx)
+    while ((tx_block_idx = tx_block->get_next_tx_block()) != old_tail.idx)
       tx_block = &file->mem_table.lidx_to_addr_ro(tx_block_idx)->tx_block;
     // if gc_seq is zero, this means there is at least one new full tx block
     // since last gc
@@ -163,10 +159,10 @@ class GarbageCollector {
       new_cursor.block->store(pmem::TxEntry::TxEntryDummy,
                               new_cursor.idx.local_idx);
     // last block points to the tail, meta points to the first block
-    new_cursor.block->try_set_next_tx_block(old_tail.idx.block_idx);
+    new_cursor.block->try_set_next_tx_block(old_tail.idx);
     pmem::persist_unfenced(new_cursor.block, BLOCK_SIZE);
     // abort if new transaction history is longer than the old one
-    auto tail_block = file->mem_table.lidx_to_addr_rw(old_tail.idx.block_idx);
+    auto tail_block = file->mem_table.lidx_to_addr_rw(old_tail.idx);
     if (tail_block->tx_block.get_tx_seq() <= new_cursor.block->get_tx_seq()) {
       // abort, free the new tx blocks
       auto new_tx_blk_idx = first_tx_block_idx;
@@ -174,7 +170,7 @@ class GarbageCollector {
         auto next_tx_blk_idx = new_cursor.block->get_next_tx_block();
         allocator->block.free(new_tx_blk_idx, 1);
         new_tx_blk_idx = next_tx_blk_idx;
-      } while (new_tx_blk_idx != old_tail.idx.block_idx && new_tx_blk_idx != 0);
+      } while (new_tx_blk_idx != old_tail.idx && new_tx_blk_idx != 0);
       allocator->block.return_free_list();
       LOG_WARN("GarbageCollector: new tx history is longer than the old one");
       return false;
@@ -188,8 +184,7 @@ class GarbageCollector {
   }
 
   [[nodiscard]] LogicalBlockIdx get_smallest_tx_idx() const {
-    LogicalBlockIdx smallest_tx_idx =
-        std::numeric_limits<LogicalBlockIdx::numeric_type>::max();
+    LogicalBlockIdx smallest_tx_idx = LogicalBlockIdx::max();
     for (size_t i = 0; i < MAX_NUM_THREADS; ++i) {
       auto per_thread_data = file->shm_mgr.get_per_thread_data(i);
       if (!per_thread_data->is_data_valid()) continue;
@@ -201,36 +196,44 @@ class GarbageCollector {
 
   void recycle() const {
     LogicalBlockIdx idx = get_smallest_tx_idx();
-    LOG_DEBUG("GarbageCollector: smallest tx idx: %d", idx.get());
+    LOG_DEBUG("GarbageCollector: smallest tx idx: %u", idx.get());
     // blocks before the pivot can be immediately recycled, blocks after the
     // pivot needs to be recycled later.
-    const dram::TxCursor pivot =
-        dram::TxCursor::from_idx(idx, &file->mem_table);
+    const TxBlockCursor pivot(idx, &file->mem_table);
 
-    dram::TxCursor curr = old_head;
+    TxBlockCursor curr = old_head;
     while (curr < pivot) {  // free up to the pivot
-      dram::TxCursor prev = curr;
+      TxBlockCursor prev = curr;
       // we first advance and then free the previous block
       bool success = curr.advance_to_next_block(&file->mem_table);
-      assert(success);
-      allocator->block.free(prev.idx.block_idx);
-      LOG_DEBUG("GarbageCollector: freed block %d", prev.idx.block_idx.get());
+      if (!success) break;
+      allocator->block.free(prev.idx);
+      LOG_DEBUG("GarbageCollector: freed block %d", prev.idx.get());
     }
 
-    while (curr.idx.block_idx < old_tail.idx.block_idx) {
+    // find the tail of the orphaned tx blocks, and try to free them during
+    // traversal
+    TxBlockCursor orphan_curr(file->meta);
+    TxBlockCursor orphan_prev = orphan_curr;
+    while (orphan_curr.advance_to_next_orphan(&file->mem_table)) {
+      if (orphan_curr < pivot) {
+        orphan_prev.set_next_orphan_block(orphan_curr.get_next_orphan_block());
+        allocator->block.free(orphan_curr.idx);
+        LOG_DEBUG("GarbageCollector: freed orphan block %d",
+                  orphan_curr.idx.get());
+      } else {
+        orphan_prev = orphan_curr;
+      }
+    }
+
+    // add everything after the pivot to the orphan list
+    while (curr < old_tail) {
       LOG_DEBUG("GarbageCollector: block %d cannot be recycled now",
-                curr.idx.block_idx.get());
+                curr.idx.get());
+      orphan_curr.set_next_orphan_block(curr.idx);
+      orphan_curr.advance_to_next_orphan(&file->mem_table);
       if (!curr.advance_to_next_block(&file->mem_table)) break;
     }
-
-    // TODO: scan shared memory to get a snapshot of which tx block every thread
-    // has pinned and
-    // 1) if a tx block is neither pinned nor linked after a pinned tx block,
-    //    release this block immediately by marking the bitmap
-    // 2) otherwise, link this block into an outdated block linked list
-    //
-    // Also scan the outdated tx block linked list to free blocks with the above
-    // rules
   }
 };
 
