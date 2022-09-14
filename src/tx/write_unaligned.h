@@ -13,14 +13,15 @@ class CoWTx : public WriteTx {
   // copying the src data
   const size_t num_full_blocks;
 
-  CoWTx(File* file, TxMgr* tx_mgr, const char* buf, size_t count, size_t offset)
-      : WriteTx(file, tx_mgr, buf, count, offset),
+  CoWTx(Allocator* allocator, TxMgr* tx_mgr, const char* buf, size_t count,
+        size_t offset)
+      : WriteTx(allocator, tx_mgr, buf, count, offset),
         begin_full_vidx(BLOCK_SIZE_TO_IDX(ALIGN_UP(offset, BLOCK_SIZE))),
         end_full_vidx(BLOCK_SIZE_TO_IDX(end_offset)),
         num_full_blocks(end_full_vidx - begin_full_vidx) {}
-  CoWTx(File* file, TxMgr* tx_mgr, const char* buf, size_t count, size_t offset,
-        FileState state, uint64_t ticket)
-      : WriteTx(file, tx_mgr, buf, count, offset, state, ticket),
+  CoWTx(Allocator* allocator, TxMgr* tx_mgr, const char* buf, size_t count,
+        size_t offset, FileState state, uint64_t ticket)
+      : WriteTx(allocator, tx_mgr, buf, count, offset, state, ticket),
         begin_full_vidx(BLOCK_SIZE_TO_IDX(ALIGN_UP(offset, BLOCK_SIZE))),
         end_full_vidx(BLOCK_SIZE_TO_IDX(end_offset)),
         num_full_blocks(end_full_vidx - begin_full_vidx) {}
@@ -32,16 +33,16 @@ class SingleBlockTx : public CoWTx {
   const size_t local_offset;
 
  public:
-  SingleBlockTx(File* file, TxMgr* tx_mgr, const char* buf, size_t count,
-                size_t offset)
-      : CoWTx(file, tx_mgr, buf, count, offset),
+  SingleBlockTx(Allocator* allocator, TxMgr* tx_mgr, const char* buf,
+                size_t count, size_t offset)
+      : CoWTx(allocator, tx_mgr, buf, count, offset),
         local_offset(offset - BLOCK_IDX_TO_SIZE(begin_vidx)) {
     assert(num_blocks == 1);
   }
 
-  SingleBlockTx(File* file, TxMgr* tx_mgr, const char* buf, size_t count,
-                size_t offset, FileState state, uint64_t ticket)
-      : CoWTx(file, tx_mgr, buf, count, offset, state, ticket),
+  SingleBlockTx(Allocator* allocator, TxMgr* tx_mgr, const char* buf,
+                size_t count, size_t offset, FileState state, uint64_t ticket)
+      : CoWTx(allocator, tx_mgr, buf, count, offset, state, ticket),
         local_offset(offset - BLOCK_IDX_TO_SIZE(begin_vidx)) {
     assert(num_blocks == 1);
   }
@@ -60,14 +61,14 @@ class SingleBlockTx : public CoWTx {
     }
 
     // must acquire the tx tail before any get
-    if (!is_offset_depend) file->update(&state, allocator);
+    if (!is_offset_depend) state = blk_table->update(allocator);
 
     if (pinned_tx_block_idx != state.get_tx_block_idx())
       allocator->log_entry.reset();
 
     prepare_commit_entry();
 
-    recycle_image[0] = file->vidx_to_lidx(begin_vidx);
+    recycle_image[0] = blk_table->vidx_to_lidx(begin_vidx);
     assert(recycle_image[0] != dst_lidxs[0]);
 
     // copy data from buf
@@ -97,7 +98,7 @@ class SingleBlockTx : public CoWTx {
       }
     }
 
-    if (is_offset_depend) tx_mgr->offset_mgr.wait_offset(ticket);
+    if (is_offset_depend) offset_mgr->wait(ticket);
 
   retry:
     if constexpr (BuildOptions::cc_occ) {
@@ -148,15 +149,15 @@ class MultiBlockTx : public CoWTx {
   const size_t last_block_overlap_size;
 
  public:
-  MultiBlockTx(File* file, TxMgr* tx_mgr, const char* buf, size_t count,
-               size_t offset)
-      : CoWTx(file, tx_mgr, buf, count, offset),
+  MultiBlockTx(Allocator* allocator, TxMgr* tx_mgr, const char* buf,
+               size_t count, size_t offset)
+      : CoWTx(allocator, tx_mgr, buf, count, offset),
         first_block_overlap_size(ALIGN_UP(offset, BLOCK_SIZE) - offset),
         last_block_overlap_size(end_offset -
                                 ALIGN_DOWN(end_offset, BLOCK_SIZE)) {}
-  MultiBlockTx(File* file, TxMgr* tx_mgr, const char* buf, size_t count,
-               size_t offset, FileState state, uint64_t ticket)
-      : CoWTx(file, tx_mgr, buf, count, offset, state, ticket),
+  MultiBlockTx(Allocator* allocator, TxMgr* tx_mgr, const char* buf,
+               size_t count, size_t offset, FileState state, uint64_t ticket)
+      : CoWTx(allocator, tx_mgr, buf, count, offset, state, ticket),
         first_block_overlap_size(ALIGN_UP(offset, BLOCK_SIZE) - offset),
         last_block_overlap_size(end_offset -
                                 ALIGN_DOWN(end_offset, BLOCK_SIZE)) {}
@@ -202,7 +203,7 @@ class MultiBlockTx : public CoWTx {
     }
 
     // only get a snapshot of the tail when starting critical piece
-    if (!is_offset_depend) file->update(&state, allocator);
+    if (!is_offset_depend) state = blk_table->update(allocator);
 
     if (allocator->tx_block.get_pinned_idx() != state.get_tx_block_idx())
       allocator->log_entry.reset();
@@ -210,7 +211,7 @@ class MultiBlockTx : public CoWTx {
     prepare_commit_entry();
 
     for (uint32_t i = 0; i < num_blocks; ++i)
-      recycle_image[i] = file->vidx_to_lidx(begin_vidx + i);
+      recycle_image[i] = blk_table->vidx_to_lidx(begin_vidx + i);
     src_first_lidx = recycle_image[0];
     src_last_lidx = recycle_image[num_blocks - 1];
 
@@ -249,7 +250,7 @@ class MultiBlockTx : public CoWTx {
     }
     fence();
 
-    if (is_offset_depend) tx_mgr->offset_mgr.wait_offset(ticket);
+    if (is_offset_depend) offset_mgr->wait(ticket);
 
   retry:
     if constexpr (BuildOptions::cc_occ) {

@@ -39,8 +39,9 @@ class File {
  public:
   BitmapMgr bitmap_mgr;
   MemTable mem_table;
-  TxMgr tx_mgr;
   BlkTable blk_table;
+  OffsetMgr offset_mgr;
+  TxMgr tx_mgr;
   ShmMgr shm_mgr;
   pmem::MetaBlock* const meta;
   const char* path;  // only set at debug mode
@@ -53,12 +54,6 @@ class File {
   // each thread tid has its local allocator
   // the allocator is a per-thread per-file data structure
   tbb::concurrent_unordered_map<pid_t, Allocator> allocators;
-
-  // move spinlock into a separated cacheline
-  union {
-    pthread_spinlock_t spinlock;
-    char cl[CACHELINE_SIZE];
-  };
 
   // transformer will have to do many dirty and inclusive operations
   friend utility::Converter;
@@ -80,45 +75,7 @@ class File {
   int fsync();
   void stat(struct stat* buf);
 
-  /*
-   * Getters
-   */
   [[nodiscard]] Allocator* get_local_allocator();
-
-  void update(FileState* state, Allocator* allocator = nullptr) {
-    if (!blk_table.need_update(state, allocator)) return;
-    pthread_spin_lock(&spinlock);
-    blk_table.update(allocator);
-    *state = blk_table.get_file_state();
-    pthread_spin_unlock(&spinlock);
-  }
-
-  void update_with_offset(FileState* state, uint64_t& count,
-                          bool stop_at_boundary, uint64_t& ticket,
-                          uint64_t& old_offset,
-                          Allocator* allocator = nullptr) {
-    pthread_spin_lock(&spinlock);
-    blk_table.update(allocator);
-    *state = blk_table.get_file_state();
-    old_offset = tx_mgr.offset_mgr.acquire_offset(count, state->file_size,
-                                                  stop_at_boundary, ticket);
-    pthread_spin_unlock(&spinlock);
-  }
-
-  /**
-   * @return the logical block index corresponding to the virtual index
-   */
-  [[nodiscard]] LogicalBlockIdx vidx_to_lidx(VirtualBlockIdx vidx) const {
-    return blk_table.get(vidx);
-  }
-
-  /**
-   * @return a read-only pointer to the block given a virtual block index
-   * An empty block is returned if the block is not allocated yet (e.g., a hole)
-   */
-  [[nodiscard]] const pmem::Block* vidx_to_addr_ro(VirtualBlockIdx vidx) {
-    return mem_table.lidx_to_addr_ro(vidx_to_lidx(vidx));
-  }
 
   // try to open a file with checking whether the given file is in uLayFS format
   static bool try_open(int& fd, struct stat& stat_buf, const char* pathname,

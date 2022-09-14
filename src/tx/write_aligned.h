@@ -3,13 +3,13 @@
 namespace ulayfs::dram {
 class AlignedTx : public WriteTx {
  public:
-  AlignedTx(File* file, TxMgr* tx_mgr, const char* buf, size_t count,
+  AlignedTx(Allocator* allocator, TxMgr* tx_mgr, const char* buf, size_t count,
             size_t offset)
-      : WriteTx(file, tx_mgr, buf, count, offset) {}
+      : WriteTx(allocator, tx_mgr, buf, count, offset) {}
 
-  AlignedTx(File* file, TxMgr* tx_mgr, const char* buf, size_t count,
+  AlignedTx(Allocator* allocator, TxMgr* tx_mgr, const char* buf, size_t count,
             size_t offset, FileState state, uint64_t ticket)
-      : WriteTx(file, tx_mgr, buf, count, offset, state, ticket) {}
+      : WriteTx(allocator, tx_mgr, buf, count, offset, state, ticket) {}
 
   ssize_t exec() {
     timer.stop<Event::ALIGNED_TX_CTOR>();
@@ -33,7 +33,7 @@ class AlignedTx : public WriteTx {
 
     {
       TimerGuard<Event::ALIGNED_TX_UPDATE> timer_guard;
-      if (!is_offset_depend) file->update(&state, allocator);
+      if (!is_offset_depend) state = blk_table->update(allocator);
     }
 
     if (allocator->tx_block.get_pinned_idx() != state.get_tx_block_idx())
@@ -43,7 +43,7 @@ class AlignedTx : public WriteTx {
       TimerGuard<Event::ALIGNED_TX_PREPARE> timer_guard;
       // for aligned tx, `leftover_bytes` is always zero, so we don't need to
       // know file size before prepare commit entry. thus, we move it before
-      // `file->update` to shrink the critical section
+      // `update` to shrink the critical section
       leftover_bytes = 0;
       prepare_commit_entry(/*skip_update_leftover_bytes*/ true);
     }
@@ -51,12 +51,12 @@ class AlignedTx : public WriteTx {
     {
       TimerGuard<Event::ALIGNED_TX_RECYCLE> timer_guard;
       for (uint32_t i = 0; i < num_blocks; ++i)
-        recycle_image[i] = file->vidx_to_lidx(begin_vidx + i);
+        recycle_image[i] = blk_table->vidx_to_lidx(begin_vidx + i);
     }
 
     {
       TimerGuard<Event::ALIGNED_TX_WAIT_OFFSET> timer_guard;
-      if (is_offset_depend) tx_mgr->offset_mgr.wait_offset(ticket);
+      if (is_offset_depend) offset_mgr->wait(ticket);
     }
 
     if constexpr (BuildOptions::cc_occ) {

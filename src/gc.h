@@ -28,7 +28,7 @@ class GarbageCollector {
     }
 
     file = std::make_unique<dram::File>(fd, stat_buf, O_RDWR, pathname);
-    auto state = file->blk_table.get_file_state();
+    auto state = file->blk_table.get_file_state_unsafe();
     file_size = state.file_size;
     old_cursor = state.cursor;
   }
@@ -92,6 +92,7 @@ class GarbageCollector {
 
   [[nodiscard]] bool create_new_linked_list() const {
     auto allocator = file->get_local_allocator();
+    auto blk_table = &file->blk_table;
 
     LogicalBlockIdx old_first_tx_block_idx = file->meta->get_next_tx_block();
     assert(old_first_tx_block_idx != 0);
@@ -114,15 +115,15 @@ class GarbageCollector {
 
       auto num_blocks = BLOCK_SIZE_TO_IDX(ALIGN_UP(file_size, BLOCK_SIZE));
       for (; i < num_blocks; i++) {
-        auto curr_blk_idx = file->vidx_to_lidx(i);
-        auto prev_blk_idx = file->vidx_to_lidx(i - 1);
+        auto curr_blk_idx = blk_table->vidx_to_lidx(i);
+        auto prev_blk_idx = blk_table->vidx_to_lidx(i - 1);
         if (curr_blk_idx == 0) continue;
         // continuous blocks can be placed in 1 tx
         if (curr_blk_idx - prev_blk_idx == 1 &&
             i - begin < pmem::TxEntryInline::NUM_BLOCKS_MAX)
           continue;
-        auto entry =
-            pmem::TxEntryInline(i - begin, begin, file->vidx_to_lidx(begin));
+        auto entry = pmem::TxEntryInline(i - begin, begin,
+                                         blk_table->vidx_to_lidx(begin));
         new_cursor.block->store(entry, new_cursor.idx.local_idx);
         if (bool success = new_cursor.advance(&file->mem_table); !success) {
           // current block is full, flush it and allocate a new block
@@ -144,15 +145,15 @@ class GarbageCollector {
     {
       auto leftover_bytes = ALIGN_UP(file_size, BLOCK_SIZE) - file_size;
       if (leftover_bytes == 0) {
-        auto commit_entry =
-            pmem::TxEntryInline(i - begin, begin, file->vidx_to_lidx(begin));
+        auto commit_entry = pmem::TxEntryInline(i - begin, begin,
+                                                blk_table->vidx_to_lidx(begin));
         new_cursor.block->store(commit_entry, new_cursor.idx.local_idx);
       } else {
         // since i - begin <= 63, this can fit into one log entry
-        auto begin_lidx = std::vector{file->vidx_to_lidx(begin)};
-        dram::LogCursor log_cursor = file->tx_mgr.append_log_entry(
-            allocator, pmem::LogEntry::Op::LOG_OVERWRITE, leftover_bytes,
-            i - begin, begin, begin_lidx);
+        auto begin_lidx = std::vector{blk_table->vidx_to_lidx(begin)};
+        dram::LogCursor log_cursor = allocator->log_entry.append(
+            pmem::LogEntry::Op::LOG_OVERWRITE, leftover_bytes, i - begin, begin,
+            begin_lidx);
         auto commit_entry = pmem::TxEntryIndirect(log_cursor.idx);
         new_cursor.block->store(commit_entry, new_cursor.idx.local_idx);
       }

@@ -26,11 +26,11 @@ thread_local std::vector<pmem::Block*> local_buf_dst_blocks;
  */
 class Tx {
  protected:
-  // pointer to the outer class
-  File* file;
-  TxMgr* tx_mgr;
   MemTable* mem_table;
-  Allocator* allocator;  // local
+  BlkTable* blk_table;
+  OffsetMgr* offset_mgr;
+  Lock* lock;
+  Allocator* allocator;  // thread-local
 
   /*
    * Input properties
@@ -62,11 +62,12 @@ class Tx {
 
   FileState state;
 
-  Tx(File* file, TxMgr* tx_mgr, size_t count, size_t offset)
-      : file(file),
-        tx_mgr(tx_mgr),
-        mem_table(tx_mgr->mem_table),
-        allocator(file->get_local_allocator()),
+  Tx(Allocator* allocator, TxMgr* tx_mgr, size_t count, size_t offset)
+      : mem_table(tx_mgr->mem_table),
+        blk_table(tx_mgr->blk_table),
+        offset_mgr(tx_mgr->offset_mgr),
+        lock(&tx_mgr->lock),
+        allocator(allocator),
 
         // input properties
         count(count),
@@ -79,14 +80,14 @@ class Tx {
         num_blocks(end_vidx - begin_vidx),
         is_offset_depend(false) {}
 
-  ~Tx() { tx_mgr->lock.unlock(); }
+  ~Tx() { lock->unlock(); }
 
  public:
   template <typename TX, typename... Params>
   static ssize_t exec_and_release_offset(Params&&... params) {
     TX tx(std::forward<Params>(params)...);
     ssize_t ret = tx.exec();
-    tx.tx_mgr->offset_mgr.release_offset(tx.ticket, tx.state.cursor);
+    tx.offset_mgr->release(tx.ticket, tx.state.cursor);
     return ret;
   }
 

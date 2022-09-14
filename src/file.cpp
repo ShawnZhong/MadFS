@@ -21,8 +21,9 @@ namespace ulayfs::dram {
 File::File(int fd, const struct stat& stat, int flags,
            const char* pathname [[maybe_unused]])
     : mem_table(fd, stat.st_size, (flags & O_ACCMODE) == O_RDONLY),
-      tx_mgr(this, &mem_table),
       blk_table(&mem_table),
+      offset_mgr(),
+      tx_mgr(&mem_table, &blk_table, &offset_mgr),
       shm_mgr(fd, stat, mem_table.get_meta()),
       meta(mem_table.get_meta()),
       fd(fd),
@@ -30,7 +31,6 @@ File::File(int fd, const struct stat& stat, int flags,
                (flags & O_ACCMODE) == O_RDWR),
       can_write((flags & O_ACCMODE) == O_WRONLY ||
                 (flags & O_ACCMODE) == O_RDWR) {
-  pthread_spin_init(&spinlock, PTHREAD_PROCESS_PRIVATE);
   if (stat.st_size == 0) meta->init();
 
   uint64_t file_size;
@@ -47,7 +47,7 @@ File::File(int fd, const struct stat& stat, int flags,
     if (!bitmap_mgr.entries[0].is_allocated(0)) {
       meta->lock();
       if (!bitmap_mgr.entries[0].is_allocated(0)) {
-        file_size = blk_table.update(/*allocator=*/nullptr, &bitmap_mgr);
+        file_size = blk_table.update_unsafe(/*allocator=*/nullptr, &bitmap_mgr);
         file_size_updated = true;
         bitmap_mgr.entries[0].set_allocated(0);
       }
@@ -55,17 +55,15 @@ File::File(int fd, const struct stat& stat, int flags,
     }
   }
 
-  if (!file_size_updated) file_size = blk_table.update();
+  if (!file_size_updated) file_size = blk_table.update_unsafe();
 
-  if (flags & O_APPEND)
-    tx_mgr.offset_mgr.seek_absolute(static_cast<off_t>(file_size));
+  if (flags & O_APPEND) offset_mgr.seek_absolute(static_cast<off_t>(file_size));
   if constexpr (BuildOptions::debug) {
     path = strdup(pathname);
   }
 }
 
 File::~File() {
-  pthread_spin_destroy(&spinlock);
   allocators.clear();
   if (fd >= 0) posix::close(fd);
   if constexpr (BuildOptions::debug) {
@@ -83,7 +81,9 @@ ssize_t File::pwrite(const void* buf, size_t count, size_t offset) {
     return -1;
   }
   if (unlikely(count == 0)) return 0;
-  return tx_mgr.do_pwrite(static_cast<const char*>(buf), count, offset);
+  Allocator* allocator = get_local_allocator();
+  return tx_mgr.do_pwrite(static_cast<const char*>(buf), count, offset,
+                          allocator);
 }
 
 ssize_t File::write(const void* buf, size_t count) {
@@ -92,7 +92,8 @@ ssize_t File::write(const void* buf, size_t count) {
     return -1;
   }
   if (unlikely(count == 0)) return 0;
-  return tx_mgr.do_write(static_cast<const char*>(buf), count);
+  Allocator* allocator = get_local_allocator();
+  return tx_mgr.do_write(static_cast<const char*>(buf), count, allocator);
 }
 
 ssize_t File::pread(void* buf, size_t count, off_t offset) {
@@ -101,8 +102,9 @@ ssize_t File::pread(void* buf, size_t count, off_t offset) {
     return -1;
   }
   if (unlikely(count == 0)) return 0;
+  Allocator* allocator = get_local_allocator();
   return tx_mgr.do_pread(static_cast<char*>(buf), count,
-                         static_cast<size_t>(offset));
+                         static_cast<size_t>(offset), allocator);
 }
 
 ssize_t File::read(void* buf, size_t count) {
@@ -111,35 +113,34 @@ ssize_t File::read(void* buf, size_t count) {
     return -1;
   }
   if (unlikely(count == 0)) return 0;
-  return tx_mgr.do_read(static_cast<char*>(buf), count);
+  Allocator* allocator = get_local_allocator();
+  return tx_mgr.do_read(static_cast<char*>(buf), count, allocator);
 }
 
 off_t File::lseek(off_t offset, int whence) {
   int64_t ret;
 
-  pthread_spin_lock(&spinlock);
-  uint64_t file_size = blk_table.update();
+  blk_table.update([&](FileState* state) {
+    switch (whence) {
+      case SEEK_SET:
+        ret = offset_mgr.seek_absolute(offset);
+        break;
+      case SEEK_CUR:
+        ret = offset_mgr.seek_relative(offset);
+        if (ret == -1) errno = EINVAL;
+        break;
+      case SEEK_END:
+        ret = offset_mgr.seek_absolute(static_cast<off_t>(state->file_size) +
+                                       offset);
+        break;
+      case SEEK_DATA:
+      case SEEK_HOLE:
+      default:
+        ret = -1;
+        errno = EINVAL;
+    }
+  });
 
-  switch (whence) {
-    case SEEK_SET:
-      ret = tx_mgr.offset_mgr.seek_absolute(offset);
-      break;
-    case SEEK_CUR:
-      ret = tx_mgr.offset_mgr.seek_relative(offset);
-      if (ret == -1) errno = EINVAL;
-      break;
-    case SEEK_END:
-      ret = tx_mgr.offset_mgr.seek_absolute(static_cast<off_t>(file_size) +
-                                            offset);
-      break;
-    case SEEK_DATA:
-    case SEEK_HOLE:
-    default:
-      ret = -1;
-      errno = EINVAL;
-  }
-
-  pthread_spin_unlock(&spinlock);
   return ret;
 }
 
@@ -182,10 +183,10 @@ void* File::mmap(void* addr_hint, size_t length, int prot, int mmap_flags,
   VirtualBlockIdx vidx_end =
       BLOCK_SIZE_TO_IDX(ALIGN_UP(offset + length, BLOCK_SIZE));
   VirtualBlockIdx vidx_group_begin = BLOCK_SIZE_TO_IDX(offset);
-  LogicalBlockIdx lidx_group_begin = blk_table.get(vidx_group_begin);
+  LogicalBlockIdx lidx_group_begin = blk_table.vidx_to_lidx(vidx_group_begin);
   uint32_t num_blocks = 0;
   for (VirtualBlockIdx vidx = vidx_group_begin; vidx < vidx_end; ++vidx) {
-    LogicalBlockIdx lidx = blk_table.get(vidx);
+    LogicalBlockIdx lidx = blk_table.vidx_to_lidx(vidx);
     if (lidx == 0) PANIC("hole vidx=%d in mmap", vidx.get());
 
     if (lidx == lidx_group_begin + num_blocks) {
@@ -211,8 +212,7 @@ error:
 }
 
 int File::fsync() {
-  FileState state;
-  this->update(&state);
+  FileState state = blk_table.update();
   TxCursor::flush_up_to(&mem_table, meta, state.cursor);
   // we keep an invariant that tx_tail must be a valid (non-overflow) idx
   // an overflow index implies that the `next` pointer of the block is not set
@@ -227,7 +227,7 @@ int File::fsync() {
 }
 
 void File::stat(struct stat* buf) {
-  buf->st_size = static_cast<off_t>(blk_table.update());
+  buf->st_size = static_cast<off_t>(blk_table.update_unsafe());
 }
 
 /*

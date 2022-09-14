@@ -30,7 +30,15 @@ struct FileState {
 };
 static_assert(sizeof(FileState) == 24);
 
-class TxMgr;
+class SpinlockGuard {
+  pthread_spinlock_t* lock;
+
+ public:
+  explicit SpinlockGuard(pthread_spinlock_t* lock) : lock(lock) {
+    pthread_spin_lock(lock);
+  }
+  ~SpinlockGuard() { pthread_spin_unlock(lock); }
+};
 
 // read logs and update mapping from virtual blocks to logical blocks
 class BlkTable {
@@ -42,9 +50,18 @@ class BlkTable {
   static_assert(std::atomic<LogicalBlockIdx>::is_always_lock_free);
 
   FileState state;
+
+  /**
+   * The spinlock is used to prevent concurrent update to the file state.
+   */
+  union {
+    pthread_spinlock_t spinlock;
+    char cl[CACHELINE_SIZE];  // move spinlock into a separated cacheline
+  };
+
   /**
    * Version of the file state above.
-   * It can only be updated with file->spinlock held. Before a writer (of
+   * It can only be updated with the spinlock held. Before a writer (of
    * BlkTable) tries to update the three fields above, it must increment the
    * version; after it's done, it must increment it again.
    * Thus, when this version is odd, it means someone is updating three fields
@@ -54,21 +71,58 @@ class BlkTable {
 
  public:
   explicit BlkTable(MemTable* mem_table)
-      : mem_table(mem_table),
-        state{{{}, mem_table->get_meta()}, 0},
-        version(0) {
+      : mem_table(mem_table), state{mem_table->get_meta(), 0}, version(0) {
     table.grow_to_at_least(NUM_BLOCKS_PER_GROW);
+    pthread_spin_init(&spinlock, PTHREAD_PROCESS_PRIVATE);
   }
 
-  ~BlkTable() = default;
+  ~BlkTable() { pthread_spin_destroy(&spinlock); }
 
   /**
    * @return the logical block index corresponding the the virtual block index
    *  0 is returned if the virtual block index is not allocated yet
    */
-  [[nodiscard]] LogicalBlockIdx get(VirtualBlockIdx virtual_block_idx) const {
+  [[nodiscard]] LogicalBlockIdx vidx_to_lidx(
+      VirtualBlockIdx virtual_block_idx) const {
     if (virtual_block_idx >= table.size()) return 0;
     return table[virtual_block_idx.get()];
+  }
+
+  /**
+   * Get the current file state. Not thread-safe.
+   * @return the current file state
+   */
+  [[nodiscard]] FileState get_file_state_unsafe() const { return state; }
+
+  /**
+   * Update block table and get the current file state. Thread-safe.
+   * @param allocator if not nullptr, it will be used to allocate new blocks
+   * @return the current file state
+   */
+  FileState update(Allocator* allocator = nullptr) {
+    if (!need_update(allocator)) return state;
+    {
+      SpinlockGuard guard(&spinlock);
+      update_unsafe(allocator);
+      return state;
+    }
+  }
+
+  /**
+   * Update block table, execute the given function with lock held, and return
+   * the current file state. Thread-safe.
+   *
+   * @param f the function to execute with lock held
+   * @param allocator if not nullptr, it will be used to allocate new blocks
+   * @return the current file state
+   */
+  template <typename F>
+  FileState update(F&& f, Allocator* allocator = nullptr) {
+    // we don't need to check need_update here
+    SpinlockGuard guard(&spinlock);
+    update_unsafe(allocator);
+    f(&state);
+    return state;
   }
 
   /**
@@ -77,8 +131,8 @@ class BlkTable {
    * @param allocator if given, allow allocation when iterating the tx_idx
    * @param bitmap_mgr if given, initialized the bitmap
    */
-  uint64_t update(Allocator* allocator = nullptr,
-                  BitmapMgr* bitmap_mgr = nullptr) {
+  uint64_t update_unsafe(Allocator* allocator = nullptr,
+                         BitmapMgr* bitmap_mgr = nullptr) {
     TimerGuard<Event::UPDATE> timer_guard;
     TxCursor cursor = state.cursor;
 
@@ -121,6 +175,7 @@ class BlkTable {
     return state.file_size;
   }
 
+ private:
   /**
    * Quick check if update is necessary; thread safe
    * This check is guarantee to not write any shared data structure so avoid
@@ -131,24 +186,19 @@ class BlkTable {
    * @param allocator if given, allow allocation
    * @return whether update is necessary
    */
-  [[nodiscard]] bool need_update(FileState* result_state,
-                                 Allocator* allocator) const {
+  [[nodiscard]] bool need_update(Allocator* allocator) {
     uint64_t curr_ver = version.load(std::memory_order_acquire);
     if (curr_ver & 1) return true;  // old version means inconsistency
-    *result_state = state;
     if (curr_ver != version.load(std::memory_order_acquire)) return true;
-    bool success = result_state->cursor.handle_overflow(mem_table, allocator);
+    bool success = state.cursor.handle_overflow(mem_table, allocator);
     if (!success) {
       return false;
     }
     // if it's not valid, there is no new tx to the tx history, thus no need to
     // acquire spinlock to update
-    return result_state->cursor.get_entry().is_valid();
+    return state.cursor.get_entry().is_valid();
   }
 
-  [[nodiscard]] FileState get_file_state() const { return state; }
-
- private:
   void grow_to_fit(VirtualBlockIdx idx) {
     if (table.size() > idx.get()) return;
     table.grow_to_at_least(next_pow2(idx.get()));

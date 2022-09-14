@@ -8,14 +8,15 @@ class ReadTx : public Tx {
   char* const buf;
 
  public:
-  ReadTx(File* file, TxMgr* tx_mgr, char* buf, size_t count, size_t offset)
-      : Tx(file, tx_mgr, count, offset), buf(buf) {
-    tx_mgr->lock.rdlock();  // nop lock is used by default
+  ReadTx(Allocator* allocator, TxMgr* tx_mgr, char* buf, size_t count,
+         size_t offset)
+      : Tx(allocator, tx_mgr, count, offset), buf(buf) {
+    lock->rdlock();  // nop lock is used by default
   }
 
-  ReadTx(File* file, TxMgr* tx_mgr, char* buf, size_t count, size_t offset,
-         FileState state, uint64_t ticket)
-      : ReadTx(file, tx_mgr, buf, count, offset) {
+  ReadTx(Allocator* allocator, TxMgr* tx_mgr, char* buf, size_t count,
+         size_t offset, FileState state, uint64_t ticket)
+      : ReadTx(allocator, tx_mgr, buf, count, offset) {
     is_offset_depend = true;
     this->state = state;
     this->ticket = ticket;
@@ -34,7 +35,7 @@ class ReadTx : public Tx {
 
     {
       TimerGuard<Event::READ_TX_UPDATE> timer_guard;
-      if (!is_offset_depend) file->update(&state);
+      if (!is_offset_depend) state = blk_table->update();
     }
 
     // reach EOF
@@ -52,13 +53,16 @@ class ReadTx : public Tx {
     {
       TimerGuard<Event::READ_TX_COPY> timer_guard;
 
-      const char* addr = file->vidx_to_addr_ro(begin_vidx)->data_ro();
+      const char* addr =
+          mem_table->lidx_to_addr_ro(blk_table->vidx_to_lidx(begin_vidx))
+              ->data_ro();
       addr += first_block_offset;
       size_t contiguous_bytes = first_block_size;
       size_t buf_offset = 0;
 
       for (VirtualBlockIdx vidx = begin_vidx + 1; vidx < end_vidx; ++vidx) {
-        const pmem::Block* curr_block = file->vidx_to_addr_ro(vidx);
+        const pmem::Block* curr_block =
+            mem_table->lidx_to_addr_ro(blk_table->vidx_to_lidx(vidx));
         if (addr + contiguous_bytes == curr_block->data_ro()) {
           contiguous_bytes += BLOCK_SIZE;
           continue;
@@ -126,7 +130,7 @@ class ReadTx : public Tx {
     // we actually don't care what's the previous tx's tail, because we will
     // need to validate against the latest tail anyway
     if (is_offset_depend) {
-      if (!tx_mgr->offset_mgr.validate_offset(ticket, state.cursor)) {
+      if (!offset_mgr->validate(ticket, state.cursor)) {
         // we don't need to revalidate after redo
         is_offset_depend = false;
         goto redo;

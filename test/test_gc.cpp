@@ -44,7 +44,7 @@ void basic_test(BasicTestOpt opt) {
   fsync(fd);
 
   auto file = ulayfs::get_file(fd);
-  auto file_size = file->blk_table.get_file_state().file_size;
+  auto file_size = file->blk_table.get_file_state_unsafe().file_size;
 
   if (print) std::cerr << *file;
   close(fd);
@@ -60,7 +60,7 @@ void basic_test(BasicTestOpt opt) {
   {
     int new_fd = open(filepath, O_CREAT | O_RDWR, S_IRUSR | S_IWUSR);
     auto new_file = ulayfs::get_file(new_fd);
-    ASSERT(new_file->blk_table.get_file_state().file_size == file_size);
+    ASSERT(new_file->blk_table.get_file_state_unsafe().file_size == file_size);
   }
 }
 
