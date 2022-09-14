@@ -106,7 +106,12 @@ class File {
    * Remove the thread-local allocator for the current thread.
    * Called when the thread exits.
    */
-  void remove_local_allocator() { allocators.unsafe_erase(tid); }
+  void remove_local_allocator() {
+    if (auto it = allocators.find(tid); it != allocators.end()) {
+      // call destructor explicitly without freeing the memory
+      it->second.~Allocator();
+    }
+  }
 
   void update(FileState* state, Allocator* allocator = nullptr) {
     if (!blk_table.need_update(state, allocator)) return;
