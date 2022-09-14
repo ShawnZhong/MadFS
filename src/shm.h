@@ -71,7 +71,8 @@ class alignas(SHM_PER_THREAD_SIZE) PerThreadData {
     index = i;
     tx_block_idx.store(0, std::memory_order_relaxed);
     init_robust_mutex(&mutex);
-    pthread_mutex_lock(&mutex);
+    // TODO: uncomment this
+    //    pthread_mutex_lock(&mutex);
     state.store(State::INITIALIZED, std::memory_order_release);
 
     LOG_DEBUG("PerThreadData %ld initialized by tid %d", i, tid);
@@ -91,7 +92,8 @@ class alignas(SHM_PER_THREAD_SIZE) PerThreadData {
       return;
     }
     LOG_DEBUG("PerThreadData %ld to be reset by tid %d", index, tid);
-    if (is_thread_alive()) pthread_mutex_unlock(&mutex);
+    // TODO: uncomment this
+    //    if (is_thread_alive()) pthread_mutex_unlock(&mutex);
     index = 0;
     tx_block_idx.store(0, std::memory_order_relaxed);
     pthread_mutex_destroy(&mutex);
@@ -116,6 +118,8 @@ class alignas(SHM_PER_THREAD_SIZE) PerThreadData {
    * @return true if the thread is alive
    */
   bool is_thread_alive() {
+    return true;  // TODO: fix me
+    assert(state.load(std::memory_order_acquire) == State::INITIALIZED);
     int rc = pthread_mutex_trylock(&mutex);
     if (rc == 0) {
       // if we can lock the mutex, then the thread is dead
