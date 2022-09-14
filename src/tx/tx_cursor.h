@@ -24,7 +24,7 @@ struct TxCursor {
   TxCursor() : idx(), addr(nullptr) {}
   TxCursor(TxEntryIdx idx, void* addr) : idx(idx), addr(addr) {}
 
-  static TxCursor head(pmem::MetaBlock* meta) { return {{}, meta}; }
+  static TxCursor from_meta(pmem::MetaBlock* meta) { return {{}, meta}; }
 
   static TxCursor from_idx(TxEntryIdx idx, MemTable* mem_table) {
     return {idx, mem_table->lidx_to_addr_rw(idx.block_idx)};
@@ -44,11 +44,6 @@ struct TxCursor {
         idx.is_inline() ? meta->tx_entries : block->tx_entries;
     assert(idx.local_idx < idx.get_capacity());
     return entries[idx.local_idx].load(std::memory_order_acquire);
-  }
-
-  [[nodiscard]] LogicalBlockIdx get_next_block_idx() const {
-    return idx.is_inline() ? meta->get_next_tx_block()
-                           : block->get_next_tx_block();
   }
 
   /**
@@ -105,6 +100,11 @@ struct TxCursor {
     return handle_overflow(mem_table, allocator, into_new_block);
   }
 
+  [[nodiscard]] LogicalBlockIdx get_next_block_idx() const {
+    return idx.is_inline() ? meta->get_next_tx_block()
+                           : block->get_next_tx_block();
+  }
+
   /**
    * Advance to the first entry of the next tx block
    * @param mem_table used to find the memory address of the next block
@@ -117,6 +117,30 @@ struct TxCursor {
     idx.local_idx = 0;
     addr = mem_table->lidx_to_addr_rw(idx.block_idx);
     return true;
+  }
+
+  /**
+   * Advance to the next orphan tx block
+   * @param mem_table used to find the memory address of the next block
+   * @return true on success; false when reaches the end
+   */
+  bool advance_to_next_orphan(MemTable* mem_table) {
+    LogicalBlockIdx block_idx = idx.is_inline()
+                                    ? meta->get_next_orphan_block()
+                                    : block->get_next_orphan_block();
+    if (block_idx == 0) return false;
+    idx.block_idx = block_idx;
+    idx.local_idx = 0;
+    addr = mem_table->lidx_to_addr_rw(idx.block_idx);
+    return true;
+  }
+
+  void set_next_orphan_block(LogicalBlockIdx block_idx) const {
+    if (idx.is_inline()) {
+      meta->set_next_orphan_block(block_idx);
+    } else {
+      block->set_next_orphan_block(block_idx);
+    }
   }
 
   /**

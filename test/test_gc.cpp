@@ -131,6 +131,14 @@ void sync_test() {
 
   gc_thread.join();
   for (auto& t : io_threads) t.join();
+  close(fd);
+
+  {
+    GarbageCollector garbage_collector(filepath);
+    std::cerr << garbage_collector.file->shm_mgr;
+    garbage_collector.do_gc();
+    std::cerr << garbage_collector.file->tx_mgr;
+  }
 }
 
 int main() {

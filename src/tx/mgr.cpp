@@ -89,7 +89,7 @@ std::ostream& operator<<(std::ostream& out, const TxMgr& tx_mgr) {
   {
     out << "Transactions: \n";
 
-    TxCursor cursor = TxCursor::head(tx_mgr.file->meta);
+    TxCursor cursor = TxCursor::from_meta(tx_mgr.file->meta);
     int count = 0;
 
     while (true) {
@@ -122,8 +122,16 @@ std::ostream& operator<<(std::ostream& out, const TxMgr& tx_mgr) {
 
   {
     out << "Tx Blocks: \n";
-    TxCursor cursor = TxCursor::head(tx_mgr.file->meta);
+    TxCursor cursor = TxCursor::from_meta(tx_mgr.file->meta);
     while (cursor.advance_to_next_block(tx_mgr.mem_table)) {
+      out << "\t" << cursor.idx.block_idx << ": " << *cursor.block << "\n";
+    }
+  }
+
+  {
+    out << "Orphaned Tx Blocks: \n";
+    TxCursor cursor = TxCursor::from_meta(tx_mgr.file->meta);
+    while (cursor.advance_to_next_orphan(tx_mgr.mem_table)) {
       out << "\t" << cursor.idx.block_idx << ": " << *cursor.block << "\n";
     }
   }

@@ -36,9 +36,9 @@ class MetaBlock : public noncopyable {
       // if inline tx_entries are used up, this points to the next log block
       std::atomic<LogicalBlockIdx> next_tx_block;
 
-      // outdated but not yet freed tx blocks are organized as a linked list;
+      // orphan but not yet freed tx blocks are organized as a linked list;
       // these blocks are freed once they are not referenced by others
-      std::atomic<LogicalBlockIdx> next_outdated_tx_block;
+      std::atomic<LogicalBlockIdx> next_orphan_block;
     } cl1_meta;
 
     // padding avoid cache line contention
@@ -155,13 +155,13 @@ class MetaBlock : public noncopyable {
     return cl1_meta.next_tx_block.load(std::memory_order_acquire);
   }
 
-  void set_next_outdated_tx_block(LogicalBlockIdx block_idx) {
-    cl1_meta.next_outdated_tx_block.store(block_idx, std::memory_order_release);
+  void set_next_orphan_block(LogicalBlockIdx block_idx) {
+    cl1_meta.next_orphan_block.store(block_idx, std::memory_order_release);
     persist_cl_unfenced(&cl1_meta);
   }
 
-  [[nodiscard]] LogicalBlockIdx get_next_outdated_tx_block() const {
-    return cl1_meta.next_outdated_tx_block.load(std::memory_order_acquire);
+  [[nodiscard]] LogicalBlockIdx get_next_orphan_block() const {
+    return cl1_meta.next_orphan_block.load(std::memory_order_acquire);
   }
 
   /**

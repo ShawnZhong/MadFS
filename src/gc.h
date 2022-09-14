@@ -47,14 +47,10 @@ class GarbageCollector {
   void do_gc() const {
     LOG_INFO("GarbageCollector: start transaction & log gc");
 
-    if (!need_gc()) {
+    if (!need_new_linked_list()) {
       LOG_INFO("GarbageCollector: no need to gc");
-      return;
-    }
-
-    bool success = create_new_linked_list();
-    if (!success) {
-      return;
+    } else {
+      create_new_linked_list();
     }
 
     recycle();
@@ -62,7 +58,7 @@ class GarbageCollector {
     LOG_INFO("GarbageCollector: done");
   }
 
-  [[nodiscard]] bool need_gc() const {
+  [[nodiscard]] bool need_new_linked_list() const {
     LOG_DEBUG("GarbageCollector: old_tail=%d", old_tail.idx.block_idx.get());
 
     // skip if tail_tx_block is meta block
@@ -201,7 +197,7 @@ class GarbageCollector {
 
   void recycle() const {
     LogicalBlockIdx idx = get_smallest_tx_idx();
-    LOG_DEBUG("GarbageCollector: smallest tx idx: %d", idx.get());
+    LOG_DEBUG("GarbageCollector: smallest tx idx: %u", idx.get());
     // blocks before the pivot can be immediately recycled, blocks after the
     // pivot needs to be recycled later.
     const dram::TxCursor pivot =
@@ -217,20 +213,23 @@ class GarbageCollector {
       LOG_DEBUG("GarbageCollector: freed block %d", prev.idx.block_idx.get());
     }
 
+    // find the tail of the orphaned tx blocks, and try to free them
+    dram::TxCursor orphan = dram::TxCursor::from_meta(file->meta);
+    while (orphan.advance_to_next_orphan(&file->mem_table)) {
+      if (orphan < pivot) {
+        allocator->block.free(orphan.idx.block_idx);
+        LOG_DEBUG("GarbageCollector: freed orphan block %d",
+                  orphan.idx.block_idx.get());
+      }
+    }
+
     while (curr.idx.block_idx < old_tail.idx.block_idx) {
       LOG_DEBUG("GarbageCollector: block %d cannot be recycled now",
                 curr.idx.block_idx.get());
+      orphan.set_next_orphan_block(curr.idx.block_idx);
+      orphan.advance_to_next_orphan(&file->mem_table);
       if (!curr.advance_to_next_block(&file->mem_table)) break;
     }
-
-    // TODO: scan shared memory to get a snapshot of which tx block every thread
-    // has pinned and
-    // 1) if a tx block is neither pinned nor linked after a pinned tx block,
-    //    release this block immediately by marking the bitmap
-    // 2) otherwise, link this block into an outdated block linked list
-    //
-    // Also scan the outdated tx block linked list to free blocks with the above
-    // rules
   }
 };
 
