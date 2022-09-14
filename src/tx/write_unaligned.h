@@ -97,7 +97,7 @@ class SingleBlockTx : public CoWTx {
       }
     }
 
-    if (is_offset_depend) tx_mgr->offset_mgr.wait_offset(ticket);
+    if (is_offset_depend) tx_mgr->offset_mgr->wait(ticket);
 
   retry:
     if constexpr (BuildOptions::cc_occ) {
@@ -249,7 +249,7 @@ class MultiBlockTx : public CoWTx {
     }
     fence();
 
-    if (is_offset_depend) tx_mgr->offset_mgr.wait_offset(ticket);
+    if (is_offset_depend) tx_mgr->offset_mgr->wait(ticket);
 
   retry:
     if constexpr (BuildOptions::cc_occ) {

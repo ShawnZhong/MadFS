@@ -21,7 +21,8 @@ namespace ulayfs::dram {
 File::File(int fd, const struct stat& stat, int flags,
            const char* pathname [[maybe_unused]])
     : mem_table(fd, stat.st_size, (flags & O_ACCMODE) == O_RDONLY),
-      tx_mgr(this, &mem_table),
+      offset_mgr(),
+      tx_mgr(this, &mem_table, &offset_mgr),
       blk_table(&mem_table),
       shm_mgr(fd, stat, mem_table.get_meta()),
       meta(mem_table.get_meta()),
@@ -57,8 +58,7 @@ File::File(int fd, const struct stat& stat, int flags,
 
   if (!file_size_updated) file_size = blk_table.update();
 
-  if (flags & O_APPEND)
-    tx_mgr.offset_mgr.seek_absolute(static_cast<off_t>(file_size));
+  if (flags & O_APPEND) offset_mgr.seek_absolute(static_cast<off_t>(file_size));
   if constexpr (BuildOptions::debug) {
     path = strdup(pathname);
   }
@@ -122,15 +122,14 @@ off_t File::lseek(off_t offset, int whence) {
 
   switch (whence) {
     case SEEK_SET:
-      ret = tx_mgr.offset_mgr.seek_absolute(offset);
+      ret = offset_mgr.seek_absolute(offset);
       break;
     case SEEK_CUR:
-      ret = tx_mgr.offset_mgr.seek_relative(offset);
+      ret = offset_mgr.seek_relative(offset);
       if (ret == -1) errno = EINVAL;
       break;
     case SEEK_END:
-      ret = tx_mgr.offset_mgr.seek_absolute(static_cast<off_t>(file_size) +
-                                            offset);
+      ret = offset_mgr.seek_absolute(static_cast<off_t>(file_size) + offset);
       break;
     case SEEK_DATA:
     case SEEK_HOLE:

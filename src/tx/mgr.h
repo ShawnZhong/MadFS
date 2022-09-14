@@ -18,12 +18,12 @@ class TxMgr {
  public:
   File* file;
   MemTable* mem_table;
+  OffsetMgr* offset_mgr;
 
   Lock lock;  // nop lock is used by default
-  OffsetMgr offset_mgr;
 
-  TxMgr(File* file, MemTable* mem_table)
-      : file(file), mem_table(mem_table), offset_mgr(this) {}
+  TxMgr(File* file, MemTable* mem_table, OffsetMgr* offset_mgr)
+      : file(file), mem_table(mem_table), offset_mgr(offset_mgr) {}
 
   ssize_t do_pread(char* buf, size_t count, size_t offset);
   ssize_t do_read(char* buf, size_t count);

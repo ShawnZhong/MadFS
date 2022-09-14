@@ -56,7 +56,7 @@ class AlignedTx : public WriteTx {
 
     {
       TimerGuard<Event::ALIGNED_TX_WAIT_OFFSET> timer_guard;
-      if (is_offset_depend) tx_mgr->offset_mgr.wait_offset(ticket);
+      if (is_offset_depend) tx_mgr->offset_mgr->wait(ticket);
     }
 
     if constexpr (BuildOptions::cc_occ) {
