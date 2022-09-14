@@ -27,4 +27,13 @@ static auto add_file(int fd, Args&&... args) {
   return files.emplace(
       fd, std::make_shared<dram::File>(fd, std::forward<Args>(args)...));
 }
+
+inline thread_local class ThreadExitHandler {
+ public:
+  ~ThreadExitHandler() {
+    for (auto& [fd, file] : files) {
+      file->remove_local_allocator();
+    }
+  }
+} thread_exit_handler;
 }  // namespace ulayfs

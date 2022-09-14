@@ -50,8 +50,13 @@ class File {
   const bool can_read;
   const bool can_write;
 
-  // each thread tid has its local allocator
-  // the allocator is a per-thread per-file data structure
+  /**
+   * `allocators` is a map from thread id to allocator
+   *
+   * Allocator is a per-thread per-file data structure. It is created upon first
+   * call to `get_local_allocator` and destroyed when the file is closed (~File)
+   * or the thread exits (ThreadExitHandler).
+   */
   tbb::concurrent_unordered_map<pid_t, Allocator> allocators;
 
   // move spinlock into a separated cacheline
@@ -80,10 +85,28 @@ class File {
   int fsync();
   void stat(struct stat* buf);
 
-  /*
-   * Getters
+  /**
+   * @return the allocator for the current thread
    */
-  [[nodiscard]] Allocator* get_local_allocator();
+  [[nodiscard]] Allocator* get_local_allocator() {
+    if (auto it = allocators.find(tid); it != allocators.end()) {
+      return &it->second;
+    }
+
+    auto [it, ok] = allocators.emplace(
+        std::piecewise_construct, std::forward_as_tuple(tid),
+        std::forward_as_tuple(&mem_table, &bitmap_mgr,
+                              shm_mgr.alloc_per_thread_data()));
+    PANIC_IF(!ok, "insert to thread-local allocators failed");
+
+    return &it->second;
+  }
+
+  /**
+   * Remove the thread-local allocator for the current thread.
+   * Called when the thread exits.
+   */
+  void remove_local_allocator() { allocators.unsafe_erase(tid); }
 
   void update(FileState* state, Allocator* allocator = nullptr) {
     if (!blk_table.need_update(state, allocator)) return;
