@@ -15,9 +15,9 @@
 namespace ulayfs::dram {
 
 class alignas(SHM_PER_THREAD_SIZE) PerThreadData {
-  enum State : uint8_t {
+  enum class State : uint8_t {
     UNINITIALIZED,
-    PENDING,  // the state is inconsistent (initializing or destorying)
+    PENDING,  // the state is inconsistent (initializing or destroying)
     INITIALIZED,
   };
 
@@ -40,7 +40,7 @@ class alignas(SHM_PER_THREAD_SIZE) PerThreadData {
    * dead.
    */
   [[nodiscard]] bool is_valid() {
-    if (state != INITIALIZED) return false;
+    if (state != State::INITIALIZED) return false;
     return is_thread_alive();
   }
 
@@ -52,8 +52,8 @@ class alignas(SHM_PER_THREAD_SIZE) PerThreadData {
    * @return true if initialization succeeded
    */
   bool try_init(size_t i) {
-    State expected = UNINITIALIZED;
-    if (!state.compare_exchange_strong(expected, PENDING,
+    State expected = State::UNINITIALIZED;
+    if (!state.compare_exchange_strong(expected, State::PENDING,
                                        std::memory_order_acq_rel,
                                        std::memory_order_acquire)) {
       // If the state is not UNINITIALIZED, then it must be INITIALIZED.
@@ -64,12 +64,12 @@ class alignas(SHM_PER_THREAD_SIZE) PerThreadData {
 
     index = i;
     tx_block_idx.store(0, std::memory_order_relaxed);
-
-    pthread_mutexattr_t attr;
-    pthread_mutexattr_init(&attr);
-    pthread_mutexattr_setrobust(&attr, PTHREAD_MUTEX_ROBUST);
-    pthread_mutex_init(&mutex, &attr);
+    init_robust_mutex(&mutex);
+    // TODO: uncomment this
+    //    pthread_mutex_lock(&mutex);
     state.store(State::INITIALIZED, std::memory_order_release);
+
+    LOG_DEBUG("PerThreadData %ld initialized by tid %d", i, tid);
     return true;
   }
 
@@ -77,8 +77,10 @@ class alignas(SHM_PER_THREAD_SIZE) PerThreadData {
    * Destroy the per-thread data
    */
   void reset() {
-    LOG_DEBUG("PerThreadData %ld reset by tid %d", index, tid);
+    LOG_DEBUG("PerThreadData %ld to be reset by tid %d", index, tid);
     assert(state.load(std::memory_order_acquire) == State::INITIALIZED);
+    // TODO: uncomment this
+    //    if (is_thread_alive()) pthread_mutex_unlock(&mutex);
     state.store(State::PENDING, std::memory_order_acq_rel);
     index = 0;
     tx_block_idx.store(0, std::memory_order_relaxed);
@@ -113,9 +115,28 @@ class alignas(SHM_PER_THREAD_SIZE) PerThreadData {
     } else if (rc == EBUSY) {
       // if the mutex is already locked, then the thread is alive
       return true;
+    } else if (rc == EOWNERDEAD) {
+      // detected that the owner of the mutex is dead
+      pthread_mutex_consistent(&mutex);
+      pthread_mutex_unlock(&mutex);
+      return false;
     } else {
       PANIC("pthread_mutex_trylock failed: %s", strerror(rc));
     }
+  }
+
+ public:
+  friend std::ostream& operator<<(std::ostream& os, PerThreadData& data) {
+    std::array state_names = {"UNINITIALIZED", "PENDING", "INITIALIZED"};
+    State curr_state = data.state;
+
+    os << "PerThreadData{state="
+       << state_names[static_cast<size_t>(curr_state)];
+    if (curr_state == State::INITIALIZED) {
+      os << ", is_thread_alive=" << data.is_thread_alive();
+    }
+    os << ", tx_block_idx=" << data.tx_block_idx << "}";
+    return os;
   }
 };
 
@@ -291,10 +312,7 @@ class ShmMgr {
        << "\taddr = " << mgr.addr << "\n"
        << "\tpath = " << mgr.path << "\n";
     for (size_t i = 0; i < MAX_NUM_THREADS; ++i) {
-      if (mgr.get_per_thread_data(i)->is_valid()) {
-        os << "\tthread " << i << ": tail_tx_block_idx = "
-           << mgr.get_per_thread_data(i)->get_tx_block_idx() << "\n";
-      }
+      os << "\t" << i << ": " << *mgr.get_per_thread_data(i) << "\n";
     }
     return os;
   }

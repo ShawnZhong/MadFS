@@ -1,5 +1,6 @@
 #pragma once
 
+#include <pthread.h>
 #include <tbb/cache_aligned_allocator.h>
 
 #include <bit>
@@ -84,6 +85,14 @@ static inline bool try_acquire_flock(int fd) {
 static inline void release_flock(int fd) {
   int ret = posix::flock(fd, LOCK_UN);
   PANIC_IF(ret != 0, "flock release fails");
+}
+
+static void init_robust_mutex(pthread_mutex_t *mutex) {
+  pthread_mutexattr_t attr;
+  pthread_mutexattr_init(&attr);
+  pthread_mutexattr_setpshared(&attr, PTHREAD_PROCESS_SHARED);
+  pthread_mutexattr_setrobust(&attr, PTHREAD_MUTEX_ROBUST);
+  pthread_mutex_init(mutex, &attr);
 }
 
 }  // namespace ulayfs

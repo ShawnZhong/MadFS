@@ -40,19 +40,19 @@ struct FatalException : public std::exception {};
 #define PANIC(msg, ...) PANIC_IF(true, msg, ##__VA_ARGS__)
 
 // LOG_* are not active in release mode
-#define ULAYFS_LOG(level, msg, ...)                                \
-  do {                                                             \
-    if constexpr (!BuildOptions::debug) break;                     \
-    if (level < runtime_options.log_level) break;                  \
-    constexpr const char *level_str_arr[] = {                      \
-        "[\u001b[37mTRACE\u001b[0m]",                              \
-        "[\u001b[32mDEBUG\u001b[0m]",                              \
-        "[\u001b[34mINFO\u001b[0m] ",                              \
-        "[\u001b[31mWARN\u001b[0m] ",                              \
-    };                                                             \
-    constexpr const char *level_str = level_str_arr[level];        \
-    if (log_file == nullptr) log_file = stderr;                    \
-    ULAYFS_FPRINTF(log_file, "%s " msg, level_str, ##__VA_ARGS__); \
+#define ULAYFS_LOG(level, msg, ...)                                          \
+  do {                                                                       \
+    if constexpr (!::ulayfs::BuildOptions::debug) break;                     \
+    if (level < ::ulayfs::runtime_options.log_level) break;                  \
+    constexpr const char *level_str_arr[] = {                                \
+        "[\u001b[37mTRACE\u001b[0m]",                                        \
+        "[\u001b[32mDEBUG\u001b[0m]",                                        \
+        "[\u001b[34mINFO\u001b[0m] ",                                        \
+        "[\u001b[31mWARN\u001b[0m] ",                                        \
+    };                                                                       \
+    constexpr const char *level_str = level_str_arr[level];                  \
+    if (::ulayfs::log_file == nullptr) ::ulayfs::log_file = stderr;          \
+    ULAYFS_FPRINTF(::ulayfs::log_file, "%s " msg, level_str, ##__VA_ARGS__); \
   } while (0)
 
 #define LOG_TRACE(msg, ...) ULAYFS_LOG(0, msg, ##__VA_ARGS__)
