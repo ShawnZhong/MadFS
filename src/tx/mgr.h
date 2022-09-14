@@ -18,16 +18,12 @@ class TxMgr {
  public:
   File* file;
   MemTable* mem_table;
-  pmem::MetaBlock* meta;
 
   Lock lock;  // nop lock is used by default
   OffsetMgr offset_mgr;
 
   TxMgr(File* file, MemTable* mem_table)
-      : file(file),
-        mem_table(mem_table),
-        meta(mem_table->get_meta()),
-        offset_mgr(this) {}
+      : file(file), mem_table(mem_table), offset_mgr(this) {}
 
   ssize_t do_pread(char* buf, size_t count, size_t offset);
   ssize_t do_read(char* buf, size_t count);
@@ -52,15 +48,6 @@ class TxMgr {
       Allocator* allocator, pmem::LogEntry::Op op, uint16_t leftover_bytes,
       uint32_t num_blocks, VirtualBlockIdx begin_vidx,
       const std::vector<LogicalBlockIdx>& begin_lidxs) const;
-
-  /**
-   * Try to commit an entry
-   *
-   * @param entry entry to commit
-   * @param cursor the cursor to commit to (might be updated under overflow)
-   * @return empty entry on success; conflict entry otherwise
-   */
-  pmem::TxEntry try_commit(pmem::TxEntry entry, TxCursor* cursor) const;
 
  public:
   friend std::ostream& operator<<(std::ostream& out, const TxMgr& tx_mgr);

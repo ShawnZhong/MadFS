@@ -29,6 +29,7 @@ class Tx {
   // pointer to the outer class
   File* file;
   TxMgr* tx_mgr;
+  MemTable* mem_table;
   Allocator* allocator;  // local
 
   /*
@@ -64,6 +65,7 @@ class Tx {
   Tx(File* file, TxMgr* tx_mgr, size_t count, size_t offset)
       : file(file),
         tx_mgr(tx_mgr),
+        mem_table(tx_mgr->mem_table),
         allocator(file->get_local_allocator()),
 
         // input properties
@@ -121,7 +123,7 @@ class Tx {
         if (possible_file_size > state.file_size)
           state.file_size = possible_file_size;
       } else {  // non-inline tx entry
-        LogCursor log_cursor(curr_entry.indirect_entry, tx_mgr->mem_table);
+        LogCursor log_cursor(curr_entry.indirect_entry, mem_table);
 
         do {
           uint32_t i;
@@ -147,11 +149,11 @@ class Tx {
           if (possible_file_size > state.file_size)
             state.file_size = possible_file_size;
 
-        } while (log_cursor.advance(tx_mgr->mem_table));
+        } while (log_cursor.advance(mem_table));
       }
       // only update into_new_block if it is not nullptr and not set true yet
       if (!state.cursor.advance(
-              tx_mgr->mem_table,
+              mem_table,
               /*allocator=*/nullptr,
               into_new_block && !*into_new_block ? into_new_block : nullptr))
         break;
