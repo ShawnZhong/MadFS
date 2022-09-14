@@ -1,4 +1,7 @@
+#pragma once
+
 #include "file.h"
+#include "idx.h"
 #include "posix.h"
 #include "utils.h"
 
@@ -24,8 +27,7 @@ class GarbageCollector {
       PANIC("Fail to open file \"%s\"", pathname);
     }
 
-    file = std::make_unique<dram::File>(fd, stat_buf, O_RDWR, pathname,
-                                        /*guard*/ false);
+    file = std::make_unique<dram::File>(fd, stat_buf, O_RDWR, pathname);
     auto state = file->blk_table.get_file_state();
     file_size = state.file_size;
     old_cursor = state.cursor;
@@ -33,7 +35,7 @@ class GarbageCollector {
 
   [[nodiscard]] dram::File* get_file() const { return file.get(); }
 
-  void gc() const {
+  void do_gc() const {
     LOG_INFO("GarbageCollector: start transaction & log gc");
 
     if (!need_gc()) {
@@ -70,22 +72,37 @@ class GarbageCollector {
     // skip if the tail directly follows meta
     if (first_tx_idx == old_cursor.idx.block_idx) return false;
 
-    // skip if there is only one tx block between meta and tail
-    if (file->mem_table.lidx_to_addr_ro(first_tx_idx)
-            ->tx_block.get_next_tx_block() == first_tx_idx)
-      return false;
+    LogicalBlockIdx tx_block_idx = first_tx_idx;
+    const pmem::TxBlock* tx_block =
+        &file->mem_table.lidx_to_addr_ro(tx_block_idx)->tx_block;
 
-    return true;
+    // skip if there is only one tx block between meta and tail, because at best
+    // we can only make this single block into one block
+    if (tx_block->get_next_tx_block() == old_cursor.idx.block_idx) return false;
+
+    // skip if there is no tx block with gc_seq == 0 before the tail, which
+    // means there is no work can be done since last gc
+    while ((tx_block_idx = tx_block->get_next_tx_block()) !=
+           old_cursor.idx.block_idx)
+      tx_block = &file->mem_table.lidx_to_addr_ro(tx_block_idx)->tx_block;
+    // if gc_seq is zero, this means there is at least one new full tx block
+    // since last gc
+    return tx_block->get_gc_seq() == 0;
   }
 
   [[nodiscard]] bool create_new_linked_list() const {
     auto allocator = file->get_local_allocator();
 
+    LogicalBlockIdx old_first_tx_block_idx = file->meta->get_next_tx_block();
+    assert(old_first_tx_block_idx != 0);
+    uint32_t gc_seq = file->mem_table.lidx_to_addr_ro(old_first_tx_block_idx)
+                          ->tx_block.get_gc_seq() +
+                      1;
     uint32_t tx_seq = 1;
     auto first_tx_block_idx = allocator->block.alloc(1);
     auto new_block = file->mem_table.lidx_to_addr_rw(first_tx_block_idx);
     memset(&new_block->cache_lines[NUM_CL_PER_BLOCK - 1], 0, CACHELINE_SIZE);
-    new_block->tx_block.set_tx_seq(tx_seq++);
+    new_block->tx_block.set_tx_seq(tx_seq++, gc_seq);
     dram::TxCursor new_cursor({first_tx_block_idx, 0}, &new_block->tx_block);
 
     VirtualBlockIdx begin = 0;
@@ -115,7 +132,7 @@ class GarbageCollector {
           new_block = file->mem_table.lidx_to_addr_rw(new_tx_block_idx);
           memset(&new_block->cache_lines[NUM_CL_PER_BLOCK - 1], 0,
                  CACHELINE_SIZE);
-          new_block->tx_block.set_tx_seq(tx_seq++);
+          new_block->tx_block.set_tx_seq(tx_seq++, gc_seq);
           new_cursor.block = &new_block->tx_block;
           new_cursor.idx = {new_tx_block_idx, 0};
         }
@@ -169,6 +186,15 @@ class GarbageCollector {
 
     // invalidate tx in meta block, so we can free the log blocks they point to
     file->meta->invalidate_tx_entries();
+
+    // TODO: scan shared memory to get a snapshot of which tx block every thread
+    // has pinned and
+    // 1) if a tx block is neither pinned nor linked after a pinned tx block,
+    //    release this block immediately by marking the bitmap
+    // 2) otherwise, link this block into an outdated block linked list
+    //
+    // Also scan the outdated tx block linked list to free blocks with the above
+    // rules
     return true;
   }
 };

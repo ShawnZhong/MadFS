@@ -54,7 +54,7 @@ void test(TestOpt test_opt) {
 
   {
     GarbageCollector garbage_collector(filepath);
-    garbage_collector.gc();
+    garbage_collector.do_gc();
     if (print) std::cerr << *garbage_collector.get_file();
   }
 

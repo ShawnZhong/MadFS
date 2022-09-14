@@ -19,7 +19,7 @@
 namespace ulayfs::dram {
 
 File::File(int fd, const struct stat& stat, int flags,
-           const char* pathname [[maybe_unused]], bool guard)
+           const char* pathname [[maybe_unused]])
     : mem_table(fd, stat.st_size, (flags & O_ACCMODE) == O_RDONLY),
       tx_mgr(this, &mem_table),
       blk_table(&mem_table),
@@ -30,10 +30,6 @@ File::File(int fd, const struct stat& stat, int flags,
                (flags & O_ACCMODE) == O_RDWR),
       can_write((flags & O_ACCMODE) == O_WRONLY ||
                 (flags & O_ACCMODE) == O_RDWR) {
-  // lock the file to prevent gc before proceeding
-  // the lock will be released only at close
-  if (guard) flock_guard(fd);
-
   pthread_spin_init(&spinlock, PTHREAD_PROCESS_PRIVATE);
   if (stat.st_size == 0) meta->init();
 
