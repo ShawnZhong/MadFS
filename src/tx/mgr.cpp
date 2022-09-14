@@ -87,7 +87,8 @@ LogCursor TxMgr::append_log_entry(
     Allocator* allocator, pmem::LogEntry::Op op, uint16_t leftover_bytes,
     uint32_t num_blocks, VirtualBlockIdx begin_vidx,
     const std::vector<LogicalBlockIdx>& begin_lidxs) const {
-  LogCursor log_cursor = allocator->log_entry.alloc(num_blocks);
+  const LogCursor head = allocator->log_entry.alloc(num_blocks);
+  LogCursor log_cursor = head;
 
   // i to iterate through begin_lidxs across entries
   // j to iterate within each entry
@@ -110,7 +111,7 @@ LogCursor TxMgr::append_log_entry(
       break;
     }
   }
-  return log_cursor;
+  return head;
 }
 
 std::ostream& operator<<(std::ostream& out, const TxMgr& tx_mgr) {

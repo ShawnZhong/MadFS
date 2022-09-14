@@ -41,8 +41,7 @@ class TxMgr {
    * @param begin_vidx start of virtual index
    * @param begin_lidxs ordered list of logical indices for each chunk of
    * virtual index
-   * @return index of the first LogHeadEntry for later retrival of the whole
-   *         group of entries
+   * @return a cursor pointing to the first log entry
    */
   LogCursor append_log_entry(
       Allocator* allocator, pmem::LogEntry::Op op, uint16_t leftover_bytes,
