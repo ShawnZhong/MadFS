@@ -71,7 +71,7 @@ void sync_test() {
   std::mutex mutex;
   std::condition_variable cv;
 
-  int num_io_threads = 8;
+  int num_io_threads = 4;
   bool gc_done = false;
   std::vector io_threads_done(num_io_threads, false);
   std::vector<std::thread> io_threads;
@@ -84,8 +84,9 @@ void sync_test() {
         cv.wait(lock, [&]() { return io_threads_done[i - 1]; });
       }
 
-      // the first thread writes NUM_INLINE_TX_ENTRY + 1 blocks
-      int num_iter = i == 0 ? NUM_INLINE_TX_ENTRY + 1 : NUM_TX_ENTRY_PER_BLOCK;
+      int num_iter = i == 0
+                         ? NUM_INLINE_TX_ENTRY + NUM_TX_ENTRY_PER_BLOCK * 5 + 1
+                         : NUM_TX_ENTRY_PER_BLOCK;
 
       LOG_INFO("thread %d start", i);
       char buf[BLOCK_SIZE]{};
@@ -113,8 +114,8 @@ void sync_test() {
     LOG_INFO("gc start");
 
     GarbageCollector garbage_collector(filepath);
-    std::cerr << garbage_collector.file->shm_mgr;
     std::cerr << garbage_collector.file->tx_mgr;
+    std::cerr << garbage_collector.file->shm_mgr;
     garbage_collector.do_gc();
 
     LOG_INFO("gc finished");

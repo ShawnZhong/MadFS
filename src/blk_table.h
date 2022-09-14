@@ -55,7 +55,7 @@ class BlkTable {
  public:
   explicit BlkTable(MemTable* mem_table)
       : mem_table(mem_table),
-        state{{{}, mem_table->get_meta()}, 0},
+        state{TxCursor::head(mem_table->get_meta()), 0},
         version(0) {
     table.grow_to_at_least(NUM_BLOCKS_PER_GROW);
   }

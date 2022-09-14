@@ -83,11 +83,17 @@ class alignas(SHM_PER_THREAD_SIZE) PerThreadData {
    * Destroy the per-thread data
    */
   void reset() {
+    State expected = State::INITIALIZED;
+    if (!state.compare_exchange_strong(expected, State::PENDING,
+                                       std::memory_order_acq_rel,
+                                       std::memory_order_acquire)) {
+      // if the old state is already PENDING or UNINITIALIZED, then we
+      // don't need to do anything
+      return;
+    }
     LOG_DEBUG("PerThreadData %ld to be reset by tid %d", index, tid);
-    assert(state.load(std::memory_order_acquire) == State::INITIALIZED);
     // TODO: uncomment this
     //    if (is_thread_alive()) pthread_mutex_unlock(&mutex);
-    state.store(State::PENDING, std::memory_order_acq_rel);
     index = 0;
     tx_block_idx.store(0, std::memory_order_relaxed);
     pthread_mutex_destroy(&mutex);
@@ -112,6 +118,7 @@ class alignas(SHM_PER_THREAD_SIZE) PerThreadData {
    * @return true if the thread is alive
    */
   bool is_thread_alive() {
+    return true;  // TODO: fix me
     assert(state.load(std::memory_order_acquire) == State::INITIALIZED);
     int rc = pthread_mutex_trylock(&mutex);
     if (rc == 0) {
