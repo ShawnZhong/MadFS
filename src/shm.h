@@ -67,6 +67,8 @@ class alignas(SHM_PER_THREAD_SIZE) PerThreadData {
     init_robust_mutex(&mutex);
     pthread_mutex_lock(&mutex);
     state.store(State::INITIALIZED, std::memory_order_release);
+
+    LOG_DEBUG("PerThreadData %ld initialized by tid %d", i, tid);
     return true;
   }
 
@@ -74,12 +76,12 @@ class alignas(SHM_PER_THREAD_SIZE) PerThreadData {
    * Destroy the per-thread data
    */
   void reset() {
-    LOG_DEBUG("PerThreadData %ld reset by tid %d", index, tid);
+    LOG_DEBUG("PerThreadData %ld to be reset by tid %d", index, tid);
     assert(state.load(std::memory_order_acquire) == State::INITIALIZED);
+    if (is_thread_alive()) pthread_mutex_unlock(&mutex);
     state.store(State::PENDING, std::memory_order_acq_rel);
     index = 0;
     tx_block_idx.store(0, std::memory_order_relaxed);
-    pthread_mutex_unlock(&mutex);
     pthread_mutex_destroy(&mutex);
     state.store(State::UNINITIALIZED, std::memory_order_release);
   }
@@ -111,6 +113,11 @@ class alignas(SHM_PER_THREAD_SIZE) PerThreadData {
     } else if (rc == EBUSY) {
       // if the mutex is already locked, then the thread is alive
       return true;
+    } else if (rc == EOWNERDEAD) {
+      // detected that the owner of the mutex is dead
+      pthread_mutex_consistent(&mutex);
+      pthread_mutex_unlock(&mutex);
+      return false;
     } else {
       PANIC("pthread_mutex_trylock failed: %s", strerror(rc));
     }
