@@ -3,6 +3,7 @@
 #include <atomic>
 #include <cassert>
 #include <cstring>
+#include <ostream>
 
 #include "const.h"
 #include "entry.h"
@@ -99,6 +100,12 @@ class TxBlock : public noncopyable {
   }
 
   friend struct ::ulayfs::dram::TxCursor;
+
+  friend std::ostream &operator<<(std::ostream &os, const TxBlock &block) {
+    os << "TxBlock{gc_seq=" << block.gc_seq << ", tx_seq=" << block.tx_seq
+       << "}";
+    return os;
+  }
 };
 
 static_assert(sizeof(TxBlock) == BLOCK_SIZE,

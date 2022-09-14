@@ -36,10 +36,16 @@ class alignas(SHM_PER_THREAD_SIZE) PerThreadData {
 
  public:
   /**
-   * @return true if this PerThreadData is initialized and the thread is not
-   * dead.
+   * @return true if there are some data stored, regardless of whether the
+   * thread is alive or not
    */
-  [[nodiscard]] bool is_valid() {
+  [[nodiscard]] bool has_data() const { return state != State::UNINITIALIZED; }
+
+  /**
+   * @return true if this PerThreadData contains valid data (i.e. the state
+   * is initialized and the thread is not dead).
+   */
+  [[nodiscard]] bool is_data_valid() {
     if (state != State::INITIALIZED) return false;
     return is_thread_alive();
   }
@@ -312,6 +318,8 @@ class ShmMgr {
        << "\taddr = " << mgr.addr << "\n"
        << "\tpath = " << mgr.path << "\n";
     for (size_t i = 0; i < MAX_NUM_THREADS; ++i) {
+      PerThreadData* per_thread_data = mgr.get_per_thread_data(i);
+      if (!per_thread_data->has_data()) continue;
       os << "\t" << i << ": " << *mgr.get_per_thread_data(i) << "\n";
     }
     return os;
