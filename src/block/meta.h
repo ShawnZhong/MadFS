@@ -128,6 +128,10 @@ class MetaBlock : public noncopyable {
                            sizeof(cl2_meta.num_logical_blocks));
   }
 
+  [[nodiscard]] uint32_t get_num_logical_blocks() const {
+    return cl2_meta.num_logical_blocks.load(std::memory_order_acquire);
+  }
+
   [[nodiscard]] static uint32_t get_tx_seq() { return 0; }
 
   /**
@@ -147,8 +151,21 @@ class MetaBlock : public noncopyable {
     persist_cl_unfenced(&cl1_meta);
   }
 
+  [[nodiscard]] LogicalBlockIdx get_next_tx_block() const {
+    return cl1_meta.next_tx_block.load(std::memory_order_acquire);
+  }
+
+  void set_next_outdated_tx_block(LogicalBlockIdx block_idx) {
+    cl1_meta.next_outdated_tx_block.store(block_idx, std::memory_order_release);
+    persist_cl_unfenced(&cl1_meta);
+  }
+
+  [[nodiscard]] LogicalBlockIdx get_next_outdated_tx_block() const {
+    return cl1_meta.next_outdated_tx_block.load(std::memory_order_acquire);
+  }
+
   /**
-   * Set the tx tail
+   * Set the flushed tx tail
    * tx_tail is mostly just a hint, so it's fine to be not up-to-date; thus by
    * default, we don't do concurrency control and no fence by default
    *
@@ -159,6 +176,10 @@ class MetaBlock : public noncopyable {
     cl1_meta.flushed_tx_tail.store(flushed_tx_tail, std::memory_order_relaxed);
     VALGRIND_PMC_SET_CLEAN(&cl1_meta.flushed_tx_tail,
                            sizeof(cl1_meta.flushed_tx_tail));
+  }
+
+  [[nodiscard]] TxEntryIdx get_flushed_tx_tail() const {
+    return cl1_meta.flushed_tx_tail.load(std::memory_order_relaxed);
   }
 
   /**
@@ -181,18 +202,6 @@ class MetaBlock : public noncopyable {
   void flush_tx_entries(TxLocalIdx begin_idx, TxLocalIdx end_idx) {
     persist_unfenced(&tx_entries[begin_idx],
                      sizeof(TxEntry) * (end_idx - begin_idx));
-  }
-
-  [[nodiscard]] uint32_t get_num_logical_blocks() const {
-    return cl2_meta.num_logical_blocks.load(std::memory_order_acquire);
-  }
-
-  [[nodiscard]] LogicalBlockIdx get_next_tx_block() const {
-    return cl1_meta.next_tx_block.load(std::memory_order_acquire);
-  }
-
-  [[nodiscard]] TxEntryIdx get_flushed_tx_tail() const {
-    return cl1_meta.flushed_tx_tail.load(std::memory_order_relaxed);
   }
 
   /*
