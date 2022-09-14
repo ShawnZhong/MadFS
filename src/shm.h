@@ -320,6 +320,7 @@ class ShmMgr {
   }
 
   friend std::ostream& operator<<(std::ostream& os, const ShmMgr& mgr) {
+    __msan_scoped_disable_interceptor_checks();
     os << "ShmMgr:\n"
        << "\tfd = " << mgr.fd << "\n"
        << "\taddr = " << mgr.addr << "\n"
@@ -329,6 +330,7 @@ class ShmMgr {
       if (!per_thread_data->has_data()) continue;
       os << "\t" << i << ": " << *mgr.get_per_thread_data(i) << "\n";
     }
+    __msan_scoped_enable_interceptor_checks();
     return os;
   }
 };

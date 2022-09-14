@@ -115,7 +115,7 @@ LogCursor TxMgr::append_log_entry(
 }
 
 std::ostream& operator<<(std::ostream& out, const TxMgr& tx_mgr) {
-  out << tx_mgr.offset_mgr;
+  __msan_scoped_disable_interceptor_checks();
 
   {
     out << "Transactions: \n";
@@ -158,6 +158,8 @@ std::ostream& operator<<(std::ostream& out, const TxMgr& tx_mgr) {
       out << "\t" << cursor.idx.block_idx << ": " << *cursor.block << "\n";
     }
   }
+
+  __msan_scoped_enable_interceptor_checks();
 
   return out;
 }
