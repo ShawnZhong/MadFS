@@ -7,9 +7,9 @@
 #include "entry.h"
 #include "file.h"
 #include "idx.h"
-#include "persist.h"
 #include "posix.h"
-#include "utils.h"
+#include "utils/persist.h"
+#include "utils/utils.h"
 
 namespace ulayfs::utility {
 

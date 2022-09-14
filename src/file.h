@@ -21,11 +21,11 @@
 #include "entry.h"
 #include "idx.h"
 #include "mem_table.h"
+#include "offset.h"
 #include "posix.h"
 #include "shm.h"
 #include "tx/mgr.h"
-#include "tx/offset.h"
-#include "utils.h"
+#include "utils/utils.h"
 
 namespace ulayfs::utility {
 class Converter;

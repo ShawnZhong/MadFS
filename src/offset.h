@@ -6,8 +6,8 @@
 
 #include "block/block.h"
 #include "const.h"
+#include "cursor/tx_entry.h"
 #include "idx.h"
-#include "tx/tx_cursor.h"
 
 namespace ulayfs::dram {
 

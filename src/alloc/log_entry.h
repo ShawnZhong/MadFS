@@ -1,7 +1,7 @@
 #pragma once
 
 #include "alloc/block.h"
-#include "tx/log_cursor.h"
+#include "cursor/log.h"
 
 namespace ulayfs::dram {
 

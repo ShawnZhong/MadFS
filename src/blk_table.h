@@ -11,11 +11,12 @@
 #include "bitmap.h"
 #include "block/block.h"
 #include "const.h"
+#include "cursor/log.h"
+#include "cursor/tx_entry.h"
 #include "entry.h"
 #include "idx.h"
-#include "tx/log_cursor.h"
-#include "tx/tx_cursor.h"
-#include "utils.h"
+#include "utils/tbb.h"
+#include "utils/utils.h"
 
 namespace ulayfs::dram {
 struct FileState {

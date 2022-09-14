@@ -2,8 +2,8 @@
 
 #include "const.h"
 #include "entry.h"
-#include "logging.h"
-#include "utils.h"
+#include "utils/logging.h"
+#include "utils/utils.h"
 
 namespace ulayfs::pmem {
 

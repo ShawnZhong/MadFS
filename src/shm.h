@@ -8,9 +8,9 @@
 
 #include "const.h"
 #include "idx.h"
-#include "logging.h"
 #include "posix.h"
-#include "utils.h"
+#include "utils/logging.h"
+#include "utils/utils.h"
 
 namespace ulayfs::dram {
 
