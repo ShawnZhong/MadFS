@@ -64,8 +64,7 @@ class File {
   friend utility::Converter;
 
  public:
-  File(int fd, const struct stat& stat, int flags, const char* pathname,
-       bool guard = true);
+  File(int fd, const struct stat& stat, int flags, const char* pathname);
   ~File();
 
   /*

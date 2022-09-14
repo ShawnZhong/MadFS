@@ -65,15 +65,15 @@ struct TxCursor {
    * @param[in] allocator allocator to allocate new blocks
    * @param[in] mem_table used to find the memory address of the next block
    * @param[out] into_new_block if not nullptr, return whether the cursor is
-   * advanced into a new tx block
+   * advanced into a new tx block (i.e. previously, it is in an overflow state)
    * @return true if the idx is not in overflow state; false otherwise
    */
   bool handle_overflow(MemTable* mem_table, Allocator* allocator = nullptr,
-                       bool* is_overflow = nullptr) {
+                       bool* into_new_block = nullptr) {
     const bool is_inline = idx.is_inline();
     uint16_t capacity = idx.get_capacity();
     if (unlikely(idx.local_idx >= capacity)) {
-      if (is_overflow) *is_overflow = true;
+      if (into_new_block) *into_new_block = true;
       LogicalBlockIdx block_idx =
           is_inline ? meta->get_next_tx_block() : block->get_next_tx_block();
       if (block_idx == 0) {
@@ -90,7 +90,7 @@ struct TxCursor {
         block = &mem_table->lidx_to_addr_rw(idx.block_idx)->tx_block;
       }
     } else {
-      if (is_overflow) *is_overflow = false;
+      if (into_new_block) *into_new_block = false;
     }
     return true;
   }

@@ -7,7 +7,6 @@ namespace ulayfs::dram {
 class WriteTx : public Tx {
  protected:
   const char* const buf;
-  Allocator* allocator;
   std::vector<LogicalBlockIdx>& recycle_image;
 
   // the logical index of the destination data block
@@ -24,7 +23,6 @@ class WriteTx : public Tx {
           size_t offset)
       : Tx(file, tx_mgr, count, offset),
         buf(buf),
-        allocator(file->get_local_allocator()),
         recycle_image(local_buf_image_lidxs),
         dst_lidxs(local_buf_dst_lidxs),
         dst_blocks(local_buf_dst_blocks) {

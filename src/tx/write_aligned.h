@@ -31,21 +31,13 @@ class AlignedTx : public WriteTx {
       fence();
     }
 
-    LogicalBlockIdx pinned_tx_block_idx = allocator->tx_block.get_pinned_idx();
-    if (pinned_tx_block_idx == 0) {  // no tx_block is pinned yet
-      // this should trigger a shared memory slot allocation
-      // because we will start the first log replay, we will need to read the
-      // whole tx history, so gc threads must not reclaim any blocks before we
-      // are done
-      allocator->tx_block.pin(0);
-    }
 
     {
       TimerGuard<Event::ALIGNED_TX_UPDATE> timer_guard;
       if (!is_offset_depend) file->update(&state, allocator);
     }
 
-    if (pinned_tx_block_idx != state.get_tx_block_idx())
+    if (allocator->tx_block.get_pinned_idx() != state.get_tx_block_idx())
       allocator->log_entry.reset();
 
     {

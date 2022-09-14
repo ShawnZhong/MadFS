@@ -49,16 +49,13 @@ class TxBlock : public noncopyable {
   // it should be fine not to use any fence since there will be fence for flush
   // gc_seq must be zero for apps; it can only be set to nonzero by gc threads
   void set_tx_seq(uint32_t tx_seq, uint32_t gc_seq = 0) {
-    assert(tx_seq > 0); // 0 is an invalid tx_seq
+    assert(tx_seq > 0);  // 0 is an invalid tx_seq
     this->tx_seq = tx_seq;
     this->gc_seq = gc_seq;
   }
-  // return tx_seq (which is mostly commonly used) as return value; if user asks
-  // for gc_seq, return it through pointer
-  [[nodiscard]] uint32_t get_tx_seq(uint32_t* gc_seq_addr = nullptr) const {
-    if (gc_seq_addr) *gc_seq_addr = gc_seq;
-    return tx_seq;
-  }
+
+  [[nodiscard]] uint32_t get_tx_seq() const { return tx_seq; }
+  [[nodiscard]] uint32_t get_gc_seq() const { return gc_seq; }
 
   [[nodiscard]] LogicalBlockIdx get_next_tx_block() const {
     return next.load(std::memory_order_acquire);

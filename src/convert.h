@@ -29,7 +29,7 @@ class Converter {
     PANIC_IF(ret, "Fail to fstat");
 
     if (stat_buf.st_size == 0) {
-      dram::File* file = new dram::File(fd, stat_buf, O_RDWR, pathname, false);
+      dram::File* file = new dram::File(fd, stat_buf, O_RDWR, pathname);
       // release exclusive lock and acquire shared lock
       release_flock(fd);
       flock_guard(fd);
@@ -62,7 +62,7 @@ class Converter {
 
     // first mark all these blocks as used, so that they won't be occupied by
     // allocator when preparing log entries
-    dram::File* file = new dram::File(fd, stat_buf, O_RDWR, pathname, false);
+    dram::File* file = new dram::File(fd, stat_buf, O_RDWR, pathname);
     dram::Allocator* allocator = file->get_local_allocator();
     allocator->block.return_free_list();
     uint32_t num_bitmaps_full =

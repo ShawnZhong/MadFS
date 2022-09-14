@@ -53,7 +53,7 @@ void basic_test(BasicTestOpt opt) {
 
   {
     GarbageCollector garbage_collector(filepath);
-    garbage_collector.gc();
+    garbage_collector.do_gc();
     if (print) std::cerr << *garbage_collector.get_file();
   }
 

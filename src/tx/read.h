@@ -38,7 +38,10 @@ class ReadTx : public Tx {
     }
 
     // reach EOF
-    if (offset >= state.file_size) return 0;
+    if (offset >= state.file_size) {
+      count = 0;
+      goto done;
+    }
     if (offset + count > state.file_size) {  // partial read; recalculate end_*
       count = state.file_size - offset;
       end_offset = offset + count;
@@ -135,6 +138,9 @@ class ReadTx : public Tx {
     }
 
     timer.stop<Event::READ_TX_VALIDATE>();
+
+  done:
+    allocator->tx_block.pin(state.get_tx_block_idx());
     return static_cast<ssize_t>(count);
   }
 };
