@@ -29,6 +29,7 @@ class Tx {
   // pointer to the outer class
   File* file;
   TxMgr* tx_mgr;
+  Allocator* allocator;  // local
 
   /*
    * Input properties
@@ -63,6 +64,7 @@ class Tx {
   Tx(File* file, TxMgr* tx_mgr, size_t count, size_t offset)
       : file(file),
         tx_mgr(tx_mgr),
+        allocator(file->get_local_allocator()),
 
         // input properties
         count(count),
@@ -144,7 +146,7 @@ class Tx {
               BLOCK_IDX_TO_SIZE(end_vidx) - log_cursor->leftover_bytes;
           if (possible_file_size > state.file_size)
             state.file_size = possible_file_size;
-          
+
         } while (log_cursor.advance(tx_mgr->mem_table));
       }
       // only update into_new_block if it is not nullptr and not set true yet

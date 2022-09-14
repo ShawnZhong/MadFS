@@ -51,7 +51,7 @@ class alignas(SHM_PER_THREAD_SIZE) PerThreadData {
    * @param i the index of this per-thread data
    * @return true if initialization succeeded
    */
-  bool try_init(size_t i, LogicalBlockIdx pinned_idx) {
+  bool try_init(size_t i) {
     State expected = UNINITIALIZED;
     if (!state.compare_exchange_strong(expected, PENDING,
                                        std::memory_order_acq_rel,
@@ -63,7 +63,7 @@ class alignas(SHM_PER_THREAD_SIZE) PerThreadData {
     }
 
     index = i;
-    tx_block_idx.store(pinned_idx, std::memory_order_relaxed);
+    tx_block_idx.store(0, std::memory_order_relaxed);
 
     pthread_mutexattr_t attr;
     pthread_mutexattr_init(&attr);
@@ -190,15 +190,14 @@ class ShmMgr {
    * Allocate a new per-thread data for the current thread.
    * @return the address of the per-thread data
    */
-  [[nodiscard]] PerThreadData* alloc_per_thread_data(
-      LogicalBlockIdx pinned_idx) const {
+  [[nodiscard]] PerThreadData* alloc_per_thread_data() const {
     // TODO: make sure that only one thread can allocate a per-thread data at a
     //  time. Otherwise, a thread crashes during PerThreadData::try_init will
     //  result in a leak (e.g., state == PENDING but the thread is dead).
     // meta->lock();
     for (size_t i = 0; i < MAX_NUM_THREADS; i++) {
       PerThreadData* per_thread_data = get_per_thread_data(i);
-      bool success = per_thread_data->try_init(i, pinned_idx);
+      bool success = per_thread_data->try_init(i);
       if (success) return per_thread_data;
     }
     // meta->unlock();

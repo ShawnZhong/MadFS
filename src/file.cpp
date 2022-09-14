@@ -241,7 +241,8 @@ Allocator* File::get_local_allocator() {
 
   auto [it, ok] = allocators.emplace(
       std::piecewise_construct, std::forward_as_tuple(tid),
-      std::forward_as_tuple(&mem_table, &bitmap_mgr, &shm_mgr));
+      std::forward_as_tuple(&mem_table, &bitmap_mgr,
+                            shm_mgr.alloc_per_thread_data()));
   PANIC_IF(!ok, "insert to thread-local allocators failed");
   return &it->second;
 }
