@@ -149,9 +149,9 @@ class GarbageCollector {
       } else {
         // since i - begin <= 63, this can fit into one log entry
         auto begin_lidx = std::vector{file->vidx_to_lidx(begin)};
-        dram::LogCursor log_cursor = file->tx_mgr.append_log_entry(
-            allocator, pmem::LogEntry::Op::LOG_OVERWRITE, leftover_bytes,
-            i - begin, begin, begin_lidx);
+        dram::LogCursor log_cursor = allocator->log_entry.append(
+            pmem::LogEntry::Op::LOG_OVERWRITE, leftover_bytes, i - begin, begin,
+            begin_lidx);
         auto commit_entry = pmem::TxEntryIndirect(log_cursor.idx);
         new_cursor.block->store(commit_entry, new_cursor.idx.local_idx);
       }

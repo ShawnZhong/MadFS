@@ -85,8 +85,8 @@ class Converter {
                                 /*begin_lidx*/ 1),
             mem_table, allocator);
       else {
-        dram::LogCursor log_cursor = file->tx_mgr.append_log_entry(
-            allocator, pmem::LogEntry::Op::LOG_OVERWRITE, leftover_bytes,
+        dram::LogCursor log_cursor = allocator->log_entry.append(
+            pmem::LogEntry::Op::LOG_OVERWRITE, leftover_bytes,
             /*total_blocks*/ 1, /*begin_vidx*/ 0, /*begin_lidxs*/ {1});
         tx_cursor.try_commit(pmem::TxEntryIndirect(log_cursor.idx), mem_table,
                              allocator);
@@ -101,8 +101,8 @@ class Converter {
                            allocator);
     } else {
       need_le_block = true;
-      dram::LogCursor log_cursor = file->tx_mgr.append_log_entry(
-          allocator, pmem::LogEntry::Op::LOG_OVERWRITE, /*leftover_bytes*/ 0,
+      dram::LogCursor log_cursor = allocator->log_entry.append(
+          pmem::LogEntry::Op::LOG_OVERWRITE, /*leftover_bytes*/ 0,
           /*total_blocks*/ 1, /*begin_vidx*/ 0, /*begin_lidxs*/ {num_blocks});
       tx_cursor.try_commit(pmem::TxEntryIndirect(log_cursor.idx), mem_table,
                            allocator);
@@ -128,8 +128,8 @@ class Converter {
         tx_cursor.advance(mem_table, allocator);
       }
     } else {
-      dram::LogCursor log_cursor = file->tx_mgr.append_log_entry(
-          allocator, pmem::LogEntry::Op::LOG_OVERWRITE, leftover_bytes,
+      dram::LogCursor log_cursor = allocator->log_entry.append(
+          pmem::LogEntry::Op::LOG_OVERWRITE, leftover_bytes,
           /*total_blocks*/ num_blocks - 1, /*begin_vidx*/ 1,
           /*begin_lidxs*/ {1});
       tx_cursor.try_commit(pmem::TxEntryIndirect(log_cursor.idx), mem_table,

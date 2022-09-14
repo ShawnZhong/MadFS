@@ -19,6 +19,49 @@ class LogEntryAllocator {
       : block_allocator(block_allocator), mem_table(mem_table) {}
 
   /**
+   * populate log entries required by a single transaction; do persist but not
+   * fenced
+   *
+   * @param op operation code, e.g., LOG_OVERWRITE
+   * @param leftover_bytes remaining empty bytes in the last block
+   * @param num_blocks total number blocks touched
+   * @param begin_vidx start of virtual index
+   * @param begin_lidxs ordered list of logical indices for each chunk of
+   * virtual index
+   * @return a cursor pointing to the first log entry
+   */
+  LogCursor append(pmem::LogEntry::Op op, uint16_t leftover_bytes,
+                   uint32_t num_blocks, VirtualBlockIdx begin_vidx,
+                   const std::vector<LogicalBlockIdx>& begin_lidxs) {
+    const LogCursor head = this->alloc(num_blocks);
+    LogCursor log_cursor = head;
+
+    // i to iterate through begin_lidxs across entries
+    // j to iterate within each entry
+    uint32_t i, j;
+    i = 0;
+    while (true) {
+      log_cursor->op = op;
+      log_cursor->begin_vidx = begin_vidx;
+      for (j = 0; j < log_cursor->get_lidxs_len(); ++j)
+        log_cursor->begin_lidxs[j] = begin_lidxs[i + j];
+      if (log_cursor->has_next) {
+        log_cursor->leftover_bytes = 0;
+        log_cursor->persist();
+        i += j;
+        begin_vidx += (j << BITMAP_ENTRY_BLOCKS_CAPACITY_SHIFT);
+        log_cursor.advance(mem_table);
+      } else {  // last entry
+        log_cursor->leftover_bytes = leftover_bytes;
+        log_cursor->persist();
+        break;
+      }
+    }
+    return head;
+  }
+
+ private:
+  /**
    * Allocate a linked list of log entry that could fit a mapping of the given
    * length
    *
@@ -82,6 +125,7 @@ class LogEntryAllocator {
     }
   }
 
+ public:
   /**
    * a log entry is discarded because reset_log_entry() is called before commit;
    * the uncommitted entry must be (semi-)freed to prevent memory leak

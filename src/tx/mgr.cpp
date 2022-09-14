@@ -83,37 +83,6 @@ ssize_t TxMgr::do_write(const char* buf, size_t count) {
   }
 }
 
-LogCursor TxMgr::append_log_entry(
-    Allocator* allocator, pmem::LogEntry::Op op, uint16_t leftover_bytes,
-    uint32_t num_blocks, VirtualBlockIdx begin_vidx,
-    const std::vector<LogicalBlockIdx>& begin_lidxs) const {
-  const LogCursor head = allocator->log_entry.alloc(num_blocks);
-  LogCursor log_cursor = head;
-
-  // i to iterate through begin_lidxs across entries
-  // j to iterate within each entry
-  uint32_t i, j;
-  i = 0;
-  while (true) {
-    log_cursor->op = op;
-    log_cursor->begin_vidx = begin_vidx;
-    for (j = 0; j < log_cursor->get_lidxs_len(); ++j)
-      log_cursor->begin_lidxs[j] = begin_lidxs[i + j];
-    if (log_cursor->has_next) {
-      log_cursor->leftover_bytes = 0;
-      log_cursor->persist();
-      i += j;
-      begin_vidx += (j << BITMAP_ENTRY_BLOCKS_CAPACITY_SHIFT);
-      log_cursor.advance(mem_table);
-    } else {  // last entry
-      log_cursor->leftover_bytes = leftover_bytes;
-      log_cursor->persist();
-      break;
-    }
-  }
-  return head;
-}
-
 std::ostream& operator<<(std::ostream& out, const TxMgr& tx_mgr) {
   __msan_scoped_disable_interceptor_checks();
 
