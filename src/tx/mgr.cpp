@@ -6,11 +6,12 @@
 
 #include "alloc/alloc.h"
 #include "const.h"
+#include "cursor/tx_block.h"
+#include "cursor/tx_entry.h"
 #include "entry.h"
 #include "file.h"
 #include "idx.h"
 #include "tx/read.h"
-#include "tx/tx_cursor.h"
 #include "tx/write_aligned.h"
 #include "tx/write_unaligned.h"
 

@@ -12,7 +12,7 @@
 #include "common.h"
 #include "const.h"
 #include "debug.h"
-#include "logging.h"
+#include "utils/logging.h"
 
 #define CHECK_RESULT(expected, actual, length, fd)                \
   do {                                                            \

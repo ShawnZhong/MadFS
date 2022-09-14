@@ -7,7 +7,7 @@
 
 #include "const.h"
 #include "idx.h"
-#include "persist.h"
+#include "utils/persist.h"
 
 namespace ulayfs::pmem {
 

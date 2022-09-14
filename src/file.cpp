@@ -13,8 +13,8 @@
 #include "config.h"
 #include "idx.h"
 #include "shm.h"
-#include "timer.h"
-#include "utils.h"
+#include "utils/timer.h"
+#include "utils/utils.h"
 
 namespace ulayfs::dram {
 

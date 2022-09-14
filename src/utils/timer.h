@@ -1,11 +1,11 @@
 #pragma once
 
 #include <chrono>
-#include <magic_enum.hpp>
 #include <mutex>
 
+#include "_deps/magic-enum-src/include/magic_enum.hpp"
 #include "const.h"
-#include "logging.h"
+#include "utils/logging.h"
 
 namespace ulayfs {
 

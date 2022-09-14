@@ -10,7 +10,7 @@
 #include "entry.h"
 #include "idx.h"
 #include "posix.h"
-#include "utils.h"
+#include "utils/utils.h"
 
 namespace ulayfs::dram {
 struct TxCursor;
