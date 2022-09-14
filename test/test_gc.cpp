@@ -114,7 +114,7 @@ void sync_test() {
 
     GarbageCollector garbage_collector(filepath);
     std::cerr << garbage_collector.file->shm_mgr;
-    garbage_collector.gc();
+    garbage_collector.do_gc();
 
     LOG_INFO("gc finished");
 
