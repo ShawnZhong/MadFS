@@ -64,24 +64,28 @@ void basic_test(BasicTestOpt opt) {
   }
 }
 
+/**
+ * Test the basic functionality of garbage collection.
+ *
+ * Launch a number of io threads to write to the file, and then run the gc
+ * thread while the io threads are in the background.
+ */
 void sync_test() {
   unlink(filepath);
   int fd = open(filepath, O_CREAT | O_RDWR, S_IRUSR | S_IWUSR);
 
-  std::mutex mutex;
-  std::condition_variable cv;
-
   int num_io_threads = 4;
-  bool gc_done = false;
-  std::vector io_threads_done(num_io_threads, false);
+  std::atomic<bool> gc_done = false;
+  std::vector<std::atomic<bool>> io_threads_done(num_io_threads);
   std::vector<std::thread> io_threads;
 
   for (int i = 0; i < num_io_threads; ++i) {
     io_threads.emplace_back([&, i]() {
-      std::unique_lock<std::mutex> lock{mutex};
       if (i != 0) {
-        // wait for the previous thread
-        cv.wait(lock, [&]() { return io_threads_done[i - 1]; });
+        // wait for the previous thread to finish
+        while (!io_threads_done[i - 1].load()) {
+          std::this_thread::yield();
+        }
       }
 
       int num_iter = i == 0
@@ -99,32 +103,33 @@ void sync_test() {
 
       // notify the next thread to start
       io_threads_done[i] = true;
-      cv.notify_all();
 
       // keep running until the gc is done
-      cv.wait(lock, [&]() { return gc_done; });
+      while (!gc_done.load()) {
+        std::this_thread::yield();
+      }
       LOG_INFO("thread %d exiting", i);
     });
   }
 
-  std::thread gc([&]() {
-    std::unique_lock<std::mutex> lock{mutex};
-    cv.wait(lock, [&]() { return io_threads_done[num_io_threads - 1]; });
-
+  std::thread gc_thread([&]() {
+    while (!io_threads_done[num_io_threads - 1].load()) {
+      std::this_thread::yield();
+    }
     LOG_INFO("gc start");
 
     GarbageCollector garbage_collector(filepath);
     std::cerr << garbage_collector.file->tx_mgr;
     std::cerr << garbage_collector.file->shm_mgr;
     garbage_collector.do_gc();
+    std::cerr << garbage_collector.file->tx_mgr;
 
     LOG_INFO("gc finished");
 
     gc_done = true;
-    cv.notify_all();
   });
 
-  gc.join();
+  gc_thread.join();
   for (auto& t : io_threads) t.join();
 }
 

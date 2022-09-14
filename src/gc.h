@@ -63,6 +63,8 @@ class GarbageCollector {
   }
 
   [[nodiscard]] bool need_gc() const {
+    LOG_DEBUG("GarbageCollector: old_tail=%d", old_tail.idx.block_idx.get());
+
     // skip if tail_tx_block is meta block
     if (old_tail.idx.block_idx == 0) return false;
 
@@ -215,7 +217,7 @@ class GarbageCollector {
       LOG_DEBUG("GarbageCollector: freed block %d", prev.idx.block_idx.get());
     }
 
-    while (curr < old_tail) {
+    while (curr.idx.block_idx < old_tail.idx.block_idx) {
       LOG_DEBUG("GarbageCollector: block %d cannot be recycled now",
                 curr.idx.block_idx.get());
       if (!curr.advance_to_next_block(&file->mem_table)) break;

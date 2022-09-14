@@ -103,6 +103,7 @@ class TxBlock : public noncopyable {
 
   friend std::ostream &operator<<(std::ostream &os, const TxBlock &block) {
     os << "TxBlock{gc_seq=" << block.gc_seq << ", tx_seq=" << block.tx_seq
+       << ", next=" << block.next << ", next_outdated=" << block.next_outdated
        << "}";
     return os;
   }
