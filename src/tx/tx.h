@@ -86,7 +86,7 @@ class Tx {
   static ssize_t exec_and_release_offset(Params&&... params) {
     TX tx(std::forward<Params>(params)...);
     ssize_t ret = tx.exec();
-    tx.tx_mgr->offset_mgr.release_offset(tx.ticket, tx.state.cursor);
+    tx.tx_mgr->offset_mgr->release(tx.ticket, tx.state.cursor);
     return ret;
   }
 

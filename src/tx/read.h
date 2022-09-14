@@ -126,7 +126,7 @@ class ReadTx : public Tx {
     // we actually don't care what's the previous tx's tail, because we will
     // need to validate against the latest tail anyway
     if (is_offset_depend) {
-      if (!tx_mgr->offset_mgr.validate_offset(ticket, state.cursor)) {
+      if (!tx_mgr->offset_mgr->validate(ticket, state.cursor)) {
         // we don't need to revalidate after redo
         is_offset_depend = false;
         goto redo;

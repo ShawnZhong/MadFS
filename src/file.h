@@ -39,6 +39,7 @@ class File {
  public:
   BitmapMgr bitmap_mgr;
   MemTable mem_table;
+  OffsetMgr offset_mgr;
   TxMgr tx_mgr;
   BlkTable blk_table;
   ShmMgr shm_mgr;
@@ -100,8 +101,8 @@ class File {
     pthread_spin_lock(&spinlock);
     blk_table.update(allocator);
     *state = blk_table.get_file_state();
-    old_offset = tx_mgr.offset_mgr.acquire_offset(count, state->file_size,
-                                                  stop_at_boundary, ticket);
+    old_offset =
+        offset_mgr.acquire(count, state->file_size, stop_at_boundary, ticket);
     pthread_spin_unlock(&spinlock);
   }
 
