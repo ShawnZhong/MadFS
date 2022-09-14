@@ -116,37 +116,51 @@ LogCursor TxMgr::append_log_entry(
 
 std::ostream& operator<<(std::ostream& out, const TxMgr& tx_mgr) {
   out << tx_mgr.offset_mgr;
-  out << "Transactions: \n";
 
-  TxCursor cursor(tx_mgr.file->meta);
-  int count = 0;
+  {
+    out << "Transactions: \n";
 
-  while (true) {
-    auto tx_entry = cursor.get_entry();
-    if (!tx_entry.is_valid()) break;
-    if (tx_entry.is_dummy()) goto next;
+    TxCursor cursor(tx_mgr.file->meta);
+    int count = 0;
 
-    count++;
-    if (count > 100) {
-      if (count % static_cast<int>(exp10(floor(log10(count)) - 1)) != 0)
-        goto next;
+    while (true) {
+      auto tx_entry = cursor.get_entry();
+      if (!tx_entry.is_valid()) break;
+      if (tx_entry.is_dummy()) goto next;
+
+      count++;
+      if (count > 10) {
+        if (count % static_cast<int>(exp10(floor(log10(count)))) != 0)
+          goto next;
+      }
+
+      out << "\t" << count << ": " << cursor.idx << " -> " << tx_entry << "\n";
+
+      // print log entries if the tx is not inlined
+      if (!tx_entry.is_inline()) {
+        LogCursor log_cursor(tx_entry.indirect_entry, tx_mgr.mem_table);
+        do {
+          out << "\t\t" << *log_cursor << "\n";
+        } while (log_cursor.advance(tx_mgr.mem_table));
+      }
+
+    next:
+      if (bool success = cursor.advance(tx_mgr.mem_table); !success) break;
     }
 
-    out << "\t" << count << ": " << cursor.idx << " -> " << tx_entry << "\n";
-
-    // print log entries if the tx is not inlined
-    if (!tx_entry.is_inline()) {
-      LogCursor log_cursor(tx_entry.indirect_entry, tx_mgr.mem_table);
-      do {
-        out << "\t\t" << *log_cursor << "\n";
-      } while (log_cursor.advance(tx_mgr.mem_table));
-    }
-
-  next:
-    if (bool success = cursor.advance(tx_mgr.mem_table); !success) break;
+    out << "\ttotal number of tx: " << count++ << "\n";
   }
 
-  out << "\ttotal = " << count++ << "\n";
+  {
+    out << "Tx Blocks: \n";
+    auto meta = tx_mgr.file->meta;
+    LogicalBlockIdx idx = meta->get_next_tx_block();
+    while (idx != 0) {
+      auto tx_block = &tx_mgr.mem_table->lidx_to_addr_ro(idx)->tx_block;
+      out << "\t" << idx << ": " << *tx_block << "\n";
+      idx = tx_block->get_next_tx_block();
+    }
+  }
 
   return out;
 }
