@@ -7,6 +7,8 @@
 
 namespace ulayfs::utility {
 
+using dram::TxBlockCursor;
+
 /**
  * Garbage collecting transaction blocks and log blocks. This function builds
  * a new transaction history from block table and uses it to replace the old
@@ -17,8 +19,8 @@ class GarbageCollector {
  public:
   const std::unique_ptr<dram::File> file;
   const uint64_t file_size;
-  const dram::TxBlockCursor old_tail;
-  const dram::TxBlockCursor old_head;
+  const TxBlockCursor old_tail;
+  const TxBlockCursor old_head;
   dram::Allocator* allocator;
 
   explicit GarbageCollector(const char* pathname)
@@ -197,11 +199,11 @@ class GarbageCollector {
     LOG_DEBUG("GarbageCollector: smallest tx idx: %u", idx.get());
     // blocks before the pivot can be immediately recycled, blocks after the
     // pivot needs to be recycled later.
-    const dram::TxBlockCursor pivot(idx, &file->mem_table);
+    const TxBlockCursor pivot(idx, &file->mem_table);
 
-    dram::TxBlockCursor curr = old_head;
+    TxBlockCursor curr = old_head;
     while (curr < pivot) {  // free up to the pivot
-      dram::TxBlockCursor prev = curr;
+      TxBlockCursor prev = curr;
       // we first advance and then free the previous block
       bool success = curr.advance_to_next_block(&file->mem_table);
       if (!success) break;
@@ -209,20 +211,23 @@ class GarbageCollector {
       LOG_DEBUG("GarbageCollector: freed block %d", prev.idx.get());
     }
 
-    // find the tail of the orphaned tx blocks, and try to free them
-    dram::TxBlockCursor orphan_curr =
-        dram::TxBlockCursor::from_meta(file->meta);
+    // find the tail of the orphaned tx blocks, and try to free them during
+    // traversal
+    TxBlockCursor orphan_curr(file->meta);
+    TxBlockCursor orphan_prev = orphan_curr;
     while (orphan_curr.advance_to_next_orphan(&file->mem_table)) {
       if (orphan_curr < pivot) {
-        file->meta->set_next_orphan_block(
-            orphan_curr.block->get_next_orphan_block());
+        orphan_prev.set_next_orphan_block(orphan_curr.get_next_orphan_block());
         allocator->block.free(orphan_curr.idx);
         LOG_DEBUG("GarbageCollector: freed orphan block %d",
                   orphan_curr.idx.get());
+      } else {
+        orphan_prev = orphan_curr;
       }
     }
 
-    while (curr.idx < old_tail.idx) {
+    // add everything after the pivot to the orphan list
+    while (curr < old_tail) {
       LOG_DEBUG("GarbageCollector: block %d cannot be recycled now",
                 curr.idx.get());
       orphan_curr.set_next_orphan_block(curr.idx);

@@ -251,18 +251,15 @@ struct TxBlockCursor {
     void* addr;
   };
 
-  TxBlockCursor(LogicalBlockIdx idx, pmem::TxBlock* block)
-      : idx(idx), block(block) {}
+  explicit TxBlockCursor(pmem::MetaBlock* meta) : idx(), meta(meta) {}
 
-  TxBlockCursor(TxCursor cursor)
+  explicit TxBlockCursor(TxCursor cursor)
       : idx(cursor.idx.block_idx), block(cursor.block) {}
 
   TxBlockCursor(LogicalBlockIdx idx, MemTable* mem_table)
       : idx(idx),
         addr(idx == LogicalBlockIdx::max() ? nullptr
                                            : mem_table->lidx_to_addr_rw(idx)) {}
-
-  static TxCursor from_meta(pmem::MetaBlock* meta) { return {{}, meta}; }
 
   /**
    * Advance to the first entry of the next tx block
@@ -294,14 +291,16 @@ struct TxBlockCursor {
     return true;
   }
 
-
   void set_next_orphan_block(LogicalBlockIdx block_idx) const {
     assert(addr != nullptr);
-    if (idx == 0) {
-      meta->set_next_orphan_block(block_idx);
-    } else {
-      block->set_next_orphan_block(block_idx);
-    }
+    return idx == 0 ? meta->set_next_orphan_block(block_idx)
+                    : block->set_next_orphan_block(block_idx);
+  }
+
+  [[nodiscard]] LogicalBlockIdx get_next_orphan_block() const {
+    assert(addr != nullptr);
+    return idx == 0 ? meta->get_next_orphan_block()
+                    : block->get_next_orphan_block();
   }
 
   friend bool operator<(const TxBlockCursor& lhs, const TxBlockCursor& rhs) {

@@ -122,7 +122,7 @@ std::ostream& operator<<(std::ostream& out, const TxMgr& tx_mgr) {
 
   {
     out << "Tx Blocks: \n";
-    TxBlockCursor cursor = TxBlockCursor::from_meta(tx_mgr.file->meta);
+    TxBlockCursor cursor(tx_mgr.file->meta);
     while (cursor.advance_to_next_block(tx_mgr.mem_table)) {
       out << "\t" << cursor.idx << ": " << *cursor.block << "\n";
     }
@@ -130,7 +130,7 @@ std::ostream& operator<<(std::ostream& out, const TxMgr& tx_mgr) {
 
   {
     out << "Orphaned Tx Blocks: \n";
-    TxBlockCursor cursor = TxBlockCursor::from_meta(tx_mgr.file->meta);
+    TxBlockCursor cursor(tx_mgr.file->meta);
     while (cursor.advance_to_next_orphan(tx_mgr.mem_table)) {
       out << "\t" << cursor.idx << ": " << *cursor.block << "\n";
     }
