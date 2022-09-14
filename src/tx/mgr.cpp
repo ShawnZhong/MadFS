@@ -115,12 +115,12 @@ LogCursor TxMgr::append_log_entry(
 }
 
 std::ostream& operator<<(std::ostream& out, const TxMgr& tx_mgr) {
-  out << tx_mgr.offset_mgr;
+  __msan_scoped_disable_interceptor_checks();
 
   {
     out << "Transactions: \n";
 
-    TxCursor cursor(tx_mgr.file->meta);
+    TxCursor cursor = TxCursor::head(tx_mgr.file->meta);
     int count = 0;
 
     while (true) {
@@ -153,14 +153,13 @@ std::ostream& operator<<(std::ostream& out, const TxMgr& tx_mgr) {
 
   {
     out << "Tx Blocks: \n";
-    auto meta = tx_mgr.file->meta;
-    LogicalBlockIdx idx = meta->get_next_tx_block();
-    while (idx != 0) {
-      auto tx_block = &tx_mgr.mem_table->lidx_to_addr_ro(idx)->tx_block;
-      out << "\t" << idx << ": " << *tx_block << "\n";
-      idx = tx_block->get_next_tx_block();
+    TxCursor cursor = TxCursor::head(tx_mgr.file->meta);
+    while (cursor.advance_to_next_block(tx_mgr.mem_table)) {
+      out << "\t" << cursor.idx.block_idx << ": " << *cursor.block << "\n";
     }
   }
+
+  __msan_scoped_enable_interceptor_checks();
 
   return out;
 }

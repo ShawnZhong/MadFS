@@ -22,8 +22,17 @@ struct TxCursor {
   };
 
   TxCursor() : idx(), addr(nullptr) {}
-  TxCursor(pmem::MetaBlock* meta) : idx(), meta(meta) {}
   TxCursor(TxEntryIdx idx, void* addr) : idx(idx), addr(addr) {}
+
+  static TxCursor head(pmem::MetaBlock* meta) { return {{}, meta}; }
+
+  static TxCursor from_idx(TxEntryIdx idx, MemTable* mem_table) {
+    return {idx, mem_table->lidx_to_addr_rw(idx.block_idx)};
+  }
+
+  static TxCursor from_idx(LogicalBlockIdx idx, MemTable* mem_table) {
+    return TxCursor::from_idx({idx, 0}, mem_table);
+  }
 
   /**
    * @return the tx entry pointed to by this cursor
@@ -35,6 +44,11 @@ struct TxCursor {
         idx.is_inline() ? meta->tx_entries : block->tx_entries;
     assert(idx.local_idx < idx.get_capacity());
     return entries[idx.local_idx].load(std::memory_order_acquire);
+  }
+
+  [[nodiscard]] LogicalBlockIdx get_next_block_idx() const {
+    return idx.is_inline() ? meta->get_next_tx_block()
+                           : block->get_next_tx_block();
   }
 
   /**
@@ -52,8 +66,7 @@ struct TxCursor {
     uint16_t capacity = idx.get_capacity();
     if (unlikely(idx.local_idx >= capacity)) {
       if (into_new_block) *into_new_block = true;
-      LogicalBlockIdx block_idx =
-          is_inline ? meta->get_next_tx_block() : block->get_next_tx_block();
+      LogicalBlockIdx block_idx = get_next_block_idx();
       if (block_idx == 0) {
         if (!allocator) return false;
         const auto& [new_block_idx, new_block] =
@@ -90,6 +103,20 @@ struct TxCursor {
                bool* into_new_block = nullptr) {
     idx.local_idx++;
     return handle_overflow(mem_table, allocator, into_new_block);
+  }
+
+  /**
+   * Advance to the first entry of the next tx block
+   * @param mem_table used to find the memory address of the next block
+   * @return true on success; false when reaches the end
+   */
+  bool advance_to_next_block(MemTable* mem_table) {
+    LogicalBlockIdx block_idx = get_next_block_idx();
+    if (block_idx == 0) return false;
+    idx.block_idx = block_idx;
+    idx.local_idx = 0;
+    addr = mem_table->lidx_to_addr_rw(idx.block_idx);
+    return true;
   }
 
   /**

@@ -260,6 +260,7 @@ std::ostream& operator<<(std::ostream& out, const File& f) {
   if (f.can_write) {
     out << f.bitmap_mgr;
   }
+  out << f.offset_mgr;
   out << f.tx_mgr;
   out << "\n";
   __msan_scoped_enable_interceptor_checks();
