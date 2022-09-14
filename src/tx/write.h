@@ -78,13 +78,13 @@ class WriteTx : public Tx {
       commit_entry = pmem::TxEntryInline(num_blocks, begin_vidx, dst_lidxs[0]);
     } else {
       // it's fine that we append log first as long we don't publish it by tx
-      log_cursor = tx_mgr->append_log_entry(
-          allocator, pmem::LogEntry::Op::LOG_OVERWRITE,  // op
-          leftover_bytes,                                // leftover_bytes
-          num_blocks,                                    // total_blocks
-          begin_vidx,                                    // begin_virtual_idx
-          dst_lidxs                                      // begin_logical_idxs
-      );
+      log_cursor =
+          allocator->log_entry.append(pmem::LogEntry::Op::LOG_OVERWRITE,  // op
+                                      leftover_bytes,  // leftover_bytes
+                                      num_blocks,      // total_blocks
+                                      begin_vidx,      // begin_virtual_idx
+                                      dst_lidxs        // begin_logical_idxs
+          );
       commit_entry = pmem::TxEntryIndirect(log_cursor.idx);
     }
   }
