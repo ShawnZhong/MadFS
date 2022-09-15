@@ -1,5 +1,8 @@
 #pragma once
 
+#include <unordered_set>
+
+#include "block/tx.h"
 #include "cursor/tx_block.h"
 #include "file.h"
 #include "idx.h"
@@ -91,11 +94,7 @@ class GarbageCollector {
   }
 
   [[nodiscard]] bool create_new_linked_list() const {
-    LogicalBlockIdx old_first_tx_block_idx = file->meta->get_next_tx_block();
-    assert(old_first_tx_block_idx != 0);
-    uint32_t gc_seq = file->mem_table.lidx_to_addr_ro(old_first_tx_block_idx)
-                          ->tx_block.get_gc_seq() +
-                      1;
+    uint32_t gc_seq = old_head.block->get_gc_seq() + 1;
     uint32_t tx_seq = 1;
     auto first_tx_block_idx = allocator->block.alloc(1);
     auto new_block = file->mem_table.lidx_to_addr_rw(first_tx_block_idx);
@@ -168,10 +167,10 @@ class GarbageCollector {
     auto tail_block = file->mem_table.lidx_to_addr_rw(old_tail.idx);
     if (tail_block->tx_block.get_tx_seq() <= new_cursor.block->get_tx_seq()) {
       // abort, free the new tx blocks
-      auto new_tx_blk_idx = first_tx_block_idx;
+      LogicalBlockIdx new_tx_blk_idx = first_tx_block_idx;
       do {
-        auto next_tx_blk_idx = new_cursor.block->get_next_tx_block();
-        allocator->block.free(new_tx_blk_idx);
+        LogicalBlockIdx next_tx_blk_idx = new_cursor.block->get_next_tx_block();
+        free_tx_log_entry_blocks({new_tx_blk_idx, &file->mem_table});
         new_tx_blk_idx = next_tx_blk_idx;
       } while (new_tx_blk_idx != old_tail.idx && new_tx_blk_idx != 0);
       allocator->block.return_free_list();
@@ -209,7 +208,7 @@ class GarbageCollector {
       // we first advance and then free the previous block
       bool success = curr.advance_to_next_block(&file->mem_table);
       if (!success) break;
-      allocator->block.free(prev.idx);
+      free_tx_log_entry_blocks(prev);
       LOG_DEBUG("GarbageCollector: freed block %d", prev.idx.get());
     }
 
@@ -220,7 +219,7 @@ class GarbageCollector {
     while (orphan_curr.advance_to_next_orphan(&file->mem_table)) {
       if (orphan_curr < pivot) {
         orphan_prev.set_next_orphan_block(orphan_curr.get_next_orphan_block());
-        allocator->block.free(orphan_curr.idx);
+        free_tx_log_entry_blocks(orphan_curr);
         LOG_DEBUG("GarbageCollector: freed orphan block %d",
                   orphan_curr.idx.get());
       } else {
@@ -236,6 +235,18 @@ class GarbageCollector {
       orphan_curr.advance_to_next_orphan(&file->mem_table);
       if (!curr.advance_to_next_block(&file->mem_table)) break;
     }
+
+    allocator->block.return_free_list();
+  }
+
+  // for the given tx_blocks, free all log entry blocks referenced by this block
+  void free_tx_log_entry_blocks(const TxBlockCursor& tx_block_cursor) const {
+    // we use uint32_t here for simplicity, so that we don't need to provide
+    // customized hash function for LogicalBlockIdx
+    std::unordered_set<uint32_t> le_blocks;
+    tx_block_cursor.block->get_ref_log_entry_blocks(le_blocks);
+    for (auto lidx : le_blocks) allocator->block.free(lidx);
+    allocator->block.free(tx_block_cursor.idx);
   }
 };
 
