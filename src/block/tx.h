@@ -33,10 +33,8 @@ class TxBlock : public noncopyable {
   // if within same block, compare local index
   // if not, compare their block's seq number
   uint32_t tx_seq;
-  // each garbage collection operation has a unique, monotonically increasing
-  // sequence number; this can be viewed as a "version number" of tx_seq so that
-  // tx seq number can be reused
-  uint32_t gc_seq;
+  // unused uint32_t for padding
+  uint32_t unused;
 
  public:
   [[nodiscard]] TxLocalIdx find_tail(TxLocalIdx hint = 0) const {
@@ -48,16 +46,15 @@ class TxBlock : public noncopyable {
     tx_entries[idx].store(entry, std::memory_order_relaxed);
   }
 
-  // it should be fine not to use any fence since there will be fence for flush
-  // gc_seq must be zero for apps; it can only be set to nonzero by gc threads
-  void set_tx_seq(uint32_t tx_seq, uint32_t gc_seq = 0) {
+  void set_tx_seq(uint32_t tx_seq) {
     assert(tx_seq > 0);  // 0 is an invalid tx_seq
     this->tx_seq = tx_seq;
-    this->gc_seq = gc_seq;
   }
 
-  [[nodiscard]] uint32_t get_tx_seq() const { return tx_seq; }
-  [[nodiscard]] uint32_t get_gc_seq() const { return gc_seq; }
+  [[nodiscard]] uint32_t get_tx_seq() const {
+    assert(tx_seq > 0);
+    return tx_seq;
+  }
 
   [[nodiscard]] LogicalBlockIdx get_next_tx_block() const {
     return next.load(std::memory_order_acquire);
@@ -124,9 +121,8 @@ class TxBlock : public noncopyable {
   friend struct ::ulayfs::dram::TxCursor;
 
   friend std::ostream &operator<<(std::ostream &os, const TxBlock &block) {
-    os << "TxBlock{gc_seq=" << block.gc_seq << ", tx_seq=" << block.tx_seq
-       << ", next=" << block.next << ", next_orphan=" << block.next_orphan
-       << "}";
+    os << "TxBlock{tx_seq=" << block.tx_seq << ", next=" << block.next
+       << ", next_orphan=" << block.next_orphan << "}";
     return os;
   }
 };

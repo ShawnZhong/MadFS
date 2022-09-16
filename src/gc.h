@@ -83,24 +83,15 @@ class GarbageCollector {
 
     // skip if there is only one tx block between meta and tail, because at best
     // we can only make this single block into one block
-    if (tx_block->get_next_tx_block() == old_tail.idx) return false;
-
-    // skip if there is no tx block with gc_seq == 0 before the tail, which
-    // means there is no work can be done since last gc
-    while ((tx_block_idx = tx_block->get_next_tx_block()) != old_tail.idx)
-      tx_block = &file->mem_table.lidx_to_addr_ro(tx_block_idx)->tx_block;
-    // if gc_seq is zero, this means there is at least one new full tx block
-    // since last gc
-    return tx_block->get_gc_seq() == 0;
+    return tx_block->get_next_tx_block() != old_tail.idx;
   }
 
   [[nodiscard]] bool create_new_linked_list() const {
-    uint32_t gc_seq = old_head.block->get_gc_seq() + 1;
     uint32_t tx_seq = 1;
     auto first_tx_block_idx = allocator->block.alloc(1);
     auto new_block = file->mem_table.lidx_to_addr_rw(first_tx_block_idx);
     memset(&new_block->cache_lines[NUM_CL_PER_BLOCK - 1], 0, CACHELINE_SIZE);
-    new_block->tx_block.set_tx_seq(tx_seq++, gc_seq);
+    new_block->tx_block.set_tx_seq(tx_seq++);
     dram::TxCursor new_cursor({first_tx_block_idx, 0}, &new_block->tx_block);
 
     VirtualBlockIdx begin = 0;
@@ -130,7 +121,7 @@ class GarbageCollector {
           new_block = file->mem_table.lidx_to_addr_rw(new_tx_block_idx);
           memset(&new_block->cache_lines[NUM_CL_PER_BLOCK - 1], 0,
                  CACHELINE_SIZE);
-          new_block->tx_block.set_tx_seq(tx_seq++, gc_seq);
+          new_block->tx_block.set_tx_seq(tx_seq++);
           new_cursor.block = &new_block->tx_block;
           new_cursor.idx = {new_tx_block_idx, 0};
         }

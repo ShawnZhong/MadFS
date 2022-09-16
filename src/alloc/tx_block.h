@@ -71,7 +71,7 @@ class TxBlockAllocator {
  private:
   /**
    * Allocate a tx block
-   * @param tx_seq the tx sequence number of the tx block (gc_seq = 0)
+   * @param tx_seq the tx sequence number of the tx block
    * @return a tuple of the block index and the block address
    */
   std::tuple<LogicalBlockIdx, pmem::TxBlock*> alloc(uint32_t tx_seq) {
