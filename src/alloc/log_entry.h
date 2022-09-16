@@ -2,6 +2,7 @@
 
 #include "alloc/block.h"
 #include "cursor/log.h"
+#include "idx.h"
 
 namespace ulayfs::dram {
 
@@ -133,27 +134,40 @@ class LogEntryAllocator {
    * return log entry blocks that are exclusively taken by this log entry; if
    * there is other log entries on this block, leave this block alone
    */
-  void free(const LogCursor& log_cursor) {
-    pmem::LogEntry* curr_entry = log_cursor.get_entry();
-    pmem::LogEntryBlock* curr_block = log_cursor.block;
-    LogicalBlockIdx curr_block_idx = log_cursor.idx.block_idx;
-
+  void free(LogCursor log_cursor) {
     // NOTE: we assume free() will always keep the block in the local free list
     //       instead of publishing it immediately. this makes it safe to read
     //       the log entry block even after calling free()
 
     // do we need to free the first le block? no if there is other le ahead
-    if (log_cursor.idx.local_offset == 0) block_allocator->free(curr_block_idx);
+    if (log_cursor.idx.local_offset == 0)
+      block_allocator->free(log_cursor.idx.block_idx);
 
-    while (curr_entry->has_next) {
-      if (curr_entry->is_next_same_block) {
-        curr_entry = curr_block->get(curr_entry->next.local_offset);
-      } else {
-        curr_block_idx = curr_entry->next.block_idx;
-        curr_block =
-            &mem_table->lidx_to_addr_rw(curr_block_idx)->log_entry_block;
-        curr_entry = curr_block->get(0);
-        block_allocator->free(curr_block_idx);
+    LogicalBlockIdx prev_block_idx = log_cursor.idx.block_idx;
+    while (log_cursor.advance(mem_table)) {
+      if (prev_block_idx != log_cursor.idx.block_idx) {
+        prev_block_idx = log_cursor.idx.block_idx;
+        block_allocator->free(prev_block_idx);
+      }
+    }
+  }
+
+  /**
+   * @brief get all log entry blocks linked with the given head; only called by
+   * GarbageCollector
+   *
+   * @param log_cursor the head of log entry linked list
+   * @param le_blocks the set to put results; can be non-empty, and
+   * pre-existing elements will be untouched
+   */
+  void get_ref_log_entry_blocks(LogCursor log_cursor,
+                                std::unordered_set<uint32_t>& le_blocks) {
+    LogicalBlockIdx prev_block_idx = log_cursor.idx.block_idx;
+    le_blocks.emplace(prev_block_idx.get());
+    while (log_cursor.advance(mem_table)) {
+      if (prev_block_idx != log_cursor.idx.block_idx) {
+        prev_block_idx = log_cursor.idx.block_idx;
+        le_blocks.emplace(prev_block_idx.get());
       }
     }
   }

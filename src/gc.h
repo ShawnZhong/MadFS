@@ -256,9 +256,28 @@ class GarbageCollector {
     // we use uint32_t here for simplicity, so that we don't need to provide
     // customized hash function for LogicalBlockIdx
     std::unordered_set<uint32_t> le_blocks;
-    tx_block_cursor.block->get_ref_log_entry_blocks(le_blocks);
+    get_ref_log_entry_blocks(tx_block_cursor.block, le_blocks);
     for (auto lidx : le_blocks) allocator->block.free(lidx);
     allocator->block.free(tx_block_cursor.idx);
+  }
+
+  /**
+   * get all log entry blocks referenced by this tx blocks
+   *
+   * @param[in] tx_block
+   * @param[out] le_blocks a set of log entry blocks; note we use uint32_t
+   * instead of LogicalBlockIdx because LogicalBlockIdx requires additional
+   * template parameter for hash function
+   */
+  void get_ref_log_entry_blocks(const pmem::TxBlock* tx_block,
+                                std::unordered_set<uint32_t>& le_blocks) const {
+    for (auto& e : tx_block->tx_entries) {
+      auto entry = e.load(std::memory_order_relaxed);
+      if (entry.is_inline()) continue;
+      auto le_idx = entry.indirect_entry.get_log_entry_idx();
+      allocator->log_entry.get_ref_log_entry_blocks({le_idx, &file->mem_table},
+                                                    le_blocks);
+    }
   }
 };
 

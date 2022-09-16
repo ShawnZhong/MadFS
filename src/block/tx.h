@@ -16,6 +16,10 @@ namespace ulayfs::dram {
 struct TxCursor;
 }
 
+namespace ulayfs::utility {
+class GarbageCollector;
+}
+
 namespace ulayfs::pmem {
 
 class TxBlock : public noncopyable {
@@ -35,6 +39,8 @@ class TxBlock : public noncopyable {
   uint32_t tx_seq;
   // unused uint32_t for padding
   uint32_t unused;
+
+  friend utility::GarbageCollector;
 
  public:
   [[nodiscard]] TxLocalIdx find_tail(TxLocalIdx hint = 0) const {
@@ -89,22 +95,6 @@ class TxBlock : public noncopyable {
     persist_unfenced(&tx_entries[begin_idx],
                      sizeof(TxEntry) * (NUM_TX_ENTRY_PER_BLOCK - begin_idx) +
                          2 * sizeof(LogicalBlockIdx));
-  }
-
-  /**
-   * get all log entry blocks referenced by this tx blocks
-   *
-   * @param[out] le_blocks a set of log entry blocks; note we use uint32_t
-   * instead of LogicalBlockIdx because LogicalBlockIdx requires additional
-   * template parameter for hash function
-   */
-  void get_ref_log_entry_blocks(std::unordered_set<uint32_t> &le_blocks) const {
-    for (auto &e : tx_entries) {
-      auto entry = e.load(std::memory_order_relaxed);
-      if (entry.is_inline()) continue;
-      auto le_idx = entry.indirect_entry.get_log_entry_idx();
-      le_blocks.emplace(le_idx.block_idx.get());
-    }
   }
 
   /**
