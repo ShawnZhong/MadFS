@@ -7,6 +7,7 @@
 #include "file.h"
 #include "idx.h"
 #include "posix.h"
+#include "utils/logging.h"
 #include "utils/utils.h"
 
 namespace ulayfs::utility {
@@ -184,47 +185,67 @@ class GarbageCollector {
     return true;
   }
 
-  [[nodiscard]] TxBlockCursor get_min_tx_cursor() const {
-    TxBlockCursor min_cursor = TxBlockCursor::max();
+  /**
+   * when a block is pinned by a thread on shared memory, all blocks (on linked
+   * list) after this one is also logically pinned and cannot be freed; this
+   * function can and get such a set of tx blocks that cannot be freed
+   *
+   * @param[out] pinned_blocks filled with such pinned tx block's logical index
+   */
+  void scan_pinned_blocks(std::unordered_set<uint32_t>& pinned_blocks) const {
     for (size_t i = 0; i < MAX_NUM_THREADS; ++i) {
       auto per_thread_data = file->shm_mgr.get_per_thread_data(i);
       if (!per_thread_data->is_data_valid()) continue;
-      TxBlockCursor curr_cursor(per_thread_data->get_tx_block_idx(),
-                                &file->mem_table);
-      if (curr_cursor < min_cursor) min_cursor = curr_cursor;
+
+      TxBlockCursor curr(per_thread_data->get_tx_block_idx(), &file->mem_table);
+      // NOTE: it is possible that the given cusor is already after old_tail
+      while (!pinned_blocks.contains(curr.idx.get()) && curr < old_tail) {
+        pinned_blocks.emplace(curr.idx.get());
+        bool success = curr.advance_to_next_block(&file->mem_table);
+        // advance must never fail because the cursor should eventually reach
+        // old_tail or begin at a location after old_tail (which will not enter
+        // the loop)
+        if (!success)
+          PANIC(
+              "GarbageCollector: Fail to advance when scanning pinned blocks "
+              "[idx=%u]",
+              curr.idx.get());
+      };
     }
-    return min_cursor;
   }
 
   void recycle() const {
-    // blocks before the pivot can be immediately recycled, blocks after the
-    // pivot needs to be recycled later.
-    const TxBlockCursor pivot = get_min_tx_cursor();
-    LOG_DEBUG("GarbageCollector: min tx idx: %u", pivot.idx.get());
-
-    TxBlockCursor curr = old_head;
-    while (curr < pivot) {  // free up to the pivot
-      TxBlockCursor prev = curr;
-      // we first advance and then free the previous block
-      bool success = curr.advance_to_next_block(&file->mem_table);
-      if (!success) break;
-      free_tx_log_entry_blocks(prev);
-      LOG_DEBUG("GarbageCollector: freed block %d", prev.idx.get());
-    }
+    std::unordered_set<uint32_t> pinned_blocks;
+    scan_pinned_blocks(pinned_blocks);
 
     // find the tail of the orphaned tx blocks, and try to free them during
     // traversal
     TxBlockCursor orphan_curr(file->meta);
     TxBlockCursor orphan_prev = orphan_curr;
     while (orphan_curr.advance_to_next_orphan(&file->mem_table)) {
-      if (orphan_curr < pivot) {
+      if (pinned_blocks.contains(orphan_curr.idx.get())) {
+        orphan_prev = orphan_curr;  // just skip
+      } else {
         orphan_prev.set_next_orphan_block(orphan_curr.get_next_orphan_block());
         free_tx_log_entry_blocks(orphan_curr);
         LOG_DEBUG("GarbageCollector: freed orphan block %d",
                   orphan_curr.idx.get());
-      } else {
-        orphan_prev = orphan_curr;
       }
+    }
+
+    TxBlockCursor curr = old_head;
+    while (curr < old_tail) {
+      if (pinned_blocks.contains(curr.idx.get())) break;
+      TxBlockCursor prev = curr;
+      // we first advance and then free the previous block
+      bool success = curr.advance_to_next_block(&file->mem_table);
+      if (!success)
+        PANIC(
+            "GarbageCollector: Fail to advance when freed unpinned blocks "
+            "[idx=%u]",
+            curr.idx.get());
+      free_tx_log_entry_blocks(prev);
+      LOG_DEBUG("GarbageCollector: freed block %d", prev.idx.get());
     }
 
     // add everything after the pivot to the orphan list
@@ -240,7 +261,7 @@ class GarbageCollector {
   }
 
   // for the given tx_blocks, free all log entry blocks referenced by this block
-  void free_tx_log_entry_blocks(const TxBlockCursor& tx_block_cursor) const {
+  void free_tx_log_entry_blocks(const TxBlockCursor tx_block_cursor) const {
     // we use uint32_t here for simplicity, so that we don't need to provide
     // customized hash function for LogicalBlockIdx
     std::unordered_set<uint32_t> le_blocks;
