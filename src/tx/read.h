@@ -38,7 +38,10 @@ class ReadTx : public Tx {
     }
 
     // reach EOF
-    if (offset >= state.file_size) return 0;
+    if (offset >= state.file_size) {
+      count = 0;
+      goto done;
+    }
     if (offset + count > state.file_size) {  // partial read; recalculate end_*
       count = state.file_size - offset;
       end_offset = offset + count;
@@ -73,8 +76,7 @@ class ReadTx : public Tx {
     timer.start<Event::READ_TX_VALIDATE>();
     while (true) {
       // check the tail is still tail
-      if (bool success = state.cursor.handle_overflow(tx_mgr->mem_table);
-          !success) {
+      if (bool success = state.cursor.handle_overflow(mem_table); !success) {
         break;
       }
       pmem::TxEntry curr_entry = state.cursor.get_entry();
@@ -90,8 +92,7 @@ class ReadTx : public Tx {
       // first handle the first block (which might not be full block)
       redo_lidx = redo_image[0];
       if (redo_lidx != 0) {
-        const pmem::Block* curr_block =
-            tx_mgr->mem_table->lidx_to_addr_ro(redo_lidx);
+        const pmem::Block* curr_block = mem_table->lidx_to_addr_ro(redo_lidx);
         dram::memcpy(buf, curr_block->data_ro() + first_block_offset,
                      first_block_size);
         redo_image[0] = 0;
@@ -103,8 +104,7 @@ class ReadTx : public Tx {
       for (curr_vidx = begin_vidx + 1; curr_vidx < end_vidx - 1; ++curr_vidx) {
         redo_lidx = redo_image[curr_vidx - begin_vidx];
         if (redo_lidx != 0) {
-          const pmem::Block* curr_block =
-              tx_mgr->mem_table->lidx_to_addr_ro(redo_lidx);
+          const pmem::Block* curr_block = mem_table->lidx_to_addr_ro(redo_lidx);
           dram::memcpy(buf + buf_offset, curr_block->data_ro(), BLOCK_SIZE);
           redo_image[curr_vidx - begin_vidx] = 0;
         }
@@ -115,8 +115,7 @@ class ReadTx : public Tx {
       if (begin_vidx != end_vidx - 1) {
         redo_lidx = redo_image[curr_vidx - begin_vidx];
         if (redo_lidx != 0) {
-          const pmem::Block* curr_block =
-              tx_mgr->mem_table->lidx_to_addr_ro(redo_lidx);
+          const pmem::Block* curr_block = mem_table->lidx_to_addr_ro(redo_lidx);
           dram::memcpy(buf + buf_offset, curr_block->data_ro(),
                        count - buf_offset);
           redo_image[curr_vidx - begin_vidx] = 0;
@@ -127,7 +126,7 @@ class ReadTx : public Tx {
     // we actually don't care what's the previous tx's tail, because we will
     // need to validate against the latest tail anyway
     if (is_offset_depend) {
-      if (!tx_mgr->offset_mgr.validate_offset(ticket, state.cursor)) {
+      if (!tx_mgr->offset_mgr->validate(ticket, state.cursor)) {
         // we don't need to revalidate after redo
         is_offset_depend = false;
         goto redo;
@@ -135,6 +134,9 @@ class ReadTx : public Tx {
     }
 
     timer.stop<Event::READ_TX_VALIDATE>();
+
+  done:
+    allocator->tx_block.pin(state.get_tx_block_idx());
     return static_cast<ssize_t>(count);
   }
 };

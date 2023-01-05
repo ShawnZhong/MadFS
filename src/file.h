@@ -12,7 +12,7 @@
 #include <iostream>
 #include <stdexcept>
 
-#include "alloc.h"
+#include "alloc/alloc.h"
 #include "bitmap.h"
 #include "blk_table.h"
 #include "block/block.h"
@@ -21,11 +21,11 @@
 #include "entry.h"
 #include "idx.h"
 #include "mem_table.h"
+#include "offset.h"
 #include "posix.h"
 #include "shm.h"
 #include "tx/mgr.h"
-#include "tx/offset.h"
-#include "utils.h"
+#include "utils/utils.h"
 
 namespace ulayfs::utility {
 class Converter;
@@ -39,6 +39,7 @@ class File {
  public:
   BitmapMgr bitmap_mgr;
   MemTable mem_table;
+  OffsetMgr offset_mgr;
   TxMgr tx_mgr;
   BlkTable blk_table;
   ShmMgr shm_mgr;
@@ -64,8 +65,7 @@ class File {
   friend utility::Converter;
 
  public:
-  File(int fd, const struct stat& stat, int flags, const char* pathname,
-       bool guard = true);
+  File(int fd, const struct stat& stat, int flags, const char* pathname);
   ~File();
 
   /*
@@ -76,7 +76,8 @@ class File {
   ssize_t pread(void* buf, size_t count, off_t offset);
   ssize_t read(void* buf, size_t count);
   off_t lseek(off_t offset, int whence);
-  void* mmap(void* addr, size_t length, int prot, int flags, size_t offset);
+  void* mmap(void* addr, size_t length, int prot, int flags,
+             size_t offset) const;
   int fsync();
   void stat(struct stat* buf);
 
@@ -100,8 +101,8 @@ class File {
     pthread_spin_lock(&spinlock);
     blk_table.update(allocator);
     *state = blk_table.get_file_state();
-    old_offset = tx_mgr.offset_mgr.acquire_offset(count, state->file_size,
-                                                  stop_at_boundary, ticket);
+    old_offset =
+        offset_mgr.acquire(count, state->file_size, stop_at_boundary, ticket);
     pthread_spin_unlock(&spinlock);
   }
 

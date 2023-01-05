@@ -7,7 +7,7 @@
 
 #include "const.h"
 #include "idx.h"
-#include "persist.h"
+#include "utils/persist.h"
 
 namespace ulayfs::pmem {
 
@@ -56,6 +56,9 @@ struct LogEntry {
     uint32_t local_offset : 12;
   } next;
 
+  // everything before begin_vidx is considered as header
+  constexpr static uint32_t HEADER_SIZE = 8;
+
   VirtualBlockIdx begin_vidx;
   LogicalBlockIdx begin_lidxs[];
 
@@ -80,7 +83,10 @@ struct LogEntry {
     auto size = FIXED_SIZE + sizeof(LogicalBlockIdx) * get_lidxs_len();
     persist_unfenced(this, size);
   }
-  // more advanced iteration helpers are in TxMgr, since they require MemTable
+
+  // a log entry can be very large (e.g. a full block), but sometimes only the
+  // header gets updated and needs persistence
+  void persist_header() { persist_unfenced(this, HEADER_SIZE); }
 
   friend std::ostream& operator<<(std::ostream& out, const LogEntry& entry) {
     out << "LogEntry{";
@@ -97,6 +103,8 @@ struct LogEntry {
 
 static_assert(sizeof(LogEntry) == LogEntry::FIXED_SIZE,
               "LogEntry::FIXED_SIZE must match its actual size");
+
+static_assert(offsetof(LogEntry, begin_vidx) == LogEntry::HEADER_SIZE);
 
 /**
  * Points to the head of a linked list of LogEntry

@@ -1,10 +1,10 @@
 #pragma once
 
-#include "alloc.h"
+#include "alloc/alloc.h"
 #include "block/tx.h"
 #include "idx.h"
 #include "mem_table.h"
-#include "timer.h"
+#include "utils/timer.h"
 
 namespace ulayfs::dram {
 
@@ -24,6 +24,8 @@ struct TxCursor {
   TxCursor() : idx(), addr(nullptr) {}
   TxCursor(TxEntryIdx idx, void* addr) : idx(idx), addr(addr) {}
 
+  static TxCursor from_meta(pmem::MetaBlock* meta) { return {{}, meta}; }
+
   /**
    * @return the tx entry pointed to by this cursor
    */
@@ -37,12 +39,104 @@ struct TxCursor {
   }
 
   /**
-   * try to append an entry to a slot in an array of TxEntry; fail if the slot
-   * is taken (likely due to a race condition)
+   * If the given cursor is in an overflow state, update it if allowed.
    *
-   * @param entries a pointer to an array of tx entries
-   * @param entry the entry to append
-   * @param hint hint to start the search
+   * @param[in] allocator allocator to allocate new blocks
+   * @param[in] mem_table used to find the memory address of the next block
+   * @param[out] into_new_block if not nullptr, return whether the cursor is
+   * advanced into a new tx block (i.e. previously, it is in an overflow state)
+   * @return true if the idx is not in overflow state; false otherwise
+   */
+  bool handle_overflow(MemTable* mem_table, Allocator* allocator = nullptr,
+                       bool* into_new_block = nullptr) {
+    const bool is_inline = idx.is_inline();
+    uint16_t capacity = idx.get_capacity();
+    if (unlikely(idx.local_idx >= capacity)) {
+      if (into_new_block) *into_new_block = true;
+      LogicalBlockIdx block_idx = idx.is_inline() ? meta->get_next_tx_block()
+                                                  : block->get_next_tx_block();
+      if (block_idx == 0) {
+        if (!allocator) return false;
+        const auto& [new_block_idx, new_block] =
+            is_inline ? allocator->tx_block.alloc_next(meta)
+                      : allocator->tx_block.alloc_next(block);
+        idx.block_idx = new_block_idx;
+        block = new_block;
+        idx.local_idx -= capacity;
+      } else {
+        idx.block_idx = block_idx;
+        idx.local_idx -= capacity;
+        block = &mem_table->lidx_to_addr_rw(idx.block_idx)->tx_block;
+      }
+    } else {
+      if (into_new_block) *into_new_block = false;
+    }
+    return true;
+  }
+
+  /**
+   * Advance cursor to the next transaction entry
+   *
+   * @param[in] cursor the cursor to advance
+   * @param[in] allocator if given, allocate new blocks when reaching the end of
+   * a block
+   * @param[out] into_new_block if not nullptr, return whether the cursor is
+   * advanced into a new tx block
+   *
+   * @return true on success; false when reaches the end of a block and
+   * allocator is not given. The advance would happen anyway but in the case
+   * of false, it is in a overflow state
+   */
+  bool advance(MemTable* mem_table, Allocator* allocator = nullptr,
+               bool* into_new_block = nullptr) {
+    idx.local_idx++;
+    return handle_overflow(mem_table, allocator, into_new_block);
+  }
+
+  /**
+   * Try to commit a tx entry to the current cursor
+   *
+   * @param entry entry to commit
+   * @param mem_table used to find the memory address of the next block and the
+   * meta block
+   * @param allocator used to allocate new tx blocks on overflow
+   * @return empty entry on success; conflict entry otherwise
+   */
+  pmem::TxEntry try_commit(pmem::TxEntry entry, MemTable* mem_table,
+                           Allocator* allocator) {
+    this->handle_overflow(mem_table, allocator);
+
+    if (pmem::TxEntry::need_flush(this->idx.local_idx)) {
+      pmem::MetaBlock* meta = mem_table->get_meta();
+      TxCursor::flush_up_to(mem_table, meta, *this);
+      meta->set_flushed_tx_tail(this->idx);
+    }
+
+    return this->try_append(entry);
+  }
+
+  /**
+   * Flush from the tail recorded in the meta block to `end`
+   * @param mem_table used to find the memory address of the next block
+   * @param meta the meta block used to find the flushed tx tail
+   * @param end the end of the range to flush
+   */
+  static void flush_up_to(MemTable* mem_table, pmem::MetaBlock* meta,
+                          TxCursor end) {
+    TxEntryIdx begin_idx = meta->get_flushed_tx_tail();
+    void* addr =
+        begin_idx.is_inline()
+            ? static_cast<void*>(meta)
+            : mem_table->lidx_to_addr_rw(begin_idx.block_idx)->data_rw();
+
+    flush_range(mem_table, TxCursor(begin_idx, addr), end);
+  }
+
+ private:
+  /**
+   * try to append a tx entry to the location pointer by the cursor; fail if the
+   * slot is taken (likely due to a race condition)
+   *
    * @return if success, return 0; otherwise, return the entry on the slot
    */
   [[nodiscard]] pmem::TxEntry try_append(pmem::TxEntry entry) const {
@@ -57,63 +151,6 @@ struct TxCursor {
     // if CAS fails, `expected` will be stored the value in entries[idx]
     // if success, it will return 0
     return expected;
-  }
-
-  /**
-   * If the given cursor is in an overflow state, update it if allowed.
-   *
-   * @param allocator allocator to allocate new blocks
-   * @param mem_table used to find the memory address of the next block
-   * @return true if the idx is not in overflow state; false otherwise
-   */
-  bool handle_overflow(MemTable* mem_table, Allocator* allocator = nullptr) {
-    const bool is_inline = idx.is_inline();
-    uint16_t capacity = idx.get_capacity();
-    if (unlikely(idx.local_idx >= capacity)) {
-      LogicalBlockIdx block_idx =
-          is_inline ? meta->get_next_tx_block() : block->get_next_tx_block();
-      if (block_idx == 0) {
-        if (!allocator) return false;
-        const auto& [new_block_idx, new_block] =
-            is_inline ? allocator->alloc_next_tx_block(meta)
-                      : allocator->alloc_next_tx_block(block);
-        idx.block_idx = new_block_idx;
-        block = new_block;
-        idx.local_idx -= capacity;
-      } else {
-        idx.block_idx = block_idx;
-        idx.local_idx -= capacity;
-        block = &mem_table->lidx_to_addr_rw(idx.block_idx)->tx_block;
-      }
-    }
-    return true;
-  }
-
-  /**
-   * Advance cursor to the next transaction entry
-   *
-   * @param cursor the cursor to advance
-   * @param allocator if given, allocate new blocks when reaching the end of
-   * a block
-   *
-   * @return true on success; false when reaches the end of a block and
-   * allocator is not given. The advance would happen anyway but in the case
-   * of false, it is in a overflow state
-   */
-  bool advance(MemTable* mem_table, Allocator* allocator = nullptr) {
-    idx.local_idx++;
-    return handle_overflow(mem_table, allocator);
-  }
-
-  static void flush_up_to(MemTable* mem_table, TxCursor end) {
-    pmem::MetaBlock* meta = mem_table->get_meta();
-    TxEntryIdx begin_idx = meta->get_tx_tail();
-    void* addr =
-        begin_idx.is_inline()
-            ? static_cast<void*>(meta)
-            : mem_table->lidx_to_addr_rw(begin_idx.block_idx)->data_rw();
-
-    flush_range(mem_table, TxCursor(begin_idx, addr), end);
   }
 
   static void flush_range(MemTable* mem_table, TxCursor begin, TxCursor end) {
@@ -174,6 +211,7 @@ struct TxCursor {
     return cursor;
   }
 
+ public:
   friend bool operator==(const TxCursor& lhs, const TxCursor& rhs) {
     return lhs.idx == rhs.idx && lhs.block == rhs.block;
   }

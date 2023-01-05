@@ -1,8 +1,9 @@
 #pragma once
 
+#include "cursor/log.h"
 #include "file.h"
 #include "mgr.h"
-#include "timer.h"
+#include "utils/timer.h"
 
 namespace ulayfs::dram {
 
@@ -28,6 +29,8 @@ class Tx {
   // pointer to the outer class
   File* file;
   TxMgr* tx_mgr;
+  MemTable* mem_table;
+  Allocator* allocator;  // local
 
   /*
    * Input properties
@@ -62,6 +65,8 @@ class Tx {
   Tx(File* file, TxMgr* tx_mgr, size_t count, size_t offset)
       : file(file),
         tx_mgr(tx_mgr),
+        mem_table(tx_mgr->mem_table),
+        allocator(file->get_local_allocator()),
 
         // input properties
         count(count),
@@ -81,7 +86,7 @@ class Tx {
   static ssize_t exec_and_release_offset(Params&&... params) {
     TX tx(std::forward<Params>(params)...);
     ssize_t ret = tx.exec();
-    tx.tx_mgr->offset_mgr.release_offset(tx.ticket, tx.state.cursor);
+    tx.tx_mgr->offset_mgr->release(tx.ticket, tx.state.cursor);
     return ret;
   }
 
@@ -96,13 +101,16 @@ class Tx {
    * @param[in] first_vidx the first block's virtual idx; ignored if !copy_first
    * @param[in] last_vidx the last block's virtual idx; ignored if !copy_last
    * @param[out] conflict_image a list of lidx that conflict with the current tx
+   * @param[out] into_new_block if not nullptr, return whether the cursor has
+   * been advanced into a new tx block
    * @return true if there exits conflict and requires redo
    */
   bool handle_conflict(pmem::TxEntry curr_entry, VirtualBlockIdx first_vidx,
                        VirtualBlockIdx last_vidx,
-                       std::vector<LogicalBlockIdx>& conflict_image) {
+                       std::vector<LogicalBlockIdx>& conflict_image,
+                       bool* into_new_block = nullptr) {
     bool has_conflict = false;
-
+    if (into_new_block) *into_new_block = false;
     do {
       if (curr_entry.is_inline()) {  // inline tx entry
         has_conflict |= get_conflict_image(
@@ -115,41 +123,40 @@ class Tx {
         if (possible_file_size > state.file_size)
           state.file_size = possible_file_size;
       } else {  // non-inline tx entry
-        auto [curr_le_entry, curr_le_block] = tx_mgr->get_log_entry(
-            curr_entry.indirect_entry.get_log_entry_idx());
+        LogCursor log_cursor(curr_entry.indirect_entry, mem_table);
 
-        while (true) {
+        do {
           uint32_t i;
-          for (i = 0; i < curr_le_entry->get_lidxs_len() - 1; ++i) {
+          for (i = 0; i < log_cursor->get_lidxs_len() - 1; ++i) {
             has_conflict |= get_conflict_image(
                 first_vidx, last_vidx,
-                curr_le_entry->begin_vidx +
+                log_cursor->begin_vidx +
                     (i << BITMAP_ENTRY_BLOCKS_CAPACITY_SHIFT),
-                curr_le_entry->begin_lidxs[i], BITMAP_ENTRY_BLOCKS_CAPACITY,
+                log_cursor->begin_lidxs[i], BITMAP_ENTRY_BLOCKS_CAPACITY,
                 conflict_image);
           }
           has_conflict |= get_conflict_image(
               first_vidx, last_vidx,
-              curr_le_entry->begin_vidx +
+              log_cursor->begin_vidx +
                   (i << BITMAP_ENTRY_BLOCKS_CAPACITY_SHIFT),
-              curr_le_entry->begin_lidxs[i],
-              curr_le_entry->get_last_lidx_num_blocks(), conflict_image);
-          VirtualBlockIdx end_vidx = curr_le_entry->begin_vidx +
+              log_cursor->begin_lidxs[i],
+              log_cursor->get_last_lidx_num_blocks(), conflict_image);
+          VirtualBlockIdx end_vidx = log_cursor->begin_vidx +
                                      (i << BITMAP_ENTRY_BLOCKS_CAPACITY_SHIFT) +
-                                     curr_le_entry->get_last_lidx_num_blocks();
+                                     log_cursor->get_last_lidx_num_blocks();
           uint64_t possible_file_size =
-              BLOCK_IDX_TO_SIZE(end_vidx) - curr_le_entry->leftover_bytes;
+              BLOCK_IDX_TO_SIZE(end_vidx) - log_cursor->leftover_bytes;
           if (possible_file_size > state.file_size)
             state.file_size = possible_file_size;
 
-          const auto& [next_le_entry, next_le_block] =
-              tx_mgr->get_next_log_entry(curr_le_entry, curr_le_block);
-          if (next_le_entry == nullptr) break;
-          curr_le_entry = next_le_entry;
-          curr_le_block = next_le_block;
-        }
+        } while (log_cursor.advance(mem_table));
       }
-      if (!state.cursor.advance(tx_mgr->mem_table)) break;
+      // only update into_new_block if it is not nullptr and not set true yet
+      if (!state.cursor.advance(
+              mem_table,
+              /*allocator=*/nullptr,
+              into_new_block && !*into_new_block ? into_new_block : nullptr))
+        break;
       curr_entry = state.cursor.get_entry();
     } while (curr_entry.is_valid());
 

@@ -5,7 +5,7 @@
 
 #include "common.h"
 
-constexpr auto NUM_BYTES = 128;
+constexpr auto NUM_BYTES = 32;
 constexpr auto BYTES_PER_THREAD = 2;
 
 const char* filepath = get_filepath();

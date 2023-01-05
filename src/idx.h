@@ -27,6 +27,9 @@ class BaseIdx {
 
  public:
   using numeric_type = T;
+  static constexpr BaseIdx<T, D> max() {
+    return BaseIdx<T, D>(std::numeric_limits<T>::max());
+  }
 
   BaseIdx(T i) : idx(i) {}
   BaseIdx& operator=(const T& i) {

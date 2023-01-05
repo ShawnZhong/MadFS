@@ -3,15 +3,21 @@
 #include <atomic>
 #include <cassert>
 #include <cstring>
+#include <ostream>
+#include <unordered_set>
 
 #include "const.h"
 #include "entry.h"
 #include "idx.h"
-#include "logging.h"
-#include "utils.h"
+#include "utils/logging.h"
+#include "utils/utils.h"
 
 namespace ulayfs::dram {
 struct TxCursor;
+}
+
+namespace ulayfs::utility {
+class GarbageCollector;
 }
 
 namespace ulayfs::pmem {
@@ -20,12 +26,21 @@ class TxBlock : public noncopyable {
   std::atomic<TxEntry> tx_entries[NUM_TX_ENTRY_PER_BLOCK];
   // next is placed after tx_entires so that it could be flushed with tx_entries
   std::atomic<LogicalBlockIdx> next;
-  // seq is used to construct total order between tx entries, so it must
+  // orphan blocks are organized as an orphan list, which will be recycled
+  // once they are not referenced
+  // if this tx block is the latest, this field must be 0.
+  std::atomic<LogicalBlockIdx> next_orphan;
+
+  // tx seq is used to construct total order between tx entries, so it must
   // increase monotonically
   // when compare two TxEntryIdx
   // if within same block, compare local index
   // if not, compare their block's seq number
   uint32_t tx_seq;
+  // unused uint32_t for padding
+  uint32_t unused;
+
+  friend utility::GarbageCollector;
 
  public:
   [[nodiscard]] TxLocalIdx find_tail(TxLocalIdx hint = 0) const {
@@ -37,9 +52,15 @@ class TxBlock : public noncopyable {
     tx_entries[idx].store(entry, std::memory_order_relaxed);
   }
 
-  // it should be fine not to use any fence since there will be fence for flush
-  void set_tx_seq(uint32_t seq) { tx_seq = seq; }
-  [[nodiscard]] uint32_t get_tx_seq() const { return tx_seq; }
+  void set_tx_seq(uint32_t tx_seq) {
+    assert(tx_seq > 0);  // 0 is an invalid tx_seq
+    this->tx_seq = tx_seq;
+  }
+
+  [[nodiscard]] uint32_t get_tx_seq() const {
+    assert(tx_seq > 0);
+    return tx_seq;
+  }
 
   [[nodiscard]] LogicalBlockIdx get_next_tx_block() const {
     return next.load(std::memory_order_acquire);
@@ -54,6 +75,15 @@ class TxBlock : public noncopyable {
     return next.compare_exchange_strong(expected, block_idx,
                                         std::memory_order_acq_rel,
                                         std::memory_order_acquire);
+  }
+
+  [[nodiscard]] LogicalBlockIdx get_next_orphan_block() const {
+    return next_orphan.load(std::memory_order_acquire);
+  }
+
+  void set_next_orphan_block(LogicalBlockIdx block_idx) {
+    next_orphan.store(block_idx, std::memory_order_release);
+    persist_cl_unfenced(&next_orphan);
   }
 
   /**
@@ -79,6 +109,12 @@ class TxBlock : public noncopyable {
   }
 
   friend struct ::ulayfs::dram::TxCursor;
+
+  friend std::ostream &operator<<(std::ostream &os, const TxBlock &block) {
+    os << "TxBlock{tx_seq=" << block.tx_seq << ", next=" << block.next
+       << ", next_orphan=" << block.next_orphan << "}";
+    return os;
+  }
 };
 
 static_assert(sizeof(TxBlock) == BLOCK_SIZE,

@@ -9,30 +9,28 @@
 #include <cstring>
 #include <iomanip>
 
-#include "alloc.h"
+#include "alloc/alloc.h"
 #include "config.h"
 #include "idx.h"
 #include "shm.h"
-#include "timer.h"
-#include "utils.h"
+#include "utils/timer.h"
+#include "utils/utils.h"
 
 namespace ulayfs::dram {
 
 File::File(int fd, const struct stat& stat, int flags,
-           const char* pathname [[maybe_unused]], bool guard)
+           const char* pathname [[maybe_unused]])
     : mem_table(fd, stat.st_size, (flags & O_ACCMODE) == O_RDONLY),
-      tx_mgr(this, &mem_table),
-      blk_table(&mem_table, &tx_mgr),
+      offset_mgr(),
+      tx_mgr(this, &mem_table, &offset_mgr),
+      blk_table(&mem_table),
+      shm_mgr(fd, stat, mem_table.get_meta()),
       meta(mem_table.get_meta()),
       fd(fd),
       can_read((flags & O_ACCMODE) == O_RDONLY ||
                (flags & O_ACCMODE) == O_RDWR),
       can_write((flags & O_ACCMODE) == O_WRONLY ||
                 (flags & O_ACCMODE) == O_RDWR) {
-  // lock the file to prevent gc before proceeding
-  // the lock will be released only at close
-  if (guard) flock_guard(fd);
-
   pthread_spin_init(&spinlock, PTHREAD_PROCESS_PRIVATE);
   if (stat.st_size == 0) meta->init();
 
@@ -41,7 +39,7 @@ File::File(int fd, const struct stat& stat, int flags,
 
   // only open shared memory if we may write
   if (can_write) {
-    bitmap_mgr.entries = static_cast<BitmapEntry*>(shm_mgr.init(fd, stat));
+    bitmap_mgr.entries = static_cast<BitmapEntry*>(shm_mgr.get_bitmap_addr());
 
     // The first bit corresponds to the meta block which should always be set
     // to 1. If it is not, then bitmap needs to be initialized.
@@ -60,8 +58,7 @@ File::File(int fd, const struct stat& stat, int flags,
 
   if (!file_size_updated) file_size = blk_table.update();
 
-  if (flags & O_APPEND)
-    tx_mgr.offset_mgr.seek_absolute(static_cast<off_t>(file_size));
+  if (flags & O_APPEND) offset_mgr.seek_absolute(static_cast<off_t>(file_size));
   if constexpr (BuildOptions::debug) {
     path = strdup(pathname);
   }
@@ -125,15 +122,14 @@ off_t File::lseek(off_t offset, int whence) {
 
   switch (whence) {
     case SEEK_SET:
-      ret = tx_mgr.offset_mgr.seek_absolute(offset);
+      ret = offset_mgr.seek_absolute(offset);
       break;
     case SEEK_CUR:
-      ret = tx_mgr.offset_mgr.seek_relative(offset);
+      ret = offset_mgr.seek_relative(offset);
       if (ret == -1) errno = EINVAL;
       break;
     case SEEK_END:
-      ret = tx_mgr.offset_mgr.seek_absolute(static_cast<off_t>(file_size) +
-                                            offset);
+      ret = offset_mgr.seek_absolute(static_cast<off_t>(file_size) + offset);
       break;
     case SEEK_DATA:
     case SEEK_HOLE:
@@ -147,7 +143,7 @@ off_t File::lseek(off_t offset, int whence) {
 }
 
 void* File::mmap(void* addr_hint, size_t length, int prot, int mmap_flags,
-                 size_t offset) {
+                 size_t offset) const {
   if (offset % BLOCK_SIZE != 0) {
     errno = EINVAL;
     return MAP_FAILED;
@@ -216,7 +212,7 @@ error:
 int File::fsync() {
   FileState state;
   this->update(&state);
-  TxCursor::flush_up_to(&mem_table, state.cursor);
+  TxCursor::flush_up_to(&mem_table, meta, state.cursor);
   // we keep an invariant that tx_tail must be a valid (non-overflow) idx
   // an overflow index implies that the `next` pointer of the block is not set
   // (and thus not flushed) yet, so we cannot assume it is equivalent to the
@@ -225,7 +221,7 @@ int File::fsync() {
   uint16_t capacity = state.cursor.idx.get_capacity();
   if (unlikely(state.cursor.idx.local_idx >= capacity))
     state.cursor.idx.local_idx = static_cast<uint16_t>(capacity - 1);
-  meta->set_tx_tail(state.cursor.idx);
+  meta->set_flushed_tx_tail(state.cursor.idx);
   return 0;
 }
 
@@ -242,10 +238,10 @@ Allocator* File::get_local_allocator() {
     return &it->second;
   }
 
-  size_t shm_thread_idx = shm_mgr.get_next_shm_thread_idx();
-
   auto [it, ok] = allocators.emplace(
-      tid, Allocator(&mem_table, &bitmap_mgr, &shm_mgr, shm_thread_idx));
+      std::piecewise_construct, std::forward_as_tuple(tid),
+      std::forward_as_tuple(&mem_table, &bitmap_mgr,
+                            shm_mgr.alloc_per_thread_data()));
   PANIC_IF(!ok, "insert to thread-local allocators failed");
   return &it->second;
 }
@@ -264,6 +260,7 @@ std::ostream& operator<<(std::ostream& out, const File& f) {
   if (f.can_write) {
     out << f.bitmap_mgr;
   }
+  out << f.offset_mgr;
   out << f.tx_mgr;
   out << "\n";
   __msan_scoped_enable_interceptor_checks();

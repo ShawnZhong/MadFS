@@ -28,10 +28,7 @@ struct NopLock {
 struct MutexLock {
   pthread_mutex_t mutex;
   MutexLock() {  // NOLINT(cppcoreguidelines-pro-type-member-init)
-    pthread_mutexattr_t attr;
-    pthread_mutexattr_init(&attr);
-    pthread_mutexattr_setrobust(&attr, PTHREAD_MUTEX_ROBUST);
-    pthread_mutex_init(&mutex, &attr);
+    init_robust_mutex(&mutex);
   }
   ~MutexLock() { pthread_mutex_destroy(&mutex); }
   void rdlock() { pthread_mutex_lock(&mutex); };

@@ -10,7 +10,7 @@
 #include "entry.h"
 #include "idx.h"
 #include "posix.h"
-#include "utils.h"
+#include "utils/utils.h"
 
 namespace ulayfs::dram {
 struct TxCursor;
@@ -29,20 +29,21 @@ class MetaBlock : public noncopyable {
       // file signature
       char signature[SIGNATURE_SIZE];
 
-      // hint to find tx log tail; not necessarily up-to-date
       // all tx entries before it must be flushed
-      std::atomic<TxEntryIdx> tx_tail;
+      std::atomic<TxEntryIdx> flushed_tx_tail;
+      static_assert(std::atomic<TxEntryIdx>::is_always_lock_free);
 
       // if inline tx_entries are used up, this points to the next log block
       std::atomic<LogicalBlockIdx> next_tx_block;
+
+      // orphan but not yet freed tx blocks are organized as a linked list;
+      // these blocks are freed once they are not referenced by others
+      std::atomic<LogicalBlockIdx> next_orphan_block;
     } cl1_meta;
 
     // padding avoid cache line contention
     char cl1[CACHELINE_SIZE];
   };
-
-  static_assert(std::atomic<TxEntryIdx>::is_always_lock_free,
-                "cl1_meta.tx_tail must be lock-free");
 
   static_assert(sizeof(cl1_meta) <= CACHELINE_SIZE);
 
@@ -77,10 +78,7 @@ class MetaBlock : public noncopyable {
    */
   void init() {
     // initialize the mutex
-    pthread_mutexattr_t attr;
-    pthread_mutexattr_init(&attr);
-    pthread_mutexattr_setrobust(&attr, PTHREAD_MUTEX_ROBUST);
-    pthread_mutex_init(&cl2_meta.mutex, &attr);
+    init_robust_mutex(&cl2_meta.mutex);
 
     // initialize the signature
     memcpy(cl1_meta.signature, FILE_SIGNATURE, SIGNATURE_SIZE);
@@ -130,6 +128,10 @@ class MetaBlock : public noncopyable {
                            sizeof(cl2_meta.num_logical_blocks));
   }
 
+  [[nodiscard]] uint32_t get_num_logical_blocks() const {
+    return cl2_meta.num_logical_blocks.load(std::memory_order_acquire);
+  }
+
   [[nodiscard]] static uint32_t get_tx_seq() { return 0; }
 
   /**
@@ -149,17 +151,35 @@ class MetaBlock : public noncopyable {
     persist_cl_unfenced(&cl1_meta);
   }
 
+  [[nodiscard]] LogicalBlockIdx get_next_tx_block() const {
+    return cl1_meta.next_tx_block.load(std::memory_order_acquire);
+  }
+
+  void set_next_orphan_block(LogicalBlockIdx block_idx) {
+    cl1_meta.next_orphan_block.store(block_idx, std::memory_order_release);
+    persist_cl_unfenced(&cl1_meta);
+  }
+
+  [[nodiscard]] LogicalBlockIdx get_next_orphan_block() const {
+    return cl1_meta.next_orphan_block.load(std::memory_order_acquire);
+  }
+
   /**
-   * Set the tx tail
+   * Set the flushed tx tail
    * tx_tail is mostly just a hint, so it's fine to be not up-to-date; thus by
    * default, we don't do concurrency control and no fence by default
    *
    * @param tx_tail tail value to set
    * @param fenced whether use fence
    */
-  void set_tx_tail(TxEntryIdx tx_tail) {
-    cl1_meta.tx_tail.store(tx_tail, std::memory_order_relaxed);
-    VALGRIND_PMC_SET_CLEAN(&cl1_meta.tx_tail, sizeof(cl1_meta.tx_tail));
+  void set_flushed_tx_tail(TxEntryIdx flushed_tx_tail) {
+    cl1_meta.flushed_tx_tail.store(flushed_tx_tail, std::memory_order_relaxed);
+    VALGRIND_PMC_SET_CLEAN(&cl1_meta.flushed_tx_tail,
+                           sizeof(cl1_meta.flushed_tx_tail));
+  }
+
+  [[nodiscard]] TxEntryIdx get_flushed_tx_tail() const {
+    return cl1_meta.flushed_tx_tail.load(std::memory_order_relaxed);
   }
 
   /**
@@ -182,18 +202,6 @@ class MetaBlock : public noncopyable {
   void flush_tx_entries(TxLocalIdx begin_idx, TxLocalIdx end_idx) {
     persist_unfenced(&tx_entries[begin_idx],
                      sizeof(TxEntry) * (end_idx - begin_idx));
-  }
-
-  [[nodiscard]] uint32_t get_num_logical_blocks() const {
-    return cl2_meta.num_logical_blocks.load(std::memory_order_acquire);
-  }
-
-  [[nodiscard]] LogicalBlockIdx get_next_tx_block() const {
-    return cl1_meta.next_tx_block.load(std::memory_order_acquire);
-  }
-
-  [[nodiscard]] TxEntryIdx get_tx_tail() const {
-    return cl1_meta.tx_tail.load(std::memory_order_relaxed);
   }
 
   /*
@@ -220,7 +228,8 @@ class MetaBlock : public noncopyable {
     out << "\tnext_tx_block: "
         << block.cl1_meta.next_tx_block.load(std::memory_order_acquire) << "\n";
     out << "\ttx_tail: "
-        << block.cl1_meta.tx_tail.load(std::memory_order_acquire) << "\n";
+        << block.cl1_meta.flushed_tx_tail.load(std::memory_order_acquire)
+        << "\n";
     return out;
   }
 };

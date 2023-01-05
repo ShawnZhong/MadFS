@@ -1,15 +1,15 @@
 #include <cstring>
 
-#include "alloc.h"
+#include "alloc/alloc.h"
 #include "bitmap.h"
 #include "block/block.h"
 #include "const.h"
 #include "entry.h"
 #include "file.h"
 #include "idx.h"
-#include "persist.h"
 #include "posix.h"
-#include "utils.h"
+#include "utils/persist.h"
+#include "utils/utils.h"
 
 namespace ulayfs::utility {
 
@@ -29,7 +29,7 @@ class Converter {
     PANIC_IF(ret, "Fail to fstat");
 
     if (stat_buf.st_size == 0) {
-      dram::File* file = new dram::File(fd, stat_buf, O_RDWR, pathname, false);
+      dram::File* file = new dram::File(fd, stat_buf, O_RDWR, pathname);
       // release exclusive lock and acquire shared lock
       release_flock(fd);
       flock_guard(fd);
@@ -62,9 +62,9 @@ class Converter {
 
     // first mark all these blocks as used, so that they won't be occupied by
     // allocator when preparing log entries
-    dram::File* file = new dram::File(fd, stat_buf, O_RDWR, pathname, false);
+    dram::File* file = new dram::File(fd, stat_buf, O_RDWR, pathname);
     dram::Allocator* allocator = file->get_local_allocator();
-    allocator->return_free_list();
+    allocator->block.return_free_list();
     uint32_t num_bitmaps_full =
         (num_blocks + 1) >> BITMAP_ENTRY_BLOCKS_CAPACITY_SHIFT;
     uint32_t num_bits_left = (num_blocks + 1) % BITMAP_ENTRY_BLOCKS_CAPACITY;
@@ -73,22 +73,23 @@ class Converter {
     for (uint32_t i = 0; i < num_bits_left; ++i)
       file->bitmap_mgr.entries[num_bitmaps_full].set_allocated(i);
 
+    dram::MemTable* mem_table = &file->mem_table;
     dram::TxCursor tx_cursor{};
     bool need_le_block = false;
 
     // handle special case with only one block
     if (num_blocks == 1) {
       if (leftover_bytes == 0)
-        file->tx_mgr.try_commit(
+        tx_cursor.try_commit(
             pmem::TxEntryInline(/*num_blocks*/ 1, /*begin_vidx*/ 0,
                                 /*begin_lidx*/ 1),
-            &tx_cursor);
+            mem_table, allocator);
       else {
-        auto log_entry_idx = file->tx_mgr.append_log_entry(
-            allocator, pmem::LogEntry::Op::LOG_OVERWRITE, leftover_bytes,
+        dram::LogCursor log_cursor = allocator->log_entry.append(
+            pmem::LogEntry::Op::LOG_OVERWRITE, leftover_bytes,
             /*total_blocks*/ 1, /*begin_vidx*/ 0, /*begin_lidxs*/ {1});
-        file->tx_mgr.try_commit(pmem::TxEntryIndirect(log_entry_idx),
-                                &tx_cursor);
+        tx_cursor.try_commit(pmem::TxEntryIndirect(log_cursor.idx), mem_table,
+                             allocator);
       }
       goto done;
     }
@@ -96,16 +97,17 @@ class Converter {
     // can we inline the mapping of the first virtual block?
     if (pmem::TxEntryInline::can_inline(/*num_blocks*/ 1, /*begin_vidx*/ 0,
                                         /*begin_lidx*/ num_blocks)) {
-      file->tx_mgr.try_commit(pmem::TxEntryInline(1, 0, num_blocks),
-                              &tx_cursor);
+      tx_cursor.try_commit(pmem::TxEntryInline(1, 0, num_blocks), mem_table,
+                           allocator);
     } else {
       need_le_block = true;
-      auto log_entry_idx = file->tx_mgr.append_log_entry(
-          allocator, pmem::LogEntry::Op::LOG_OVERWRITE, /*leftover_bytes*/ 0,
+      dram::LogCursor log_cursor = allocator->log_entry.append(
+          pmem::LogEntry::Op::LOG_OVERWRITE, /*leftover_bytes*/ 0,
           /*total_blocks*/ 1, /*begin_vidx*/ 0, /*begin_lidxs*/ {num_blocks});
-      file->tx_mgr.try_commit(pmem::TxEntryIndirect(log_entry_idx), &tx_cursor);
+      tx_cursor.try_commit(pmem::TxEntryIndirect(log_cursor.idx), mem_table,
+                           allocator);
     }
-    tx_cursor.advance(&file->mem_table, allocator);
+    tx_cursor.advance(mem_table, allocator);
 
     // if it's not full block or MetaBlock does not have the capacity, we still
     // need LogEntryBlock
@@ -119,18 +121,19 @@ class Converter {
            begin_vidx += BITMAP_ENTRY_BLOCKS_CAPACITY) {
         uint32_t len = std::min(num_blocks - begin_vidx.get(),
                                 BITMAP_ENTRY_BLOCKS_CAPACITY);
-        file->tx_mgr.try_commit(
+        tx_cursor.try_commit(
             pmem::TxEntryInline(len, begin_vidx,
                                 LogicalBlockIdx(begin_vidx.get())),
-            &tx_cursor);
-        tx_cursor.advance(&file->mem_table, allocator);
+            mem_table, allocator);
+        tx_cursor.advance(mem_table, allocator);
       }
     } else {
-      auto log_entry_idx = file->tx_mgr.append_log_entry(
-          allocator, pmem::LogEntry::Op::LOG_OVERWRITE, leftover_bytes,
+      dram::LogCursor log_cursor = allocator->log_entry.append(
+          pmem::LogEntry::Op::LOG_OVERWRITE, leftover_bytes,
           /*total_blocks*/ num_blocks - 1, /*begin_vidx*/ 1,
           /*begin_lidxs*/ {1});
-      file->tx_mgr.try_commit(pmem::TxEntryIndirect(log_entry_idx), &tx_cursor);
+      tx_cursor.try_commit(pmem::TxEntryIndirect(log_cursor.idx), mem_table,
+                           allocator);
     }
 
   done:

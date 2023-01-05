@@ -32,6 +32,14 @@ class AlignedTx : public WriteTx {
     }
 
     {
+      TimerGuard<Event::ALIGNED_TX_UPDATE> timer_guard;
+      if (!is_offset_depend) file->update(&state, allocator);
+    }
+
+    if (allocator->tx_block.get_pinned_idx() != state.get_tx_block_idx())
+      allocator->log_entry.reset();
+
+    {
       TimerGuard<Event::ALIGNED_TX_PREPARE> timer_guard;
       // for aligned tx, `leftover_bytes` is always zero, so we don't need to
       // know file size before prepare commit entry. thus, we move it before
@@ -41,14 +49,6 @@ class AlignedTx : public WriteTx {
     }
 
     {
-      TimerGuard<Event::ALIGNED_TX_UPDATE> timer_guard;
-      if (!is_offset_depend) file->update(&state, allocator);
-    }
-
-    // for an aligned tx, leftover_bytes must be zero, so there is no need to
-    // validate whether we falsely assume this tx can be inline
-
-    {
       TimerGuard<Event::ALIGNED_TX_RECYCLE> timer_guard;
       for (uint32_t i = 0; i < num_blocks; ++i)
         recycle_image[i] = file->vidx_to_lidx(begin_vidx + i);
@@ -56,34 +56,45 @@ class AlignedTx : public WriteTx {
 
     {
       TimerGuard<Event::ALIGNED_TX_WAIT_OFFSET> timer_guard;
-      if (is_offset_depend) tx_mgr->offset_mgr.wait_offset(ticket);
+      if (is_offset_depend) tx_mgr->offset_mgr->wait(ticket);
     }
 
     if constexpr (BuildOptions::cc_occ) {
       TimerGuard<Event::ALIGNED_TX_COMMIT> timer_guard;
       while (true) {
         pmem::TxEntry conflict_entry =
-            tx_mgr->try_commit(commit_entry, &state.cursor);
+            state.cursor.try_commit(commit_entry, mem_table, allocator);
         if (!conflict_entry.is_valid()) break;
 
+        bool into_new_block = false;
         // we don't check the return value of handle_conflict here because we
         // don't care whether there is a conflict, as long as recycle_image gets
         // updated
-        handle_conflict(conflict_entry, begin_vidx, end_vidx - 1,
-                        recycle_image);
+        handle_conflict(conflict_entry, begin_vidx, end_vidx - 1, recycle_image,
+                        commit_entry.is_inline() ? nullptr : &into_new_block);
+        if (into_new_block) {
+          assert(!commit_entry.is_inline());
+          allocator->log_entry.free(log_cursor);
+          allocator->log_entry.reset();
+          // re-prepare (incl. append new log entries)
+          prepare_commit_entry(/*skip_update_leftover_bytes*/ true);
+        }
         // aligned transaction will never have leftover bytes, so no need to
         // recheck commit_entry
       }
     } else {
       TimerGuard<Event::ALIGNED_TX_COMMIT> timer_guard;
-      tx_mgr->try_commit(commit_entry, &state.cursor);
+      state.cursor.try_commit(commit_entry, mem_table, allocator);
     }
 
     {
       TimerGuard<Event::ALIGNED_TX_FREE> timer_guard;
       // recycle the data blocks being overwritten
-      allocator->free(recycle_image);
+      allocator->block.free(recycle_image);
     }
+
+    // update the pinned tx block
+    allocator->tx_block.pin(state.get_tx_block_idx());
 
     timer.stop<Event::ALIGNED_TX_EXEC>();
 

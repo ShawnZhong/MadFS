@@ -1,20 +1,19 @@
 #include "mgr.h"
 
-#include <cassert>
 #include <cmath>
 #include <cstddef>
 #include <vector>
 
-#include "alloc.h"
+#include "alloc/alloc.h"
 #include "const.h"
+#include "cursor/tx_block.h"
+#include "cursor/tx_entry.h"
 #include "entry.h"
 #include "file.h"
 #include "idx.h"
-#include "tx/cursor.h"
 #include "tx/read.h"
 #include "tx/write_aligned.h"
 #include "tx/write_unaligned.h"
-#include "utils.h"
 
 namespace ulayfs::dram {
 
@@ -85,142 +84,60 @@ ssize_t TxMgr::do_write(const char* buf, size_t count) {
   }
 }
 
-std::tuple<pmem::LogEntry*, pmem::LogEntryBlock*> TxMgr::get_log_entry(
-    LogEntryIdx idx, BitmapMgr* bitmap_mgr) const {
-  if (bitmap_mgr) bitmap_mgr->set_allocated(idx.block_idx);
-  pmem::LogEntryBlock* curr_block =
-      &mem_table->lidx_to_addr_rw(idx.block_idx)->log_entry_block;
-  return {curr_block->get(idx.local_offset), curr_block};
-}
-
-[[nodiscard]] std::tuple<pmem::LogEntry*, pmem::LogEntryBlock*>
-TxMgr::get_next_log_entry(const pmem::LogEntry* curr_entry,
-                          pmem::LogEntryBlock* curr_block,
-                          BitmapMgr* bitmap_mgr) const {
-  // check if we are at the end of the linked list
-  if (!curr_entry->has_next) return {nullptr, nullptr};
-
-  // next entry is in the same block
-  if (curr_entry->is_next_same_block)
-    return {curr_block->get(curr_entry->next.local_offset), curr_block};
-
-  // move to the next block
-  LogicalBlockIdx next_block_idx = curr_entry->next.block_idx;
-  if (bitmap_mgr) bitmap_mgr->set_allocated(next_block_idx);
-  const auto next_block =
-      &mem_table->lidx_to_addr_rw(next_block_idx)->log_entry_block;
-  // if the next entry is on another block, it must be from the first byte
-  return {next_block->get(0), next_block};
-}
-
-LogEntryIdx TxMgr::append_log_entry(
-    Allocator* allocator, pmem::LogEntry::Op op, uint16_t leftover_bytes,
-    uint32_t num_blocks, VirtualBlockIdx begin_vidx,
-    const std::vector<LogicalBlockIdx>& begin_lidxs) const {
-  const auto& [first_entry, first_idx, first_block] =
-      allocator->alloc_log_entry(num_blocks);
-
-  pmem::LogEntry* curr_entry = first_entry;
-  pmem::LogEntryBlock* curr_block = first_block;
-
-  // i to iterate through begin_lidxs across entries
-  // j to iterate within each entry
-  uint32_t i, j;
-  i = 0;
-  while (true) {
-    curr_entry->op = op;
-    curr_entry->begin_vidx = begin_vidx;
-    for (j = 0; j < curr_entry->get_lidxs_len(); ++j)
-      curr_entry->begin_lidxs[j] = begin_lidxs[i + j];
-    const auto& [next_entry, next_block] =
-        get_next_log_entry(curr_entry, curr_block);
-    if (next_entry != nullptr) {
-      curr_entry->leftover_bytes = 0;
-      curr_entry->persist();
-      curr_entry = next_entry;
-      curr_block = next_block;
-      i += j;
-      begin_vidx += (j << BITMAP_ENTRY_BLOCKS_CAPACITY_SHIFT);
-    } else {  // last entry
-      curr_entry->leftover_bytes = leftover_bytes;
-      curr_entry->persist();
-      break;
-    }
-  }
-  return first_idx;
-}
-
-void TxMgr::update_log_entry_leftover_bytes(LogEntryIdx first_idx,
-                                            uint16_t leftover_bytes) const {
-  const auto& [first_entry, first_block] = get_log_entry(first_idx);
-  pmem::LogEntry* curr_entry = first_entry;
-  pmem::LogEntryBlock* curr_block = first_block;
-  while (true) {
-    const auto& [next_entry, next_block] =
-        get_next_log_entry(curr_entry, curr_block);
-    if (next_entry != nullptr) {
-      curr_entry = next_entry;
-      curr_block = next_block;
-    } else {
-      curr_entry->leftover_bytes = leftover_bytes;
-      curr_entry->persist();
-      break;
-    }
-  }
-}
-
-pmem::TxEntry TxMgr::try_commit(pmem::TxEntry entry, TxCursor* cursor) const {
-  cursor->handle_overflow(mem_table, file->get_local_allocator());
-
-  if (pmem::TxEntry::need_flush(cursor->idx.local_idx)) {
-    TxCursor::flush_up_to(mem_table, *cursor);
-    meta->set_tx_tail(cursor->idx);
-  }
-
-  return cursor->try_append(entry);
-}
-
 std::ostream& operator<<(std::ostream& out, const TxMgr& tx_mgr) {
-  out << tx_mgr.offset_mgr;
-  out << "Transactions: \n";
+  __msan_scoped_disable_interceptor_checks();
 
-  TxCursor cursor({}, tx_mgr.meta);
-  int count = 0;
+  {
+    out << "Transactions: \n";
 
-  while (true) {
-    auto tx_entry = cursor.get_entry();
-    if (!tx_entry.is_valid()) break;
-    if (tx_entry.is_dummy()) goto next;
+    TxCursor cursor = TxCursor::from_meta(tx_mgr.file->meta);
+    int count = 0;
 
-    count++;
-    if (count > 100) {
-      if (count % static_cast<int>(exp10(floor(log10(count)) - 1)) != 0)
-        goto next;
-    }
+    while (true) {
+      auto tx_entry = cursor.get_entry();
+      if (!tx_entry.is_valid()) break;
+      if (tx_entry.is_dummy()) goto next;
 
-    out << "\t" << count << ": " << cursor.idx << " -> " << tx_entry << "\n";
-
-    // print log entries if the tx is not inlined
-    if (!tx_entry.is_inline()) {
-      auto [curr_entry, curr_block] =
-          tx_mgr.get_log_entry(tx_entry.indirect_entry.get_log_entry_idx());
-      assert(curr_entry && curr_block);
-
-      while (true) {
-        out << "\t\t" << *curr_entry << "\n";
-        const auto& [next_entry, next_block] =
-            tx_mgr.get_next_log_entry(curr_entry, curr_block);
-        if (!next_entry) break;
-        curr_entry = next_entry;
-        curr_block = next_block;
+      count++;
+      if (count > 10) {
+        if (count % static_cast<int>(exp10(floor(log10(count)))) != 0)
+          goto next;
       }
+
+      out << "\t" << count << ": " << cursor.idx << " -> " << tx_entry << "\n";
+
+      // print log entries if the tx is not inlined
+      if (!tx_entry.is_inline()) {
+        LogCursor log_cursor(tx_entry.indirect_entry, tx_mgr.mem_table);
+        do {
+          out << "\t\t" << *log_cursor << "\n";
+        } while (log_cursor.advance(tx_mgr.mem_table));
+      }
+
+    next:
+      if (bool success = cursor.advance(tx_mgr.mem_table); !success) break;
     }
 
-  next:
-    if (bool success = cursor.advance(tx_mgr.mem_table); !success) break;
+    out << "\ttotal number of tx: " << count++ << "\n";
   }
 
-  out << "\ttotal = " << count++ << "\n";
+  {
+    out << "Tx Blocks: \n";
+    TxBlockCursor cursor(tx_mgr.file->meta);
+    while (cursor.advance_to_next_block(tx_mgr.mem_table)) {
+      out << "\t" << cursor.idx << ": " << *cursor.block << "\n";
+    }
+  }
+
+  {
+    out << "Orphaned Tx Blocks: \n";
+    TxBlockCursor cursor(tx_mgr.file->meta);
+    while (cursor.advance_to_next_orphan(tx_mgr.mem_table)) {
+      out << "\t" << cursor.idx << ": " << *cursor.block << "\n";
+    }
+  }
+
+  __msan_scoped_enable_interceptor_checks();
 
   return out;
 }

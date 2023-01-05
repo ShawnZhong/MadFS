@@ -50,8 +50,20 @@ class SingleBlockTx : public CoWTx {
     timer.count<Event::SINGLE_BLOCK_TX_START>();
     bool need_redo;
 
+    LogicalBlockIdx pinned_tx_block_idx = allocator->tx_block.get_pinned_idx();
+    if (pinned_tx_block_idx == 0) {  // no tx_block is pinned yet
+      // this should trigger a shared memory slot allocation
+      // because we will start the first log replay, we will need to read the
+      // whole tx history, so gc threads must not reclaim any blocks before we
+      // are done
+      allocator->tx_block.pin(0);
+    }
+
     // must acquire the tx tail before any get
     if (!is_offset_depend) file->update(&state, allocator);
+
+    if (pinned_tx_block_idx != state.get_tx_block_idx())
+      allocator->log_entry.reset();
 
     prepare_commit_entry();
 
@@ -70,7 +82,7 @@ class SingleBlockTx : public CoWTx {
 
       char* dst_block = dst_blocks[0]->data_rw();
       const char* src_block =
-          tx_mgr->mem_table->lidx_to_addr_ro(recycle_image[0])->data_ro();
+          mem_table->lidx_to_addr_ro(recycle_image[0])->data_ro();
 
       // copy the left part of the block
       if (local_offset != 0) {
@@ -85,30 +97,42 @@ class SingleBlockTx : public CoWTx {
       }
     }
 
-    if (is_offset_depend) tx_mgr->offset_mgr.wait_offset(ticket);
+    if (is_offset_depend) tx_mgr->offset_mgr->wait(ticket);
 
   retry:
     if constexpr (BuildOptions::cc_occ) {
       timer.count<Event::SINGLE_BLOCK_TX_COMMIT>();
       // try to commit the tx entry
       pmem::TxEntry conflict_entry =
-          tx_mgr->try_commit(commit_entry, &state.cursor);
+          state.cursor.try_commit(commit_entry, mem_table, allocator);
       if (!conflict_entry.is_valid()) goto done;  // success, no conflict
 
+      bool into_new_block = false;
       // we just treat begin_vidx as both first and last vidx
-      need_redo = handle_conflict(conflict_entry, begin_vidx, begin_vidx,
-                                  recycle_image);
-      recheck_commit_entry();
+      need_redo =
+          handle_conflict(conflict_entry, begin_vidx, begin_vidx, recycle_image,
+                          commit_entry.is_inline() ? nullptr : &into_new_block);
+      if (into_new_block) {
+        assert(!commit_entry.is_inline());
+        allocator->log_entry.free(log_cursor);
+        allocator->log_entry.reset();
+        // re-prepare (incl. append new log entries)
+        prepare_commit_entry();
+      } else {
+        recheck_commit_entry();
+      }
       if (!need_redo)
         goto retry;
       else
         goto redo;
     } else {
-      tx_mgr->try_commit(commit_entry, &state.cursor);
+      state.cursor.try_commit(commit_entry, mem_table, allocator);
     }
 
   done:
-    allocator->free(recycle_image[0]);  // it has only single block
+    // update the pinned tx block
+    allocator->tx_block.pin(state.get_tx_block_idx());
+    allocator->block.free(recycle_image[0]);  // it has only single block
     return static_cast<ssize_t>(count);
   }
 };
@@ -147,7 +171,6 @@ class MultiBlockTx : public CoWTx {
     bool do_copy_first = true;
     bool do_copy_last = true;
     bool need_redo;
-    pmem::TxEntry conflict_entry;
     LogicalBlockIdx src_first_lidx, src_last_lidx;
 
     // copy full blocks first
@@ -181,6 +204,9 @@ class MultiBlockTx : public CoWTx {
     // only get a snapshot of the tail when starting critical piece
     if (!is_offset_depend) file->update(&state, allocator);
 
+    if (allocator->tx_block.get_pinned_idx() != state.get_tx_block_idx())
+      allocator->log_entry.reset();
+
     prepare_commit_entry();
 
     for (uint32_t i = 0; i < num_blocks; ++i)
@@ -208,8 +234,7 @@ class MultiBlockTx : public CoWTx {
     // copy the data from the first source block if exists
     if (need_copy_first && do_copy_first) {
       char* dst = dst_blocks[0]->data_rw();
-      const char* src =
-          tx_mgr->mem_table->lidx_to_addr_ro(src_first_lidx)->data_ro();
+      const char* src = mem_table->lidx_to_addr_ro(src_first_lidx)->data_ro();
       size_t size = BLOCK_SIZE - first_block_overlap_size;
       pmem::memcpy_persist(dst, src, size);
     }
@@ -217,28 +242,39 @@ class MultiBlockTx : public CoWTx {
     // copy the data from the last source block if exits
     if (need_copy_last && do_copy_last) {
       char* dst = last_dst_block->data_rw() + last_block_overlap_size;
-      const char* src =
-          tx_mgr->mem_table->lidx_to_addr_ro(src_last_lidx)->data_ro() +
-          last_block_overlap_size;
+      const char* src = mem_table->lidx_to_addr_ro(src_last_lidx)->data_ro() +
+                        last_block_overlap_size;
       size_t size = BLOCK_SIZE - last_block_overlap_size;
       pmem::memcpy_persist(dst, src, size);
     }
     fence();
 
-    if (is_offset_depend) tx_mgr->offset_mgr.wait_offset(ticket);
+    if (is_offset_depend) tx_mgr->offset_mgr->wait(ticket);
 
   retry:
     if constexpr (BuildOptions::cc_occ) {
       timer.count<Event::MULTI_BLOCK_TX_COMMIT>();
       // try to commit the transaction
-      conflict_entry = tx_mgr->try_commit(commit_entry, &state.cursor);
+      pmem::TxEntry conflict_entry =
+          state.cursor.try_commit(commit_entry, mem_table, allocator);
       if (!conflict_entry.is_valid()) goto done;  // success
       // make a copy of the first and last again
       src_first_lidx = recycle_image[0];
       src_last_lidx = recycle_image[num_blocks - 1];
-      need_redo = handle_conflict(conflict_entry, begin_vidx, end_full_vidx,
-                                  recycle_image);
-      recheck_commit_entry();
+
+      bool into_new_block = false;
+      need_redo = handle_conflict(
+          conflict_entry, begin_vidx, end_full_vidx, recycle_image,
+          commit_entry.is_inline() ? nullptr : &into_new_block);
+      if (into_new_block) {
+        assert(!commit_entry.is_inline());
+        allocator->log_entry.free(log_cursor);
+        allocator->log_entry.reset();
+        // re-prepare (incl. append new log entries)
+        prepare_commit_entry();
+      } else {
+        recheck_commit_entry();
+      }
       if (!need_redo)
         goto retry;  // we have moved to the new tail, retry commit
       else {
@@ -250,12 +286,14 @@ class MultiBlockTx : public CoWTx {
           goto retry;
       }
     } else {
-      tx_mgr->try_commit(commit_entry, &state.cursor);
+      state.cursor.try_commit(commit_entry, mem_table, allocator);
     }
 
   done:
+    // update the pinned tx block
+    allocator->tx_block.pin(state.get_tx_block_idx());
     // recycle the data blocks being overwritten
-    allocator->free(recycle_image);
+    allocator->block.free(recycle_image);
     return static_cast<ssize_t>(count);
   }
 };

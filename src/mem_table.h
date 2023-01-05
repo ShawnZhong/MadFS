@@ -12,9 +12,10 @@
 #include "config.h"
 #include "const.h"
 #include "idx.h"
-#include "logging.h"
 #include "posix.h"
-#include "utils.h"
+#include "utils/logging.h"
+#include "utils/tbb.h"
+#include "utils/utils.h"
 
 namespace ulayfs::dram {
 
@@ -32,7 +33,7 @@ constexpr static uint32_t GROW_UNIT_IN_BLOCK_MASK =
 //   the addr
 // - if this block is not even allocated from kernel filesystem, grow_to_fit and
 //   map it, and return the address
-class MemTable {
+class MemTable : noncopyable {
   pmem::MetaBlock* meta;
   int fd;
   int prot;
