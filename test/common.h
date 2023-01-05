@@ -9,7 +9,6 @@
 #include <cstdio>
 #include <cstring>
 
-#include "common.h"
 #include "const.h"
 #include "debug.h"
 #include "utils/logging.h"
