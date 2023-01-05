@@ -61,6 +61,7 @@ void basic_test(BasicTestOpt opt) {
     int new_fd = open(filepath, O_CREAT | O_RDWR, S_IRUSR | S_IWUSR);
     auto new_file = ulayfs::get_file(new_fd);
     ASSERT(new_file->blk_table.get_file_state().file_size == file_size);
+    close(new_fd);
   }
 }
 
