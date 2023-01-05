@@ -1,7 +1,6 @@
 import logging
-import shutil
 from pathlib import Path
-from typing import Dict, Optional, List
+from typing import Optional
 
 from utils import root_dir, is_ulayfs_linked, system
 
@@ -19,15 +18,6 @@ def infer_numa_node(pmem_path: Path) -> int:
     return 0
 
 
-def get_cpulist(numa_node: int) -> List[int]:
-    result = []
-    text = Path(f"/sys/devices/system/node/node{numa_node}/cpulist").read_text()
-    for r in text.split(","):
-        start, end = r.split("-")
-        result += list(range(int(start), int(end) + 1))
-    return result
-
-
 class Filesystem:
     name: str
 
@@ -41,28 +31,15 @@ class Filesystem:
     def get_env(self, **kwargs):
         return {}
 
-    def process_cmd(self, cmd: List[str], env: Dict[str, str], **kwargs) -> List[str]:
-        numa = infer_numa_node(self.path)
-
-        env = {
-            **env,
-            **self.get_env(cmd=cmd, **kwargs),
-            "PMEM_PATH": str(self.path),
-            "CPULIST": ",".join(str(c) for c in get_cpulist(numa)),
-        }
-
-        cmd = ["env"] + [f"{k}={v}" for k, v in env.items()] + cmd
-
-        if shutil.which("numactl"):
-            cmd = ["numactl", f"--cpunodebind={numa}", f"--membind={numa}"] + cmd
-        else:
-            logger.warning("numactl not found, NUMA not enabled")
-
-        return cmd
-
 
 def _get_ext4_path() -> Path:
-    for path in ["/mnt/pmem0-ext4-dax", "/mnt/pmem", "/mnt/pmem0", "/mnt/pmem1", "/mnt/pmem_emul"]:
+    for path in [
+        "/mnt/pmem0-ext4-dax",
+        "/mnt/pmem",
+        "/mnt/pmem0",
+        "/mnt/pmem1",
+        "/mnt/pmem_emul",
+    ]:
         if Path(path).is_mount():
             return Path(path)
 
@@ -115,8 +92,8 @@ class ULAYFS(Ext4DAX):
 
         return result
 
-    def get_env(self, cmd, **kwargs):
-        if is_ulayfs_linked(cmd[0]):
+    def get_env(self, prog, **kwargs):
+        if is_ulayfs_linked(prog):
             return {}
         cmake_args = ULAYFS._make_cmake_args(self.cc)
         ulayfs_path = ULAYFS.build(cmake_args=cmake_args, **kwargs)
@@ -180,14 +157,20 @@ class SplitFS(Filesystem):
         env = {
             "LD_LIBRARY_PATH": SplitFS.build_path,
             "NVP_TREE_FILE": SplitFS.build_path / "bin" / "nvp_nvp.tree",
-            "LD_PRELOAD": SplitFS.build_path / "libnvp.so"
+            "LD_PRELOAD": SplitFS.build_path / "libnvp.so",
         }
         return env
 
 
 all_bench_fs = {fs.name: fs for fs in [ULAYFS(), Ext4DAX(), NOVA(), SplitFS()]}
-all_extra_fs = {fs.name: fs for fs in [ULAYFS_OCC(), ULAYFS_SPINLOCK(), ULAYFS_MUTEX(), ULAYFS_RWLOCK()]}
+all_extra_fs = {
+    fs.name: fs
+    for fs in [ULAYFS_OCC(), ULAYFS_SPINLOCK(), ULAYFS_MUTEX(), ULAYFS_RWLOCK()]
+}
 all_fs = {**all_bench_fs, **all_extra_fs}
 
 bench_fs = {k: v for k, v in all_bench_fs.items() if v.is_available()}
-available_fs = {**bench_fs, **{k: v for k, v in all_extra_fs.items() if v.is_available()}}
+available_fs = {
+    **bench_fs,
+    **{k: v for k, v in all_extra_fs.items() if v.is_available()},
+}

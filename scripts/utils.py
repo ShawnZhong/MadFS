@@ -4,6 +4,7 @@ import os
 import shutil
 import sys
 from pathlib import Path
+from typing import List
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger("utils")
@@ -38,7 +39,10 @@ sudo apt install -y sqlite3                                         # for benchm
         configure_cmds += "sudo sysctl -w vm.max_map_count=131072\n"
 
     # disable CPU frequency scaling
-    paths = [Path(f"/sys/devices/system/cpu/cpu{i}/cpufreq/scaling_governor") for i in range(os.cpu_count())]
+    paths = [
+        Path(f"/sys/devices/system/cpu/cpu{i}/cpufreq/scaling_governor")
+        for i in range(os.cpu_count())
+    ]
     configure_cmds += " &&\n".join(
         f"echo performance | sudo tee {path} >/dev/null"
         for path in paths
@@ -63,13 +67,17 @@ def is_ulayfs_linked(prog_path: Path):
     import subprocess
     import re
 
-    output = subprocess.check_output(['ldd', shutil.which(prog_path)]).decode("utf-8")
+    output = subprocess.check_output(["ldd", shutil.which(prog_path)]).decode("utf-8")
     for line in output.splitlines():
-        match = re.match(r'\t(.*) => (.*) \(0x', line)
-        if match and match.group(1) == 'libulayfs.so':
-            logger.info(f"`{prog_path}` is already linked with uLayFS ({match.group(2)})")
+        match = re.match(r"\t(.*) => (.*) \(0x", line)
+        if match and match.group(1) == "libulayfs.so":
+            logger.info(
+                f"`{prog_path}` is already linked with uLayFS ({match.group(2)})"
+            )
             return True
-    logger.info(f"`{prog_path}` is not linked with uLayFS by default. Need to run with `env LD_PRELOAD=...`")
+    logger.info(
+        f"`{prog_path}` is not linked with uLayFS by default. Need to run with `env LD_PRELOAD=...`"
+    )
     return False
 
 
@@ -91,3 +99,12 @@ def system(cmd, log_path=None):
 
 def get_timestamp():
     return datetime.datetime.now().strftime("%Y%m%d-%H%M%S")
+
+
+def get_cpulist(numa_node: int) -> List[int]:
+    result = []
+    text = Path(f"/sys/devices/system/node/node{numa_node}/cpulist").read_text()
+    for r in text.split(","):
+        start, end = r.split("-")
+        result += list(range(int(start), int(end) + 1))
+    return result
