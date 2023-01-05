@@ -61,23 +61,35 @@ DEFINE_FN(fcntl);
 DEFINE_FN(unlink);
 DEFINE_FN(rename);
 
-#ifndef _STAT_VER
+namespace detail {
+// See stat.cpp
+#ifdef _STAT_VER
+DEFINE_FN(__fxstat);
+DEFINE_FN(__xstat);
+#else
 DEFINE_FN(fstat);
 DEFINE_FN(stat);
-#else
-// See stat.cpp
-DEFINE_FN(__xstat);
-DEFINE_FN(__fxstat);
+#endif
+}  // namespace detail
 
 static int fstat(int fd, struct stat* buf) {
   __msan_unpoison(buf, sizeof(struct stat));
-  return posix::__fxstat(_STAT_VER, fd, buf);
+#ifdef _STAT_VER
+  return detail::__fxstat(_STAT_VER, fd, buf);
+#else
+  return detail::fstat(fd, buf);
+#endif
 }
 
 static int stat(const char* pathname, struct stat* buf) {
   __msan_unpoison(buf, sizeof(struct stat));
-  return posix::__xstat(_STAT_VER, pathname, buf);
-}
+#ifdef _STAT_VER
+  return detail::__xstat(_STAT_VER, pathname, buf);
+#else
+  return detail::stat(pathname, buf);
 #endif
+}
+
+#undef DEFINE_FN
 
 }  // namespace ulayfs::posix
