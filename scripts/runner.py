@@ -78,6 +78,9 @@ class Runner:
         if prog_args is not None:
             cmd += prog_args
 
+        if self.build_type == "tsan":
+            env["TSAN_OPTIONS"] = f"suppressions={root_dir / 'cmake' / 'tsan.supp'}"
+
         cmd = fs.process_cmd(cmd, env=env, build_type=self.build_type, result_dir=self.result_dir)
         # cmd = "perf stat -d -d -d".split() + cmd
         cmd = " ".join(cmd)
