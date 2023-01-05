@@ -15,7 +15,7 @@ pd.options.display.width = None
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger("plot")
-plt.set_loglevel('WARNING')
+plt.set_loglevel("WARNING")
 
 
 def get_sorted_subdirs(path):
@@ -63,8 +63,12 @@ def export_results(result_dir, data, name="result"):
     with open(result_dir / f"{name}.csv", "w") as f:
         data.to_csv(f)
     with open(result_dir / f"{name}.txt", "w") as f:
-        for name, benchmark in data[["benchmark", "label", "x", "y"]].groupby(["benchmark"], sort=False):
-            pt = pd.pivot_table(benchmark, values="y", index="x", columns="label", sort=False)
+        for name, benchmark in data[["benchmark", "label", "x", "y"]].groupby(
+            ["benchmark"], sort=False
+        ):
+            pt = pd.pivot_table(
+                benchmark, values="y", index="x", columns="label", sort=False
+            )
             ulayfs = get_fs_name("uLayFS")
             if ulayfs in pt.columns:
                 for c in pt.columns:
@@ -81,16 +85,16 @@ def save_fig(fig, name, result_dir):
 
 
 def plot_single_bm(
-        df,
-        result_dir,
-        barchart=False,
-        name="result",
-        post_plot=None,
-        figsize=(2.5, 1.5),
-        markers=("o", "^", "s", "D"),
-        hatches=("//", "\\\\", "--", ".."),
-        colors=(None,),
-        separate_legend=True,
+    df,
+    result_dir,
+    barchart=False,
+    name="result",
+    post_plot=None,
+    figsize=(2.5, 1.5),
+    markers=("o", "^", "s", "D"),
+    hatches=("//", "\\\\", "--", ".."),
+    colors=(None,),
+    separate_legend=True,
 ):
     plt.clf()
     fig, ax = plt.subplots(figsize=figsize)
@@ -108,13 +112,30 @@ def plot_single_bm(
         x = np.arange(len(df["x"].unique()))
         width = 0.7 / num_groups
         offsets = np.linspace(-0.3, 0.3, num_groups)
-        for (label, group), color, hatch, i in zip(label_groups, colors, hatches, range(num_groups)):
-            ax.bar(x + offsets[i], group["y"], width, label=label, color=color, hatch=hatch, alpha=1)
+        for (label, group), color, hatch, i in zip(
+            label_groups, colors, hatches, range(num_groups)
+        ):
+            ax.bar(
+                x + offsets[i],
+                group["y"],
+                width,
+                label=label,
+                color=color,
+                hatch=hatch,
+                alpha=1,
+            )
         ax.set_xticks(x)
         ax.set_xticklabels(df["x"].unique())
     else:
         for (label, group), marker, color in zip(label_groups, markers, colors):
-            plt.plot(group["x"], group["y"], label=label, marker=marker, markersize=3, color=color)
+            plt.plot(
+                group["x"],
+                group["y"],
+                label=label,
+                marker=marker,
+                markersize=3,
+                color=color,
+            )
 
     if post_plot:
         post_plot(ax=ax, name=name, df=df)
@@ -148,12 +169,16 @@ def plot_micro_st(result_dir):
         is_cow = name.startswith("cow")
         if is_cow:
             df["x"] = df["name"].apply(parse_name, args=(1,))
-            df["y"] = df["items_per_second"].apply(lambda x: float(x) / 1000 ** 2)
+            df["y"] = df["items_per_second"].apply(lambda x: float(x) / 1000**2)
             xunit = "Bytes"
             ylabel = r"Throughput (Mops/s)"
         else:
-            df["x"] = df["name"].apply(parse_name, args=(1,)).apply(lambda x: f"{int(x) / 1024:1g}")
-            df["y"] = df["bytes_per_second"].apply(lambda x: float(x) / 1024 ** 3)
+            df["x"] = (
+                df["name"]
+                .apply(parse_name, args=(1,))
+                .apply(lambda x: f"{int(x) / 1024:1g}")
+            )
+            df["y"] = df["bytes_per_second"].apply(lambda x: float(x) / 1024**3)
             xunit = "KB"
             ylabel = "Throughput (GB/s)"
 
@@ -203,7 +228,9 @@ def plot_micro_mt(result_dir):
     is_cc = "OCC" in df["label"].unique()
 
     for name, benchmark in benchmarks:
-        benchmark["y"] = benchmark["bytes_per_second"].apply(lambda x: float(x) / 1024 ** 3)
+        benchmark["y"] = benchmark["bytes_per_second"].apply(
+            lambda x: float(x) / 1024**3
+        )
         ylabel = "Throughput (GB/s)"
 
         export_results(result_dir, benchmark, name=name)
@@ -296,7 +323,14 @@ def plot_ycsb(result_dir):
                     float(e) for e in re.findall("Time elapsed: (.+?) us", data)
                 )
                 mops_per_sec = total_num_requests / total_time_us
-                results.append({"x": w.upper(), "y": mops_per_sec, "label": fs_name, "benchmark": "ycsb"})
+                results.append(
+                    {
+                        "x": w.upper(),
+                        "y": mops_per_sec,
+                        "label": fs_name,
+                        "benchmark": "ycsb",
+                    }
+                )
 
     df = pd.DataFrame(results)
     export_results(result_dir, df)
@@ -312,7 +346,7 @@ def plot_ycsb(result_dir):
         figsize=(5, 2.5),
         result_dir=result_dir,
         post_plot=post_plot,
-        separate_legend=False
+        separate_legend=False,
     )
 
 
@@ -322,7 +356,7 @@ def plot_tpcc(result_dir):
         "Payment": "payment",
         "Order\nStatus": "ordstat",
         "Delivery": "delivery",
-        "Stock\nLevel": "slev"
+        "Stock\nLevel": "slev",
     }
 
     results = []
@@ -340,12 +374,32 @@ def plot_tpcc(result_dir):
             total_time_ms = 0
             for i, (name, workload) in enumerate(name_mapping.items()):
                 num_tx = float(re.search(f"\[{i}\] sc:(.+?) lt:", data).group(1))
-                time_ms = float(re.search(f"{workload}: timing = (.+?) nanoseconds", data).group(1)) / 1000 ** 2
-                results.append({"x": name, "y": num_tx / time_ms, "label": get_fs_name(fs_name), "benchmark": "tpcc"})
+                time_ms = (
+                    float(
+                        re.search(
+                            f"{workload}: timing = (.+?) nanoseconds", data
+                        ).group(1)
+                    )
+                    / 1000**2
+                )
+                results.append(
+                    {
+                        "x": name,
+                        "y": num_tx / time_ms,
+                        "label": get_fs_name(fs_name),
+                        "benchmark": "tpcc",
+                    }
+                )
                 total_tx += num_tx
                 total_time_ms += time_ms
             results.append(
-                {"x": "Mix", "y": total_tx / total_time_ms, "label": get_fs_name(fs_name), "benchmark": "tpcc"})
+                {
+                    "x": "Mix",
+                    "y": total_tx / total_time_ms,
+                    "label": get_fs_name(fs_name),
+                    "benchmark": "tpcc",
+                }
+            )
     df = pd.DataFrame(results)
     export_results(result_dir, df)
 
@@ -360,5 +414,5 @@ def plot_tpcc(result_dir):
         figsize=(5, 2.5),
         result_dir=result_dir,
         post_plot=post_plot,
-        separate_legend=False
+        separate_legend=False,
     )
