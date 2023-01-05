@@ -61,6 +61,7 @@ class Runner:
         prog_log_name: str = "prog.log",
         fs: Filesystem = ULAYFS,
         prog_args: List[str] = None,
+        env: Optional[dict] = None,
         trace: bool = False,
     ):
         if cmd is None:
@@ -83,6 +84,7 @@ class Runner:
             logger.warning("numactl not found, NUMA not enabled")
 
         env = {
+            **env,
             "PMEM_PATH": str(fs.path),
             "CPULIST": ",".join(str(x) for x in get_cpulist(numa)),
             **fs.get_env(
