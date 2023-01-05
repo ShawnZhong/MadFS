@@ -189,7 +189,7 @@ class GarbageCollector {
       if (!per_thread_data->is_data_valid()) continue;
 
       TxBlockCursor curr(per_thread_data->get_tx_block_idx(), &file->mem_table);
-      // NOTE: it is possible that the given cusor is already after old_tail
+      // NOTE: it is possible that the given cursor is already after old_tail
       while (!pinned_blocks.contains(curr.idx.get()) && curr < old_tail) {
         pinned_blocks.emplace(curr.idx.get());
         bool success = curr.advance_to_next_block(&file->mem_table);
@@ -274,9 +274,8 @@ class GarbageCollector {
     for (auto& e : tx_block->tx_entries) {
       auto entry = e.load(std::memory_order_relaxed);
       if (entry.is_inline()) continue;
-      auto le_idx = entry.indirect_entry.get_log_entry_idx();
-      allocator->log_entry.get_ref_log_entry_blocks({le_idx, &file->mem_table},
-                                                    le_blocks);
+      dram::LogCursor le_cursor(entry.indirect_entry, &file->mem_table);
+      le_cursor.get_all_blocks(&file->mem_table, le_blocks);
     }
   }
 };

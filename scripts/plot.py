@@ -109,7 +109,7 @@ def plot_single_bm(
         width = 0.7 / num_groups
         offsets = np.linspace(-0.3, 0.3, num_groups)
         for (label, group), color, hatch, i in zip(label_groups, colors, hatches, range(num_groups)):
-            ax.bar(x + offsets[i], group["y"], width, label=label, color=color, hatch=hatch)
+            ax.bar(x + offsets[i], group["y"], width, label=label, color=color, hatch=hatch, alpha=1)
         ax.set_xticks(x)
         ax.set_xticklabels(df["x"].unique())
     else:
@@ -296,7 +296,7 @@ def plot_ycsb(result_dir):
                     float(e) for e in re.findall("Time elapsed: (.+?) us", data)
                 )
                 mops_per_sec = total_num_requests / total_time_us
-                results.append({"x": w, "y": mops_per_sec, "label": fs_name, "benchmark": "ycsb"})
+                results.append({"x": w.upper(), "y": mops_per_sec, "label": fs_name, "benchmark": "ycsb"})
 
     df = pd.DataFrame(results)
     export_results(result_dir, df)
@@ -341,11 +341,11 @@ def plot_tpcc(result_dir):
             for i, (name, workload) in enumerate(name_mapping.items()):
                 num_tx = float(re.search(f"\[{i}\] sc:(.+?) lt:", data).group(1))
                 time_ms = float(re.search(f"{workload}: timing = (.+?) nanoseconds", data).group(1)) / 1000 ** 2
-                results.append({"x": name, "y": num_tx / time_ms, "label": fs_name, "benchmark": "tpcc"})
+                results.append({"x": name, "y": num_tx / time_ms, "label": get_fs_name(fs_name), "benchmark": "tpcc"})
                 total_tx += num_tx
                 total_time_ms += time_ms
             results.append(
-                {"x": "Mix", "y": total_tx / total_time_ms, "label": fs_name, "benchmark": "tpcc"})
+                {"x": "Mix", "y": total_tx / total_time_ms, "label": get_fs_name(fs_name), "benchmark": "tpcc"})
     df = pd.DataFrame(results)
     export_results(result_dir, df)
 

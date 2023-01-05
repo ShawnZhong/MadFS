@@ -153,26 +153,6 @@ class LogEntryAllocator {
   }
 
   /**
-   * @brief get all log entry blocks linked with the given head; only called by
-   * GarbageCollector
-   *
-   * @param log_cursor the head of log entry linked list
-   * @param le_blocks the set to put results; can be non-empty, and
-   * pre-existing elements will be untouched
-   */
-  void get_ref_log_entry_blocks(LogCursor log_cursor,
-                                std::unordered_set<uint32_t>& le_blocks) {
-    LogicalBlockIdx prev_block_idx = log_cursor.idx.block_idx;
-    le_blocks.emplace(prev_block_idx.get());
-    while (log_cursor.advance(mem_table)) {
-      if (prev_block_idx != log_cursor.idx.block_idx) {
-        prev_block_idx = log_cursor.idx.block_idx;
-        le_blocks.emplace(prev_block_idx.get());
-      }
-    }
-  }
-
-  /**
    * when moving into a new tx block, reset states associated with log entry
    * allocation so that the next time calling alloc_log_entry will allocate from
    * a new log entry block

@@ -98,6 +98,27 @@ struct LogCursor {
     log_cursor->leftover_bytes = leftover_bytes;
     log_cursor->persist_header();
   }
+
+  /**
+   * @brief get all log entry blocks linked with the given head; only called by
+   * GarbageCollector
+   *
+   * @param log_cursor[in] the head of log entry linked list
+   * @param le_blocks[out] the set to put results; can be non-empty, and
+   * pre-existing elements will be untouched
+   */
+  void get_all_blocks(MemTable* mem_table,
+                      std::unordered_set<uint32_t>& le_blocks) const {
+    LogCursor log_cursor = *this;  // make a copy
+    LogicalBlockIdx prev_block_idx = log_cursor.idx.block_idx;
+    le_blocks.emplace(prev_block_idx.get());
+    while (log_cursor.advance(mem_table)) {
+      if (prev_block_idx != log_cursor.idx.block_idx) {
+        prev_block_idx = log_cursor.idx.block_idx;
+        le_blocks.emplace(prev_block_idx.get());
+      }
+    }
+  }
 };
 
 static_assert(sizeof(LogCursor) == 16);
