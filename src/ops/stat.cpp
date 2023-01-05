@@ -49,8 +49,13 @@ int stat64(const char* pathname, struct stat64* buf) {
 }
 
 #ifdef _STAT_VER
-// Compatibility for glibc <2.33. See
-/// https://github.com/bminor/glibc/commit/8ed005daf0ab03e142500324a34087ce179ae78e
+// For glibc 2.31 (used by Ubuntu 20.04), `{f}stat` are wrappers around
+// `__{f}xstat`, which take an additional version argument `_STAT_VER`.
+//
+// Since glibc 2.33, the wrappers are removed and becomes actual symbols
+// exported by the library. See:
+// https://github.com/bminor/glibc/commit/8ed005daf0ab03e142500324a34087ce179ae78e
+// https://github.com/bminor/glibc/commit/30f1c7439489bf756a45e349d69be1826e0c9bd8
 
 int __fxstat([[maybe_unused]] int ver, int fd, struct stat* buf) {
   return fstat(fd, buf);
@@ -66,7 +71,7 @@ int __xstat([[maybe_unused]] int ver, const char* pathname, struct stat* buf) {
 
 int __xstat64([[maybe_unused]] int ver, const char* pathname,
               struct stat64* buf) {
-  return stat64(ver, pathname, buf);
+  return stat64(pathname, buf);
 }
 #endif
 }
