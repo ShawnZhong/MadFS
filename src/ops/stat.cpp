@@ -3,7 +3,7 @@
 
 namespace ulayfs {
 extern "C" {
-int __fxstat([[maybe_unused]] int ver, int fd, struct stat* buf) {
+int fstat(int fd, struct stat* buf) {
   int rc = posix::fstat(fd, buf);
   if (unlikely(rc < 0)) {
     LOG_WARN("fstat failed for fd = %d: %m", fd);
@@ -20,12 +20,12 @@ int __fxstat([[maybe_unused]] int ver, int fd, struct stat* buf) {
   return 0;
 }
 
-int __fxstat64([[maybe_unused]] int ver, int fd, struct stat64* buf) {
-  return __fxstat(ver, fd, reinterpret_cast<struct stat*>(buf));
+int fstat64(int fd, struct stat64* buf) {
+  return fstat(fd, reinterpret_cast<struct stat*>(buf));
 }
 
-int __xstat([[maybe_unused]] int ver, const char* pathname, struct stat* buf) {
-  if (int rc = posix::__xstat(ver, pathname, buf); unlikely(rc < 0)) {
+int stat(const char* pathname, struct stat* buf) {
+  if (int rc = posix::stat(pathname, buf); unlikely(rc < 0)) {
     LOG_WARN("posix::stat(%s) = %d: %m", pathname, rc);
     return rc;
   }
@@ -44,9 +44,30 @@ int __xstat([[maybe_unused]] int ver, const char* pathname, struct stat* buf) {
   return 0;
 }
 
+int stat64(const char* pathname, struct stat64* buf) {
+  return stat(pathname, reinterpret_cast<struct stat*>(buf));
+}
+
+#ifdef _STAT_VER
+// Compatibility for glibc <2.33. See
+/// https://github.com/bminor/glibc/commit/8ed005daf0ab03e142500324a34087ce179ae78e
+
+int __fxstat([[maybe_unused]] int ver, int fd, struct stat* buf) {
+  return fstat(fd, buf);
+}
+
+int __fxstat64([[maybe_unused]] int ver, int fd, struct stat64* buf) {
+  return fstat64(fd, buf);
+}
+
+int __xstat([[maybe_unused]] int ver, const char* pathname, struct stat* buf) {
+  return stat(pathname, buf);
+}
+
 int __xstat64([[maybe_unused]] int ver, const char* pathname,
               struct stat64* buf) {
-  return __xstat(ver, pathname, reinterpret_cast<struct stat*>(buf));
+  return stat64(ver, pathname, buf);
 }
+#endif
 }
 }  // namespace ulayfs
