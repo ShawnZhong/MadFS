@@ -144,6 +144,8 @@ class BlkTable {
     return state.file_size;
   }
 
+  [[nodiscard]] FileState get_state_unsafe() const { return state; }
+
  private:
   /**
    * Quick check if update is necessary; thread safe
@@ -169,8 +171,6 @@ class BlkTable {
     // acquire spinlock to update
     return result_state->cursor.get_entry().is_valid();
   }
-
-  [[nodiscard]] FileState get_file_state() const { return state; }
 
   void grow_to_fit(VirtualBlockIdx idx) {
     if (table.size() > idx.get()) return;
