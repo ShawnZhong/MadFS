@@ -113,7 +113,7 @@ class File {
       return false;
     }
 
-    if (!IS_ALIGNED(stat_buf.st_size, BLOCK_SIZE)) {
+    if (!is_aligned(stat_buf.st_size, BLOCK_SIZE)) {
       LOG_WARN("File size not aligned for \"%s\". Fallback to syscall",
                pathname);
       return false;

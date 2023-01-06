@@ -15,7 +15,7 @@ class CoWTx : public WriteTx {
 
   CoWTx(TxArg& arg)
       : WriteTx(arg),
-        begin_full_vidx(BLOCK_SIZE_TO_IDX(ALIGN_UP(arg.offset, BLOCK_SIZE))),
+        begin_full_vidx(BLOCK_SIZE_TO_IDX(align_up(arg.offset, BLOCK_SIZE))),
         end_full_vidx(BLOCK_SIZE_TO_IDX(end_offset)),
         num_full_blocks(end_full_vidx - begin_full_vidx) {}
 };
@@ -137,9 +137,9 @@ class MultiBlockTx : public CoWTx {
  public:
   MultiBlockTx(TxArg& arg)
       : CoWTx(arg),
-        first_block_overlap_size(ALIGN_UP(arg.offset, BLOCK_SIZE) - arg.offset),
+        first_block_overlap_size(align_up(arg.offset, BLOCK_SIZE) - arg.offset),
         last_block_overlap_size(end_offset -
-                                ALIGN_DOWN(end_offset, BLOCK_SIZE)) {}
+                                align_down(end_offset, BLOCK_SIZE)) {}
   ssize_t exec() {
     timer.count<Event::MULTI_BLOCK_TX_START>();
     // if need_copy_first/last is false, this means it is handled by the full

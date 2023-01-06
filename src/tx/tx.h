@@ -97,7 +97,7 @@ class Tx : noncopyable {
       : arg(arg),
         end_offset(arg.offset + arg.count),
         begin_vidx(BLOCK_SIZE_TO_IDX(arg.offset)),
-        end_vidx(BLOCK_SIZE_TO_IDX(ALIGN_UP(end_offset, BLOCK_SIZE))),
+        end_vidx(BLOCK_SIZE_TO_IDX(align_up(end_offset, BLOCK_SIZE))),
         num_blocks(end_vidx - begin_vidx) {}
 
  protected:

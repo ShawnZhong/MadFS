@@ -88,7 +88,7 @@ class LogEntryAllocator {
     pmem::LogEntry* first_entry = curr_log_block->get(curr_log_offset);
     pmem::LogEntry* curr_entry = first_entry;
     uint32_t needed_lidxs_cnt =
-        ALIGN_UP(num_blocks, BITMAP_ENTRY_BLOCKS_CAPACITY) >>
+        align_up(num_blocks, BITMAP_ENTRY_BLOCKS_CAPACITY) >>
         BITMAP_ENTRY_BLOCKS_CAPACITY_SHIFT;
     while (true) {
       assert(curr_entry);

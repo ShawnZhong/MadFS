@@ -40,7 +40,7 @@ void* File::mmap(void* addr_hint, size_t length, int prot, int mmap_flags,
 
   // remap the blocks in the file
   VirtualBlockIdx vidx_end =
-      BLOCK_SIZE_TO_IDX(ALIGN_UP(offset + length, BLOCK_SIZE));
+      BLOCK_SIZE_TO_IDX(align_up(offset + length, BLOCK_SIZE));
   VirtualBlockIdx vidx_group_begin = BLOCK_SIZE_TO_IDX(offset);
   LogicalBlockIdx lidx_group_begin = blk_table.vidx_to_lidx(vidx_group_begin);
   uint32_t num_blocks = 0;

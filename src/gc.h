@@ -101,7 +101,7 @@ class GarbageCollector {
     {
       TimerGuard<Event::GC_CREATE> timer_guard;
 
-      auto num_blocks = BLOCK_SIZE_TO_IDX(ALIGN_UP(file_size, BLOCK_SIZE));
+      auto num_blocks = BLOCK_SIZE_TO_IDX(align_up(file_size, BLOCK_SIZE));
       for (; i < num_blocks; i++) {
         auto curr_blk_idx = file->blk_table.vidx_to_lidx(i);
         auto prev_blk_idx = file->blk_table.vidx_to_lidx(i - 1);
@@ -131,7 +131,7 @@ class GarbageCollector {
 
     // add the last commit entry
     {
-      auto leftover_bytes = ALIGN_UP(file_size, BLOCK_SIZE) - file_size;
+      auto leftover_bytes = align_up(file_size, BLOCK_SIZE) - file_size;
       if (leftover_bytes == 0) {
         auto commit_entry = pmem::TxEntryInline(
             i - begin, begin, file->blk_table.vidx_to_lidx(begin));

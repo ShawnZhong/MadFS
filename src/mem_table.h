@@ -58,11 +58,11 @@ class MemTable : noncopyable {
     bool is_empty = init_file_size == 0;
     // grow to multiple of grow_unit_size if the file is empty or the file
     // size is not grow_unit aligned
-    bool should_grow = is_empty || !IS_ALIGNED(init_file_size, GROW_UNIT_SIZE);
+    bool should_grow = is_empty || !is_aligned(init_file_size, GROW_UNIT_SIZE);
     off_t file_size = init_file_size;
     if (should_grow) {
       file_size =
-          is_empty ? PREALLOC_SIZE : ALIGN_UP(init_file_size, GROW_UNIT_SIZE);
+          is_empty ? PREALLOC_SIZE : align_up(init_file_size, GROW_UNIT_SIZE);
       int ret = posix::fallocate(fd, 0, 0, file_size);
       PANIC_IF(ret < 0, "fallocate failed");
     }
@@ -141,7 +141,7 @@ class MemTable : noncopyable {
     // we have `idx + 1` since we want to grow_to_fit the file when idx is a
     // multiple of the number of blocks in a grow_to_fit unit (e.g., 512 for 2
     // MB grow_to_fit)
-    uint64_t file_size = ALIGN_UP(BLOCK_IDX_TO_SIZE(idx + 1), GROW_UNIT_SIZE);
+    uint64_t file_size = align_up(BLOCK_IDX_TO_SIZE(idx + 1), GROW_UNIT_SIZE);
 
     int ret = posix::fallocate(fd, 0, 0, static_cast<off_t>(file_size));
     PANIC_IF(ret, "fd %d: fallocate failed", fd);

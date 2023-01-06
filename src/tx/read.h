@@ -32,7 +32,7 @@ class ReadTx : public Tx {
         arg.state.file_size) {  // partial read; recalculate end_*
       arg.count = arg.state.file_size - arg.offset;
       end_offset = arg.offset + arg.count;
-      end_vidx = BLOCK_SIZE_TO_IDX(ALIGN_UP(end_offset, BLOCK_SIZE));
+      end_vidx = BLOCK_SIZE_TO_IDX(align_up(end_offset, BLOCK_SIZE));
     }
 
     // copy the blocks

@@ -15,11 +15,13 @@
 #include "utils/logging.h"
 
 // adopted from `include/linux/align.h`
-inline constexpr auto ALIGN_UP(auto x, auto a) {
+inline constexpr auto align_up(auto x, auto a) {
   return (x + (a - 1)) & ~(a - 1);
 }
-#define ALIGN_DOWN(x, a) ((x) & ~(static_cast<decltype(x)>(a) - 1))
-#define IS_ALIGNED(x, a) (((x) & (static_cast<decltype(x)>(a) - 1)) == 0)
+inline constexpr auto align_down(auto x, auto a) { return x & ~(a - 1); }
+inline constexpr auto is_aligned(auto x, auto a) {
+  return !(x & (static_cast<decltype(x)>(a) - 1));
+}
 
 namespace ulayfs {
 

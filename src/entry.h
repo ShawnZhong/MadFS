@@ -68,7 +68,7 @@ struct LogEntry {
 
   /*** some helper functions ***/
   [[nodiscard]] constexpr uint32_t get_lidxs_len() const {
-    return ALIGN_UP(static_cast<uint32_t>(num_blocks),
+    return align_up(static_cast<uint32_t>(num_blocks),
                     BITMAP_ENTRY_BLOCKS_CAPACITY) >>
            BITMAP_ENTRY_BLOCKS_CAPACITY_SHIFT;
   }
@@ -241,7 +241,7 @@ union TxEntry {
   // if only flush at fsync, always return false
   static bool need_flush(TxLocalIdx idx) {
     if constexpr (BuildOptions::tx_flush_only_fsync) return false;
-    return IS_ALIGNED(sizeof(TxEntry) * idx, CACHELINE_SIZE);
+    return is_aligned(sizeof(TxEntry) * idx, CACHELINE_SIZE);
   }
 
   friend std::ostream& operator<<(std::ostream& out, const TxEntry& tx_entry) {

@@ -50,10 +50,10 @@ class WriteTx : public Tx {
   // NOTE: this function can only be called after file_size is known
   void update_leftover_bytes() {
     // this is how many bytes left at last block that is not written by us
-    leftover_bytes = ALIGN_UP(end_offset, BLOCK_SIZE) - end_offset;
+    leftover_bytes = align_up(end_offset, BLOCK_SIZE) - end_offset;
     // then verify if this is the end of file; if not, leftover must be zero
     if (leftover_bytes > 0 &&
-        end_offset <= ALIGN_DOWN(arg.state.file_size, BLOCK_SIZE))
+        end_offset <= align_down(arg.state.file_size, BLOCK_SIZE))
       leftover_bytes = 0;
   }
 
