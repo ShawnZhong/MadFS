@@ -32,7 +32,7 @@ class AlignedTx : public WriteTx {
 
     {
       TimerGuard<Event::ALIGNED_TX_UPDATE> timer_guard;
-      if (!is_offset_depend) file->update(&state, allocator);
+      if (!is_offset_depend) blk_table->update(&state, allocator);
     }
 
     if (allocator->tx_block.get_pinned_idx() != state.get_tx_block_idx())

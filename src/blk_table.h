@@ -51,15 +51,22 @@ class BlkTable {
    */
   std::atomic<uint64_t> version;
 
+  // move spinlock into a separated cacheline
+  union {
+    pthread_spinlock_t spinlock;
+    char cl[CACHELINE_SIZE];
+  };
+
  public:
   explicit BlkTable(MemTable* mem_table)
       : mem_table(mem_table),
         state{TxCursor::from_meta(mem_table->get_meta()), 0},
         version(0) {
     table.grow_to_at_least(NUM_BLOCKS_PER_GROW);
+    pthread_spin_init(&spinlock, PTHREAD_PROCESS_PRIVATE);
   }
 
-  ~BlkTable() = default;
+  ~BlkTable() { pthread_spin_destroy(&spinlock); }
 
   /**
    * @return the logical block index corresponding the the virtual block index
@@ -71,14 +78,30 @@ class BlkTable {
     return table[virtual_block_idx.get()];
   }
 
+  void update(FileState* result_state, Allocator* allocator = nullptr) {
+    if (!need_update(result_state, allocator)) return;
+    pthread_spin_lock(&spinlock);
+    update_unsafe(allocator);
+    *result_state = state;
+    pthread_spin_unlock(&spinlock);
+  }
+
+  template <typename Fn>
+  void update(Fn&& fn, Allocator* allocator = nullptr) {
+    pthread_spin_lock(&spinlock);
+    update_unsafe(allocator);
+    fn(const_cast<const FileState&>(state));
+    pthread_spin_unlock(&spinlock);
+  }
+
   /**
    * Update the block table by applying the transactions; not thread-safe
    *
    * @param allocator if given, allow allocation when iterating the tx_idx
    * @param bitmap_mgr if given, initialized the bitmap
    */
-  uint64_t update(Allocator* allocator = nullptr,
-                  BitmapMgr* bitmap_mgr = nullptr) {
+  uint64_t update_unsafe(Allocator* allocator = nullptr,
+                         BitmapMgr* bitmap_mgr = nullptr) {
     TimerGuard<Event::UPDATE> timer_guard;
     TxCursor cursor = state.cursor;
 
@@ -121,6 +144,7 @@ class BlkTable {
     return state.file_size;
   }
 
+ private:
   /**
    * Quick check if update is necessary; thread safe
    * This check is guarantee to not write any shared data structure so avoid
@@ -148,7 +172,6 @@ class BlkTable {
 
   [[nodiscard]] FileState get_file_state() const { return state; }
 
- private:
   void grow_to_fit(VirtualBlockIdx idx) {
     if (table.size() > idx.get()) return;
     table.grow_to_at_least(next_pow2(idx.get()));

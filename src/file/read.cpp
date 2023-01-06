@@ -24,8 +24,11 @@ ssize_t File::read(char* buf, size_t count) {
   FileState state;
   uint64_t ticket;
   uint64_t offset;
-  update_with_offset(&state, count,
-                     /*stop_at_boundary*/ true, ticket, offset);
+  blk_table.update([&](const FileState& file_state) {
+    offset = offset_mgr.acquire(count, file_state.file_size,
+                                /*stop_at_boundary*/ true, ticket);
+    state = file_state;
+  });
 
   return Tx::exec_and_release_offset<ReadTx>(this, buf, count, offset, state,
                                              ticket);

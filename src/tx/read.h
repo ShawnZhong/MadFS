@@ -34,7 +34,7 @@ class ReadTx : public Tx {
 
     {
       TimerGuard<Event::READ_TX_UPDATE> timer_guard;
-      if (!is_offset_depend) file->update(&state);
+      if (!is_offset_depend) blk_table->update(&state);
     }
 
     // reach EOF

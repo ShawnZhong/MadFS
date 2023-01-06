@@ -59,7 +59,7 @@ class SingleBlockTx : public CoWTx {
     }
 
     // must acquire the tx tail before any get
-    if (!is_offset_depend) file->update(&state, allocator);
+    if (!is_offset_depend) blk_table->update(&state, allocator);
 
     if (pinned_tx_block_idx != state.get_tx_block_idx())
       allocator->log_entry.reset();
@@ -200,7 +200,7 @@ class MultiBlockTx : public CoWTx {
     }
 
     // only get a snapshot of the tail when starting critical piece
-    if (!is_offset_depend) file->update(&state, allocator);
+    if (!is_offset_depend) blk_table->update(&state, allocator);
 
     if (allocator->tx_block.get_pinned_idx() != state.get_tx_block_idx())
       allocator->log_entry.reset();
