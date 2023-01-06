@@ -19,8 +19,8 @@ class WriteTx : public Tx {
   LogCursor log_cursor;
   uint16_t leftover_bytes;
 
-  WriteTx(File* file, const char* buf, size_t count, size_t offset)
-      : Tx(file, count, offset),
+  WriteTx(const TxArgs& tx_args, const char* buf)
+      : Tx(tx_args, false),
         buf(buf),
         recycle_image(local_buf_image_lidxs),
         dst_lidxs(local_buf_dst_lidxs),
@@ -49,14 +49,6 @@ class WriteTx : public Tx {
     for (auto lidx : dst_lidxs)
       dst_blocks.push_back(mem_table->lidx_to_addr_rw(lidx));
     assert(!dst_blocks.empty());
-  }
-
-  WriteTx(File* file, const char* buf, size_t count, size_t offset,
-          FileState state, uint64_t ticket)
-      : WriteTx(file, buf, count, offset) {
-    is_offset_depend = true;
-    this->state = state;
-    this->ticket = ticket;
   }
 
   // NOTE: this function can only be called after file_size is known

@@ -11,7 +11,18 @@ ssize_t File::pread(char* buf, size_t count, size_t offset) {
   if (unlikely(count == 0)) return 0;
   TimerGuard<Event::READ_TX> timer_guard;
   timer.start<Event::READ_TX_CTOR>();
-  return ReadTx(this, buf, count, offset).exec();
+  return ReadTx(
+             TxArgs{
+                 .lock = &lock,
+                 .offset_mgr = &offset_mgr,
+                 .mem_table = &mem_table,
+                 .blk_table = &blk_table,
+                 .allocator = get_local_allocator(),
+                 .offset = offset,
+                 .count = count,
+             },
+             buf)
+      .exec();
 }
 
 ssize_t File::read(char* buf, size_t count) {
@@ -21,16 +32,17 @@ ssize_t File::read(char* buf, size_t count) {
   }
   if (unlikely(count == 0)) return 0;
 
-  FileState state;
-  uint64_t ticket;
-  uint64_t offset;
-  blk_table.update([&](const FileState& file_state) {
-    offset = offset_mgr.acquire(count, file_state.file_size,
-                                /*stop_at_boundary*/ true, ticket);
-    state = file_state;
-  });
-
-  return Tx::exec_and_release_offset<ReadTx>(this, buf, count, offset, state,
-                                             ticket);
+  return ReadTx(
+             TxArgs{
+                 .lock = &lock,
+                 .offset_mgr = &offset_mgr,
+                 .mem_table = &mem_table,
+                 .blk_table = &blk_table,
+                 .allocator = get_local_allocator(),
+                 .offset = std::nullopt,
+                 .count = count,
+             },
+             buf)
+      .exec();
 }
 }  // namespace ulayfs::dram

@@ -13,14 +13,8 @@ class CoWTx : public WriteTx {
   // copying the src data
   const size_t num_full_blocks;
 
-  CoWTx(File* file, const char* buf, size_t count, size_t offset)
-      : WriteTx(file, buf, count, offset),
-        begin_full_vidx(BLOCK_SIZE_TO_IDX(ALIGN_UP(offset, BLOCK_SIZE))),
-        end_full_vidx(BLOCK_SIZE_TO_IDX(end_offset)),
-        num_full_blocks(end_full_vidx - begin_full_vidx) {}
-  CoWTx(File* file, const char* buf, size_t count, size_t offset,
-        FileState state, uint64_t ticket)
-      : WriteTx(file, buf, count, offset, state, ticket),
+  CoWTx(const TxArgs& tx_args, const char* buf)
+      : WriteTx(tx_args, buf),
         begin_full_vidx(BLOCK_SIZE_TO_IDX(ALIGN_UP(offset, BLOCK_SIZE))),
         end_full_vidx(BLOCK_SIZE_TO_IDX(end_offset)),
         num_full_blocks(end_full_vidx - begin_full_vidx) {}
@@ -32,15 +26,8 @@ class SingleBlockTx : public CoWTx {
   const size_t local_offset;
 
  public:
-  SingleBlockTx(File* file, const char* buf, size_t count, size_t offset)
-      : CoWTx(file, buf, count, offset),
-        local_offset(offset - BLOCK_IDX_TO_SIZE(begin_vidx)) {
-    assert(num_blocks == 1);
-  }
-
-  SingleBlockTx(File* file, const char* buf, size_t count, size_t offset,
-                FileState state, uint64_t ticket)
-      : CoWTx(file, buf, count, offset, state, ticket),
+  SingleBlockTx(const TxArgs& tx_args, const char* buf)
+      : CoWTx(tx_args, buf),
         local_offset(offset - BLOCK_IDX_TO_SIZE(begin_vidx)) {
     assert(num_blocks == 1);
   }
@@ -147,14 +134,8 @@ class MultiBlockTx : public CoWTx {
   const size_t last_block_overlap_size;
 
  public:
-  MultiBlockTx(File* file, const char* buf, size_t count, size_t offset)
-      : CoWTx(file, buf, count, offset),
-        first_block_overlap_size(ALIGN_UP(offset, BLOCK_SIZE) - offset),
-        last_block_overlap_size(end_offset -
-                                ALIGN_DOWN(end_offset, BLOCK_SIZE)) {}
-  MultiBlockTx(File* file, const char* buf, size_t count, size_t offset,
-               FileState state, uint64_t ticket)
-      : CoWTx(file, buf, count, offset, state, ticket),
+  MultiBlockTx(const TxArgs& tx_args, const char* buf)
+      : CoWTx(tx_args, buf),
         first_block_overlap_size(ALIGN_UP(offset, BLOCK_SIZE) - offset),
         last_block_overlap_size(end_offset -
                                 ALIGN_DOWN(end_offset, BLOCK_SIZE)) {}

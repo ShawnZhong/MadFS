@@ -13,19 +13,52 @@ ssize_t File::pwrite(const char* buf, size_t count, size_t offset) {
   if (count % BLOCK_SIZE == 0 && offset % BLOCK_SIZE == 0) {
     TimerGuard<Event::ALIGNED_TX> timer_guard;
     timer.start<Event::ALIGNED_TX_CTOR>();
-    return AlignedTx(this, buf, count, offset).exec();
+    return AlignedTx(
+               TxArgs{
+                   .lock = &lock,
+                   .offset_mgr = &offset_mgr,
+                   .mem_table = &mem_table,
+                   .blk_table = &blk_table,
+                   .allocator = get_local_allocator(),
+                   .offset = offset,
+                   .count = count,
+               },
+               buf)
+        .exec();
   }
 
   // another special case where range is within a single block
   if ((BLOCK_SIZE_TO_IDX(offset)) == BLOCK_SIZE_TO_IDX(offset + count - 1)) {
     TimerGuard<Event::SINGLE_BLOCK_TX> timer_guard;
-    return SingleBlockTx(this, buf, count, offset).exec();
+    return SingleBlockTx(
+               TxArgs{
+                   .lock = &lock,
+                   .offset_mgr = &offset_mgr,
+                   .mem_table = &mem_table,
+                   .blk_table = &blk_table,
+                   .allocator = get_local_allocator(),
+                   .offset = offset,
+                   .count = count,
+               },
+               buf)
+        .exec();
   }
 
   // unaligned multi-block write
   {
     TimerGuard<Event::MULTI_BLOCK_TX> timer_guard;
-    return MultiBlockTx(this, buf, count, offset).exec();
+    return MultiBlockTx(
+               TxArgs{
+                   .lock = &lock,
+                   .offset_mgr = &offset_mgr,
+                   .mem_table = &mem_table,
+                   .blk_table = &blk_table,
+                   .allocator = get_local_allocator(),
+                   .offset = offset,
+                   .count = count,
+               },
+               buf)
+        .exec();
   }
 }
 
@@ -48,22 +81,53 @@ ssize_t File::write(const char* buf, size_t count) {
   // special case that we have everything aligned, no OCC
   if (count % BLOCK_SIZE == 0 && offset % BLOCK_SIZE == 0) {
     TimerGuard<Event::ALIGNED_TX> timer_guard;
-    return Tx::exec_and_release_offset<AlignedTx>(this, buf, count, offset,
-                                                  state, ticket);
+    return AlignedTx(
+               TxArgs{
+                   .lock = &lock,
+                   .offset_mgr = &offset_mgr,
+                   .mem_table = &mem_table,
+                   .blk_table = &blk_table,
+                   .allocator = get_local_allocator(),
+                   .offset = std::nullopt,
+                   .count = count,
+
+               },
+               buf)
+        .exec();
   }
 
   // another special case where range is within a single block
   if (BLOCK_SIZE_TO_IDX(offset) == BLOCK_SIZE_TO_IDX(offset + count - 1)) {
     TimerGuard<Event::SINGLE_BLOCK_TX> timer_guard;
-    return Tx::exec_and_release_offset<SingleBlockTx>(this, buf, count, offset,
-                                                      state, ticket);
+    return SingleBlockTx(
+               TxArgs{
+                   .lock = &lock,
+                   .offset_mgr = &offset_mgr,
+                   .mem_table = &mem_table,
+                   .blk_table = &blk_table,
+                   .allocator = get_local_allocator(),
+                   .offset = std::nullopt,
+                   .count = count,
+               },
+               buf)
+        .exec();
   }
 
   // unaligned multi-block write
   {
     TimerGuard<Event::MULTI_BLOCK_TX> timer_guard;
-    return Tx::exec_and_release_offset<MultiBlockTx>(this, buf, count, offset,
-                                                     state, ticket);
+    return MultiBlockTx(
+               TxArgs{
+                   .lock = &lock,
+                   .offset_mgr = &offset_mgr,
+                   .mem_table = &mem_table,
+                   .blk_table = &blk_table,
+                   .allocator = get_local_allocator(),
+                   .offset = std::nullopt,
+                   .count = count,
+               },
+               buf)
+        .exec();
   }
 }
 }  // namespace ulayfs::dram

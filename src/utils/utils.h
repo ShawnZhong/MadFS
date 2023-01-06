@@ -15,8 +15,9 @@
 #include "utils/logging.h"
 
 // adopted from `include/linux/align.h`
-#define ALIGN_MASK(x, mask) (((x) + (mask)) & ~(mask))
-#define ALIGN_UP(x, a) ALIGN_MASK((x), (static_cast<decltype(x)>(a) - 1))
+inline constexpr auto ALIGN_UP(auto x, auto a) {
+  return (x + (a - 1)) & ~(a - 1);
+}
 #define ALIGN_DOWN(x, a) ((x) & ~(static_cast<decltype(x)>(a) - 1))
 #define IS_ALIGNED(x, a) (((x) & (static_cast<decltype(x)>(a) - 1)) == 0)
 

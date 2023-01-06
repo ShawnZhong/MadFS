@@ -4,21 +4,11 @@
 
 namespace ulayfs::dram {
 class ReadTx : public Tx {
- protected:
   char* const buf;
 
  public:
-  ReadTx(File* file, char* buf, size_t count, size_t offset)
-      : Tx(file, count, offset), buf(buf) {
+  ReadTx(const TxArgs& tx_args, char* buf) : Tx(tx_args, true), buf(buf) {
     lock->rdlock();  // nop lock is used by default
-  }
-
-  ReadTx(File* file, char* buf, size_t count, size_t offset, FileState state,
-         uint64_t ticket)
-      : ReadTx(file, buf, count, offset) {
-    is_offset_depend = true;
-    this->state = state;
-    this->ticket = ticket;
   }
 
   ssize_t exec() {

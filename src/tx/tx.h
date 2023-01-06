@@ -20,13 +20,22 @@ inline thread_local std::vector<LogicalBlockIdx> local_buf_image_lidxs;
 inline thread_local std::vector<LogicalBlockIdx> local_buf_dst_lidxs;
 inline thread_local std::vector<pmem::Block*> local_buf_dst_blocks;
 
+struct TxArgs {
+  Lock* lock;
+  OffsetMgr* offset_mgr;
+  MemTable* mem_table;
+  BlkTable* blk_table;
+  Allocator* allocator;
+  std::optional<size_t> offset;
+  size_t count;
+};
+
 /**
  * Tx represents a single ongoing transaction.
  */
 class Tx {
  protected:
   // pointer to the outer class
-  File* file;
   Lock* lock;
   OffsetMgr* offset_mgr;
   MemTable* mem_table;
@@ -63,34 +72,41 @@ class Tx {
 
   FileState state;
 
-  Tx(File* file, size_t count, size_t offset)
-      : file(file),
-        lock(&file->lock),
-        offset_mgr(&file->offset_mgr),
-        mem_table(&file->mem_table),
-        blk_table(&file->blk_table),
-        allocator(file->get_local_allocator()),
+ public:
+  Tx(const TxArgs& args, bool is_read)
+      : lock(args.lock),
+        offset_mgr(args.offset_mgr),
+        mem_table(args.mem_table),
+        blk_table(args.blk_table),
+        allocator(args.allocator),
 
-        // input properties
-        count(count),
-        offset(offset),
+        count(args.count),
+        offset([&]() {
+          if (args.offset.has_value()) {
+            return args.offset.value();
+          }
+          size_t ret;
+          args.blk_table->update([&](const FileState& file_state) {
+            ret =
+                args.offset_mgr->acquire(count, file_state.file_size,
+                                         /*stop_at_boundary*/ is_read, ticket);
+            state = file_state;
+          });
+          return ret;
+        }()),
 
         // derived properties
         end_offset(offset + count),
         begin_vidx(BLOCK_SIZE_TO_IDX(offset)),
         end_vidx(BLOCK_SIZE_TO_IDX(ALIGN_UP(end_offset, BLOCK_SIZE))),
         num_blocks(end_vidx - begin_vidx),
-        is_offset_depend(false) {}
+        is_offset_depend(!args.offset.has_value()) {}
 
-  ~Tx() { lock->unlock(); }
-
- public:
-  template <typename TX, typename... Params>
-  static ssize_t exec_and_release_offset(Params&&... params) {
-    TX tx(std::forward<Params>(params)...);
-    ssize_t ret = tx.exec();
-    tx.offset_mgr->release(tx.ticket, tx.state.cursor);
-    return ret;
+  ~Tx() {
+    lock->unlock();
+    if (is_offset_depend) {
+      offset_mgr->release(ticket, state.cursor);
+    }
   }
 
  protected:

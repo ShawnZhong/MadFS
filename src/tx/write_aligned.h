@@ -3,12 +3,7 @@
 namespace ulayfs::dram {
 class AlignedTx : public WriteTx {
  public:
-  AlignedTx(File* file, const char* buf, size_t count, size_t offset)
-      : WriteTx(file, buf, count, offset) {}
-
-  AlignedTx(File* file, const char* buf, size_t count, size_t offset,
-            FileState state, uint64_t ticket)
-      : WriteTx(file, buf, count, offset, state, ticket) {}
+  AlignedTx(const TxArgs& args, const char* buf) : WriteTx(args, buf) {}
 
   ssize_t exec() {
     timer.stop<Event::ALIGNED_TX_CTOR>();
