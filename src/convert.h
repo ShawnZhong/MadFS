@@ -5,7 +5,7 @@
 #include "block/block.h"
 #include "const.h"
 #include "entry.h"
-#include "file.h"
+#include "file/file.h"
 #include "idx.h"
 #include "posix.h"
 #include "utils/persist.h"
@@ -173,8 +173,11 @@ class Converter {
 
     // copy data to the new region
     for (VirtualBlockIdx vidx = 0; vidx < virtual_num_blocks; ++vidx)
-      pmem::memcpy_persist(new_region[vidx.get()].data_rw(),
-                           file->vidx_to_addr_ro(vidx)->data_ro(), BLOCK_SIZE);
+      pmem::memcpy_persist(
+          new_region[vidx.get()].data_rw(),
+          file->mem_table.lidx_to_addr_ro(file->blk_table.vidx_to_lidx(vidx))
+              ->data_ro(),
+          BLOCK_SIZE);
 
     fence();
 

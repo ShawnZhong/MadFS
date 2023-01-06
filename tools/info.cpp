@@ -1,6 +1,6 @@
 #include <iostream>
 
-#include "lib.h"
+#include "lib/lib.h"
 
 int main(int argc, char *argv[]) {
   if (argc != 2) {

@@ -4,7 +4,7 @@
 
 #include "block/tx.h"
 #include "cursor/tx_block.h"
-#include "file.h"
+#include "file/file.h"
 #include "idx.h"
 #include "posix.h"
 #include "utils/logging.h"
@@ -103,15 +103,15 @@ class GarbageCollector {
 
       auto num_blocks = BLOCK_SIZE_TO_IDX(ALIGN_UP(file_size, BLOCK_SIZE));
       for (; i < num_blocks; i++) {
-        auto curr_blk_idx = file->vidx_to_lidx(i);
-        auto prev_blk_idx = file->vidx_to_lidx(i - 1);
+        auto curr_blk_idx = file->blk_table.vidx_to_lidx(i);
+        auto prev_blk_idx = file->blk_table.vidx_to_lidx(i - 1);
         if (curr_blk_idx == 0) continue;
         // continuous blocks can be placed in 1 tx
         if (curr_blk_idx - prev_blk_idx == 1 &&
             i - begin < pmem::TxEntryInline::NUM_BLOCKS_MAX)
           continue;
-        auto entry =
-            pmem::TxEntryInline(i - begin, begin, file->vidx_to_lidx(begin));
+        auto entry = pmem::TxEntryInline(i - begin, begin,
+                                         file->blk_table.vidx_to_lidx(begin));
         new_cursor.block->store(entry, new_cursor.idx.local_idx);
         if (bool success = new_cursor.advance(&file->mem_table); !success) {
           // current block is full, flush it and allocate a new block
@@ -133,12 +133,12 @@ class GarbageCollector {
     {
       auto leftover_bytes = ALIGN_UP(file_size, BLOCK_SIZE) - file_size;
       if (leftover_bytes == 0) {
-        auto commit_entry =
-            pmem::TxEntryInline(i - begin, begin, file->vidx_to_lidx(begin));
+        auto commit_entry = pmem::TxEntryInline(
+            i - begin, begin, file->blk_table.vidx_to_lidx(begin));
         new_cursor.block->store(commit_entry, new_cursor.idx.local_idx);
       } else {
         // since i - begin <= 63, this can fit into one log entry
-        auto begin_lidx = std::vector{file->vidx_to_lidx(begin)};
+        auto begin_lidx = std::vector{file->blk_table.vidx_to_lidx(begin)};
         dram::LogCursor log_cursor = allocator->log_entry.append(
             pmem::LogEntry::Op::LOG_OVERWRITE, leftover_bytes, i - begin, begin,
             begin_lidx);

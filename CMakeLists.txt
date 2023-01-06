@@ -10,7 +10,7 @@ add_library(ulayfs SHARED ${ulayfs_SRC})
 build flags
 ]]
 set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -march=native -Wall -Wextra -Wno-unused")
-target_compile_options(ulayfs PRIVATE -Werror)
+target_compile_options(ulayfs PRIVATE -Werror -Wsign-conversion)
 set_property(TARGET ulayfs PROPERTY INTERPROCEDURAL_OPTIMIZATION TRUE) # LTO
 
 #[[

@@ -19,14 +19,13 @@ class WriteTx : public Tx {
   LogCursor log_cursor;
   uint16_t leftover_bytes;
 
-  WriteTx(File* file, TxMgr* tx_mgr, const char* buf, size_t count,
-          size_t offset)
-      : Tx(file, tx_mgr, count, offset),
+  WriteTx(File* file, const char* buf, size_t count, size_t offset)
+      : Tx(file, count, offset),
         buf(buf),
         recycle_image(local_buf_image_lidxs),
         dst_lidxs(local_buf_dst_lidxs),
         dst_blocks(local_buf_dst_blocks) {
-    tx_mgr->lock.wrlock();  // nop lock is used by default
+    lock->wrlock();  // nop lock is used by default
 
     // reset recycle_image
     recycle_image.clear();
@@ -52,9 +51,9 @@ class WriteTx : public Tx {
     assert(!dst_blocks.empty());
   }
 
-  WriteTx(File* file, TxMgr* tx_mgr, const char* buf, size_t count,
-          size_t offset, FileState state, uint64_t ticket)
-      : WriteTx(file, tx_mgr, buf, count, offset) {
+  WriteTx(File* file, const char* buf, size_t count, size_t offset,
+          FileState state, uint64_t ticket)
+      : WriteTx(file, buf, count, offset) {
     is_offset_depend = true;
     this->state = state;
     this->ticket = ticket;

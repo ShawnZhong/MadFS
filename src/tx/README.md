@@ -1,6 +1,3 @@
-This folder exposes the transaction manager (`TxMgr`) interface defined in the
-file [`mgr.h`](mgr.h).
-
 The [`Tx`](tx.h) class represents a single ongoing transaction. It has two
 subclasses:
 

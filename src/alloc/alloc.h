@@ -12,7 +12,8 @@ class Allocator {
   TxBlockAllocator tx_block;
   LogEntryAllocator log_entry;
 
-  Allocator(MemTable* mem_table, BitmapMgr* bitmap_mgr, PerThreadData* per_thread_data)
+  Allocator(MemTable* mem_table, BitmapMgr* bitmap_mgr,
+            PerThreadData* per_thread_data)
       : block(mem_table, bitmap_mgr),
         tx_block(&block, mem_table, per_thread_data),
         log_entry(&block, mem_table) {}

@@ -1,8 +1,7 @@
 #pragma once
 
 #include "cursor/log.h"
-#include "file.h"
-#include "mgr.h"
+#include "file/file.h"
 #include "utils/timer.h"
 
 namespace ulayfs::dram {
@@ -15,11 +14,11 @@ namespace ulayfs::dram {
  */
 
 // This one is used for redo_image in ReadTx and recycle_image in WriteTx
-thread_local std::vector<LogicalBlockIdx> local_buf_image_lidxs;
+inline thread_local std::vector<LogicalBlockIdx> local_buf_image_lidxs;
 
 // These are used in WriteTx for dst blocks
-thread_local std::vector<LogicalBlockIdx> local_buf_dst_lidxs;
-thread_local std::vector<pmem::Block*> local_buf_dst_blocks;
+inline thread_local std::vector<LogicalBlockIdx> local_buf_dst_lidxs;
+inline thread_local std::vector<pmem::Block*> local_buf_dst_blocks;
 
 /**
  * Tx represents a single ongoing transaction.
@@ -28,8 +27,10 @@ class Tx {
  protected:
   // pointer to the outer class
   File* file;
-  TxMgr* tx_mgr;
+  Lock* lock;
+  OffsetMgr* offset_mgr;
   MemTable* mem_table;
+  BlkTable* blk_table;
   Allocator* allocator;  // local
 
   /*
@@ -62,10 +63,12 @@ class Tx {
 
   FileState state;
 
-  Tx(File* file, TxMgr* tx_mgr, size_t count, size_t offset)
+  Tx(File* file, size_t count, size_t offset)
       : file(file),
-        tx_mgr(tx_mgr),
-        mem_table(tx_mgr->mem_table),
+        lock(&file->lock),
+        offset_mgr(&file->offset_mgr),
+        mem_table(&file->mem_table),
+        blk_table(&file->blk_table),
         allocator(file->get_local_allocator()),
 
         // input properties
@@ -79,14 +82,14 @@ class Tx {
         num_blocks(end_vidx - begin_vidx),
         is_offset_depend(false) {}
 
-  ~Tx() { tx_mgr->lock.unlock(); }
+  ~Tx() { lock->unlock(); }
 
  public:
   template <typename TX, typename... Params>
   static ssize_t exec_and_release_offset(Params&&... params) {
     TX tx(std::forward<Params>(params)...);
     ssize_t ret = tx.exec();
-    tx.tx_mgr->offset_mgr->release(tx.ticket, tx.state.cursor);
+    tx.offset_mgr->release(tx.ticket, tx.state.cursor);
     return ret;
   }
 

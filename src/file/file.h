@@ -24,12 +24,11 @@
 #include "offset.h"
 #include "posix.h"
 #include "shm.h"
-#include "tx/mgr.h"
+#include "tx/lock.h"
 #include "utils/utils.h"
 
 namespace ulayfs::utility {
 class Converter;
-class GarbageCollector;
 }  // namespace ulayfs::utility
 
 // data structure under this namespace must be in volatile memory (DRAM)
@@ -40,10 +39,10 @@ class File {
   BitmapMgr bitmap_mgr;
   MemTable mem_table;
   OffsetMgr offset_mgr;
-  TxMgr tx_mgr;
   BlkTable blk_table;
   ShmMgr shm_mgr;
   pmem::MetaBlock* const meta;
+  Lock lock;         // nop lock is used by default
   const char* path;  // only set at debug mode
 
  private:
@@ -71,15 +70,17 @@ class File {
   /*
    * POSIX I/O operations
    */
-  ssize_t pwrite(const void* buf, size_t count, size_t offset);
-  ssize_t write(const void* buf, size_t count);
-  ssize_t pread(void* buf, size_t count, off_t offset);
-  ssize_t read(void* buf, size_t count);
+  ssize_t pwrite(const char* buf, size_t count, size_t offset);
+  ssize_t write(const char* buf, size_t count);
+  ssize_t pread(char* buf, size_t count, size_t offset);
+  ssize_t read(char* buf, size_t count);
   off_t lseek(off_t offset, int whence);
   void* mmap(void* addr, size_t length, int prot, int flags,
              size_t offset) const;
   int fsync();
-  void stat(struct stat* buf);
+  void stat(struct stat* buf) {
+    buf->st_size = static_cast<off_t>(blk_table.update());
+  }
 
   /*
    * Getters
@@ -104,21 +105,6 @@ class File {
     old_offset =
         offset_mgr.acquire(count, state->file_size, stop_at_boundary, ticket);
     pthread_spin_unlock(&spinlock);
-  }
-
-  /**
-   * @return the logical block index corresponding to the virtual index
-   */
-  [[nodiscard]] LogicalBlockIdx vidx_to_lidx(VirtualBlockIdx vidx) const {
-    return blk_table.get(vidx);
-  }
-
-  /**
-   * @return a read-only pointer to the block given a virtual block index
-   * An empty block is returned if the block is not allocated yet (e.g., a hole)
-   */
-  [[nodiscard]] const pmem::Block* vidx_to_addr_ro(VirtualBlockIdx vidx) {
-    return mem_table.lidx_to_addr_ro(vidx_to_lidx(vidx));
   }
 
   // try to open a file with checking whether the given file is in uLayFS format
@@ -164,7 +150,7 @@ class File {
     return true;
   }
 
-  friend std::ostream& operator<<(std::ostream& out, const File& f);
+  friend std::ostream& operator<<(std::ostream& out, File& f);
 };
 
 }  // namespace ulayfs::dram

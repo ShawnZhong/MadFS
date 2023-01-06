@@ -6,7 +6,7 @@ extern "C" {
 ssize_t write(int fd, const void* buf, size_t count) {
   if (auto file = get_file(fd)) {
     timer.start<Event::WRITE>(count);
-    ssize_t res = file->write(buf, count);
+    ssize_t res = file->write(static_cast<const char*>(buf), count);
     timer.stop<Event::WRITE>();
     LOG_DEBUG("ulayfs::write(%s, buf, %zu) = %zu", file->path, count, res);
     return res;
@@ -20,7 +20,8 @@ ssize_t write(int fd, const void* buf, size_t count) {
 ssize_t pwrite(int fd, const void* buf, size_t count, off_t offset) {
   if (auto file = get_file(fd)) {
     TimerGuard<Event::PWRITE> timer_guard(count);
-    ssize_t res = file->pwrite(buf, count, static_cast<size_t>(offset));
+    ssize_t res = file->pwrite(static_cast<const char*>(buf), count,
+                               static_cast<size_t>(offset));
     LOG_DEBUG("ulayfs::pwrite(%s, buf, %zu, %zu) = %zu", file->path, count,
               offset, res);
     return res;
