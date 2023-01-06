@@ -79,7 +79,9 @@ class File {
   void* mmap(void* addr, size_t length, int prot, int flags,
              size_t offset) const;
   int fsync();
-  void stat(struct stat* buf);
+  void stat(struct stat* buf) {
+    buf->st_size = static_cast<off_t>(blk_table.update());
+  }
 
   /*
    * Getters

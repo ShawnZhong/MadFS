@@ -1,7 +1,7 @@
 #pragma once
 
 #include "cursor/log.h"
-#include "file.h"
+#include "file/file.h"
 #include "utils/timer.h"
 
 namespace ulayfs::dram {
@@ -14,11 +14,11 @@ namespace ulayfs::dram {
  */
 
 // This one is used for redo_image in ReadTx and recycle_image in WriteTx
-thread_local std::vector<LogicalBlockIdx> local_buf_image_lidxs;
+inline thread_local std::vector<LogicalBlockIdx> local_buf_image_lidxs;
 
 // These are used in WriteTx for dst blocks
-thread_local std::vector<LogicalBlockIdx> local_buf_dst_lidxs;
-thread_local std::vector<pmem::Block*> local_buf_dst_blocks;
+inline thread_local std::vector<LogicalBlockIdx> local_buf_dst_lidxs;
+inline thread_local std::vector<pmem::Block*> local_buf_dst_blocks;
 
 /**
  * Tx represents a single ongoing transaction.

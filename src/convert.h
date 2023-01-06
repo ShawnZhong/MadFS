@@ -5,7 +5,7 @@
 #include "block/block.h"
 #include "const.h"
 #include "entry.h"
-#include "file.h"
+#include "file/file.h"
 #include "idx.h"
 #include "posix.h"
 #include "utils/persist.h"

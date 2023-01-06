@@ -4,7 +4,7 @@
 
 #include "block/tx.h"
 #include "cursor/tx_block.h"
-#include "file.h"
+#include "file/file.h"
 #include "idx.h"
 #include "posix.h"
 #include "utils/logging.h"
