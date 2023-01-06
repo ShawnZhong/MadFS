@@ -120,10 +120,10 @@ void sync_test() {
     LOG_INFO("gc start");
 
     GarbageCollector garbage_collector(filepath);
-    std::cerr << garbage_collector.file->tx_mgr;
+    std::cerr << garbage_collector.file;
     std::cerr << garbage_collector.file->shm_mgr;
     garbage_collector.do_gc();
-    std::cerr << garbage_collector.file->tx_mgr;
+    std::cerr << garbage_collector.file;
 
     LOG_INFO("gc finished");
 
@@ -138,7 +138,7 @@ void sync_test() {
     GarbageCollector garbage_collector(filepath);
     std::cerr << garbage_collector.file->shm_mgr;
     garbage_collector.do_gc();
-    std::cerr << garbage_collector.file->tx_mgr;
+    std::cerr << garbage_collector.file;
   }
 }
 
