@@ -24,7 +24,7 @@
 #include "offset.h"
 #include "posix.h"
 #include "shm.h"
-#include "tx/mgr.h"
+#include "tx/lock.h"
 #include "utils/utils.h"
 
 namespace ulayfs::utility {
@@ -40,7 +40,6 @@ class File {
   BitmapMgr bitmap_mgr;
   MemTable mem_table;
   OffsetMgr offset_mgr;
-  TxMgr tx_mgr;
   BlkTable blk_table;
   ShmMgr shm_mgr;
   pmem::MetaBlock* const meta;
@@ -165,7 +164,7 @@ class File {
     return true;
   }
 
-  friend std::ostream& operator<<(std::ostream& out, const File& f);
+  friend std::ostream& operator<<(std::ostream& out, File& f);
 };
 
 }  // namespace ulayfs::dram

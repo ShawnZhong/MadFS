@@ -4,6 +4,7 @@
 #include <sys/xattr.h>
 
 #include <cerrno>
+#include <cmath>
 #include <cstdio>
 #include <cstdlib>
 #include <cstring>
@@ -11,8 +12,12 @@
 
 #include "alloc/alloc.h"
 #include "config.h"
+#include "cursor/tx_block.h"
 #include "idx.h"
 #include "shm.h"
+#include "tx/read.h"
+#include "tx/write_aligned.h"
+#include "tx/write_unaligned.h"
 #include "utils/timer.h"
 #include "utils/utils.h"
 
@@ -22,7 +27,6 @@ File::File(int fd, const struct stat& stat, int flags,
            const char* pathname [[maybe_unused]])
     : mem_table(fd, stat.st_size, (flags & O_ACCMODE) == O_RDONLY),
       offset_mgr(),
-      tx_mgr(this, &mem_table, &offset_mgr),
       blk_table(&mem_table),
       shm_mgr(fd, stat, mem_table.get_meta()),
       meta(mem_table.get_meta()),
@@ -83,7 +87,24 @@ ssize_t File::pwrite(const char* buf, size_t count, size_t offset) {
     return -1;
   }
   if (unlikely(count == 0)) return 0;
-  return tx_mgr.do_pwrite(buf, count, offset);
+  // special case that we have everything aligned, no OCC
+  if (count % BLOCK_SIZE == 0 && offset % BLOCK_SIZE == 0) {
+    TimerGuard<Event::ALIGNED_TX> timer_guard;
+    timer.start<Event::ALIGNED_TX_CTOR>();
+    return AlignedTx(this, buf, count, offset).exec();
+  }
+
+  // another special case where range is within a single block
+  if ((BLOCK_SIZE_TO_IDX(offset)) == BLOCK_SIZE_TO_IDX(offset + count - 1)) {
+    TimerGuard<Event::SINGLE_BLOCK_TX> timer_guard;
+    return SingleBlockTx(this, buf, count, offset).exec();
+  }
+
+  // unaligned multi-block write
+  {
+    TimerGuard<Event::MULTI_BLOCK_TX> timer_guard;
+    return MultiBlockTx(this, buf, count, offset).exec();
+  }
 }
 
 ssize_t File::write(const char* buf, size_t count) {
@@ -92,7 +113,33 @@ ssize_t File::write(const char* buf, size_t count) {
     return -1;
   }
   if (unlikely(count == 0)) return 0;
-  return tx_mgr.do_write(buf, count);
+
+  FileState state;
+  uint64_t ticket;
+  uint64_t offset;
+  update_with_offset(&state, count,
+                     /*stop_at_boundary*/ false, ticket, offset);
+
+  // special case that we have everything aligned, no OCC
+  if (count % BLOCK_SIZE == 0 && offset % BLOCK_SIZE == 0) {
+    TimerGuard<Event::ALIGNED_TX> timer_guard;
+    return Tx::exec_and_release_offset<AlignedTx>(this, buf, count, offset,
+                                                  state, ticket);
+  }
+
+  // another special case where range is within a single block
+  if (BLOCK_SIZE_TO_IDX(offset) == BLOCK_SIZE_TO_IDX(offset + count - 1)) {
+    TimerGuard<Event::SINGLE_BLOCK_TX> timer_guard;
+    return Tx::exec_and_release_offset<SingleBlockTx>(this, buf, count, offset,
+                                                      state, ticket);
+  }
+
+  // unaligned multi-block write
+  {
+    TimerGuard<Event::MULTI_BLOCK_TX> timer_guard;
+    return Tx::exec_and_release_offset<MultiBlockTx>(this, buf, count, offset,
+                                                     state, ticket);
+  }
 }
 
 ssize_t File::pread(char* buf, size_t count, size_t offset) {
@@ -101,7 +148,9 @@ ssize_t File::pread(char* buf, size_t count, size_t offset) {
     return -1;
   }
   if (unlikely(count == 0)) return 0;
-  return tx_mgr.do_pread(buf, count, offset);
+  TimerGuard<Event::READ_TX> timer_guard;
+  timer.start<Event::READ_TX_CTOR>();
+  return ReadTx(this, buf, count, offset).exec();
 }
 
 ssize_t File::read(char* buf, size_t count) {
@@ -110,7 +159,15 @@ ssize_t File::read(char* buf, size_t count) {
     return -1;
   }
   if (unlikely(count == 0)) return 0;
-  return tx_mgr.do_read(buf, count);
+
+  FileState state;
+  uint64_t ticket;
+  uint64_t offset;
+  update_with_offset(&state, count,
+                     /*stop_at_boundary*/ true, ticket, offset);
+
+  return Tx::exec_and_release_offset<ReadTx>(this, buf, count, offset, state,
+                                             ticket);
 }
 
 off_t File::lseek(off_t offset, int whence) {
@@ -249,7 +306,7 @@ Allocator* File::get_local_allocator() {
  * Helper functions
  */
 
-std::ostream& operator<<(std::ostream& out, const File& f) {
+std::ostream& operator<<(std::ostream& out, File& f) {
   __msan_scoped_disable_interceptor_checks();
   out << "File: fd = " << f.fd << "\n";
   if (f.can_write) out << f.shm_mgr;
@@ -260,7 +317,55 @@ std::ostream& operator<<(std::ostream& out, const File& f) {
     out << f.bitmap_mgr;
   }
   out << f.offset_mgr;
-  out << f.tx_mgr;
+  {
+    out << "Transactions: \n";
+
+    TxCursor cursor = TxCursor::from_meta(f.meta);
+    int count = 0;
+
+    while (true) {
+      auto tx_entry = cursor.get_entry();
+      if (!tx_entry.is_valid()) break;
+      if (tx_entry.is_dummy()) goto next;
+
+      count++;
+      if (count > 10) {
+        if (count % static_cast<int>(exp10(floor(log10(count)))) != 0)
+          goto next;
+      }
+
+      out << "\t" << count << ": " << cursor.idx << " -> " << tx_entry << "\n";
+
+      // print log entries if the tx is not inlined
+      if (!tx_entry.is_inline()) {
+        LogCursor log_cursor(tx_entry.indirect_entry, &f.mem_table);
+        do {
+          out << "\t\t" << *log_cursor << "\n";
+        } while (log_cursor.advance(&f.mem_table));
+      }
+
+    next:
+      if (bool success = cursor.advance(&f.mem_table); !success) break;
+    }
+
+    out << "\ttotal number of tx: " << count++ << "\n";
+  }
+
+  {
+    out << "Tx Blocks: \n";
+    TxBlockCursor cursor(f.meta);
+    while (cursor.advance_to_next_block(&f.mem_table)) {
+      out << "\t" << cursor.idx << ": " << *cursor.block << "\n";
+    }
+  }
+
+  {
+    out << "Orphaned Tx Blocks: \n";
+    TxBlockCursor cursor(f.meta);
+    while (cursor.advance_to_next_orphan(&f.mem_table)) {
+      out << "\t" << cursor.idx << ": " << *cursor.block << "\n";
+    }
+  }
   out << "\n";
   __msan_scoped_enable_interceptor_checks();
 

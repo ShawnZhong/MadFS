@@ -2,7 +2,6 @@
 
 #include "cursor/log.h"
 #include "file.h"
-#include "mgr.h"
 #include "utils/timer.h"
 
 namespace ulayfs::dram {
