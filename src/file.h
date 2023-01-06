@@ -44,6 +44,7 @@ class File {
   BlkTable blk_table;
   ShmMgr shm_mgr;
   pmem::MetaBlock* const meta;
+  Lock lock;         // nop lock is used by default
   const char* path;  // only set at debug mode
 
  private:

@@ -28,7 +28,8 @@ class Tx {
  protected:
   // pointer to the outer class
   File* file;
-  TxMgr* tx_mgr;
+  Lock* lock;
+  OffsetMgr* offset_mgr;
   MemTable* mem_table;
   Allocator* allocator;  // local
 
@@ -62,10 +63,11 @@ class Tx {
 
   FileState state;
 
-  Tx(File* file, TxMgr* tx_mgr, size_t count, size_t offset)
+  Tx(File* file, size_t count, size_t offset)
       : file(file),
-        tx_mgr(tx_mgr),
-        mem_table(tx_mgr->mem_table),
+        lock(&file->lock),
+        offset_mgr(&file->offset_mgr),
+        mem_table(&file->mem_table),
         allocator(file->get_local_allocator()),
 
         // input properties
@@ -79,14 +81,14 @@ class Tx {
         num_blocks(end_vidx - begin_vidx),
         is_offset_depend(false) {}
 
-  ~Tx() { tx_mgr->lock.unlock(); }
+  ~Tx() { lock->unlock(); }
 
  public:
   template <typename TX, typename... Params>
   static ssize_t exec_and_release_offset(Params&&... params) {
     TX tx(std::forward<Params>(params)...);
     ssize_t ret = tx.exec();
-    tx.tx_mgr->offset_mgr->release(tx.ticket, tx.state.cursor);
+    tx.offset_mgr->release(tx.ticket, tx.state.cursor);
     return ret;
   }
 

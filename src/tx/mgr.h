@@ -20,8 +20,6 @@ class TxMgr {
   MemTable* mem_table;
   OffsetMgr* offset_mgr;
 
-  Lock lock;  // nop lock is used by default
-
   TxMgr(File* file, MemTable* mem_table, OffsetMgr* offset_mgr)
       : file(file), mem_table(mem_table), offset_mgr(offset_mgr) {}
 

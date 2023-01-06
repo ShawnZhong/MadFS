@@ -8,14 +8,14 @@ class ReadTx : public Tx {
   char* const buf;
 
  public:
-  ReadTx(File* file, TxMgr* tx_mgr, char* buf, size_t count, size_t offset)
-      : Tx(file, tx_mgr, count, offset), buf(buf) {
-    tx_mgr->lock.rdlock();  // nop lock is used by default
+  ReadTx(File* file, char* buf, size_t count, size_t offset)
+      : Tx(file, count, offset), buf(buf) {
+    lock->rdlock();  // nop lock is used by default
   }
 
-  ReadTx(File* file, TxMgr* tx_mgr, char* buf, size_t count, size_t offset,
-         FileState state, uint64_t ticket)
-      : ReadTx(file, tx_mgr, buf, count, offset) {
+  ReadTx(File* file, char* buf, size_t count, size_t offset, FileState state,
+         uint64_t ticket)
+      : ReadTx(file, buf, count, offset) {
     is_offset_depend = true;
     this->state = state;
     this->ticket = ticket;
@@ -126,7 +126,7 @@ class ReadTx : public Tx {
     // we actually don't care what's the previous tx's tail, because we will
     // need to validate against the latest tail anyway
     if (is_offset_depend) {
-      if (!tx_mgr->offset_mgr->validate(ticket, state.cursor)) {
+      if (!offset_mgr->validate(ticket, state.cursor)) {
         // we don't need to revalidate after redo
         is_offset_depend = false;
         goto redo;

@@ -20,7 +20,7 @@ namespace ulayfs::dram {
 ssize_t TxMgr::do_pread(char* buf, size_t count, size_t offset) {
   TimerGuard<Event::READ_TX> timer_guard;
   timer.start<Event::READ_TX_CTOR>();
-  return ReadTx(file, this, buf, count, offset).exec();
+  return ReadTx(file, buf, count, offset).exec();
 }
 
 ssize_t TxMgr::do_read(char* buf, size_t count) {
@@ -30,8 +30,8 @@ ssize_t TxMgr::do_read(char* buf, size_t count) {
   file->update_with_offset(&state, count,
                            /*stop_at_boundary*/ true, ticket, offset);
 
-  return Tx::exec_and_release_offset<ReadTx>(file, this, buf, count, offset,
-                                             state, ticket);
+  return Tx::exec_and_release_offset<ReadTx>(file, buf, count, offset, state,
+                                             ticket);
 }
 
 ssize_t TxMgr::do_pwrite(const char* buf, size_t count, size_t offset) {
@@ -39,19 +39,19 @@ ssize_t TxMgr::do_pwrite(const char* buf, size_t count, size_t offset) {
   if (count % BLOCK_SIZE == 0 && offset % BLOCK_SIZE == 0) {
     TimerGuard<Event::ALIGNED_TX> timer_guard;
     timer.start<Event::ALIGNED_TX_CTOR>();
-    return AlignedTx(file, this, buf, count, offset).exec();
+    return AlignedTx(file, buf, count, offset).exec();
   }
 
   // another special case where range is within a single block
   if ((BLOCK_SIZE_TO_IDX(offset)) == BLOCK_SIZE_TO_IDX(offset + count - 1)) {
     TimerGuard<Event::SINGLE_BLOCK_TX> timer_guard;
-    return SingleBlockTx(file, this, buf, count, offset).exec();
+    return SingleBlockTx(file, buf, count, offset).exec();
   }
 
   // unaligned multi-block write
   {
     TimerGuard<Event::MULTI_BLOCK_TX> timer_guard;
-    return MultiBlockTx(file, this, buf, count, offset).exec();
+    return MultiBlockTx(file, buf, count, offset).exec();
   }
 }
 
@@ -65,22 +65,22 @@ ssize_t TxMgr::do_write(const char* buf, size_t count) {
   // special case that we have everything aligned, no OCC
   if (count % BLOCK_SIZE == 0 && offset % BLOCK_SIZE == 0) {
     TimerGuard<Event::ALIGNED_TX> timer_guard;
-    return Tx::exec_and_release_offset<AlignedTx>(file, this, buf, count,
-                                                  offset, state, ticket);
+    return Tx::exec_and_release_offset<AlignedTx>(file, buf, count, offset,
+                                                  state, ticket);
   }
 
   // another special case where range is within a single block
   if (BLOCK_SIZE_TO_IDX(offset) == BLOCK_SIZE_TO_IDX(offset + count - 1)) {
     TimerGuard<Event::SINGLE_BLOCK_TX> timer_guard;
-    return Tx::exec_and_release_offset<SingleBlockTx>(file, this, buf, count,
-                                                      offset, state, ticket);
+    return Tx::exec_and_release_offset<SingleBlockTx>(file, buf, count, offset,
+                                                      state, ticket);
   }
 
   // unaligned multi-block write
   {
     TimerGuard<Event::MULTI_BLOCK_TX> timer_guard;
-    return Tx::exec_and_release_offset<MultiBlockTx>(file, this, buf, count,
-                                                     offset, state, ticket);
+    return Tx::exec_and_release_offset<MultiBlockTx>(file, buf, count, offset,
+                                                     state, ticket);
   }
 }
 

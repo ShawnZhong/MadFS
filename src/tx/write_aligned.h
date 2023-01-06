@@ -3,13 +3,12 @@
 namespace ulayfs::dram {
 class AlignedTx : public WriteTx {
  public:
-  AlignedTx(File* file, TxMgr* tx_mgr, const char* buf, size_t count,
-            size_t offset)
-      : WriteTx(file, tx_mgr, buf, count, offset) {}
+  AlignedTx(File* file, const char* buf, size_t count, size_t offset)
+      : WriteTx(file, buf, count, offset) {}
 
-  AlignedTx(File* file, TxMgr* tx_mgr, const char* buf, size_t count,
-            size_t offset, FileState state, uint64_t ticket)
-      : WriteTx(file, tx_mgr, buf, count, offset, state, ticket) {}
+  AlignedTx(File* file, const char* buf, size_t count, size_t offset,
+            FileState state, uint64_t ticket)
+      : WriteTx(file, buf, count, offset, state, ticket) {}
 
   ssize_t exec() {
     timer.stop<Event::ALIGNED_TX_CTOR>();
@@ -56,7 +55,7 @@ class AlignedTx : public WriteTx {
 
     {
       TimerGuard<Event::ALIGNED_TX_WAIT_OFFSET> timer_guard;
-      if (is_offset_depend) tx_mgr->offset_mgr->wait(ticket);
+      if (is_offset_depend) offset_mgr->wait(ticket);
     }
 
     if constexpr (BuildOptions::cc_occ) {
