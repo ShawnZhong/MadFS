@@ -39,10 +39,7 @@ def add_common_args(argparser: argparse.ArgumentParser):
     )
 
     # add benchmark specific arguments to run_config
-    argparser.add_argument(
-        "--filter",
-        help="filters to be passed to Google Benchmark"
-    )
+    argparser.add_argument("--filter", help="filters to be passed to Google Benchmark")
     argparser.add_argument(
         "--size",
         help="Filesize in MB used for benchmarks",

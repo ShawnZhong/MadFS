@@ -1,9 +1,10 @@
 import logging
+import shutil
 from pathlib import Path
 from typing import Optional, List
 
-from fs import ULAYFS, Filesystem
-from utils import get_timestamp, system, root_dir
+from fs import ULAYFS, Filesystem, infer_numa_node
+from utils import get_timestamp, system, root_dir, get_cpulist
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger("runner")
@@ -55,34 +56,47 @@ class Runner:
         self.prog_path = self.build_path / cmake_target
 
     def run(
-            self,
-            cmd: Optional[List[str]] = None,
-            prog_log_name: str = "prog.log",
-            fs: Filesystem = ULAYFS,
-            prog_args: List[str] = None,
-            env=None,
-            trace: bool = False,
+        self,
+        cmd: Optional[List[str]] = None,
+        prog_log_name: str = "prog.log",
+        fs: Filesystem = ULAYFS,
+        prog_args: List[str] = None,
+        env: Optional[dict] = None,
+        trace: bool = False,
     ):
         if cmd is None:
             assert self.prog_path is not None
             cmd = [str(self.prog_path)]
 
-        if env is None:
-            env = {}
-
         if self.is_micro:
-            json_path = self.result_dir / "result.json"
-            cmd += [f"--benchmark_counters_tabular=true"]
-            cmd += [f"--benchmark_out={json_path}"]
+            cmd += [
+                f"--benchmark_counters_tabular=true",
+                f"--benchmark_out={self.result_dir / 'result.json'}",
+            ]
 
         if prog_args is not None:
             cmd += prog_args
 
+        numa = infer_numa_node(fs.path)
+        if shutil.which("numactl"):
+            cmd += ["numactl", f"--cpunodebind={numa}", f"--membind={numa}"]
+        else:
+            logger.warning("numactl not found, NUMA not enabled")
+
+        env = {
+            **env,
+            "PMEM_PATH": str(fs.path),
+            "CPULIST": ",".join(str(x) for x in get_cpulist(numa)),
+            **fs.get_env(
+                prog=cmd[0], build_type=self.build_type, result_dir=self.result_dir
+            ),
+        }
+
         if self.build_type == "tsan":
             env["TSAN_OPTIONS"] = f"suppressions={root_dir / 'cmake' / 'tsan.supp'}"
 
-        cmd = fs.process_cmd(cmd, env=env, build_type=self.build_type, result_dir=self.result_dir)
         # cmd = "perf stat -d -d -d".split() + cmd
+        cmd = ["env"] + [f"{k}={v}" for k, v in env.items()] + cmd
         cmd = " ".join(cmd)
 
         # execute
@@ -144,7 +158,6 @@ class Runner:
         #     log_path=log_path,
         # )
         system(
-            f"magic-trace run -o {trace_output}"
-            f" {prog} -- {' '.join(args)}",
+            f"magic-trace run -o {trace_output}" f" {prog} -- {' '.join(args)}",
             log_path=log_path,
         )

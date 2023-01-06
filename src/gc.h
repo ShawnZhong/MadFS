@@ -40,8 +40,8 @@ class GarbageCollector {
 
           return std::make_unique<dram::File>(fd, stat_buf, O_RDWR, pathname);
         }()),
-        file_size(file->blk_table.get_file_state().file_size),
-        old_tail(file->blk_table.get_file_state().cursor),
+        file_size(file->blk_table.get_state_unsafe().file_size),
+        old_tail(file->blk_table.get_state_unsafe().cursor),
         old_head(file->meta->get_next_tx_block(), &file->mem_table),
         allocator(file->get_local_allocator()) {
     // we don't care the per-thread data for the gc thread
