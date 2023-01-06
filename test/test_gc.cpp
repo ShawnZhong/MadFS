@@ -2,7 +2,7 @@
 
 #include "common.h"
 #include "gc.h"
-#include "lib.h"
+#include "lib/lib.h"
 #include "utils/logging.h"
 
 const char* filepath = get_filepath();

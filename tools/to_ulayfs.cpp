@@ -2,7 +2,7 @@
 
 #include "convert.h"
 #include "file.h"
-#include "lib.h"
+#include "lib/lib.h"
 #include "posix.h"
 
 int main(int argc, char *argv[]) {

@@ -1,6 +1,6 @@
 #include "debug.h"
 
-#include "lib.h"
+#include "lib/lib.h"
 #include "utils/timer.h"
 
 namespace ulayfs::debug {
