@@ -54,12 +54,6 @@ class File {
   // the allocator is a per-thread per-file data structure
   tbb::concurrent_unordered_map<pid_t, Allocator> allocators;
 
-  // move spinlock into a separated cacheline
-  union {
-    pthread_spinlock_t spinlock;
-    char cl[CACHELINE_SIZE];
-  };
-
   // transformer will have to do many dirty and inclusive operations
   friend utility::Converter;
 
@@ -79,33 +73,13 @@ class File {
              size_t offset) const;
   int fsync();
   void stat(struct stat* buf) {
-    buf->st_size = static_cast<off_t>(blk_table.update());
+    buf->st_size = static_cast<off_t>(blk_table.update_unsafe());
   }
 
   /*
    * Getters
    */
   [[nodiscard]] Allocator* get_local_allocator();
-
-  void update(FileState* state, Allocator* allocator = nullptr) {
-    if (!blk_table.need_update(state, allocator)) return;
-    pthread_spin_lock(&spinlock);
-    blk_table.update(allocator);
-    *state = blk_table.get_file_state();
-    pthread_spin_unlock(&spinlock);
-  }
-
-  void update_with_offset(FileState* state, uint64_t& count,
-                          bool stop_at_boundary, uint64_t& ticket,
-                          uint64_t& old_offset,
-                          Allocator* allocator = nullptr) {
-    pthread_spin_lock(&spinlock);
-    blk_table.update(allocator);
-    *state = blk_table.get_file_state();
-    old_offset =
-        offset_mgr.acquire(count, state->file_size, stop_at_boundary, ticket);
-    pthread_spin_unlock(&spinlock);
-  }
 
   // try to open a file with checking whether the given file is in uLayFS format
   static bool try_open(int& fd, struct stat& stat_buf, const char* pathname,

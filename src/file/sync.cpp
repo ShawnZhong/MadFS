@@ -3,7 +3,7 @@
 namespace ulayfs::dram {
 int File::fsync() {
   FileState state;
-  this->update(&state);
+  blk_table.update(&state);
   TxCursor::flush_up_to(&mem_table, meta, state.cursor);
   // we keep an invariant that tx_tail must be a valid (non-overflow) idx
   // an overflow index implies that the `next` pointer of the block is not set

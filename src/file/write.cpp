@@ -39,8 +39,11 @@ ssize_t File::write(const char* buf, size_t count) {
   FileState state;
   uint64_t ticket;
   uint64_t offset;
-  update_with_offset(&state, count,
-                     /*stop_at_boundary*/ false, ticket, offset);
+  blk_table.update([&](const FileState& file_state) {
+    offset = offset_mgr.acquire(count, file_state.file_size,
+                                /*stop_at_boundary*/ false, ticket);
+    state = file_state;
+  });
 
   // special case that we have everything aligned, no OCC
   if (count % BLOCK_SIZE == 0 && offset % BLOCK_SIZE == 0) {

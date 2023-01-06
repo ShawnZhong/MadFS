@@ -18,7 +18,6 @@ File::File(int fd, const struct stat& stat, int flags,
                (flags & O_ACCMODE) == O_RDWR),
       can_write((flags & O_ACCMODE) == O_WRONLY ||
                 (flags & O_ACCMODE) == O_RDWR) {
-  pthread_spin_init(&spinlock, PTHREAD_PROCESS_PRIVATE);
   if (stat.st_size == 0) meta->init();
 
   uint64_t file_size;
@@ -35,7 +34,7 @@ File::File(int fd, const struct stat& stat, int flags,
     if (!bitmap_mgr.entries[0].is_allocated(0)) {
       meta->lock();
       if (!bitmap_mgr.entries[0].is_allocated(0)) {
-        file_size = blk_table.update(/*allocator=*/nullptr, &bitmap_mgr);
+        file_size = blk_table.update_unsafe(/*allocator=*/nullptr, &bitmap_mgr);
         file_size_updated = true;
         bitmap_mgr.entries[0].set_allocated(0);
       }
@@ -43,7 +42,7 @@ File::File(int fd, const struct stat& stat, int flags,
     }
   }
 
-  if (!file_size_updated) file_size = blk_table.update();
+  if (!file_size_updated) file_size = blk_table.update_unsafe();
 
   if (flags & O_APPEND) offset_mgr.seek_absolute(static_cast<off_t>(file_size));
   if constexpr (BuildOptions::debug) {
@@ -52,7 +51,6 @@ File::File(int fd, const struct stat& stat, int flags,
 }
 
 File::~File() {
-  pthread_spin_destroy(&spinlock);
   allocators.clear();
   if (fd >= 0) posix::close(fd);
   if constexpr (BuildOptions::debug) {
