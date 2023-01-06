@@ -13,9 +13,9 @@ class CoWTx : public WriteTx {
   // copying the src data
   const size_t num_full_blocks;
 
-  CoWTx(const TxArgs& tx_args, const char* buf)
-      : WriteTx(tx_args, buf),
-        begin_full_vidx(BLOCK_SIZE_TO_IDX(ALIGN_UP(offset, BLOCK_SIZE))),
+  CoWTx(TxArg& arg)
+      : WriteTx(arg),
+        begin_full_vidx(BLOCK_SIZE_TO_IDX(ALIGN_UP(arg.offset, BLOCK_SIZE))),
         end_full_vidx(BLOCK_SIZE_TO_IDX(end_offset)),
         num_full_blocks(end_full_vidx - begin_full_vidx) {}
 };
@@ -26,9 +26,8 @@ class SingleBlockTx : public CoWTx {
   const size_t local_offset;
 
  public:
-  SingleBlockTx(const TxArgs& tx_args, const char* buf)
-      : CoWTx(tx_args, buf),
-        local_offset(offset - BLOCK_IDX_TO_SIZE(begin_vidx)) {
+  SingleBlockTx(TxArg& arg)
+      : CoWTx(arg), local_offset(arg.offset - BLOCK_IDX_TO_SIZE(begin_vidx)) {
     assert(num_blocks == 1);
   }
 
@@ -36,28 +35,30 @@ class SingleBlockTx : public CoWTx {
     timer.count<Event::SINGLE_BLOCK_TX_START>();
     bool need_redo;
 
-    LogicalBlockIdx pinned_tx_block_idx = allocator->tx_block.get_pinned_idx();
+    LogicalBlockIdx pinned_tx_block_idx =
+        arg.allocator->tx_block.get_pinned_idx();
     if (pinned_tx_block_idx == 0) {  // no tx_block is pinned yet
       // this should trigger a shared memory slot allocation
       // because we will start the first log replay, we will need to read the
       // whole tx history, so gc threads must not reclaim any blocks before we
       // are done
-      allocator->tx_block.pin(0);
+      arg.allocator->tx_block.pin(0);
     }
 
     // must acquire the tx tail before any get
-    if (!is_offset_depend) blk_table->update(&state, allocator);
+    if (!arg.is_offset_depend) arg.blk_table->update(&arg.state, arg.allocator);
 
-    if (pinned_tx_block_idx != state.get_tx_block_idx())
-      allocator->log_entry.reset();
+    if (pinned_tx_block_idx != arg.state.get_tx_block_idx())
+      arg.allocator->log_entry.reset();
 
     prepare_commit_entry();
 
-    recycle_image[0] = blk_table->vidx_to_lidx(begin_vidx);
+    recycle_image[0] = arg.blk_table->vidx_to_lidx(begin_vidx);
     assert(recycle_image[0] != dst_lidxs[0]);
 
     // copy data from buf
-    pmem::memcpy_persist(dst_blocks[0]->data_rw() + local_offset, buf, count);
+    pmem::memcpy_persist(dst_blocks[0]->data_rw() + local_offset, arg.buf,
+                         arg.count);
 
   redo:
     assert(dst_blocks.size() == 1);
@@ -68,7 +69,7 @@ class SingleBlockTx : public CoWTx {
 
       char* dst_block = dst_blocks[0]->data_rw();
       const char* src_block =
-          mem_table->lidx_to_addr_ro(recycle_image[0])->data_ro();
+          arg.mem_table->lidx_to_addr_ro(recycle_image[0])->data_ro();
 
       // copy the left part of the block
       if (local_offset != 0) {
@@ -76,21 +77,21 @@ class SingleBlockTx : public CoWTx {
       }
 
       // copy the right part of the block
-      if (size_t len = BLOCK_SIZE - (local_offset + count); len != 0) {
-        char* dst = dst_block + local_offset + count;
-        const char* src = src_block + local_offset + count;
+      if (size_t len = BLOCK_SIZE - (local_offset + arg.count); len != 0) {
+        char* dst = dst_block + local_offset + arg.count;
+        const char* src = src_block + local_offset + arg.count;
         pmem::memcpy_persist(dst, src, len);
       }
     }
 
-    if (is_offset_depend) offset_mgr->wait(ticket);
+    if (arg.is_offset_depend) arg.offset_mgr->wait(arg.ticket);
 
   retry:
     if constexpr (BuildOptions::cc_occ) {
       timer.count<Event::SINGLE_BLOCK_TX_COMMIT>();
       // try to commit the tx entry
-      pmem::TxEntry conflict_entry =
-          state.cursor.try_commit(commit_entry, mem_table, allocator);
+      pmem::TxEntry conflict_entry = arg.state.cursor.try_commit(
+          commit_entry, arg.mem_table, arg.allocator);
       if (!conflict_entry.is_valid()) goto done;  // success, no conflict
 
       bool into_new_block = false;
@@ -100,8 +101,8 @@ class SingleBlockTx : public CoWTx {
                           commit_entry.is_inline() ? nullptr : &into_new_block);
       if (into_new_block) {
         assert(!commit_entry.is_inline());
-        allocator->log_entry.free(log_cursor);
-        allocator->log_entry.reset();
+        arg.allocator->log_entry.free(log_cursor);
+        arg.allocator->log_entry.reset();
         // re-prepare (incl. append new log entries)
         prepare_commit_entry();
       } else {
@@ -112,14 +113,14 @@ class SingleBlockTx : public CoWTx {
       else
         goto redo;
     } else {
-      state.cursor.try_commit(commit_entry, mem_table, allocator);
+      arg.state.cursor.try_commit(commit_entry, arg.mem_table, arg.allocator);
     }
 
   done:
     // update the pinned tx block
-    allocator->tx_block.pin(state.get_tx_block_idx());
-    allocator->block.free(recycle_image[0]);  // it has only single block
-    return static_cast<ssize_t>(count);
+    arg.allocator->tx_block.pin(arg.state.get_tx_block_idx());
+    arg.allocator->block.free(recycle_image[0]);  // it has only single block
+    return static_cast<ssize_t>(arg.count);
   }
 };
 
@@ -134,9 +135,9 @@ class MultiBlockTx : public CoWTx {
   const size_t last_block_overlap_size;
 
  public:
-  MultiBlockTx(const TxArgs& tx_args, const char* buf)
-      : CoWTx(tx_args, buf),
-        first_block_overlap_size(ALIGN_UP(offset, BLOCK_SIZE) - offset),
+  MultiBlockTx(TxArg& arg)
+      : CoWTx(arg),
+        first_block_overlap_size(ALIGN_UP(arg.offset, BLOCK_SIZE) - arg.offset),
         last_block_overlap_size(end_offset -
                                 ALIGN_DOWN(end_offset, BLOCK_SIZE)) {}
   ssize_t exec() {
@@ -154,7 +155,7 @@ class MultiBlockTx : public CoWTx {
 
     // copy full blocks first
     if (num_full_blocks > 0) {
-      const char* rest_buf = buf;
+      const char* rest_buf = arg.buf;
       size_t rest_full_count = BLOCK_NUM_TO_SIZE(num_full_blocks);
       for (size_t i = 0; i < dst_blocks.size(); ++i) {
         // get logical block pointer for this iter
@@ -181,15 +182,16 @@ class MultiBlockTx : public CoWTx {
     }
 
     // only get a snapshot of the tail when starting critical piece
-    if (!is_offset_depend) blk_table->update(&state, allocator);
+    if (!arg.is_offset_depend) arg.blk_table->update(&arg.state, arg.allocator);
 
-    if (allocator->tx_block.get_pinned_idx() != state.get_tx_block_idx())
-      allocator->log_entry.reset();
+    if (arg.allocator->tx_block.get_pinned_idx() !=
+        arg.state.get_tx_block_idx())
+      arg.allocator->log_entry.reset();
 
     prepare_commit_entry();
 
     for (uint32_t i = 0; i < num_blocks; ++i)
-      recycle_image[i] = blk_table->vidx_to_lidx(begin_vidx + i);
+      recycle_image[i] = arg.blk_table->vidx_to_lidx(begin_vidx + i);
     src_first_lidx = recycle_image[0];
     src_last_lidx = recycle_image[num_blocks - 1];
 
@@ -197,14 +199,14 @@ class MultiBlockTx : public CoWTx {
     {
       char* dst =
           dst_blocks[0]->data_rw() + BLOCK_SIZE - first_block_overlap_size;
-      pmem::memcpy_persist(dst, buf, first_block_overlap_size);
+      pmem::memcpy_persist(dst, arg.buf, first_block_overlap_size);
     }
 
     // write data from the buf to the last block
     pmem::Block* last_dst_block =
         dst_blocks.back() + (end_full_vidx - begin_vidx) -
         BITMAP_ENTRY_BLOCKS_CAPACITY * (dst_blocks.size() - 1);
-    const char* buf_src = buf + (count - last_block_overlap_size);
+    const char* buf_src = arg.buf + (arg.count - last_block_overlap_size);
     pmem::memcpy_persist(last_dst_block->data_rw(), buf_src,
                          last_block_overlap_size);
 
@@ -213,7 +215,8 @@ class MultiBlockTx : public CoWTx {
     // copy the data from the first source block if exists
     if (need_copy_first && do_copy_first) {
       char* dst = dst_blocks[0]->data_rw();
-      const char* src = mem_table->lidx_to_addr_ro(src_first_lidx)->data_ro();
+      const char* src =
+          arg.mem_table->lidx_to_addr_ro(src_first_lidx)->data_ro();
       size_t size = BLOCK_SIZE - first_block_overlap_size;
       pmem::memcpy_persist(dst, src, size);
     }
@@ -221,21 +224,22 @@ class MultiBlockTx : public CoWTx {
     // copy the data from the last source block if exits
     if (need_copy_last && do_copy_last) {
       char* dst = last_dst_block->data_rw() + last_block_overlap_size;
-      const char* src = mem_table->lidx_to_addr_ro(src_last_lidx)->data_ro() +
-                        last_block_overlap_size;
+      const char* src =
+          arg.mem_table->lidx_to_addr_ro(src_last_lidx)->data_ro() +
+          last_block_overlap_size;
       size_t size = BLOCK_SIZE - last_block_overlap_size;
       pmem::memcpy_persist(dst, src, size);
     }
     fence();
 
-    if (is_offset_depend) offset_mgr->wait(ticket);
+    if (arg.is_offset_depend) arg.offset_mgr->wait(arg.ticket);
 
   retry:
     if constexpr (BuildOptions::cc_occ) {
       timer.count<Event::MULTI_BLOCK_TX_COMMIT>();
       // try to commit the transaction
-      pmem::TxEntry conflict_entry =
-          state.cursor.try_commit(commit_entry, mem_table, allocator);
+      pmem::TxEntry conflict_entry = arg.state.cursor.try_commit(
+          commit_entry, arg.mem_table, arg.allocator);
       if (!conflict_entry.is_valid()) goto done;  // success
       // make a copy of the first and last again
       src_first_lidx = recycle_image[0];
@@ -247,8 +251,8 @@ class MultiBlockTx : public CoWTx {
           commit_entry.is_inline() ? nullptr : &into_new_block);
       if (into_new_block) {
         assert(!commit_entry.is_inline());
-        allocator->log_entry.free(log_cursor);
-        allocator->log_entry.reset();
+        arg.allocator->log_entry.free(log_cursor);
+        arg.allocator->log_entry.reset();
         // re-prepare (incl. append new log entries)
         prepare_commit_entry();
       } else {
@@ -265,15 +269,15 @@ class MultiBlockTx : public CoWTx {
           goto retry;
       }
     } else {
-      state.cursor.try_commit(commit_entry, mem_table, allocator);
+      arg.state.cursor.try_commit(commit_entry, arg.mem_table, arg.allocator);
     }
 
   done:
     // update the pinned tx block
-    allocator->tx_block.pin(state.get_tx_block_idx());
+    arg.allocator->tx_block.pin(arg.state.get_tx_block_idx());
     // recycle the data blocks being overwritten
-    allocator->block.free(recycle_image);
-    return static_cast<ssize_t>(count);
+    arg.allocator->block.free(recycle_image);
+    return static_cast<ssize_t>(arg.count);
   }
 };
 

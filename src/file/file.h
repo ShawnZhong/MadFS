@@ -64,10 +64,8 @@ class File {
   /*
    * POSIX I/O operations
    */
-  ssize_t pwrite(const char* buf, size_t count, size_t offset);
-  ssize_t write(const char* buf, size_t count);
-  ssize_t pread(char* buf, size_t count, size_t offset);
-  ssize_t read(char* buf, size_t count);
+  ssize_t write(const char* buf, size_t count, std::optional<size_t> offset);
+  ssize_t read(char* buf, size_t count, std::optional<size_t> offset);
   off_t lseek(off_t offset, int whence);
   void* mmap(void* addr, size_t length, int prot, int flags,
              size_t offset) const;

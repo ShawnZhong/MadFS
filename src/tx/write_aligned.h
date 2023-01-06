@@ -3,7 +3,7 @@
 namespace ulayfs::dram {
 class AlignedTx : public WriteTx {
  public:
-  AlignedTx(const TxArgs& args, const char* buf) : WriteTx(args, buf) {}
+  AlignedTx(TxArg& args) : WriteTx(args) {}
 
   ssize_t exec() {
     timer.stop<Event::ALIGNED_TX_CTOR>();
@@ -13,8 +13,8 @@ class AlignedTx : public WriteTx {
       TimerGuard<Event::ALIGNED_TX_COPY> timer_guard;
 
       // since everything is block-aligned, we can copy data directly
-      const char* rest_buf = buf;
-      size_t rest_count = count;
+      const char* rest_buf = arg.buf;
+      size_t rest_count = arg.count;
 
       for (auto block : dst_blocks) {
         size_t num_bytes = std::min(rest_count, BITMAP_ENTRY_BYTES_CAPACITY);
@@ -27,11 +27,13 @@ class AlignedTx : public WriteTx {
 
     {
       TimerGuard<Event::ALIGNED_TX_UPDATE> timer_guard;
-      if (!is_offset_depend) blk_table->update(&state, allocator);
+      if (!arg.is_offset_depend)
+        arg.blk_table->update(&arg.state, arg.allocator);
     }
 
-    if (allocator->tx_block.get_pinned_idx() != state.get_tx_block_idx())
-      allocator->log_entry.reset();
+    if (arg.allocator->tx_block.get_pinned_idx() !=
+        arg.state.get_tx_block_idx())
+      arg.allocator->log_entry.reset();
 
     {
       TimerGuard<Event::ALIGNED_TX_PREPARE> timer_guard;
@@ -45,19 +47,19 @@ class AlignedTx : public WriteTx {
     {
       TimerGuard<Event::ALIGNED_TX_RECYCLE> timer_guard;
       for (uint32_t i = 0; i < num_blocks; ++i)
-        recycle_image[i] = blk_table->vidx_to_lidx(begin_vidx + i);
+        recycle_image[i] = arg.blk_table->vidx_to_lidx(begin_vidx + i);
     }
 
     {
       TimerGuard<Event::ALIGNED_TX_WAIT_OFFSET> timer_guard;
-      if (is_offset_depend) offset_mgr->wait(ticket);
+      if (arg.is_offset_depend) arg.offset_mgr->wait(arg.ticket);
     }
 
     if constexpr (BuildOptions::cc_occ) {
       TimerGuard<Event::ALIGNED_TX_COMMIT> timer_guard;
       while (true) {
-        pmem::TxEntry conflict_entry =
-            state.cursor.try_commit(commit_entry, mem_table, allocator);
+        pmem::TxEntry conflict_entry = arg.state.cursor.try_commit(
+            commit_entry, arg.mem_table, arg.allocator);
         if (!conflict_entry.is_valid()) break;
 
         bool into_new_block = false;
@@ -68,8 +70,8 @@ class AlignedTx : public WriteTx {
                         commit_entry.is_inline() ? nullptr : &into_new_block);
         if (into_new_block) {
           assert(!commit_entry.is_inline());
-          allocator->log_entry.free(log_cursor);
-          allocator->log_entry.reset();
+          arg.allocator->log_entry.free(log_cursor);
+          arg.allocator->log_entry.reset();
           // re-prepare (incl. append new log entries)
           prepare_commit_entry(/*skip_update_leftover_bytes*/ true);
         }
@@ -78,21 +80,21 @@ class AlignedTx : public WriteTx {
       }
     } else {
       TimerGuard<Event::ALIGNED_TX_COMMIT> timer_guard;
-      state.cursor.try_commit(commit_entry, mem_table, allocator);
+      arg.state.cursor.try_commit(commit_entry, arg.mem_table, arg.allocator);
     }
 
     {
       TimerGuard<Event::ALIGNED_TX_FREE> timer_guard;
       // recycle the data blocks being overwritten
-      allocator->block.free(recycle_image);
+      arg.allocator->block.free(recycle_image);
     }
 
     // update the pinned tx block
-    allocator->tx_block.pin(state.get_tx_block_idx());
+    arg.allocator->tx_block.pin(arg.state.get_tx_block_idx());
 
     timer.stop<Event::ALIGNED_TX_EXEC>();
 
-    return static_cast<ssize_t>(count);
+    return static_cast<ssize_t>(arg.count);
   }
 };
 }  // namespace ulayfs::dram

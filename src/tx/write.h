@@ -6,7 +6,6 @@ namespace ulayfs::dram {
 
 class WriteTx : public Tx {
  protected:
-  const char* const buf;
   std::vector<LogicalBlockIdx>& recycle_image;
 
   // the logical index of the destination data block
@@ -19,14 +18,11 @@ class WriteTx : public Tx {
   LogCursor log_cursor;
   uint16_t leftover_bytes;
 
-  WriteTx(const TxArgs& tx_args, const char* buf)
-      : Tx(tx_args, false),
-        buf(buf),
+  WriteTx(TxArg& arg)
+      : Tx(arg),
         recycle_image(local_buf_image_lidxs),
         dst_lidxs(local_buf_dst_lidxs),
         dst_blocks(local_buf_dst_blocks) {
-    lock->wrlock();  // nop lock is used by default
-
     // reset recycle_image
     recycle_image.clear();
     recycle_image.resize(num_blocks);
@@ -40,14 +36,14 @@ class WriteTx : public Tx {
     while (rest_num_blocks > 0) {
       uint32_t chunk_num_blocks =
           std::min(rest_num_blocks, BITMAP_ENTRY_BLOCKS_CAPACITY);
-      auto lidx = allocator->block.alloc(chunk_num_blocks);
+      auto lidx = arg.allocator->block.alloc(chunk_num_blocks);
       dst_lidxs.push_back(lidx);
       rest_num_blocks -= chunk_num_blocks;
     }
     assert(!dst_lidxs.empty());
 
     for (auto lidx : dst_lidxs)
-      dst_blocks.push_back(mem_table->lidx_to_addr_rw(lidx));
+      dst_blocks.push_back(arg.mem_table->lidx_to_addr_rw(lidx));
     assert(!dst_blocks.empty());
   }
 
@@ -57,7 +53,7 @@ class WriteTx : public Tx {
     leftover_bytes = ALIGN_UP(end_offset, BLOCK_SIZE) - end_offset;
     // then verify if this is the end of file; if not, leftover must be zero
     if (leftover_bytes > 0 &&
-        end_offset <= ALIGN_DOWN(state.file_size, BLOCK_SIZE))
+        end_offset <= ALIGN_DOWN(arg.state.file_size, BLOCK_SIZE))
       leftover_bytes = 0;
   }
 
@@ -69,13 +65,13 @@ class WriteTx : public Tx {
       commit_entry = pmem::TxEntryInline(num_blocks, begin_vidx, dst_lidxs[0]);
     } else {
       // it's fine that we append log first as long we don't publish it by tx
-      log_cursor =
-          allocator->log_entry.append(pmem::LogEntry::Op::LOG_OVERWRITE,  // op
-                                      leftover_bytes,  // leftover_bytes
-                                      num_blocks,      // total_blocks
-                                      begin_vidx,      // begin_virtual_idx
-                                      dst_lidxs        // begin_logical_idxs
-          );
+      log_cursor = arg.allocator->log_entry.append(
+          pmem::LogEntry::Op::LOG_OVERWRITE,  // op
+          leftover_bytes,                     // leftover_bytes
+          num_blocks,                         // total_blocks
+          begin_vidx,                         // begin_virtual_idx
+          dst_lidxs                           // begin_logical_idxs
+      );
       commit_entry = pmem::TxEntryIndirect(log_cursor.idx);
     }
   }
@@ -94,7 +90,7 @@ class WriteTx : public Tx {
       // the previously allocated log entries should be recycled, but for now,
       // we just leave them there waiting for gc.
     }
-    log_cursor.update_leftover_bytes(mem_table, leftover_bytes);
+    log_cursor.update_leftover_bytes(arg.mem_table, leftover_bytes);
   }
 };
 }  // namespace ulayfs::dram

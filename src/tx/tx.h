@@ -20,38 +20,65 @@ inline thread_local std::vector<LogicalBlockIdx> local_buf_image_lidxs;
 inline thread_local std::vector<LogicalBlockIdx> local_buf_dst_lidxs;
 inline thread_local std::vector<pmem::Block*> local_buf_dst_blocks;
 
-struct TxArgs {
-  Lock* lock;
-  OffsetMgr* offset_mgr;
-  MemTable* mem_table;
-  BlkTable* blk_table;
-  Allocator* allocator;
-  std::optional<size_t> offset;
-  size_t count;
+enum class TxType { READ, WRITE };
+
+struct TxArg : noncopyable {
+  Lock* const lock;
+  OffsetMgr* const offset_mgr;
+  MemTable* const mem_table;
+  BlkTable* const blk_table;
+  Allocator* const allocator;
+  char* const buf;
+  size_t count;  // In the case of partial read/write, count will be changed
+  bool is_offset_depend;
+  const uint64_t offset;
+  uint64_t ticket;
+  FileState state;
+
+  TxArg(TxType tx_type, Lock* lock, OffsetMgr* offset_mgr, MemTable* mem_table,
+        BlkTable* blk_table, Allocator* allocator, char* buf, size_t count,
+        std::optional<uint64_t> offset_opt)
+      : lock(lock),
+        offset_mgr(offset_mgr),
+        mem_table(mem_table),
+        blk_table(blk_table),
+        allocator(allocator),
+        buf(buf),
+        count(count),
+        is_offset_depend(!offset_opt.has_value()),
+        offset([&]() {
+          if (offset_opt.has_value()) {
+            return offset_opt.value();
+          } else {
+            size_t res;
+            blk_table->update([&](const FileState& file_state) {
+              bool stop_at_boundary = tx_type == TxType::READ;
+              res = offset_mgr->acquire(count, file_state.file_size,
+                                        stop_at_boundary, ticket);
+              state = file_state;
+            });
+            return res;
+          }
+        }()) {
+    if (tx_type == TxType::READ) {
+      lock->rdlock();  // nop lock is used by default
+    } else {
+      lock->wrlock();  // nop lock is used by default
+    }
+  }
+
+  ~TxArg() {
+    if (is_offset_depend) offset_mgr->release(ticket, state.cursor);
+    lock->unlock();
+  }
 };
 
 /**
  * Tx represents a single ongoing transaction.
  */
-class Tx {
+class Tx : noncopyable {
  protected:
-  // pointer to the outer class
-  Lock* lock;
-  OffsetMgr* offset_mgr;
-  MemTable* mem_table;
-  BlkTable* blk_table;
-  Allocator* allocator;  // local
-
-  /*
-   * Input properties
-   * In the case of partial read/write, count will be changed, so does end_*
-   */
-  size_t count;
-  const size_t offset;
-
-  /*
-   * Derived properties
-   */
+  TxArg& arg;
   // the byte range to be written is [offset, end_offset), and the byte at
   // end_offset is NOT included
   size_t end_offset;
@@ -65,49 +92,13 @@ class Tx {
   // total number of blocks
   const size_t num_blocks;
 
-  // in the case of read/write with offset change, update is done first
-  bool is_offset_depend;
-  // if update is done first, we must know file_size already
-  uint64_t ticket;
-
-  FileState state;
-
  public:
-  Tx(const TxArgs& args, bool is_read)
-      : lock(args.lock),
-        offset_mgr(args.offset_mgr),
-        mem_table(args.mem_table),
-        blk_table(args.blk_table),
-        allocator(args.allocator),
-
-        count(args.count),
-        offset([&]() {
-          if (args.offset.has_value()) {
-            return args.offset.value();
-          }
-          size_t ret;
-          args.blk_table->update([&](const FileState& file_state) {
-            ret =
-                args.offset_mgr->acquire(count, file_state.file_size,
-                                         /*stop_at_boundary*/ is_read, ticket);
-            state = file_state;
-          });
-          return ret;
-        }()),
-
-        // derived properties
-        end_offset(offset + count),
-        begin_vidx(BLOCK_SIZE_TO_IDX(offset)),
+  Tx(TxArg& arg)
+      : arg(arg),
+        end_offset(arg.offset + arg.count),
+        begin_vidx(BLOCK_SIZE_TO_IDX(arg.offset)),
         end_vidx(BLOCK_SIZE_TO_IDX(ALIGN_UP(end_offset, BLOCK_SIZE))),
-        num_blocks(end_vidx - begin_vidx),
-        is_offset_depend(!args.offset.has_value()) {}
-
-  ~Tx() {
-    lock->unlock();
-    if (is_offset_depend) {
-      offset_mgr->release(ticket, state.cursor);
-    }
-  }
+        num_blocks(end_vidx - begin_vidx) {}
 
  protected:
   /**
@@ -139,10 +130,10 @@ class Tx {
         VirtualBlockIdx end_vidx = curr_entry.inline_entry.begin_virtual_idx +
                                    curr_entry.inline_entry.num_blocks;
         uint64_t possible_file_size = BLOCK_IDX_TO_SIZE(end_vidx);
-        if (possible_file_size > state.file_size)
-          state.file_size = possible_file_size;
+        if (possible_file_size > arg.state.file_size)
+          arg.state.file_size = possible_file_size;
       } else {  // non-inline tx entry
-        LogCursor log_cursor(curr_entry.indirect_entry, mem_table);
+        LogCursor log_cursor(curr_entry.indirect_entry, arg.mem_table);
 
         do {
           uint32_t i;
@@ -165,18 +156,18 @@ class Tx {
                                      log_cursor->get_last_lidx_num_blocks();
           uint64_t possible_file_size =
               BLOCK_IDX_TO_SIZE(end_vidx) - log_cursor->leftover_bytes;
-          if (possible_file_size > state.file_size)
-            state.file_size = possible_file_size;
+          if (possible_file_size > arg.state.file_size)
+            arg.state.file_size = possible_file_size;
 
-        } while (log_cursor.advance(mem_table));
+        } while (log_cursor.advance(arg.mem_table));
       }
       // only update into_new_block if it is not nullptr and not set true yet
-      if (!state.cursor.advance(
-              mem_table,
+      if (!arg.state.cursor.advance(
+              arg.mem_table,
               /*allocator=*/nullptr,
               into_new_block && !*into_new_block ? into_new_block : nullptr))
         break;
-      curr_entry = state.cursor.get_entry();
+      curr_entry = arg.state.cursor.get_entry();
     } while (curr_entry.is_valid());
 
     return has_conflict;
