@@ -66,7 +66,7 @@ class SingleBlockTx : public CoWTx {
 
     prepare_commit_entry();
 
-    recycle_image[0] = file->vidx_to_lidx(begin_vidx);
+    recycle_image[0] = blk_table->vidx_to_lidx(begin_vidx);
     assert(recycle_image[0] != dst_lidxs[0]);
 
     // copy data from buf
@@ -208,7 +208,7 @@ class MultiBlockTx : public CoWTx {
     prepare_commit_entry();
 
     for (uint32_t i = 0; i < num_blocks; ++i)
-      recycle_image[i] = file->vidx_to_lidx(begin_vidx + i);
+      recycle_image[i] = blk_table->vidx_to_lidx(begin_vidx + i);
     src_first_lidx = recycle_image[0];
     src_last_lidx = recycle_image[num_blocks - 1];
 

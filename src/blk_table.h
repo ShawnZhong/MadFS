@@ -65,7 +65,8 @@ class BlkTable {
    * @return the logical block index corresponding the the virtual block index
    *  0 is returned if the virtual block index is not allocated yet
    */
-  [[nodiscard]] LogicalBlockIdx get(VirtualBlockIdx virtual_block_idx) const {
+  [[nodiscard]] LogicalBlockIdx vidx_to_lidx(
+      VirtualBlockIdx virtual_block_idx) const {
     if (virtual_block_idx >= table.size()) return 0;
     return table[virtual_block_idx.get()];
   }

@@ -30,6 +30,7 @@ class Tx {
   Lock* lock;
   OffsetMgr* offset_mgr;
   MemTable* mem_table;
+  BlkTable* blk_table;
   Allocator* allocator;  // local
 
   /*
@@ -67,6 +68,7 @@ class Tx {
         lock(&file->lock),
         offset_mgr(&file->offset_mgr),
         mem_table(&file->mem_table),
+        blk_table(&file->blk_table),
         allocator(file->get_local_allocator()),
 
         // input properties

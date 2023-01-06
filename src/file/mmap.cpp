@@ -42,10 +42,10 @@ void* File::mmap(void* addr_hint, size_t length, int prot, int mmap_flags,
   VirtualBlockIdx vidx_end =
       BLOCK_SIZE_TO_IDX(ALIGN_UP(offset + length, BLOCK_SIZE));
   VirtualBlockIdx vidx_group_begin = BLOCK_SIZE_TO_IDX(offset);
-  LogicalBlockIdx lidx_group_begin = blk_table.get(vidx_group_begin);
+  LogicalBlockIdx lidx_group_begin = blk_table.vidx_to_lidx(vidx_group_begin);
   uint32_t num_blocks = 0;
   for (VirtualBlockIdx vidx = vidx_group_begin; vidx < vidx_end; ++vidx) {
-    LogicalBlockIdx lidx = blk_table.get(vidx);
+    LogicalBlockIdx lidx = blk_table.vidx_to_lidx(vidx);
     if (lidx == 0) PANIC("hole vidx=%d in mmap", vidx.get());
 
     if (lidx == lidx_group_begin + num_blocks) {

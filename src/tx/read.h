@@ -52,13 +52,16 @@ class ReadTx : public Tx {
     {
       TimerGuard<Event::READ_TX_COPY> timer_guard;
 
-      const char* addr = file->vidx_to_addr_ro(begin_vidx)->data_ro();
+      const char* addr =
+          mem_table->lidx_to_addr_ro(blk_table->vidx_to_lidx(begin_vidx))
+              ->data_ro();
       addr += first_block_offset;
       size_t contiguous_bytes = first_block_size;
       size_t buf_offset = 0;
 
       for (VirtualBlockIdx vidx = begin_vidx + 1; vidx < end_vidx; ++vidx) {
-        const pmem::Block* curr_block = file->vidx_to_addr_ro(vidx);
+        const pmem::Block* curr_block =
+            mem_table->lidx_to_addr_ro(blk_table->vidx_to_lidx(vidx));
         if (addr + contiguous_bytes == curr_block->data_ro()) {
           contiguous_bytes += BLOCK_SIZE;
           continue;

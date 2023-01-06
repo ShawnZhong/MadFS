@@ -50,7 +50,7 @@ class AlignedTx : public WriteTx {
     {
       TimerGuard<Event::ALIGNED_TX_RECYCLE> timer_guard;
       for (uint32_t i = 0; i < num_blocks; ++i)
-        recycle_image[i] = file->vidx_to_lidx(begin_vidx + i);
+        recycle_image[i] = blk_table->vidx_to_lidx(begin_vidx + i);
     }
 
     {

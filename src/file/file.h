@@ -29,7 +29,6 @@
 
 namespace ulayfs::utility {
 class Converter;
-class GarbageCollector;
 }  // namespace ulayfs::utility
 
 // data structure under this namespace must be in volatile memory (DRAM)
@@ -106,21 +105,6 @@ class File {
     old_offset =
         offset_mgr.acquire(count, state->file_size, stop_at_boundary, ticket);
     pthread_spin_unlock(&spinlock);
-  }
-
-  /**
-   * @return the logical block index corresponding to the virtual index
-   */
-  [[nodiscard]] LogicalBlockIdx vidx_to_lidx(VirtualBlockIdx vidx) const {
-    return blk_table.get(vidx);
-  }
-
-  /**
-   * @return a read-only pointer to the block given a virtual block index
-   * An empty block is returned if the block is not allocated yet (e.g., a hole)
-   */
-  [[nodiscard]] const pmem::Block* vidx_to_addr_ro(VirtualBlockIdx vidx) {
-    return mem_table.lidx_to_addr_ro(vidx_to_lidx(vidx));
   }
 
   // try to open a file with checking whether the given file is in uLayFS format
