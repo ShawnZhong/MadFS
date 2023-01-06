@@ -77,41 +77,40 @@ File::~File() {
  * POSIX I/O operations
  */
 
-ssize_t File::pwrite(const void* buf, size_t count, size_t offset) {
+ssize_t File::pwrite(const char* buf, size_t count, size_t offset) {
   if (unlikely(!can_write)) {
     errno = EBADF;
     return -1;
   }
   if (unlikely(count == 0)) return 0;
-  return tx_mgr.do_pwrite(static_cast<const char*>(buf), count, offset);
+  return tx_mgr.do_pwrite(buf, count, offset);
 }
 
-ssize_t File::write(const void* buf, size_t count) {
+ssize_t File::write(const char* buf, size_t count) {
   if (unlikely(!can_write)) {
     errno = EBADF;
     return -1;
   }
   if (unlikely(count == 0)) return 0;
-  return tx_mgr.do_write(static_cast<const char*>(buf), count);
+  return tx_mgr.do_write(buf, count);
 }
 
-ssize_t File::pread(void* buf, size_t count, off_t offset) {
+ssize_t File::pread(char* buf, size_t count, size_t offset) {
   if (unlikely(!can_read)) {
     errno = EBADF;
     return -1;
   }
   if (unlikely(count == 0)) return 0;
-  return tx_mgr.do_pread(static_cast<char*>(buf), count,
-                         static_cast<size_t>(offset));
+  return tx_mgr.do_pread(buf, count, offset);
 }
 
-ssize_t File::read(void* buf, size_t count) {
+ssize_t File::read(char* buf, size_t count) {
   if (unlikely(!can_read)) {
     errno = EBADF;
     return -1;
   }
   if (unlikely(count == 0)) return 0;
-  return tx_mgr.do_read(static_cast<char*>(buf), count);
+  return tx_mgr.do_read(buf, count);
 }
 
 off_t File::lseek(off_t offset, int whence) {

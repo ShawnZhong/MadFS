@@ -31,8 +31,6 @@ struct FileState {
 };
 static_assert(sizeof(FileState) == 24);
 
-class TxMgr;
-
 // read logs and update mapping from virtual blocks to logical blocks
 class BlkTable {
   MemTable* mem_table;
