@@ -50,20 +50,21 @@ class GarbageCollector {
 
   [[nodiscard]] dram::File* get_file() const { return file.get(); }
 
-  void do_gc() const {
+  bool do_gc() const {
     LOG_INFO("GarbageCollector: start transaction & log gc");
 
     if (!need_new_linked_list()) {
       LOG_INFO("GarbageCollector: no need to gc");
-      return;
+      return false;
     }
     if (!create_new_linked_list()) {
       LOG_WARN("GarbageCollector: new tx history is longer than the old one");
-      return;
+      return false;
     }
 
     recycle();
     LOG_INFO("GarbageCollector: done");
+    return true;
   }
 
   [[nodiscard]] bool need_new_linked_list() const {
