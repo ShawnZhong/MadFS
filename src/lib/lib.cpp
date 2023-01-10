@@ -26,7 +26,7 @@ void __attribute__((constructor)) ulayfs_ctor() {
  * Called when the shared library is unloaded
  */
 void __attribute__((destructor)) ulayfs_dtor() {
-  LOG_INFO("ulayfs_dtor called");
+  std::cerr << "uLayFS unloaded" << std::endl;
 }
 }  // extern "C"
 }  // namespace ulayfs

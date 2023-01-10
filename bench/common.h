@@ -1,6 +1,7 @@
 #pragma once
 
 #include <fcntl.h>
+#include <sys/stat.h>
 #include <unistd.h>
 
 #include <climits>
@@ -38,6 +39,16 @@ int get_file_size(int default_val = 1024) noexcept {
   return mb * 1024 * 1024;
 }
 
+void check_file_size(int fd, size_t file_size) {
+  struct stat stat_buf {};
+  fstat(fd, &stat_buf);
+  if ((size_t)stat_buf.st_size != file_size) {
+    fprintf(stderr, "File size is not correct: %ld, expected: %ld",
+            stat_buf.st_size, file_size);
+    throw std::runtime_error("file size mismatch");
+  }
+}
+
 void prefill_file(int fd, size_t num_bytes,
                   size_t chunk_size = 32l * 1024 * 1024) {
   fprintf(stderr, "prefilling file with %.3f MB in %.3f MB chunk\n",
@@ -47,13 +58,22 @@ void prefill_file(int fd, size_t num_bytes,
   std::fill(buf, buf + chunk_size, 'x');
 
   for (size_t i = 0; i < num_bytes / chunk_size; ++i) {
-    [[maybe_unused]] size_t res = write(fd, buf, chunk_size);
-    assert(res == chunk_size);
+    size_t res = write(fd, buf, chunk_size);
+    if (res != chunk_size) {
+      fprintf(stderr, "write failed at %zu, returned %zu", i * chunk_size, res);
+      throw std::runtime_error("write failed");
+    }
   }
   if (size_t remaining_size = num_bytes % chunk_size) {
-    [[maybe_unused]] size_t res = write(fd, buf, remaining_size);
-    assert(res == remaining_size);
+    size_t res = write(fd, buf, remaining_size);
+    if (res != remaining_size) {
+      fprintf(stderr, "write failed at %zu, returned %zu",
+              num_bytes / chunk_size, res);
+      throw std::runtime_error("write failed");
+    }
   }
+
+  check_file_size(fd, num_bytes);
 
   if (ulayfs::is_linked()) ulayfs::debug::clear_counts();
 

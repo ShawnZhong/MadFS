@@ -274,6 +274,7 @@ class GarbageCollector {
                                 std::unordered_set<uint32_t>& le_blocks) const {
     for (auto& e : tx_block->tx_entries) {
       auto entry = e.load(std::memory_order_relaxed);
+      if (!entry.is_valid()) continue;
       if (entry.is_inline()) continue;
       dram::LogCursor le_cursor(entry.indirect_entry, &file->mem_table);
       le_cursor.get_all_blocks(&file->mem_table, le_blocks);
