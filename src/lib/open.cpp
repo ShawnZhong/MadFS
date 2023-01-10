@@ -25,7 +25,6 @@ int open(const char* pathname, int flags, ...) {
   try {
     add_file(fd, stat_buf, flags, pathname);
     LOG_INFO("ulayfs::open(%s, %x, %x) = %d", pathname, flags, mode, fd);
-    timer.count<Event::OPEN>();
   } catch (const FileInitException& e) {
     LOG_WARN("File \"%s\": ulayfs::open failed: %s. Fallback to syscall",
              pathname, e.what());

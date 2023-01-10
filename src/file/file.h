@@ -84,6 +84,8 @@ class File {
   // try to open a file with checking whether the given file is in uLayFS format
   static bool try_open(int& fd, struct stat& stat_buf, const char* pathname,
                        int flags, mode_t mode) {
+    TimerGuard<Event::OPEN_SYS> timer_guard;
+
     if ((flags & O_ACCMODE) == O_WRONLY) {
       LOG_INFO("File \"%s\" opened with O_WRONLY. Changed to O_RDWR.",
                pathname);

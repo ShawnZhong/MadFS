@@ -15,6 +15,7 @@
 #include "posix.h"
 #include "utils/logging.h"
 #include "utils/tbb.h"
+#include "utils/timer.h"
 #include "utils/utils.h"
 
 namespace ulayfs::dram {
@@ -153,6 +154,7 @@ class MemTable : noncopyable {
    * @return the pointer to the first block on the persistent memory
    */
   pmem::Block* mmap_file(size_t length, off_t offset, int flags = 0) {
+    TimerGuard<Event::MMAP> guard;
     if constexpr (BuildOptions::map_sync)
       flags |= MAP_SHARED_VALIDATE | MAP_SYNC;
     else
