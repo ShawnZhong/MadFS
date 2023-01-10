@@ -1,9 +1,9 @@
 /**
  * Perform garbage collection on a file.
  */
-#include <iostream>
-
 #include "gc.h"
+
+#include <iostream>
 
 int main(int argc, char *argv[]) {
   if (argc != 2) {
