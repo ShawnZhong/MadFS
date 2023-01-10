@@ -1,3 +1,6 @@
+/**
+ * Show the metadata of a file.
+ */
 #include <iostream>
 
 #include "lib/lib.h"

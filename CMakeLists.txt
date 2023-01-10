@@ -75,10 +75,12 @@ if (ULAYFS_BUILD_TOOLS)
     add_executable(info tools/info.cpp)
     add_executable(to_ulayfs tools/to_ulayfs.cpp)
     add_executable(from_ulayfs tools/from_ulayfs.cpp)
+    add_executable(cleanup tools/cleanup.cpp)
 
     target_link_libraries(info ulayfs)
     target_link_libraries(to_ulayfs ulayfs)
     target_link_libraries(from_ulayfs ulayfs)
+    target_link_libraries(cleanup ulayfs)
 endif ()
 
 if (ULAYFS_BUILD_BENCH)

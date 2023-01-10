@@ -2,13 +2,13 @@
  * This microbenchmark aims to measure the tail latency.
  * To run this benchmark, first prepare the file (default 1GB) and run without
  * garbage collection:
- *   LD_PRELOAD=./build-release/libulayfs.so  ./build-release/micro_tail --prep
- *   LD_PRELOAD=./build-release/libulayfs.so  ./build-release/micro_tail
+ *  LD_PRELOAD=./build-release/libulayfs.so  ./build-release/micro_tail prep
+ *  LD_PRELOAD=./build-release/libulayfs.so  ./build-release/micro_tail bench
  *
  * Then re-prepare the file and re-run with garbage collection (re-preparation
  * is necessary because previous run will modify the file):
- *   LD_PRELOAD=./build-release/libulayfs.so  ./build-release/micro_tail --prep
- *   LD_PRELOAD=./build-release/libulayfs.so  ./build-release/micro_tail --gc
+ *  LD_PRELOAD=./build-release/libulayfs.so  ./build-release/micro_tail prep
+ *  LD_PRELOAD=./build-release/libulayfs.so  ./build-release/micro_tail bench-gc
  */
 
 #include <fcntl.h>
@@ -207,16 +207,23 @@ void run_gc() {
 int main(int argc, char** argv) {
   if (argc > 2) goto usage;
   if (argc == 2) {
-    if (strcmp(argv[1], "--prep") == 0) {
+    if (strcmp(argv[1], "prep") == 0) {
       prep();
       return 0;
     }
-    if (strcmp(argv[1], "--gc") == 0) {
+
+    if (strcmp(argv[1], "bench-gc") == 0) {
       gc_pid = fork();
       if (gc_pid < 0) {
         std::cerr << "Fail to fork a garbage collection daemon!" << std::endl;
         exit(1);
       }
+    } else if (strcmp(argv[1], "bench") == 0) {
+      gc_pid = -1;  // no gc
+    } else if (strcmp(argv[1], "gc-only") == 0) {
+      gc_pid = 0;  // the current process is the gc process
+    } else {
+      goto usage;
     }
   }
 
@@ -240,8 +247,12 @@ int main(int argc, char** argv) {
   return 0;
 
 usage:
-  std::cerr << "usage: " << argv[0] << " [--prep] [--gc]" << std::endl
-            << "  --prep: only prepare the files" << std::endl
-            << "  --gc:   fork a garbage collection daemon" << std::endl;
+  std::cerr << "Usage: " << argv[0]
+            << " [ prep | bench | bench-gc | gc-only ]\n"
+            << "    prep:     only prepare the files\n"
+            << "    bench:    run benchmark without garbage collection\n"
+            << "    bench-gc: run benchmark with garbage collection\n"
+            << "    gc-only:  only run garbage collection, no benchmark"
+            << std::endl;
   return 1;
 }
