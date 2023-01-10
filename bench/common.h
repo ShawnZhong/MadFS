@@ -1,6 +1,5 @@
 #pragma once
 
-#include <benchmark/benchmark.h>
 #include <fcntl.h>
 #include <unistd.h>
 
@@ -41,8 +40,8 @@ int get_file_size(int default_val = 1024) noexcept {
 
 void prefill_file(int fd, size_t num_bytes,
                   size_t chunk_size = 32l * 1024 * 1024) {
-  fprintf(stderr, "prefilling file with %ld MB in %ld MB chunk\n",
-          num_bytes / 1024 / 1024, chunk_size / 1024 / 1024);
+  fprintf(stderr, "prefilling file with %.3f MB in %.3f MB chunk\n",
+          num_bytes / 1024. / 1024., chunk_size / 1024. / 1024.);
 
   auto buf = new char[chunk_size];
   std::fill(buf, buf + chunk_size, 'x');
@@ -56,7 +55,7 @@ void prefill_file(int fd, size_t num_bytes,
     assert(res == remaining_size);
   }
 
-  if (ulayfs::is_linked()) ulayfs::debug::clear_count();
+  if (ulayfs::is_linked()) ulayfs::debug::clear_counts();
 
   fsync(fd);
   delete[] buf;

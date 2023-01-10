@@ -169,7 +169,7 @@ def plot_micro_st(result_dir):
         is_cow = name.startswith("cow")
         if is_cow:
             df["x"] = df["name"].apply(parse_name, args=(1,))
-            df["y"] = df["items_per_second"].apply(lambda x: float(x) / 1000**2)
+            df["y"] = df["items_per_second"].apply(lambda x: float(x) / 1000 ** 2)
             xunit = "Bytes"
             ylabel = r"Throughput (Mops/s)"
         else:
@@ -178,7 +178,7 @@ def plot_micro_st(result_dir):
                 .apply(parse_name, args=(1,))
                 .apply(lambda x: f"{int(x) / 1024:1g}")
             )
-            df["y"] = df["bytes_per_second"].apply(lambda x: float(x) / 1024**3)
+            df["y"] = df["bytes_per_second"].apply(lambda x: float(x) / 1024 ** 3)
             xunit = "KB"
             ylabel = "Throughput (GB/s)"
 
@@ -229,7 +229,7 @@ def plot_micro_mt(result_dir):
 
     for name, benchmark in benchmarks:
         benchmark["y"] = benchmark["bytes_per_second"].apply(
-            lambda x: float(x) / 1024**3
+            lambda x: float(x) / 1024 ** 3
         )
         ylabel = "Throughput (GB/s)"
 
@@ -281,27 +281,6 @@ def plot_micro_mt(result_dir):
                 result_dir=result_dir,
                 post_plot=post_plot,
             )
-
-
-def plot_micro_meta(result_dir):
-    df = read_files(result_dir)
-    df["benchmark"] = df["name"].apply(parse_name, args=(0,))
-    df["x"] = df["name"].apply(parse_name, args=(1,))
-    df["y"] = df["cpu_time"].apply(lambda x: float(x) / 1000)
-
-    export_results(result_dir, df)
-
-    def post_plot(ax, **kwargs):
-        plt.xlabel("Transaction History Length")
-        plt.ylabel("Latency (us)")
-
-    for name, benchmark in df.groupby("benchmark"):
-        plot_single_bm(
-            benchmark,
-            name=name,
-            result_dir=result_dir,
-            post_plot=post_plot,
-        )
 
 
 def plot_ycsb(result_dir):
@@ -380,7 +359,7 @@ def plot_tpcc(result_dir):
                             f"{workload}: timing = (.+?) nanoseconds", data
                         ).group(1)
                     )
-                    / 1000**2
+                    / 1000 ** 2
                 )
                 results.append(
                     {

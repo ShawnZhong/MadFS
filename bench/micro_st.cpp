@@ -1,3 +1,5 @@
+#include <benchmark/benchmark.h>
+
 #include "common.h"
 
 constexpr int BLOCK_SIZE = 4096;
