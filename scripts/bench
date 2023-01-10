@@ -6,7 +6,7 @@ from pathlib import Path
 
 from args import add_common_args, parse_args
 from fs import available_fs
-from plot import plot_micro_st, plot_micro_mt, plot_micro_meta, plot_ycsb, plot_tpcc
+from plot import plot_micro_st, plot_micro_mt, plot_ycsb, plot_tpcc
 from runner import Runner
 from utils import root_dir, get_timestamp, system, drop_cache, init
 
@@ -127,16 +127,18 @@ bm_classes = {
     "tpcc": TpccBenchmark,
 }
 
-plot_fns = {
-    "st": plot_micro_st,
-    "mt": plot_micro_mt,
-    "meta": plot_micro_meta,
-    "ycsb": plot_ycsb,
-    "tpcc": plot_tpcc,
-}
-
 
 def main(benchmark, result_dir, **kwargs):
+    from plot_meta import plot_meta
+
+    plot_fns = {
+        "st": plot_micro_st,
+        "mt": plot_micro_mt,
+        "meta": plot_meta,
+        "ycsb": plot_ycsb,
+        "tpcc": plot_tpcc,
+    }
+
     if result_dir is None:
         result_dir = bm_classes[benchmark](benchmark).build_and_run(**kwargs)
     plot_fns[benchmark](result_dir)

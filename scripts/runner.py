@@ -78,11 +78,6 @@ class Runner:
             cmd += prog_args
 
         numa = infer_numa_node(fs.path)
-        if shutil.which("numactl"):
-            cmd += ["numactl", f"--cpunodebind={numa}", f"--membind={numa}"]
-        else:
-            logger.warning("numactl not found, NUMA not enabled")
-
         env = {
             **env,
             "PMEM_PATH": str(fs.path),
@@ -95,9 +90,15 @@ class Runner:
         if self.build_type == "tsan":
             env["TSAN_OPTIONS"] = f"suppressions={root_dir / 'cmake' / 'tsan.supp'}"
 
-        # cmd = "perf stat -d -d -d".split() + cmd
-        cmd = ["env"] + [f"{k}={v}" for k, v in env.items()] + cmd
-        cmd = " ".join(cmd)
+        cmd_prefix = []
+        # cmd_prefix += "perf stat -d -d -d".split()
+        if shutil.which("numactl"):
+            cmd_prefix += ["numactl", f"--cpunodebind={numa}", f"--membind={numa}"]
+        else:
+            logger.warning("numactl not found, NUMA not enabled")
+        cmd_prefix += ["env"] + [f"{k}={v}" for k, v in env.items()]
+
+        cmd = " ".join(cmd_prefix + cmd)
 
         # execute
         prog_log_path = self.result_dir / prog_log_name

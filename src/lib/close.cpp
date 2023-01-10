@@ -5,9 +5,9 @@ namespace ulayfs {
 extern "C" {
 int close(int fd) {
   if (auto file = get_file(fd)) {
+    TimerGuard<Event::CLOSE> guard;
     LOG_DEBUG("ulayfs::close(%s)", file->path);
     files.unsafe_erase(fd);
-    timer.count<Event::CLOSE>();
     return 0;
   } else {
     LOG_DEBUG("posix::close(%d)", fd);
