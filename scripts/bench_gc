@@ -1,0 +1,28 @@
+#!/usr/bin/env python3
+import logging
+
+from fs import ULAYFS
+from plot_gc import plot_gc
+from runner import Runner
+from utils import get_result_dir
+
+logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger("bench_gc")
+
+
+def main():
+    cmake_target = "micro_gc"
+    result_dir = get_result_dir(cmake_target)
+    runner = Runner(cmake_target, result_dir=result_dir)
+    runner.build()
+
+    ulayfs = ULAYFS()
+    data_path = ulayfs.path / "test.txt"
+    runner.run(prog_args=["--gc", "--io", "-f", data_path, "-o", result_dir / "gc"])
+    runner.run(prog_args=["--io", "-f", data_path, "-o", result_dir / "io"])
+
+    plot_gc(result_dir)
+
+
+if __name__ == "__main__":
+    main()

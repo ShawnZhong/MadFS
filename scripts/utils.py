@@ -101,6 +101,14 @@ def get_timestamp():
     return datetime.datetime.now().strftime("%Y%m%d-%H%M%S")
 
 
+def get_result_dir(cmake_target):
+    return root_dir / "results" / f"bench_{cmake_target}" / get_timestamp()
+
+
+def get_latest_result(path):
+    return max(path.glob("*"))
+
+
 def get_cpulist(numa_node: int) -> List[int]:
     result = []
     text = Path(f"/sys/devices/system/node/node{numa_node}/cpulist").read_text()

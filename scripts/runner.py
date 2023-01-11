@@ -24,7 +24,6 @@ build_types = [
 
 class Runner:
     def __init__(self, name, build_type="release", result_dir=None):
-        self.is_micro = name.startswith("micro")
         self.is_bench = any(name.startswith(x) for x in ["micro", "leveldb", "tpcc"])
 
         if result_dir is None:
@@ -59,16 +58,18 @@ class Runner:
         self,
         cmd: Optional[List[str]] = None,
         prog_log_name: str = "prog.log",
-        fs: Filesystem = ULAYFS,
+        fs: Filesystem = ULAYFS(),
         prog_args: List[str] = None,
         env: Optional[dict] = None,
         trace: bool = False,
     ):
+        if env is None:
+            env = {}
         if cmd is None:
             assert self.prog_path is not None
             cmd = [str(self.prog_path)]
 
-        if self.is_micro:
+        if self.name in ["micro_meta", "micro_mt", "micro_st"]:
             cmd += [
                 f"--benchmark_counters_tabular=true",
                 f"--benchmark_out={self.result_dir / 'result.json'}",
@@ -98,7 +99,7 @@ class Runner:
             logger.warning("numactl not found, NUMA not enabled")
         cmd_prefix += ["env"] + [f"{k}={v}" for k, v in env.items()]
 
-        cmd = " ".join(cmd_prefix + cmd)
+        cmd = " ".join(cmd_prefix + [str(c) for c in cmd])
 
         # execute
         prog_log_path = self.result_dir / prog_log_name

@@ -8,14 +8,10 @@ from args import add_common_args, parse_args
 from fs import available_fs
 from plot import plot_micro_st, plot_micro_mt, plot_ycsb, plot_tpcc
 from runner import Runner
-from utils import root_dir, get_timestamp, system, drop_cache, init
+from utils import root_dir, get_result_dir, system, drop_cache, init
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger("bench")
-
-
-def get_result_dir(cmake_target):
-    return root_dir / "results" / f"bench_{cmake_target}" / get_timestamp()
 
 
 class Benchmark:

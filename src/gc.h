@@ -50,20 +50,21 @@ class GarbageCollector {
 
   [[nodiscard]] dram::File* get_file() const { return file.get(); }
 
-  void do_gc() const {
+  bool do_gc() const {
     LOG_INFO("GarbageCollector: start transaction & log gc");
 
     if (!need_new_linked_list()) {
       LOG_INFO("GarbageCollector: no need to gc");
-      return;
+      return false;
     }
     if (!create_new_linked_list()) {
       LOG_WARN("GarbageCollector: new tx history is longer than the old one");
-      return;
+      return false;
     }
 
     recycle();
     LOG_INFO("GarbageCollector: done");
+    return true;
   }
 
   [[nodiscard]] bool need_new_linked_list() const {
@@ -273,6 +274,7 @@ class GarbageCollector {
                                 std::unordered_set<uint32_t>& le_blocks) const {
     for (auto& e : tx_block->tx_entries) {
       auto entry = e.load(std::memory_order_relaxed);
+      if (!entry.is_valid()) continue;
       if (entry.is_inline()) continue;
       dram::LogCursor le_cursor(entry.indirect_entry, &file->mem_table);
       le_cursor.get_all_blocks(&file->mem_table, le_blocks);

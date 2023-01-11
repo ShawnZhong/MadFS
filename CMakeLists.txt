@@ -75,10 +75,12 @@ if (ULAYFS_BUILD_TOOLS)
     add_executable(info tools/info.cpp)
     add_executable(to_ulayfs tools/to_ulayfs.cpp)
     add_executable(from_ulayfs tools/from_ulayfs.cpp)
+    add_executable(gc tools/gc.cpp)
 
     target_link_libraries(info ulayfs)
     target_link_libraries(to_ulayfs ulayfs)
     target_link_libraries(from_ulayfs ulayfs)
+    target_link_libraries(gc ulayfs)
 endif ()
 
 if (ULAYFS_BUILD_BENCH)
@@ -90,7 +92,7 @@ if (ULAYFS_BUILD_BENCH)
         GIT_TAG e4ccaa0c9cb1a019df3df74eb5db4ec55e9e02ed
         PATCH_COMMAND git apply --reject ${CMAKE_SOURCE_DIR}/bench/leveldb.patch || true
     )
-    FetchContent_Declare(cxxopts URL https://github.com/jarro2783/cxxopts/archive/refs/tags/v2.2.0.zip)
+    FetchContent_Declare(cxxopts URL https://github.com/jarro2783/cxxopts/archive/refs/tags/v3.0.0.zip)
     FetchContent_Declare(
         tpcc_sqlite
         GIT_REPOSITORY https://github.com/ShawnZhong/tpcc_sqlite.git
@@ -101,9 +103,11 @@ if (ULAYFS_BUILD_BENCH)
     add_executable(micro_st bench/micro_st.cpp bench/common.h)
     add_executable(micro_mt bench/micro_mt.cpp bench/common.h)
     add_executable(micro_meta bench/micro_meta.cpp bench/common.h)
+    add_executable(micro_gc bench/micro_gc.cpp)
 
     target_link_libraries(leveldb_ycsb cxxopts leveldb)
     target_link_libraries(micro_st benchmark::benchmark)
     target_link_libraries(micro_mt benchmark::benchmark)
     target_link_libraries(micro_meta benchmark::benchmark)
+    target_link_libraries(micro_gc cxxopts ulayfs) # We always want to link ulayfs for gc
 endif ()
