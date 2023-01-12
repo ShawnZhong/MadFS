@@ -21,9 +21,6 @@ jobs:
       - name: micro_mt
         run: ./run micro_mt -b ${{matrix.build_type}} --size 16 --iter 10
 
-      - name: micro_open
-        run: ./run micro_open -b ${{matrix.build_type}} --iter 10
-
   leveldb:
     name: LevelDB
     runs-on: ubuntu-22.04
