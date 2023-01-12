@@ -58,19 +58,6 @@ File::~File() {
   }
 }
 
-Allocator* File::get_local_allocator() {
-  if (auto it = allocators.find(tid); it != allocators.end()) {
-    return &it->second;
-  }
-
-  auto [it, ok] = allocators.emplace(
-      std::piecewise_construct, std::forward_as_tuple(tid),
-      std::forward_as_tuple(&mem_table, &bitmap_mgr,
-                            shm_mgr.alloc_per_thread_data()));
-  PANIC_IF(!ok, "insert to thread-local allocators failed");
-  return &it->second;
-}
-
 std::ostream& operator<<(std::ostream& out, File& f) {
   __msan_scoped_disable_interceptor_checks();
   out << "File: fd = " << f.fd << "\n";

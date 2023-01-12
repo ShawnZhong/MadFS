@@ -1,8 +1,8 @@
-import datetime
 import logging
 import os
 import shutil
 import sys
+from datetime import datetime
 from pathlib import Path
 from typing import List
 
@@ -97,16 +97,12 @@ def system(cmd, log_path=None):
         sys.exit(f"Command `{cmd}` failed with return code {ret}")
 
 
-def get_timestamp():
-    return datetime.datetime.now().strftime("%Y%m%d-%H%M%S")
-
-
-def get_result_dir(cmake_target):
-    return root_dir / "results" / f"bench_{cmake_target}" / get_timestamp()
-
-
 def get_latest_result(path):
-    return max(path.glob("*"))
+    return max(path.glob("*"), default=None)
+
+
+def get_timestamp():
+    return datetime.now().strftime("%Y%m%d-%H%M%S")
 
 
 def get_cpulist(numa_node: int) -> List[int]:

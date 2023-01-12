@@ -1,0 +1,27 @@
+#!/usr/bin/env python3
+import argparse
+import logging
+
+from args import add_common_args, parse_args
+from bench_utils import Benchmark
+from plot_st import plot_st
+from utils import get_timestamp, root_dir
+
+logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger("bench_st")
+
+
+def main(**kwargs):
+    result_dir = root_dir / "results" / "micro_st" / "exp" / get_timestamp()
+    Benchmark().build_and_run(cmake_target="micro_st", result_dir=result_dir, **kwargs)
+    plot_st(result_dir)
+    logger.info(f"Results saved to {result_dir}")
+
+
+if __name__ == "__main__":
+    argparser = argparse.ArgumentParser()
+    add_common_args(argparser)
+
+    args, run_cfg = parse_args(argparser)
+    logger.info(f"args={args}, run_config={run_cfg}")
+    main(**vars(args), run_config=run_cfg)

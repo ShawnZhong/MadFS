@@ -6,7 +6,7 @@ from pathlib import Path
 
 import pandas as pd
 
-from plot import export_df, save_fig
+from plot_utils import export_df, save_fig
 from utils import get_latest_result, root_dir
 
 logger = logging.getLogger("plot_open")
@@ -88,7 +88,7 @@ def plot_open(result_dir):
 
 if __name__ == "__main__":
     parser = ArgumentParser()
-    parser.add_argument("--result_dir", help="Directory with results", type=Path,
+    parser.add_argument("-r", "--result_dir", help="Directory with results", type=Path,
                         default=get_latest_result(root_dir / "results" / "bench_open" / "exp"))
     args = parser.parse_args()
     plot_open(args.result_dir)

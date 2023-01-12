@@ -7,7 +7,7 @@ from pathlib import Path
 import pandas as pd
 from matplotlib import pyplot as plt
 
-from plot import get_sorted_subdirs, get_fs_name, export_results, plot_single_bm
+from plot_utils import get_sorted_subdirs, get_fs_name, export_results, plot_single_bm
 from utils import get_latest_result, root_dir
 
 logging.basicConfig(level=logging.INFO)

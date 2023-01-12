@@ -7,20 +7,6 @@
 namespace ulayfs::dram {
 
 /**
- * Temporary, thread-local store for a sequence of objects.
- * Compared to variable-length array on the stack, it's less likely to overflow.
- * By reusing the same vector, it avoids the overhead of memory allocation from
- * the globally shared heap.
- */
-
-// This one is used for redo_image in ReadTx and recycle_image in WriteTx
-inline thread_local std::vector<LogicalBlockIdx> local_buf_image_lidxs;
-
-// These are used in WriteTx for dst blocks
-inline thread_local std::vector<LogicalBlockIdx> local_buf_dst_lidxs;
-inline thread_local std::vector<pmem::Block*> local_buf_dst_blocks;
-
-/**
  * Tx represents a single ongoing transaction.
  */
 class Tx {

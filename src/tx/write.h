@@ -4,6 +4,16 @@
 
 namespace ulayfs::dram {
 
+/**
+ * Temporary, thread-local store for a sequence of objects.
+ * Compared to variable-length array on the stack, it's less likely to overflow.
+ * By reusing the same vector, it avoids the overhead of memory allocation from
+ * the globally shared heap.
+ */
+inline thread_local std::vector<LogicalBlockIdx> local_buf_image_lidxs;
+inline thread_local std::vector<LogicalBlockIdx> local_buf_dst_lidxs;
+inline thread_local std::vector<pmem::Block*> local_buf_dst_blocks;
+
 class WriteTx : public Tx {
  protected:
   const char* const buf;
@@ -28,8 +38,7 @@ class WriteTx : public Tx {
     lock->wrlock();  // nop lock is used by default
 
     // reset recycle_image
-    recycle_image.clear();
-    recycle_image.resize(num_blocks);
+    recycle_image.resize(num_blocks, 0);
     dst_lidxs.clear();
     dst_blocks.clear();
 

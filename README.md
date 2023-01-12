@@ -46,11 +46,16 @@
       ```shell
       sudo modprobe nova                       # load NOVA module
       sudo mkdir -p /mnt/pmem0-nova            # create mount point
-      sudo mount -t NOVA -o init /dev/pmem0.1 /mnt/pmem0-nova # mount filesystem
+      sudo mount -t NOVA -o init -o data_cow  /dev/pmem0.1 /mnt/pmem0-nova # mount filesystem
       sudo chmod a+w /mnt/pmem0-nova           # make the mount point writable
       mount -v | grep /mnt/pmem0-nova          # check mount status
       ```
 
+    - To unmount the filesystems, run
+      ```shell
+      sudo umount /mnt/pmem0-ext4-dax
+      sudo umount /mnt/pmem0-nova
+      ```
   </details>
 
 ## Build and Run
@@ -65,14 +70,6 @@
 
   ```shell
   LD_PRELOAD=./build-release/libulayfs.so ./your_program
-  ```
-- Run benchmarks
-
-  ```shell
-  ./scripts/bench st       # run and plot single-threaded microbenchmark
-  ./scripts/bench mt       # run and plot multi-threaded microbenchmark
-  ./scripts/bench meta     # run and plot microbenchmark with metadata
-  ./scripts/bench_ycsb           # run YCSB benchmark
   ```
 
 ## Development
