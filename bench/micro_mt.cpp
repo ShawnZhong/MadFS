@@ -58,7 +58,7 @@ void bench(benchmark::State& state) {
     }
   }
 
-  if (ulayfs::is_linked()) ulayfs::debug::clear_counts();
+  if (ulayfs::is_linked()) ulayfs::debug::clear_timer();
 
   // run benchmark
   if constexpr (mode == Mode::APPEND) {
@@ -177,14 +177,6 @@ int main(int argc, char** argv) {
         ->Iterations(num_iter)
         ->UseRealTime();
   }
-
-  //  for (long theta_x100 = 0; theta_x100 <= 160; theta_x100 += 10) {
-  //    benchmark::RegisterBenchmark("zipf_4k", bench<Mode::ZIPF>)
-  //        ->Args({BLOCK_SIZE, theta_x100})
-  //        ->Threads(8)
-  //        ->Iterations(num_iter)
-  //        ->UseRealTime();
-  //  }
 
   for (const auto& [name, num_bytes] :
        {std::pair{"append_4k", 4096}, std::pair{"append_2k", 2048}}) {

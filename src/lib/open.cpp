@@ -4,15 +4,9 @@
 #include "utils/timer.h"
 
 namespace ulayfs {
-extern "C" {
-int open(const char* pathname, int flags, ...) {
-  mode_t mode = 0;
-  if (__OPEN_NEEDS_MODE(flags)) {
-    va_list arg;
-    va_start(arg, flags);
-    mode = va_arg(arg, mode_t);
-    va_end(arg);
-  }
+
+static int open_impl(const char* pathname, int flags, mode_t mode) {
+  TimerGuard<Event::OPEN> guard;
 
   int fd;
   struct stat stat_buf;
@@ -36,6 +30,19 @@ int open(const char* pathname, int flags, ...) {
   return fd;
 }
 
+extern "C" {
+int open(const char* pathname, int flags, ...) {
+  mode_t mode = 0;
+  if (__OPEN_NEEDS_MODE(flags)) {
+    va_list arg;
+    va_start(arg, flags);
+    mode = va_arg(arg, mode_t);
+    va_end(arg);
+  }
+
+  return open_impl(pathname, flags, mode);
+}
+
 int open64(const char* pathname, int flags, ...) {
   mode_t mode = 0;
   if (__OPEN_NEEDS_MODE(flags)) {
@@ -45,7 +52,7 @@ int open64(const char* pathname, int flags, ...) {
     va_end(arg);
   }
 
-  return open(pathname, flags, mode);
+  return open_impl(pathname, flags, mode);
 }
 
 int openat64([[maybe_unused]] int dirfd, const char* pathname, int flags, ...) {
@@ -58,7 +65,7 @@ int openat64([[maybe_unused]] int dirfd, const char* pathname, int flags, ...) {
   }
 
   // TODO: implement the case where pathname is relative to dirfd
-  return open(pathname, flags, mode);
+  return open_impl(pathname, flags, mode);
 }
 
 FILE* fopen(const char* filename, const char* mode) {

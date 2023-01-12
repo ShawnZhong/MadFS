@@ -16,8 +16,7 @@ def main():
     runner = Runner(cmake_target, result_dir=result_dir)
     runner.build()
 
-    ulayfs = ULAYFS()
-    data_path = ulayfs.path / "test.txt"
+    data_path = ULAYFS().path / "test.txt"
     runner.run(prog_args=["--gc", "--io", "-f", data_path, "-o", result_dir / "gc"])
     runner.run(prog_args=["--io", "-f", data_path, "-o", result_dir / "io"])
 

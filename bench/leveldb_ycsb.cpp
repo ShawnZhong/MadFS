@@ -1,4 +1,3 @@
-#include <cassert>
 #include <chrono>
 #include <cmath>
 #include <cstring>
@@ -76,7 +75,11 @@ static uint do_ycsb(const std::string& db_location,
       }
     }
 
-    assert(status.ok());
+    if (!status.ok()) {
+      std::cerr << status.ToString() << std::endl;
+      exit(1);
+    }
+
     cnt++;
   }
 

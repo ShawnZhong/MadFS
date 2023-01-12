@@ -109,7 +109,7 @@ class Timer {
             std::chrono::duration<double, std::micro>(duration).count() /
             (double)count;
 
-        fprintf(log_file, " (%6.3f us, %7.2f ms)", avg_us, total_ms);
+        fprintf(log_file, " (%8.3f us, %6.2f ms)", avg_us, total_ms);
       }
 
       // print size
@@ -143,8 +143,18 @@ inline thread_local Timer timer;
 
 template <Event event>
 struct TimerGuard {
-  TimerGuard() { timer.start<event>(); }
-  explicit TimerGuard(size_t size) { timer.start<event>(size); }
-  ~TimerGuard() { timer.stop<event>(); }
+  TimerGuard() {
+    if constexpr (!BuildOptions::enable_timer) return;
+    timer.start<event>();
+  }
+  explicit TimerGuard(size_t size) {
+    if constexpr (!BuildOptions::enable_timer) return;
+    timer.start<event>(size);
+  }
+  ~TimerGuard() {
+    if constexpr (!BuildOptions::enable_timer) return;
+    timer.stop<event>();
+  }
 };
+
 }  // namespace ulayfs

@@ -77,11 +77,21 @@ def export_results(result_dir, data, name="result"):
             print(pt)
             print(name, file=f)
             print(pt, file=f)
+    logger.info(f"Results saved to {result_dir}/{name}.txt")
+
+
+def export_df(result_dir, df, name="result"):
+    with open(result_dir / f"{name}.csv", "w") as f:
+        df.to_csv(f)
+    with open(result_dir / f"{name}.txt", "w") as f:
+        df.to_string(f)
+    logger.info(f"Results saved to {result_dir}/{name}.txt")
 
 
 def save_fig(fig, name, result_dir):
     fig.savefig(result_dir / f"{name}.png", bbox_inches="tight", pad_inches=0, dpi=300)
     fig.savefig(result_dir / f"{name}.pdf", bbox_inches="tight", pad_inches=0)
+    logger.info(f"Figure saved to {result_dir}/{name}.png")
 
 
 def plot_single_bm(
@@ -236,15 +246,6 @@ def plot_micro_mt(result_dir):
         export_results(result_dir, benchmark, name=name)
 
         def post_plot(ax, **kwargs):
-            # if "tx_commit" in benchmark.columns:
-            #     ax2 = ax.twinx()
-            #     y = benchmark["tx_commit"] - 1
-            #     y[y == 0] = None
-            #     ax2.plot(benchmark["x"], y, ":", label="tx_commit")
-            #     ax2.set_ylim(bottom=0)
-            #     ax2.yaxis.set_major_locator(plt.MaxNLocator(steps=[1, 5, 10]))
-            #     ax2.set_ylabel("uLayFS commit conflicts per Tx")
-
             ax.set_xlabel(xlabel, labelpad=0)
             ax.set_ylabel(ylabel, labelpad=0)
 
@@ -281,52 +282,6 @@ def plot_micro_mt(result_dir):
                 result_dir=result_dir,
                 post_plot=post_plot,
             )
-
-
-def plot_ycsb(result_dir):
-    results = []
-    for path in get_sorted_subdirs(result_dir):
-        fs_name = get_fs_name(path.name)
-
-        for w in ("a", "b", "c", "d", "e", "f"):
-            result_path = path / f"{w}-run.log"
-            if not result_path.exists():
-                logger.warning(f"{result_path} does not exist")
-                continue
-            with open(result_path, "r") as f:
-                data = f.read()
-                total_num_requests = sum(
-                    int(e) for e in re.findall("Finished (.+?) requests", data)
-                )
-                total_time_us = sum(
-                    float(e) for e in re.findall("Time elapsed: (.+?) us", data)
-                )
-                mops_per_sec = total_num_requests / total_time_us
-                results.append(
-                    {
-                        "x": w.upper(),
-                        "y": mops_per_sec,
-                        "label": fs_name,
-                        "benchmark": "ycsb",
-                    }
-                )
-
-    df = pd.DataFrame(results)
-    export_results(result_dir, df)
-
-    def post_plot(ax, **kwargs):
-        plt.xlabel("Workload")
-        plt.ylabel("Throughput (Mops/s)")
-        plt.legend()
-
-    plot_single_bm(
-        df,
-        barchart=True,
-        figsize=(5, 2.5),
-        result_dir=result_dir,
-        post_plot=post_plot,
-        separate_legend=False,
-    )
 
 
 def plot_tpcc(result_dir):

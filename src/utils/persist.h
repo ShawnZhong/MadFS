@@ -96,7 +96,11 @@ static inline void memcpy_persist(char *dst, const char *src, size_t size) {
 namespace dram {
 static inline void memcpy(char *dst, const char *src, size_t size) {
   if constexpr (BuildOptions::support_avx512f) {
-    memmove_mov_avx512f_noflush(dst, src, size);
+    if (size <= 2048) {
+      memmove_mov_avx_noflush(dst, src, size);
+    } else {
+      memmove_mov_avx512f_noflush(dst, src, size);
+    }
   } else {
     memmove_mov_avx_noflush(dst, src, size);
   }

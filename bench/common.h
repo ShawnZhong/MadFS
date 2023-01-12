@@ -7,8 +7,7 @@
 #include <climits>
 #include <cstring>
 #include <thread>
-
-#include "debug.h"
+#include <vector>
 
 const char* get_filepath() {
   const char* res = "test.txt";
@@ -43,7 +42,7 @@ void check_file_size(int fd, size_t file_size) {
   struct stat stat_buf {};
   fstat(fd, &stat_buf);
   if ((size_t)stat_buf.st_size != file_size) {
-    fprintf(stderr, "File size is not correct: %ld, expected: %ld",
+    fprintf(stderr, "File size is not correct: %ld, expected: %ld\n",
             stat_buf.st_size, file_size);
     throw std::runtime_error("file size mismatch");
   }
@@ -73,11 +72,9 @@ void prefill_file(int fd, size_t num_bytes,
     }
   }
 
-  check_file_size(fd, num_bytes);
-
-  if (ulayfs::is_linked()) ulayfs::debug::clear_counts();
-
   fsync(fd);
+
+  check_file_size(fd, num_bytes);
   delete[] buf;
 }
 
