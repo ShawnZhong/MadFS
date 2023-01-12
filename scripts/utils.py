@@ -59,10 +59,6 @@ sudo apt install -y sqlite3                                         # for benchm
         system(configure_cmds)
 
 
-def drop_cache():
-    system("echo 3 | sudo tee /proc/sys/vm/drop_caches >/dev/null")
-
-
 def is_ulayfs_linked(prog_path: Path):
     import subprocess
     import re

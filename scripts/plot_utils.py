@@ -120,7 +120,7 @@ def plot_single_bm(
 
     if barchart:
         x = np.arange(len(df["x"].unique()))
-        width = 0.7 / num_groups
+        width = 0.8 / num_groups
         offsets = np.linspace(-0.3, 0.3, num_groups)
         for (label, group), color, hatch, i in zip(
             label_groups, colors, hatches, range(num_groups)

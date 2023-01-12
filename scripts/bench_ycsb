@@ -4,10 +4,10 @@ import itertools
 import logging
 
 from args import add_common_args, parse_args
-from bench_utils import Benchmark
+from bench_utils import Benchmark, drop_cache
 from plot_ycsb import plot_ycsb
 from runner import Runner
-from utils import root_dir, system, drop_cache, get_timestamp
+from utils import root_dir, system, get_timestamp
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger("bench")

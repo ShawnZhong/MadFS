@@ -27,3 +27,7 @@ class Benchmark:
         if fs.path:
             system(f"rm -rf {fs.path}/*")
         runner.run(fs=fs, **run_config)
+
+
+def drop_cache(num=3):
+    system(f"echo {num} | sudo tee /proc/sys/vm/drop_caches >/dev/null")

@@ -32,22 +32,25 @@ def parse_results(result_dir):
     for path in get_sorted_subdirs(result_dir):
         fs_name = get_fs_name(path.name)
 
-        for w in ("a", "b", "c", "d", "e", "f"):
-            result_path = path / f"{w}-run.log"
+        names = ["a-load", "a-run", "b-run", "c-run", "d-run", "e-load", "e-run", "f-run"]
+
+        for name in names:
+            result_path = path / f"{name}.log"
             if not result_path.exists():
                 logger.warning(f"{result_path} does not exist")
                 continue
             mops_per_sec = parse_file(result_path)
+            w, t = name.split("-")
             results.append(
                 {
-                    "x": w.upper(),
+                    "x": w.upper() if t == "run" else f"{w.upper()}-{t}",
                     "y": mops_per_sec,
                     "label": fs_name,
-                    "benchmark": "ycsb",
                 }
             )
 
     df = pd.DataFrame(results)
+    df["benchmark"] = "ycsb"
     return df
 
 
@@ -73,6 +76,6 @@ def plot_ycsb(result_dir):
 if __name__ == "__main__":
     parser = ArgumentParser()
     parser.add_argument("--result_dir", help="Directory with results", type=Path,
-                        default=get_latest_result(root_dir / "results" / f"bench_leveldb_ycsb"))
+                        default=get_latest_result(root_dir / "results" / "leveldb_ycsb" / "exp"))
     args = parser.parse_args()
     plot_ycsb(args.result_dir)

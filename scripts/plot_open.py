@@ -4,6 +4,7 @@ import re
 from argparse import ArgumentParser
 from pathlib import Path
 
+import numpy as np
 import pandas as pd
 
 from plot_utils import export_df, save_fig
@@ -56,17 +57,22 @@ def plot_open(result_dir):
 
     df = df.apply(pd.to_numeric)
 
-    df = df[df["size"].isin([4, 16, 64])]
+    coeff = np.polyfit(df["size"] / 2, df["MMAP"], 1)
+    print(f"MMAP = {coeff[0]:.3f} us per 2MB + {coeff[1]:.3f} us")
 
+    df = df[df["size"].isin([4, 16, 64, 256])]
     df["Others"] = df["OPEN"] - df["MMAP"] - df["UPDATE"]
 
-    df.rename(columns={"MMAP": "Memory Map", "UPDATE": "Block Table"}, inplace=True)
-
+    columns = {
+        # "MMAP": "Memory Map",
+        "UPDATE": "Block Table",
+    }
+    df.rename(columns=columns, inplace=True)
     df.sort_values(by="size", inplace=True, ascending=False)
 
     ax = df.plot.barh(
         x="size",
-        y=["Memory Map", "Block Table", "Others"],
+        y=["MMAP", "Block Table", "Others"],
         stacked=True,
         legend=False,
         figsize=(5, 1),
