@@ -103,7 +103,7 @@ int main(int argc, char* argv[]) {
   add_opt("d,directory", "directory of db",
           cxxopts::value<std::string>(db_location)->default_value("./dbdir"));
   add_opt("v,value_size", "size of value",
-          cxxopts::value<uint>(value_size)->default_value("100"));
+          cxxopts::value<uint>(value_size)->default_value("1000"));
   add_opt("f,ycsb", "YCSB trace filename",
           cxxopts::value<std::string>(ycsb_filename)->default_value(""));
   auto result = cmd_args.parse(argc, argv);
@@ -157,7 +157,7 @@ int main(int argc, char* argv[]) {
   uint cnt = do_ycsb(db_location, ycsb_reqs, value, microsecs);
   std::cout << "Finished " << cnt << " requests." << std::endl;
   if (microsecs > 0)
-    std::cout << "Time elapsed: " << microsecs << " us" << std::endl;
+    std::cout << "Time elapsed: " << microsecs << " ms" << std::endl;
 
   return 0;
 }

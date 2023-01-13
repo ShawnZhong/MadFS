@@ -38,7 +38,8 @@ def add_common_args(argparser: argparse.ArgumentParser):
         help="Run with tracing enabled",
     )
 
-    # add benchmark specific arguments to run_config
+
+def add_gbench_args(argparser: argparse.ArgumentParser):
     argparser.add_argument("--filter", help="filters to be passed to Google Benchmark")
     argparser.add_argument(
         "--size",
@@ -63,6 +64,10 @@ def parse_args(argparser: argparse.ArgumentParser):
         "env": {},
     }
 
+    return cmd_args, run_config
+
+
+def process_gbench_args(cmd_args, run_config):
     bm_filter = cmd_args.__dict__.pop("filter")
     if bm_filter:
         run_config["prog_args"] += [f"--benchmark_filter={bm_filter}"]
@@ -79,4 +84,3 @@ def parse_args(argparser: argparse.ArgumentParser):
     if bm_iter:
         run_config["env"]["BENCH_NUM_ITER"] = bm_iter
 
-    return cmd_args, run_config

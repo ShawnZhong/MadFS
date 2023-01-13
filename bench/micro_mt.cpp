@@ -1,3 +1,5 @@
+#define _FORTIFY_SOURCE 0
+
 #include <benchmark/benchmark.h>
 #include <sys/stat.h>
 
@@ -54,6 +56,7 @@ void bench(benchmark::State& state) {
           state.SkipWithError("file size is not 0");
         }
         prefill_file(fd, file_size);
+        sleep(1);  // wait for the background thread of SplitFS to finish
       }
     }
   }
@@ -178,14 +181,14 @@ int main(int argc, char** argv) {
         ->UseRealTime();
   }
 
-  for (const auto& [name, num_bytes] :
-       {std::pair{"append_4k", 4096}, std::pair{"append_2k", 2048}}) {
-    benchmark::RegisterBenchmark(name, bench<Mode::APPEND>)
-        ->Args({num_bytes})
-        ->DenseThreadRange(1, MAX_NUM_THREAD)
-        ->Iterations(num_iter)
-        ->UseRealTime();
-  }
+  //  for (const auto& [name, num_bytes] :
+  //       {std::pair{"append_4k", 4096}, std::pair{"append_2k", 2048}}) {
+  //    benchmark::RegisterBenchmark(name, bench<Mode::APPEND>)
+  //        ->Args({num_bytes})
+  //        ->DenseThreadRange(1, MAX_NUM_THREAD)
+  //        ->Iterations(num_iter)
+  //        ->UseRealTime();
+  //  }
 
   benchmark::RunSpecifiedBenchmarks();
   return 0;

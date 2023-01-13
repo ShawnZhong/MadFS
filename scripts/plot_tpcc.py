@@ -73,7 +73,7 @@ def plot_tpcc(result_dir):
 
     def post_plot(ax, **kwargs):
         plt.xlabel("Transaction Type")
-        plt.ylabel("Throughput (k txns/s)")
+        plt.ylabel("Throughput (Kops/s)")
         plt.legend()
 
     plot_single_bm(

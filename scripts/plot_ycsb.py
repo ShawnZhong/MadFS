@@ -21,7 +21,7 @@ def parse_file(path):
             int(e) for e in re.findall("Finished (.+?) requests", data)
         )
         total_time_us = sum(
-            float(e) for e in re.findall("Time elapsed: (.+?) us", data)
+            float(e) for e in re.findall("Time elapsed: (.+?) ms", data)
         )
         mops_per_sec = total_num_requests / total_time_us
         return mops_per_sec
@@ -60,7 +60,7 @@ def plot_ycsb(result_dir):
 
     def post_plot(ax, **kwargs):
         plt.xlabel("Workload")
-        plt.ylabel("Throughput (Mops/s)")
+        plt.ylabel("Throughput (Kops/s)")
         plt.legend()
 
     plot_single_bm(

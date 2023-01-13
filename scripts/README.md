@@ -18,3 +18,14 @@ Single-threaded benchmarks
 # Profile a data point
 ./scripts/bench_st --filter="seq_pread/512" -f uLayFS -b profile
 ```
+
+Multi-threaded benchmarks
+
+```shell
+./scripts/bench_mt --filter="unif_0R"
+./scripts/bench_mt --filter="unif_50R"
+./scripts/bench_mt --filter="unif_95R"
+./scripts/bench_mt --filter="unif_100R"
+./scripts/bench_mt --filter="zipf_2k"
+./scripts/bench_mt --filter="zipf_4k"
+```
