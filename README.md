@@ -5,10 +5,12 @@
 
 ## Prerequisites
 
-- MadFS is developed on Ubuntu 20.04.3 LTS (with Linux kernel 5.4)
+- MadFS is developed on Ubuntu 20.04.3 LTS and Ubuntu 22.04.1 LTS. It should
+  work on other Linux distributions as well.
 
-- We recommend using Python 3.8.10, CMake 3.16.3, GCC 10.3.0 (or 9.4.0), and
-  Clang 10.0.0, but other versions should also work.
+- MadFS requires a C++ compiler with C++ 20 support. The compilers known to work
+  includes GCC 11.3.0, GCC 10.3.0, Clang 14.0.0, and Clang
+  10.0.0.
 
 - Install dependencies and configure the system
 
