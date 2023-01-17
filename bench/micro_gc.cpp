@@ -73,7 +73,7 @@ void export_result(const std::filesystem::path& output_dir,
   for (size_t epoch = 0; epoch < latency_bufs.size(); epoch++) {
     auto path = output_dir / ("epoch-" + std::to_string(epoch));
     int fd = madfs::posix::open(path.c_str(), O_CREAT | O_RDWR | O_APPEND,
-                                 S_IRUSR | S_IWUSR);
+                                S_IRUSR | S_IWUSR);
     if (fd < 0) {
       std::cerr << "Fail to export result: open error" << std::endl;
       throw std::runtime_error("Fail to export result: open error");
