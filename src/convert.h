@@ -18,22 +18,13 @@ class Converter {
   // convert a normal file to a MadFS file
   // fd must be opened with both read and write permission
   static dram::File* convert_to(int fd, const char* pathname) {
-    if (!try_acquire_flock(fd)) {
-      LOG_WARN("Target file locked, cannot perform conversion");
-      return nullptr;
-    }
-
     int ret;
     struct stat stat_buf;
     ret = posix::fstat(fd, &stat_buf);
     PANIC_IF(ret, "Fail to fstat");
 
     if (stat_buf.st_size == 0) {
-      dram::File* file = new dram::File(fd, stat_buf, O_RDWR, pathname);
-      // release exclusive lock and acquire shared lock
-      release_flock(fd);
-      flock_guard(fd);
-      return file;
+      return new dram::File(fd, stat_buf, O_RDWR, pathname);
     }
 
     uint64_t block_align_size = ALIGN_UP(stat_buf.st_size, BLOCK_SIZE);
@@ -138,20 +129,12 @@ class Converter {
 
   done:
     pmem::persist_fenced(file->meta, BLOCK_SIZE);
-    release_flock(fd);
-    flock_guard(fd);
     return file;
   }
 
   static int convert_from(dram::File* file) {
     int ret;
     int fd = file->fd;
-    release_flock(fd);
-    if (!try_acquire_flock(file->fd)) {
-      LOG_WARN("Target file locked, cannot perform conversion");
-      flock_guard(fd);
-      return -1;
-    }
 
     uint64_t virtual_size = file->blk_table.update_unsafe();
     uint64_t virtual_size_aligned = ALIGN_UP(virtual_size, BLOCK_SIZE);
@@ -197,7 +180,6 @@ class Converter {
 
     // we steal fd here so it won't be destroyed with File
     file->fd = -1;
-    release_flock(fd);
     return fd;
   }
 };

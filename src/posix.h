@@ -56,7 +56,6 @@ DEFINE_FN(fallocate);
 DEFINE_FN(ftruncate);
 DEFINE_FN(fsync);
 DEFINE_FN(fdatasync);
-DEFINE_FN(flock);
 DEFINE_FN(fcntl);
 DEFINE_FN(unlink);
 DEFINE_FN(rename);
