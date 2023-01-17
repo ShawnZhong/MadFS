@@ -1,6 +1,6 @@
 #include "write.h"
 
-namespace ulayfs::dram {
+namespace madfs::dram {
 class CoWTx : public WriteTx {
  protected:
   // the index of the first virtual block that needs to be copied entirely
@@ -296,4 +296,4 @@ class MultiBlockTx : public CoWTx {
   }
 };
 
-}  // namespace ulayfs::dram
+}  // namespace madfs::dram

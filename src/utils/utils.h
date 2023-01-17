@@ -20,7 +20,7 @@
 #define ALIGN_DOWN(x, a) ((x) & ~(static_cast<decltype(x)>(a) - 1))
 #define IS_ALIGNED(x, a) (((x) & (static_cast<decltype(x)>(a) - 1)) == 0)
 
-namespace ulayfs {
+namespace madfs {
 
 struct FileInitException : public std::exception {
   explicit FileInitException(const char *msg) : msg(msg) {}
@@ -77,4 +77,4 @@ static void init_robust_mutex(pthread_mutex_t *mutex) {
   pthread_mutex_init(mutex, &attr);
 }
 
-}  // namespace ulayfs
+}  // namespace madfs

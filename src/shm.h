@@ -12,7 +12,7 @@
 #include "utils/logging.h"
 #include "utils/utils.h"
 
-namespace ulayfs::dram {
+namespace madfs::dram {
 
 class alignas(SHM_PER_THREAD_SIZE) PerThreadData {
   enum class State : uint8_t {
@@ -175,7 +175,7 @@ class ShmMgr {
     {
       ssize_t rc = fgetxattr(file_fd, SHM_XATTR_NAME, path, SHM_PATH_LEN);
       if (rc == -1 && errno == ENODATA) {  // no shm_path attribute, create one
-        sprintf(path, "/dev/shm/ulayfs_%016lx_%013lx", stat.st_ino,
+        sprintf(path, "/dev/shm/madfs_%016lx_%013lx", stat.st_ino,
                 (stat.st_ctim.tv_sec * 1000000000 + stat.st_ctim.tv_nsec) >> 3);
         rc = fsetxattr(file_fd, SHM_XATTR_NAME, path, SHM_PATH_LEN, 0);
         PANIC_IF(rc == -1, "failed to set shm_path attribute");
@@ -185,7 +185,7 @@ class ShmMgr {
     }
 
     // use posix::open instead of shm_open since shm_open calls open, which is
-    // overloaded by ulayfs
+    // overloaded by madfs
     fd = posix::open(path, O_RDWR | O_NOFOLLOW | O_CLOEXEC, S_IRUSR | S_IWUSR);
     if (fd < 0) {
       fd = create(path, stat.st_mode, stat.st_uid, stat.st_gid);
@@ -335,4 +335,4 @@ class ShmMgr {
   }
 };
 
-}  // namespace ulayfs::dram
+}  // namespace madfs::dram

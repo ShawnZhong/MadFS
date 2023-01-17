@@ -7,7 +7,7 @@
 #include "mem_table.h"
 #include "utils/timer.h"
 
-namespace ulayfs::dram {
+namespace madfs::dram {
 
 struct TxBlockCursor {
   LogicalBlockIdx idx;
@@ -90,4 +90,4 @@ struct TxBlockCursor {
 };
 
 static_assert(sizeof(TxBlockCursor) == 16);
-}  // namespace ulayfs::dram
+}  // namespace madfs::dram

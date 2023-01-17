@@ -1,31 +1,31 @@
 cmake_minimum_required(VERSION 3.16)
-project(uLayFS)
+project(MadFS)
 set(CMAKE_CXX_STANDARD 20)
 include(FetchContent)
 
-file(GLOB_RECURSE ulayfs_SRC CONFIGURE_DEPENDS "src/*.h" "src/*.cpp")
-add_library(ulayfs SHARED ${ulayfs_SRC})
+file(GLOB_RECURSE madfs_SRC CONFIGURE_DEPENDS "src/*.h" "src/*.cpp")
+add_library(madfs SHARED ${madfs_SRC})
 
 #[[
 build flags
 ]]
 set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -march=native -Wall -Wextra -Wno-unused")
-target_compile_options(ulayfs PRIVATE -Werror -Wsign-conversion)
-set_property(TARGET ulayfs PROPERTY INTERPROCEDURAL_OPTIMIZATION TRUE) # LTO
+target_compile_options(madfs PRIVATE -Werror -Wsign-conversion)
+set_property(TARGET madfs PROPERTY INTERPROCEDURAL_OPTIMIZATION TRUE) # LTO
 
 #[[
 build options
 ]]
 
-option(ULAYFS_MAP_SYNC "Use MAP_SYNC for mmap" ON)
-option(ULAYFS_MAP_POPULATE "Use MAP_POPULATE for mmap" ON)
-option(ULAYFS_TX_FLUSH_ONLY_FSYNC "Only flush transaction entries in fsync" ON)
-option(ULAYFS_USE_PMEMCHECK "Enable pmemcheck macros" OFF)
-option(ULAYFS_TIMER "Enable timer" OFF)
-option(ULAYFS_CC_OCC "Use OCC for CC" ON)
-option(ULAYFS_CC_MUTEX "Use robust mutex for CC" OFF)
-option(ULAYFS_CC_SPINLOCK "Use spinlock for CC" OFF)
-option(ULAYFS_CC_RWLOCK "Use rwlock for CC" OFF)
+option(MADFS_MAP_SYNC "Use MAP_SYNC for mmap" ON)
+option(MADFS_MAP_POPULATE "Use MAP_POPULATE for mmap" ON)
+option(MADFS_TX_FLUSH_ONLY_FSYNC "Only flush transaction entries in fsync" ON)
+option(MADFS_USE_PMEMCHECK "Enable pmemcheck macros" OFF)
+option(MADFS_TIMER "Enable timer" OFF)
+option(MADFS_CC_OCC "Use OCC for CC" ON)
+option(MADFS_CC_MUTEX "Use robust mutex for CC" OFF)
+option(MADFS_CC_SPINLOCK "Use spinlock for CC" OFF)
+option(MADFS_CC_RWLOCK "Use rwlock for CC" OFF)
 
 include(cmake/tooling.cmake)
 include(cmake/libpmem2.cmake)
@@ -47,17 +47,17 @@ FetchContent_Declare(tbb URL https://github.com/oneapi-src/oneTBB/releases/downl
 FetchContent_MakeAvailable(magic-enum tbb)
 
 find_package(TBB REQUIRED HINTS ${tbb_SOURCE_DIR}/lib/cmake/tbb)
-target_link_libraries(ulayfs pmem2 dl pthread atomic TBB::tbb magic_enum::magic_enum)
+target_link_libraries(madfs pmem2 dl pthread atomic TBB::tbb magic_enum::magic_enum)
 
 #[[
 tests, benchmarks, and tools
 ]]
 
-option(ULAYFS_BUILD_TESTS "Build tests" ON)
-option(ULAYFS_BUILD_TOOLS "Build tools" ON)
-option(ULAYFS_BUILD_BENCH "Build benchmarks" OFF)
+option(MADFS_BUILD_TESTS "Build tests" ON)
+option(MADFS_BUILD_TOOLS "Build tools" ON)
+option(MADFS_BUILD_BENCH "Build benchmarks" OFF)
 
-if (ULAYFS_BUILD_TESTS)
+if (MADFS_BUILD_TESTS)
     include_directories(src)
 
     add_executable(test_basic test/test_basic.cpp test/common.h)
@@ -65,25 +65,25 @@ if (ULAYFS_BUILD_TESTS)
     add_executable(test_sync test/test_sync.cpp test/common.h)
     add_executable(test_gc test/test_gc.cpp test/common.h)
 
-    target_link_libraries(test_basic ulayfs)
-    target_link_libraries(test_rw ulayfs)
-    target_link_libraries(test_sync ulayfs pthread)
-    target_link_libraries(test_gc ulayfs)
+    target_link_libraries(test_basic madfs)
+    target_link_libraries(test_rw madfs)
+    target_link_libraries(test_sync madfs pthread)
+    target_link_libraries(test_gc madfs)
 endif ()
 
-if (ULAYFS_BUILD_TOOLS)
+if (MADFS_BUILD_TOOLS)
     add_executable(info tools/info.cpp)
-    add_executable(to_ulayfs tools/to_ulayfs.cpp)
-    add_executable(from_ulayfs tools/from_ulayfs.cpp)
+    add_executable(to_madfs tools/to_madfs.cpp)
+    add_executable(from_madfs tools/from_madfs.cpp)
     add_executable(gc tools/gc.cpp)
 
-    target_link_libraries(info ulayfs)
-    target_link_libraries(to_ulayfs ulayfs)
-    target_link_libraries(from_ulayfs ulayfs)
-    target_link_libraries(gc ulayfs)
+    target_link_libraries(info madfs)
+    target_link_libraries(to_madfs madfs)
+    target_link_libraries(from_madfs madfs)
+    target_link_libraries(gc madfs)
 endif ()
 
-if (ULAYFS_BUILD_BENCH)
+if (MADFS_BUILD_BENCH)
     set(CMAKE_RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR})
 
     FetchContent_Declare(
@@ -108,6 +108,6 @@ if (ULAYFS_BUILD_BENCH)
     target_link_libraries(leveldb_ycsb cxxopts leveldb)
     target_link_libraries(micro_st benchmark::benchmark)
     target_link_libraries(micro_mt benchmark::benchmark)
-    target_link_libraries(micro_gc cxxopts ulayfs) # We always want to link ulayfs for gc
-    target_link_libraries(bench_open cxxopts ulayfs)
+    target_link_libraries(micro_gc cxxopts madfs) # We always want to link madfs for gc
+    target_link_libraries(bench_open cxxopts madfs)
 endif ()

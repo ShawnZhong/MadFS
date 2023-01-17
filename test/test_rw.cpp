@@ -4,9 +4,9 @@
 
 #include "common.h"
 
-using ulayfs::BLOCK_SIZE;
-using ulayfs::NUM_INLINE_TX_ENTRY;
-using ulayfs::NUM_TX_ENTRY_PER_BLOCK;
+using madfs::BLOCK_SIZE;
+using madfs::NUM_INLINE_TX_ENTRY;
+using madfs::NUM_TX_ENTRY_PER_BLOCK;
 
 struct TestOpt {
   int num_bytes_per_iter = BLOCK_SIZE;

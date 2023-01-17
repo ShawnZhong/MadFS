@@ -3,7 +3,7 @@
 #include "lib.h"
 #include "utils/timer.h"
 
-namespace ulayfs {
+namespace madfs {
 
 static int open_impl(const char* pathname, int flags, mode_t mode) {
   TimerGuard<Event::OPEN> guard;
@@ -18,13 +18,13 @@ static int open_impl(const char* pathname, int flags, mode_t mode) {
 
   try {
     add_file(fd, stat_buf, flags, pathname);
-    LOG_INFO("ulayfs::open(%s, %x, %x) = %d", pathname, flags, mode, fd);
+    LOG_INFO("madfs::open(%s, %x, %x) = %d", pathname, flags, mode, fd);
   } catch (const FileInitException& e) {
-    LOG_WARN("File \"%s\": ulayfs::open failed: %s. Fallback to syscall",
+    LOG_WARN("File \"%s\": madfs::open failed: %s. Fallback to syscall",
              pathname, e.what());
     LOG_DEBUG("posix::open(%s, %x, %x) = %d", pathname, flags, mode, fd);
   } catch (const FatalException& e) {
-    LOG_WARN("File \"%s\": ulayfs::open failed with fatal error.", pathname);
+    LOG_WARN("File \"%s\": madfs::open failed with fatal error.", pathname);
     return -1;
   }
   return fd;
@@ -74,4 +74,4 @@ FILE* fopen(const char* filename, const char* mode) {
   return file;
 }
 }
-}  // namespace ulayfs
+}  // namespace madfs

@@ -72,7 +72,7 @@ void export_result(const std::filesystem::path& output_dir,
 
   for (size_t epoch = 0; epoch < latency_bufs.size(); epoch++) {
     auto path = output_dir / ("epoch-" + std::to_string(epoch));
-    int fd = ulayfs::posix::open(path.c_str(), O_CREAT | O_RDWR | O_APPEND,
+    int fd = madfs::posix::open(path.c_str(), O_CREAT | O_RDWR | O_APPEND,
                                  S_IRUSR | S_IWUSR);
     if (fd < 0) {
       std::cerr << "Fail to export result: open error" << std::endl;
@@ -81,7 +81,7 @@ void export_result(const std::filesystem::path& output_dir,
 
     const auto& latency_buf = latency_bufs[epoch];
     auto len = latency_buf.size() * sizeof(uint32_t);
-    auto ret = ulayfs::posix::write(fd, latency_buf.data(), len);
+    auto ret = madfs::posix::write(fd, latency_buf.data(), len);
 
     if (ret != len) {
       std::cerr << "Fail to export result: write error. ret=" << ret
@@ -89,7 +89,7 @@ void export_result(const std::filesystem::path& output_dir,
       throw std::runtime_error("Fail to export result: write error");
     }
 
-    ulayfs::posix::close(fd);
+    madfs::posix::close(fd);
   }
 
   std::cerr << "Benchmark result exported to " << output_dir << std::endl;
@@ -159,7 +159,7 @@ void run_io(const char* file_path, const std::filesystem::path& output_dir) {
 }
 
 void run_gc(const char* file_path) {
-  ulayfs::utility::GarbageCollector garbage_collector(file_path);
+  madfs::utility::GarbageCollector garbage_collector(file_path);
   std::vector<uint32_t> gc_duration;
   gc_duration.reserve(num_epochs);
   for (uint32_t e = 0; e < num_epochs; ++e) {

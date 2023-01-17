@@ -2,7 +2,7 @@
 
 #include "tx.h"
 
-namespace ulayfs::dram {
+namespace madfs::dram {
 class ReadTx : public Tx {
  protected:
   char* const buf;
@@ -143,4 +143,4 @@ class ReadTx : public Tx {
     return static_cast<ssize_t>(count);
   }
 };
-}  // namespace ulayfs::dram
+}  // namespace madfs::dram

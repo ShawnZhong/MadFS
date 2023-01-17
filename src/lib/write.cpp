@@ -1,14 +1,14 @@
 #include "lib.h"
 #include "utils/timer.h"
 
-namespace ulayfs {
+namespace madfs {
 extern "C" {
 ssize_t write(int fd, const void* buf, size_t count) {
   if (auto file = get_file(fd)) {
     timer.start<Event::WRITE>(count);
     ssize_t res = file->write(static_cast<const char*>(buf), count);
     timer.stop<Event::WRITE>();
-    LOG_DEBUG("ulayfs::write(%s, buf, %zu) = %zu", file->path, count, res);
+    LOG_DEBUG("madfs::write(%s, buf, %zu) = %zu", file->path, count, res);
     return res;
   } else {
     ssize_t res = posix::write(fd, buf, count);
@@ -22,7 +22,7 @@ ssize_t pwrite(int fd, const void* buf, size_t count, off_t offset) {
     TimerGuard<Event::PWRITE> timer_guard(count);
     ssize_t res = file->pwrite(static_cast<const char*>(buf), count,
                                static_cast<size_t>(offset));
-    LOG_DEBUG("ulayfs::pwrite(%s, buf, %zu, %zu) = %zu", file->path, count,
+    LOG_DEBUG("madfs::pwrite(%s, buf, %zu, %zu) = %zu", file->path, count,
               offset, res);
     return res;
   } else {
@@ -35,4 +35,4 @@ ssize_t pwrite64(int fd, const void* buf, size_t count, off64_t offset) {
   return pwrite(fd, buf, count, offset);
 }
 }
-}  // namespace ulayfs
+}  // namespace madfs

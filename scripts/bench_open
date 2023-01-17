@@ -2,7 +2,7 @@
 import logging
 
 from bench_utils import drop_cache
-from fs import ULAYFS
+from fs import MADFS
 from plot_open import plot_open
 from runner import Runner
 from utils import root_dir, get_timestamp
@@ -27,9 +27,9 @@ logical_to_virtual_size = {
 def main():
     result_dir = root_dir / "results" / "bench_open" / "exp" / get_timestamp()
     runner = Runner("bench_open", result_dir=result_dir)
-    runner.build(cmake_args="-DULAYFS_TIMER=ON")
+    runner.build(cmake_args="-DMADFS_TIMER=ON")
 
-    data_path = ULAYFS().path / "test.txt"
+    data_path = MADFS().path / "test.txt"
 
     for logical_size, virtual_size in logical_to_virtual_size.items():
         runner.run(

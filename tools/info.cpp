@@ -20,9 +20,9 @@ int main(int argc, char *argv[]) {
     return 1;
   }
 
-  if (auto file = ulayfs::get_file(fd)) {
+  if (auto file = madfs::get_file(fd)) {
     std::cerr << *file << "\n";
   } else {
-    std::cerr << filename << " is not a uLayFS file. \n";
+    std::cerr << filename << " is not a MadFS file. \n";
   }
 }

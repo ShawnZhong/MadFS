@@ -2,7 +2,7 @@ import logging
 from pathlib import Path
 from typing import Optional
 
-from utils import root_dir, is_ulayfs_linked, system
+from utils import root_dir, is_madfs_linked, system
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger("fs")
@@ -58,8 +58,8 @@ class Ext4DAX(Filesystem):
         return _ext4_path
 
 
-class ULAYFS(Ext4DAX):
-    name = "uLayFS"
+class MADFS(Ext4DAX):
+    name = "MadFS"
     cc = "OCC"
 
     @staticmethod
@@ -69,14 +69,14 @@ class ULAYFS(Ext4DAX):
         system(
             f"make {build_type} -C {root_dir} "
             f"CMAKE_ARGS='{cmake_args}' "
-            f"BUILD_TARGETS='ulayfs' ",
+            f"BUILD_TARGETS='madfs' ",
             log_path=result_dir / "build.log",
         )
 
         config_log_path = result_dir / "config.log"
         system(f"cmake -LA -N {build_path} >> {config_log_path}")
 
-        return build_path / "libulayfs.so"
+        return build_path / "libmadfs.so"
 
     @staticmethod
     def _make_cmake_args(cc: str) -> str:
@@ -86,37 +86,37 @@ class ULAYFS(Ext4DAX):
             raise ValueError(f"{cc} is not a valid option")
 
         result = " ".join(
-            f"-DULAYFS_CC_{option}={'ON' if option == cc else 'OFF'}"
+            f"-DMADFS_CC_{option}={'ON' if option == cc else 'OFF'}"
             for option in options
         )
 
         return result
 
     def get_env(self, prog, **kwargs):
-        if is_ulayfs_linked(prog):
+        if is_madfs_linked(prog):
             return {}
-        cmake_args = ULAYFS._make_cmake_args(self.cc)
-        ulayfs_path = ULAYFS.build(cmake_args=cmake_args, **kwargs)
-        env = {"LD_PRELOAD": ulayfs_path}
+        cmake_args = MADFS._make_cmake_args(self.cc)
+        madfs_path = MADFS.build(cmake_args=cmake_args, **kwargs)
+        env = {"LD_PRELOAD": madfs_path}
         return env
 
 
-class ULAYFS_OCC(ULAYFS):
+class MADFS_OCC(MADFS):
     name = "OCC"
     cc = "OCC"
 
 
-class ULAYFS_MUTEX(ULAYFS):
+class MADFS_MUTEX(MADFS):
     name = "Mutex"
     cc = "MUTEX"
 
 
-class ULAYFS_SPINLOCK(ULAYFS):
+class MADFS_SPINLOCK(MADFS):
     name = "Spinlock"
     cc = "SPINLOCK"
 
 
-class ULAYFS_RWLOCK(ULAYFS):
+class MADFS_RWLOCK(MADFS):
     name = "RwLock"
     cc = "RWLOCK"
 
@@ -162,10 +162,10 @@ class SplitFS(Filesystem):
         return env
 
 
-all_bench_fs = {fs.name: fs for fs in [ULAYFS(), Ext4DAX(), NOVA(), SplitFS()]}
+all_bench_fs = {fs.name: fs for fs in [MADFS(), Ext4DAX(), NOVA(), SplitFS()]}
 all_extra_fs = {
     fs.name: fs
-    for fs in [ULAYFS_OCC(), ULAYFS_SPINLOCK(), ULAYFS_MUTEX(), ULAYFS_RWLOCK()]
+    for fs in [MADFS_OCC(), MADFS_SPINLOCK(), MADFS_MUTEX(), MADFS_RWLOCK()]
 }
 all_fs = {**all_bench_fs, **all_extra_fs}
 

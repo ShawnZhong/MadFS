@@ -1,6 +1,6 @@
 #include "file/file.h"
 
-namespace ulayfs::dram {
+namespace madfs::dram {
 off_t File::lseek(off_t offset, int whence) {
   int64_t ret;
 
@@ -27,4 +27,4 @@ off_t File::lseek(off_t offset, int whence) {
 
   return ret;
 }
-}  // namespace ulayfs::dram
+}  // namespace madfs::dram

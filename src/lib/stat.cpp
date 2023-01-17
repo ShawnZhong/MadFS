@@ -1,7 +1,7 @@
 #include "lib.h"
 #include "utils/timer.h"
 
-namespace ulayfs {
+namespace madfs {
 
 static int fstat_impl(int fd, struct stat* buf) {
   int rc = posix::fstat(fd, buf);
@@ -12,7 +12,7 @@ static int fstat_impl(int fd, struct stat* buf) {
 
   if (auto file = get_file(fd)) {
     file->stat(buf);
-    LOG_DEBUG("ulayfs::fstat(%d, {.st_size = %ld})", fd, buf->st_size);
+    LOG_DEBUG("madfs::fstat(%d, {.st_size = %ld})", fd, buf->st_size);
   } else {
     LOG_DEBUG("posix::fstat(%d)", fd);
   }
@@ -30,7 +30,7 @@ static int stat_impl(const char* pathname, struct stat* buf) {
     int fd = open(pathname, O_RDONLY);
     if (auto file = get_file(fd)) {
       file->stat(buf);
-      LOG_DEBUG("ulayfs::stat(%s, {.st_size = %ld})", pathname, buf->st_size);
+      LOG_DEBUG("madfs::stat(%s, {.st_size = %ld})", pathname, buf->st_size);
       close(fd);
       return 0;
     }
@@ -80,4 +80,4 @@ int __xstat64([[maybe_unused]] int ver, const char* pathname,
   return stat_impl(pathname, reinterpret_cast<struct stat*>(buf));
 }
 }
-}  // namespace ulayfs
+}  // namespace madfs

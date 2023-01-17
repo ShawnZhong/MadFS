@@ -8,7 +8,7 @@
 #include "timer_event.h"
 #include "utils/logging.h"
 
-namespace ulayfs {
+namespace madfs {
 
 class Timer {
  private:
@@ -157,4 +157,4 @@ struct TimerGuard {
   }
 };
 
-}  // namespace ulayfs
+}  // namespace madfs

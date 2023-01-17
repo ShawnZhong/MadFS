@@ -7,9 +7,9 @@
 
 #include "common.h"
 
-using ulayfs::debug::print_file;
+using madfs::debug::print_file;
 
-constexpr int STR_LEN = ulayfs::BLOCK_SIZE * 16 + 123;
+constexpr int STR_LEN = madfs::BLOCK_SIZE * 16 + 123;
 std::string test_str;
 char buff[STR_LEN + 1]{};
 
@@ -172,7 +172,7 @@ void test_stream() {
 void test_unlink() {
   fprintf(stderr, "test_unlink\n");
 
-  rc = system("rm -rf /dev/shm/ulayfs_*");
+  rc = system("rm -rf /dev/shm/madfs_*");
 
   int fd = open(filepath, O_CREAT | O_RDWR, S_IRUSR | S_IWUSR);
   ASSERT(fd >= 0);
@@ -183,7 +183,7 @@ void test_unlink() {
   rc = unlink(filepath);
   ASSERT(rc == 0);
 
-  rc = system("find /dev/shm -maxdepth 1 -name ulayfs_* | grep .");
+  rc = system("find /dev/shm -maxdepth 1 -name madfs_* | grep .");
   ASSERT(rc != 0);  // make sure that there is no bitmap left
 }
 
@@ -194,8 +194,8 @@ void test_print() {
   int fd = open(filepath, O_CREAT | O_RDWR, S_IRUSR | S_IWUSR);
   ASSERT(fd >= 0);
 
-  sz = write(fd, test_str.data(), ulayfs::BLOCK_SIZE);
-  ASSERT(sz == ulayfs::BLOCK_SIZE);
+  sz = write(fd, test_str.data(), madfs::BLOCK_SIZE);
+  ASSERT(sz == madfs::BLOCK_SIZE);
 
   sz = write(fd, test_str.data(), 8);
   ASSERT(sz == 8);

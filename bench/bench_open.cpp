@@ -17,7 +17,7 @@ void prep(const std::filesystem::path& file_path, uint64_t file_size) {
   prefill_file(fd, file_size, 4096);
 
   struct stat st {};
-  ulayfs::posix::fstat(fd, &st);
+  madfs::posix::fstat(fd, &st);
   printf("file size: %.3f MB\n", st.st_size / 1024. / 1024.);
 
   close(fd);

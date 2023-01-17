@@ -5,7 +5,7 @@
 #include "utils/logging.h"
 #include "utils/utils.h"
 
-namespace ulayfs::pmem {
+namespace madfs::pmem {
 
 // LogEntryBlock is per-thread to avoid contention
 class LogEntryBlock : public noncopyable {
@@ -22,4 +22,4 @@ class LogEntryBlock : public noncopyable {
 static_assert(sizeof(LogEntryBlock) == BLOCK_SIZE,
               "LogEntryBlock must be of size BLOCK_SIZE");
 
-}  // namespace ulayfs::pmem
+}  // namespace madfs::pmem

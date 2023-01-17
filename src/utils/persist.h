@@ -21,7 +21,7 @@ void memmove_mov_avx512f_noflush(char *, const char *, size_t);
 void memmove_mov_avx_noflush(char *, const char *, size_t);
 }
 
-namespace ulayfs {
+namespace madfs {
 
 static inline void fence() {
   if constexpr (BuildOptions::enable_timer) {
@@ -107,4 +107,4 @@ static inline void memcpy(char *dst, const char *src, size_t size) {
 }
 }  // namespace dram
 
-}  // namespace ulayfs
+}  // namespace madfs

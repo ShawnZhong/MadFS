@@ -9,7 +9,7 @@
 #include "cursor/tx_entry.h"
 #include "idx.h"
 
-namespace ulayfs::dram {
+namespace madfs::dram {
 
 class OffsetMgr {
   union TicketSlot {
@@ -124,4 +124,4 @@ class OffsetMgr {
   }
 };
 
-};  // namespace ulayfs::dram
+};  // namespace madfs::dram

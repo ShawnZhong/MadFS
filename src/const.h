@@ -3,7 +3,7 @@
 #include <cstdint>
 #include <limits>
 
-namespace ulayfs {
+namespace madfs {
 /*
  * hardware
  */
@@ -16,7 +16,7 @@ constexpr static uint32_t CACHELINE_SIZE = 1 << CACHELINE_SHIFT;
  * file
  */
 constexpr static int SIGNATURE_SIZE = 8;
-constexpr static char FILE_SIGNATURE[SIGNATURE_SIZE] = "ULAYFS";
+constexpr static char FILE_SIGNATURE[SIGNATURE_SIZE] = "MADFS";
 constexpr static char SHM_XATTR_NAME[] = "user.shm_path";
 constexpr static uint16_t SHM_PATH_LEN = 64;
 // grow in the unit of 2 MB
@@ -79,4 +79,4 @@ constexpr static uint32_t SHM_PER_THREAD_SIZE = CACHELINE_SIZE;
 constexpr static uint32_t MAX_NUM_THREADS = SHM_GC_SIZE / SHM_PER_THREAD_SIZE;
 constexpr static uint32_t SHM_SIZE =
     NUM_BITMAP_BLOCKS * BLOCK_SIZE + SHM_GC_SIZE;
-}  // namespace ulayfs
+}  // namespace madfs

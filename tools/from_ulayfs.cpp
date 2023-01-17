@@ -20,16 +20,16 @@ int main(int argc, char *argv[]) {
     return 1;
   }
 
-  auto file = ulayfs::get_file(fd);
+  auto file = madfs::get_file(fd);
 
   if (!file) {
-    std::cerr << filename << " is not a uLayFS file. \n";
+    std::cerr << filename << " is not a MadFS file. \n";
     return 0;
   }
 
-  fd = ulayfs::utility::Converter::convert_from(file.get());
+  fd = madfs::utility::Converter::convert_from(file.get());
   // now fd is just a normal file
-  ulayfs::posix::close(fd);
+  madfs::posix::close(fd);
 
   return 0;
 }

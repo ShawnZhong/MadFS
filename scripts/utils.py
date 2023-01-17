@@ -59,20 +59,20 @@ sudo apt install -y sqlite3                                         # for benchm
         system(configure_cmds)
 
 
-def is_ulayfs_linked(prog_path: Path):
+def is_madfs_linked(prog_path: Path):
     import subprocess
     import re
 
     output = subprocess.check_output(["ldd", shutil.which(prog_path)]).decode("utf-8")
     for line in output.splitlines():
         match = re.match(r"\t(.*) => (.*) \(0x", line)
-        if match and match.group(1) == "libulayfs.so":
+        if match and match.group(1) == "libmadfs.so":
             logger.info(
-                f"`{prog_path}` is already linked with uLayFS ({match.group(2)})"
+                f"`{prog_path}` is already linked with MadFS ({match.group(2)})"
             )
             return True
     logger.info(
-        f"`{prog_path}` is not linked with uLayFS by default. Need to run with `env LD_PRELOAD=...`"
+        f"`{prog_path}` is not linked with MadFS by default. Need to run with `env LD_PRELOAD=...`"
     )
     return False
 

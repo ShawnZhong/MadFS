@@ -1,6 +1,6 @@
 #include "write.h"
 
-namespace ulayfs::dram {
+namespace madfs::dram {
 class AlignedTx : public WriteTx {
  public:
   AlignedTx(File* file, const char* buf, size_t count, size_t offset)
@@ -100,4 +100,4 @@ class AlignedTx : public WriteTx {
     return static_cast<ssize_t>(count);
   }
 };
-}  // namespace ulayfs::dram
+}  // namespace madfs::dram

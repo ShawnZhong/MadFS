@@ -4,7 +4,7 @@
 
 #include "cursor/tx_block.h"
 
-namespace ulayfs::dram {
+namespace madfs::dram {
 
 File::File(int fd, const struct stat& stat, int flags,
            const char* pathname [[maybe_unused]])
@@ -124,4 +124,4 @@ std::ostream& operator<<(std::ostream& out, File& f) {
   return out;
 }
 
-}  // namespace ulayfs::dram
+}  // namespace madfs::dram

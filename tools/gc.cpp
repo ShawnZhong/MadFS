@@ -12,7 +12,7 @@ int main(int argc, char *argv[]) {
   }
 
   const char *filename = argv[1];
-  ulayfs::utility::GarbageCollector garbage_collector(filename);
+  madfs::utility::GarbageCollector garbage_collector(filename);
   bool is_done = garbage_collector.do_gc();
   std::cout << "GC_done=" << is_done << std::endl;
 

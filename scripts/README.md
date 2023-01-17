@@ -13,10 +13,10 @@ Single-threaded benchmarks
 ./scripts/bench_st --filter="append_pwrite"
 
 # Limit to set of file systems
-./scripts/bench_st -f uLayFS SplitFS
+./scripts/bench_st -f MadFS SplitFS
 
 # Profile a data point
-./scripts/bench_st --filter="seq_pread/512" -f uLayFS -b profile
+./scripts/bench_st --filter="seq_pread/512" -f MadFS -b profile
 ```
 
 Multi-threaded benchmarks

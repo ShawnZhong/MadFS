@@ -10,7 +10,7 @@
 #include "utils/logging.h"
 #include "utils/utils.h"
 
-namespace ulayfs::utility {
+namespace madfs::utility {
 
 using dram::TxBlockCursor;
 
@@ -282,4 +282,4 @@ class GarbageCollector {
   }
 };
 
-}  // namespace ulayfs::utility
+}  // namespace madfs::utility

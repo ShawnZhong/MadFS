@@ -3,15 +3,15 @@
 #include <ostream>
 
 // see https://cmake.org/cmake/help/latest/command/configure_file.html
-#cmakedefine01 ULAYFS_MAP_SYNC
-#cmakedefine01 ULAYFS_MAP_POPULATE
-#cmakedefine01 ULAYFS_TX_FLUSH_ONLY_FSYNC
-#cmakedefine01 ULAYFS_USE_PMEMCHECK
-#cmakedefine01 ULAYFS_TIMER
-#cmakedefine01 ULAYFS_CC_OCC
-#cmakedefine01 ULAYFS_CC_MUTEX
-#cmakedefine01 ULAYFS_CC_SPINLOCK
-#cmakedefine01 ULAYFS_CC_RWLOCK
+#cmakedefine01 MADFS_MAP_SYNC
+#cmakedefine01 MADFS_MAP_POPULATE
+#cmakedefine01 MADFS_TX_FLUSH_ONLY_FSYNC
+#cmakedefine01 MADFS_USE_PMEMCHECK
+#cmakedefine01 MADFS_TIMER
+#cmakedefine01 MADFS_CC_OCC
+#cmakedefine01 MADFS_CC_MUTEX
+#cmakedefine01 MADFS_CC_SPINLOCK
+#cmakedefine01 MADFS_CC_RWLOCK
 
 #cmakedefine CMAKE_BUILD_TYPE "@CMAKE_BUILD_TYPE@"
 
@@ -29,7 +29,7 @@
 #define __msan_scoped_enable_interceptor_checks(...) ({})
 #endif
 
-#if ULAYFS_USE_PMEMCHECK == 1
+#if MADFS_USE_PMEMCHECK == 1
 #include <valgrind/pmemcheck.h>
 // ref: https://pmem.io/valgrind/generated/pmc-manual.html
 #else
@@ -39,19 +39,19 @@
 #define VALGRIND_PMC_DO_FLUSH(...) ({})
 #endif
 
-namespace ulayfs {
+namespace madfs {
 
 constexpr static struct BuildOptions {
   constexpr static const char* build_type = CMAKE_BUILD_TYPE;
-  constexpr static bool map_sync = ULAYFS_MAP_SYNC;
-  constexpr static bool map_populate = ULAYFS_MAP_POPULATE;
-  constexpr static bool tx_flush_only_fsync = ULAYFS_TX_FLUSH_ONLY_FSYNC;
-  constexpr static bool use_pmemcheck = ULAYFS_USE_PMEMCHECK;
-  constexpr static bool enable_timer = ULAYFS_TIMER;
-  constexpr static bool cc_occ = ULAYFS_CC_OCC;
-  constexpr static bool cc_mutex = ULAYFS_CC_MUTEX;
-  constexpr static bool cc_spinlock = ULAYFS_CC_SPINLOCK;
-  constexpr static bool cc_rwlock = ULAYFS_CC_RWLOCK;
+  constexpr static bool map_sync = MADFS_MAP_SYNC;
+  constexpr static bool map_populate = MADFS_MAP_POPULATE;
+  constexpr static bool tx_flush_only_fsync = MADFS_TX_FLUSH_ONLY_FSYNC;
+  constexpr static bool use_pmemcheck = MADFS_USE_PMEMCHECK;
+  constexpr static bool enable_timer = MADFS_TIMER;
+  constexpr static bool cc_occ = MADFS_CC_OCC;
+  constexpr static bool cc_mutex = MADFS_CC_MUTEX;
+  constexpr static bool cc_spinlock = MADFS_CC_SPINLOCK;
+  constexpr static bool cc_rwlock = MADFS_CC_RWLOCK;
   static_assert(cc_occ + cc_mutex + cc_spinlock + cc_rwlock == 1);
 
 #ifndef NDEBUG
@@ -117,10 +117,10 @@ static struct RuntimeOptions {
   int log_level{1};
 
   RuntimeOptions() noexcept {
-    if (std::getenv("ULAYFS_NO_SHOW_CONFIG")) show_config = false;
-    if (std::getenv("ULAYFS_NO_STRICT_OFFSET")) strict_offset_serial = false;
-    log_file = std::getenv("ULAYFS_LOG_FILE");
-    if (auto str = std::getenv("ULAYFS_LOG_LEVEL"); str)
+    if (std::getenv("MADFS_NO_SHOW_CONFIG")) show_config = false;
+    if (std::getenv("MADFS_NO_STRICT_OFFSET")) strict_offset_serial = false;
+    log_file = std::getenv("MADFS_LOG_FILE");
+    if (auto str = std::getenv("MADFS_LOG_LEVEL"); str)
       log_level = std::atoi(str);
   };
 
@@ -135,4 +135,4 @@ static struct RuntimeOptions {
   }
 } runtime_options;
 
-}  // namespace ulayfs
+}  // namespace madfs

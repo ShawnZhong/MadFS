@@ -2,7 +2,7 @@
 
 #include "file/file.h"
 
-namespace ulayfs::dram {
+namespace madfs::dram {
 void* File::mmap(void* addr_hint, size_t length, int prot, int mmap_flags,
                  size_t offset) const {
   if (offset % BLOCK_SIZE != 0) {
@@ -69,4 +69,4 @@ error:
   posix::munmap(new_addr, length);
   return MAP_FAILED;
 }
-}  // namespace ulayfs::dram
+}  // namespace madfs::dram

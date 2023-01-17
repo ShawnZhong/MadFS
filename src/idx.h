@@ -8,7 +8,7 @@
 
 #include "const.h"
 
-namespace ulayfs {
+namespace madfs {
 
 enum class IdxType { LOGICAL_BLOCK_IDX, VIRTUAL_BLOCK_IDX };
 
@@ -181,4 +181,4 @@ static_assert(std::is_standard_layout<TxEntryIdx>::value,
 static_assert(std::is_trivial<TxEntryIdx>::value,
               "TxEntryIdx must be a trivial type");
 
-}  // namespace ulayfs
+}  // namespace madfs

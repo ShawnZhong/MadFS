@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 import logging
 
-from fs import ULAYFS
+from fs import MADFS
 from plot_gc import plot_gc
 from runner import Runner
 from utils import root_dir, get_timestamp
@@ -16,7 +16,7 @@ def main():
     runner = Runner(cmake_target, result_dir=result_dir)
     runner.build()
 
-    data_path = ULAYFS().path / "test.txt"
+    data_path = MADFS().path / "test.txt"
     runner.run(prog_args=["--gc", "--io", "-f", data_path, "-o", result_dir / "gc"])
     runner.run(prog_args=["--io", "-f", data_path, "-o", result_dir / "io"])
 

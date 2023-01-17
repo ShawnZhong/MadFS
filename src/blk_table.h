@@ -18,7 +18,7 @@
 #include "utils/tbb.h"
 #include "utils/utils.h"
 
-namespace ulayfs::dram {
+namespace madfs::dram {
 struct FileState {
   TxCursor cursor;
   uint64_t file_size;
@@ -250,4 +250,4 @@ class BlkTable {
   }
 };
 
-}  // namespace ulayfs::dram
+}  // namespace madfs::dram

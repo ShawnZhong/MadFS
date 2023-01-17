@@ -12,15 +12,15 @@
 #include "utils/logging.h"
 #include "utils/utils.h"
 
-namespace ulayfs::dram {
+namespace madfs::dram {
 struct TxCursor;
 }
 
-namespace ulayfs::utility {
+namespace madfs::utility {
 class GarbageCollector;
 }
 
-namespace ulayfs::pmem {
+namespace madfs::pmem {
 
 class TxBlock : public noncopyable {
   std::atomic<TxEntry> tx_entries[NUM_TX_ENTRY_PER_BLOCK];
@@ -108,7 +108,7 @@ class TxBlock : public noncopyable {
                      sizeof(TxEntry) * (end_idx - begin_idx));
   }
 
-  friend struct ::ulayfs::dram::TxCursor;
+  friend struct ::madfs::dram::TxCursor;
 
   friend std::ostream &operator<<(std::ostream &os, const TxBlock &block) {
     os << "TxBlock{tx_seq=" << block.tx_seq << ", next=" << block.next
@@ -120,4 +120,4 @@ class TxBlock : public noncopyable {
 static_assert(sizeof(TxBlock) == BLOCK_SIZE,
               "TxBlock must be of size BLOCK_SIZE");
 
-}  // namespace ulayfs::pmem
+}  // namespace madfs::pmem

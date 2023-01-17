@@ -2,7 +2,7 @@
 
 #include "file/file.h"
 
-namespace ulayfs::dram {
+namespace madfs::dram {
 ssize_t File::pread(char* buf, size_t count, size_t offset) {
   if (unlikely(!can_read)) {
     errno = EBADF;
@@ -33,4 +33,4 @@ ssize_t File::read(char* buf, size_t count) {
   return Tx::exec_and_release_offset<ReadTx>(this, buf, count, offset, state,
                                              ticket);
 }
-}  // namespace ulayfs::dram
+}  // namespace madfs::dram

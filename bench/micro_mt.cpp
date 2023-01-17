@@ -61,7 +61,7 @@ void bench(benchmark::State& state) {
     }
   }
 
-  if (ulayfs::is_linked()) ulayfs::debug::clear_timer();
+  if (madfs::is_linked()) madfs::debug::clear_timer();
 
   // run benchmark
   if constexpr (mode == Mode::APPEND) {
@@ -140,15 +140,15 @@ void bench(benchmark::State& state) {
   state.SetBytesProcessed(bytes_processed);
   state.SetItemsProcessed(items_processed);
 
-  if (ulayfs::is_linked()) {
+  if (madfs::is_linked()) {
     double start_cnt =
-        ulayfs::debug::get_count(ulayfs::Event::SINGLE_BLOCK_TX_START) +
-        ulayfs::debug::get_count(ulayfs::Event::ALIGNED_TX_COPY);
+        madfs::debug::get_count(madfs::Event::SINGLE_BLOCK_TX_START) +
+        madfs::debug::get_count(madfs::Event::ALIGNED_TX_COPY);
     double copy_cnt =
-        ulayfs::debug::get_count(ulayfs::Event::SINGLE_BLOCK_TX_COPY);
+        madfs::debug::get_count(madfs::Event::SINGLE_BLOCK_TX_COPY);
     double commit_cnt =
-        ulayfs::debug::get_count(ulayfs::Event::SINGLE_BLOCK_TX_COMMIT) +
-        ulayfs::debug::get_count(ulayfs::Event::ALIGNED_TX_COMMIT);
+        madfs::debug::get_count(madfs::Event::SINGLE_BLOCK_TX_COMMIT) +
+        madfs::debug::get_count(madfs::Event::ALIGNED_TX_COMMIT);
 
     if (start_cnt != 0 && commit_cnt != 0) {
       state.counters["tx_copy"] = copy_cnt / start_cnt / state.threads;

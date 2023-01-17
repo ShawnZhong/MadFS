@@ -6,7 +6,7 @@
 #include "mem_table.h"
 #include "utils/timer.h"
 
-namespace ulayfs::dram {
+namespace madfs::dram {
 
 /**
  * @brief A TxCursor is a pointer to a transaction entry. It contains a
@@ -242,4 +242,4 @@ struct TxCursor {
 };
 
 static_assert(sizeof(TxCursor) == 16);
-}  // namespace ulayfs::dram
+}  // namespace madfs::dram
