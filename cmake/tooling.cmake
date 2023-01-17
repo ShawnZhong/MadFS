@@ -38,7 +38,7 @@ if (${CMAKE_BUILD_TYPE} STREQUAL "pmemcheck")
         "${CMAKE_CXX_FLAGS_DEBUG} -mno-avx512f" CACHE STRING
         "Flags used by the C++ compiler during Pmemcheck build." FORCE)
 
-    set(ULAYFS_USE_PMEMCHECK ON)
+    set(MADFS_USE_PMEMCHECK ON)
     FetchContent_Declare(pmemcheck URL https://github.com/ShawnZhong/pmemcheck/releases/download/v3.17/pmemcheck.tgz)
     FetchContent_MakeAvailable(pmemcheck)
     include_directories(${pmemcheck_SOURCE_DIR}/include)

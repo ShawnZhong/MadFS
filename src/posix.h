@@ -13,7 +13,7 @@
 
 #include "config.h"
 
-namespace ulayfs::posix {
+namespace madfs::posix {
 
 /*
  * To use a posix function `fn`, you need to add a line DEFINE_FN(fn); It
@@ -27,7 +27,7 @@ namespace ulayfs::posix {
  *
  * For example, `::open` in the global namespace is declared in <fcntl.h> and
  * defined in our `ops/open.cpp`. The use of `extern "C"` makes sure that the
- * symbol for `ulayfs::open` is not mangled by C++, and thus is the same as
+ * symbol for `madfs::open` is not mangled by C++, and thus is the same as
  * `open`. The posix version `posix::open` is declared and defined below.
  */
 
@@ -92,4 +92,4 @@ static int stat(const char* pathname, struct stat* buf) {
 
 #undef DEFINE_FN
 
-}  // namespace ulayfs::posix
+}  // namespace madfs::posix

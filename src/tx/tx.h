@@ -4,7 +4,7 @@
 #include "file/file.h"
 #include "utils/timer.h"
 
-namespace ulayfs::dram {
+namespace madfs::dram {
 
 /**
  * Tx represents a single ongoing transaction.
@@ -188,4 +188,4 @@ class Tx {
     return true;
   }
 };
-}  // namespace ulayfs::dram
+}  // namespace madfs::dram

@@ -16,7 +16,7 @@
 #define CHECK_RESULT(expected, actual, length, fd)                \
   do {                                                            \
     if (memcmp(expected, actual, length) != 0) {                  \
-      ulayfs::debug::print_file(fd);                              \
+      madfs::debug::print_file(fd);                               \
       std::cerr << "expected: \"";                                \
       for (int i = 0; i < length; ++i) putc(expected[i], stderr); \
       std::cerr << "\"\n";                                        \

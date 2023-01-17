@@ -3,7 +3,7 @@ import shutil
 from pathlib import Path
 from typing import Optional, List
 
-from fs import ULAYFS, Filesystem, infer_numa_node
+from fs import MADFS, Filesystem, infer_numa_node
 from utils import get_timestamp, system, root_dir, get_cpulist
 
 logging.basicConfig(level=logging.INFO)
@@ -41,7 +41,7 @@ class Runner:
         if cmake_target is None:
             cmake_target = self.name
         if self.is_bench:
-            cmake_args += " -DULAYFS_BUILD_BENCH=ON "
+            cmake_args += " -DMADFS_BUILD_BENCH=ON "
 
         # build
         build_log_path = self.result_dir / "build.log"
@@ -58,7 +58,7 @@ class Runner:
         self,
         cmd: Optional[List[str]] = None,
         prog_log_name: str = "prog.log",
-        fs: Filesystem = ULAYFS(),
+        fs: Filesystem = MADFS(),
         prog_args: List[str] = None,
         env: Optional[dict] = None,
         trace: bool = False,

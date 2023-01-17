@@ -2,7 +2,7 @@
 
 #include <pthread.h>
 
-namespace ulayfs::dram {
+namespace madfs::dram {
 
 namespace detail {
 
@@ -23,7 +23,7 @@ struct NopLock {
 /**
  * @brief A lock struct that uses pthread_mutex_t.
  *
- * Used when ULAYFS_CC_MUTEX is set.
+ * Used when MADFS_CC_MUTEX is set.
  */
 struct MutexLock {
   pthread_mutex_t mutex;
@@ -39,7 +39,7 @@ struct MutexLock {
 /**
  * @brief A lock struct that uses pthread_spinlock_t.
  *
- * Used when ULAYFS_CC_SPINLOCK is set.
+ * Used when MADFS_CC_SPINLOCK is set.
  */
 struct Spinlock {
   pthread_spinlock_t spinlock;
@@ -55,7 +55,7 @@ struct Spinlock {
 /**
  * @brief A lock struct that uses pthread_rwlock_t.
  *
- * Used when ULAYFS_CC_RWLOCK is set.
+ * Used when MADFS_CC_RWLOCK is set.
  */
 struct RwLock {
   pthread_rwlock_t rwlock;
@@ -78,4 +78,4 @@ static auto make_cc_lock() {
 }  // namespace detail
 
 using Lock = decltype(detail::make_cc_lock());
-}  // namespace ulayfs::dram
+}  // namespace madfs::dram

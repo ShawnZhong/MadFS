@@ -31,7 +31,7 @@ def get_sorted_subdirs(path):
 
 def get_fs_name(name):
     names = {
-        "uLayFS": "MEFS",
+        "MadFS": "MadFS",
     }
     return names.get(name, name)
 
@@ -69,10 +69,10 @@ def export_results(result_dir, data, name="result"):
             pt = pd.pivot_table(
                 benchmark, values="y", index="x", columns="label", sort=False
             )
-            ulayfs = get_fs_name("uLayFS")
-            if ulayfs in pt.columns:
+            madfs = get_fs_name("MadFS")
+            if madfs in pt.columns:
                 for c in pt.columns:
-                    pt[f"{c}%"] = pt[c] / pt[ulayfs] * 100
+                    pt[f"{c}%"] = pt[c] / pt[madfs] * 100
             print(name)
             print(pt)
             print(name, file=f)

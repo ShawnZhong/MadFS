@@ -4,7 +4,7 @@
 #include "block/meta.h"
 #include "block/tx.h"
 
-namespace ulayfs::pmem {
+namespace madfs::pmem {
 
 union Block {
   MetaBlock meta_block;
@@ -48,4 +48,4 @@ union Block {
 
 static_assert(sizeof(Block) == BLOCK_SIZE, "Block must be of size BLOCK_SIZE");
 
-}  // namespace ulayfs::pmem
+}  // namespace madfs::pmem

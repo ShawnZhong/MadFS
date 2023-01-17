@@ -4,7 +4,7 @@
 #include "cursor/log.h"
 #include "idx.h"
 
-namespace ulayfs::dram {
+namespace madfs::dram {
 
 class LogEntryAllocator {
   BlockAllocator* block_allocator;
@@ -164,4 +164,4 @@ class LogEntryAllocator {
     // because they are guarded by setting curr_log_block_idx zero
   }
 };
-}  // namespace ulayfs::dram
+}  // namespace madfs::dram

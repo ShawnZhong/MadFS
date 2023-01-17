@@ -9,7 +9,7 @@
 #include "idx.h"
 #include "utils/persist.h"
 
-namespace ulayfs::pmem {
+namespace madfs::pmem {
 
 // NOTE: assume for a linked list of LogEntry is sorted by their virtual index
 // BlkTable uses some assumption to simply implementation
@@ -251,4 +251,4 @@ union TxEntry {
 };
 
 static_assert(sizeof(TxEntry) == TX_ENTRY_SIZE, "TxEntry must be 64 bits");
-}  // namespace ulayfs::pmem
+}  // namespace madfs::pmem

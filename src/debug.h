@@ -6,7 +6,7 @@
 #include "const.h"
 #include "utils/timer_event.h"
 
-namespace ulayfs {
+namespace madfs {
 
 // The following functions are intended for debug usage. They are declared as
 // weak so other program can include this header without having to link with the
@@ -21,4 +21,4 @@ void print_timer() __attribute__((weak));
 }  // namespace debug
 
 static bool is_linked() { return debug::print_file != nullptr; }
-}  // namespace ulayfs
+}  // namespace madfs

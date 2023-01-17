@@ -18,8 +18,8 @@ if __name__ == "__main__":
     )
     add_common_args(parser)
     add_gbench_args(parser)
-    # set the default argument of fs to uLayFS
-    parser.set_defaults(fs_names=["uLayFS"])
+    # set the default argument of fs to MadFS
+    parser.set_defaults(fs_names=["MadFS"])
     args, run_config = parse_args(parser)
     process_gbench_args(args, run_config)
 

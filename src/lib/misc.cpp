@@ -4,7 +4,7 @@
 #include "shm.h"
 #include "utils/timer.h"
 
-namespace ulayfs {
+namespace madfs {
 
 extern "C" {
 int unlink(const char* path) {
@@ -56,4 +56,4 @@ int fcntl64(int fd, int cmd, ... /* arg */) {
   return res;
 }
 }
-}  // namespace ulayfs
+}  // namespace madfs

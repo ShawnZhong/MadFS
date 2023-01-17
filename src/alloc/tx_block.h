@@ -3,7 +3,7 @@
 #include "alloc/block.h"
 #include "shm.h"
 
-namespace ulayfs::dram {
+namespace madfs::dram {
 
 class TxBlockAllocator {
   BlockAllocator* block_allocator;
@@ -101,4 +101,4 @@ class TxBlockAllocator {
     avail_tx_block = reinterpret_cast<pmem::Block*>(tx_block);
   }
 };
-}  // namespace ulayfs::dram
+}  // namespace madfs::dram

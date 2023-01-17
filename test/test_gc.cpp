@@ -7,12 +7,12 @@
 
 const char* filepath = get_filepath();
 
-using ulayfs::BLOCK_SIZE;
-using ulayfs::NUM_INLINE_TX_ENTRY;
-using ulayfs::NUM_TX_ENTRY_PER_BLOCK;
-using ulayfs::debug::clear_timer;
-using ulayfs::debug::print_file;
-using ulayfs::utility::GarbageCollector;
+using madfs::BLOCK_SIZE;
+using madfs::NUM_INLINE_TX_ENTRY;
+using madfs::NUM_TX_ENTRY_PER_BLOCK;
+using madfs::debug::clear_timer;
+using madfs::debug::print_file;
+using madfs::utility::GarbageCollector;
 
 struct BasicTestOpt {
   int num_bytes_per_iter = BLOCK_SIZE;
@@ -43,7 +43,7 @@ void basic_test(BasicTestOpt opt) {
   }
   fsync(fd);
 
-  auto file = ulayfs::get_file(fd);
+  auto file = madfs::get_file(fd);
   auto file_size = file->blk_table.get_state_unsafe().file_size;
 
   if (print) std::cerr << *file;
@@ -59,7 +59,7 @@ void basic_test(BasicTestOpt opt) {
 
   {
     int new_fd = open(filepath, O_CREAT | O_RDWR, S_IRUSR | S_IWUSR);
-    auto new_file = ulayfs::get_file(new_fd);
+    auto new_file = madfs::get_file(new_fd);
     ASSERT(new_file->blk_table.get_state_unsafe().file_size == file_size);
     close(new_fd);
   }
@@ -151,7 +151,7 @@ int main() {
   basic_test({});
   basic_test({.random_block_range = 1000});
 
-  if constexpr (!ulayfs::BuildOptions::use_pmemcheck) {
+  if constexpr (!madfs::BuildOptions::use_pmemcheck) {
     // the following tests are too slow for pmemcheck
     basic_test({.num_bytes_per_iter = BLOCK_SIZE * 63});
     basic_test({.num_bytes_per_iter = BLOCK_SIZE * 64});

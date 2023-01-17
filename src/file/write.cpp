@@ -2,7 +2,7 @@
 #include "tx/write_aligned.h"
 #include "tx/write_unaligned.h"
 
-namespace ulayfs::dram {
+namespace madfs::dram {
 ssize_t File::pwrite(const char* buf, size_t count, size_t offset) {
   if (unlikely(!can_write)) {
     errno = EBADF;
@@ -66,4 +66,4 @@ ssize_t File::write(const char* buf, size_t count) {
                                                      state, ticket);
   }
 }
-}  // namespace ulayfs::dram
+}  // namespace madfs::dram

@@ -4,7 +4,7 @@
 
 #include <cstring>
 
-namespace ulayfs {
+namespace madfs {
 template <typename T>
 class zero_allocator : public tbb::cache_aligned_allocator<T> {
  public:
@@ -22,4 +22,4 @@ class zero_allocator : public tbb::cache_aligned_allocator<T> {
     return ptr;
   }
 };
-}  // namespace ulayfs
+}  // namespace madfs

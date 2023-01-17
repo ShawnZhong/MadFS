@@ -2,7 +2,7 @@
 
 #include "tx.h"
 
-namespace ulayfs::dram {
+namespace madfs::dram {
 
 /**
  * Temporary, thread-local store for a sequence of objects.
@@ -114,4 +114,4 @@ class WriteTx : public Tx {
     log_cursor.update_leftover_bytes(mem_table, leftover_bytes);
   }
 };
-}  // namespace ulayfs::dram
+}  // namespace madfs::dram

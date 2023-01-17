@@ -3,7 +3,7 @@
 #include "bitmap.h"
 #include "mem_table.h"
 
-namespace ulayfs::dram {
+namespace madfs::dram {
 
 /**
  * A LogCursor is a pointer to a log entry. It does not store the mem_table and
@@ -123,4 +123,4 @@ struct LogCursor {
 
 static_assert(sizeof(LogCursor) == 16);
 
-}  // namespace ulayfs::dram
+}  // namespace madfs::dram

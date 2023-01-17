@@ -1,13 +1,13 @@
 #include "lib.h"
 #include "utils/timer.h"
 
-namespace ulayfs {
+namespace madfs {
 extern "C" {
 ssize_t read(int fd, void* buf, size_t count) {
   if (auto file = get_file(fd)) {
     timer.start<Event::READ>(count);
     auto res = file->read(static_cast<char*>(buf), count);
-    LOG_DEBUG("ulayfs::read(%s, buf, %zu) = %zu", file->path, count, res);
+    LOG_DEBUG("madfs::read(%s, buf, %zu) = %zu", file->path, count, res);
     timer.stop<Event::READ>();
     return res;
   } else {
@@ -23,7 +23,7 @@ ssize_t pread(int fd, void* buf, size_t count, off_t offset) {
     auto res = file->pread(static_cast<char*>(buf), count,
                            static_cast<size_t>(offset));
     timer.stop<Event::PREAD>();
-    LOG_DEBUG("ulayfs::pread(%s, buf, %zu, %ld) = %zu", file->path, count,
+    LOG_DEBUG("madfs::pread(%s, buf, %zu, %ld) = %zu", file->path, count,
               offset, res);
     return res;
   } else {
@@ -53,4 +53,4 @@ ssize_t __pread_chk(int fd, void* buf, size_t count, off_t offset,
   return pread(fd, buf, count, offset);
 }
 }
-}  // namespace ulayfs
+}  // namespace madfs

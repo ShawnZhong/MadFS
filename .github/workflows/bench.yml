@@ -53,7 +53,7 @@ jobs:
 
       - name: run
         run: |
-          LD_PRELOAD=./build-release/libulayfs.so \
+          LD_PRELOAD=./build-release/libmadfs.so \
             sqlite3 tpcc.db '.read data/tpcc.sql'
           ./run tpcc_load -- -w 1
           ./run tpcc_start -- -w 4 -c 1 -t 10

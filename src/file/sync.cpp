@@ -1,6 +1,6 @@
 #include "file/file.h"
 
-namespace ulayfs::dram {
+namespace madfs::dram {
 int File::fsync() {
   FileState state;
   blk_table.update(&state);
@@ -16,4 +16,4 @@ int File::fsync() {
   meta->set_flushed_tx_tail(state.cursor.idx);
   return 0;
 }
-}  // namespace ulayfs::dram
+}  // namespace madfs::dram

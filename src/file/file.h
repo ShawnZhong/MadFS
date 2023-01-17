@@ -27,12 +27,12 @@
 #include "tx/lock.h"
 #include "utils/utils.h"
 
-namespace ulayfs::utility {
+namespace madfs::utility {
 class Converter;
-}  // namespace ulayfs::utility
+}  // namespace madfs::utility
 
 // data structure under this namespace must be in volatile memory (DRAM)
-namespace ulayfs::dram {
+namespace madfs::dram {
 
 class File {
  public:
@@ -89,7 +89,7 @@ class File {
     return &it->second;
   }
 
-  // try to open a file with checking whether the given file is in uLayFS format
+  // try to open a file with checking whether the given file is in MadFS format
   static bool try_open(int& fd, struct stat& stat_buf, const char* pathname,
                        int flags, mode_t mode) {
     TimerGuard<Event::OPEN_SYS> timer_guard;
@@ -108,7 +108,7 @@ class File {
     }
 
     if (!(flags & O_CREAT)) {
-      // a non-empty file w/o shm_path cannot be a uLayFS file
+      // a non-empty file w/o shm_path cannot be a MadFS file
       ssize_t rc = fgetxattr(fd, SHM_XATTR_NAME, nullptr, 0);
       if (rc == -1) return false;
     }
@@ -137,4 +137,4 @@ class File {
   friend std::ostream& operator<<(std::ostream& out, File& f);
 };
 
-}  // namespace ulayfs::dram
+}  // namespace madfs::dram

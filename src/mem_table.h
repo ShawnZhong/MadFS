@@ -18,7 +18,7 @@
 #include "utils/timer.h"
 #include "utils/utils.h"
 
-namespace ulayfs::dram {
+namespace madfs::dram {
 
 constexpr static uint32_t GROW_UNIT_IN_BLOCK_SHIFT =
     GROW_UNIT_SHIFT - BLOCK_SHIFT;
@@ -198,4 +198,4 @@ class MemTable : noncopyable {
   }
 };
 
-}  // namespace ulayfs::dram
+}  // namespace madfs::dram

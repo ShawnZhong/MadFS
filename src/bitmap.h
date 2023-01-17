@@ -15,11 +15,11 @@
 #include "utils/logging.h"
 #include "utils/utils.h"
 
-namespace ulayfs::utility {
+namespace madfs::utility {
 class Converter;
 }
 
-namespace ulayfs::dram {
+namespace madfs::dram {
 class File;
 
 // All member functions are thread-safe and require no locks
@@ -113,8 +113,8 @@ static_assert(sizeof(BitmapEntry) == BITMAP_ENTRY_SIZE,
 class BitmapMgr : noncopyable {
   BitmapEntry* entries{nullptr};
 
-  friend ::ulayfs::dram::File;
-  friend ::ulayfs::utility::Converter;
+  friend ::madfs::dram::File;
+  friend ::madfs::utility::Converter;
 
  public:
   BitmapMgr() = default;
@@ -204,4 +204,4 @@ class BitmapMgr : noncopyable {
   }
 };
 
-}  // namespace ulayfs::dram
+}  // namespace madfs::dram

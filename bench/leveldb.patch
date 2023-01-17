@@ -29,7 +29,7 @@ index 24b1c4c..395d7d1 100644
      }
  
 -    if (!mmap_limiter_.Acquire()) {
-+    // disallow mmap for ulayfs tests
++    // disallow mmap for madfs tests
 +    if ((!mmap_limiter_.Acquire()) || true) {
        *result = new PosixRandomAccessFile(filename, fd, &fd_limiter_);
        return Status::OK();

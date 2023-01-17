@@ -13,16 +13,23 @@ int main(int argc, char *argv[]) {
 
   const char *filename = argv[1];
 
-  int fd = ulayfs::posix::open(filename, O_RDWR);
+  int fd = open(filename, O_RDWR);
   if (fd < 0) {
     std::cerr << "Failed to open " << filename << ": " << strerror(errno)
               << std::endl;
     return 1;
   }
 
-  ulayfs::dram::File *file =
-      ulayfs::utility::Converter::convert_to(fd, filename);
-  delete file;
+  auto file = madfs::get_file(fd);
+
+  if (!file) {
+    std::cerr << filename << " is not a MadFS file. \n";
+    return 0;
+  }
+
+  fd = madfs::utility::Converter::convert_from(file.get());
+  // now fd is just a normal file
+  madfs::posix::close(fd);
 
   return 0;
 }

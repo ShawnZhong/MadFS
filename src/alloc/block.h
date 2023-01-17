@@ -8,7 +8,7 @@
 #include "idx.h"
 #include "mem_table.h"
 
-namespace ulayfs::dram {
+namespace madfs::dram {
 class BlockAllocator {
   MemTable* mem_table;
   BitmapMgr* bitmap_mgr;
@@ -178,4 +178,4 @@ class BlockAllocator {
         bitmap_mgr->free(static_cast<BitmapIdx>(lidx.get()), n + 1);
   }
 };
-}  // namespace ulayfs::dram
+}  // namespace madfs::dram

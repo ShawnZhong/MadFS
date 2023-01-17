@@ -16,4 +16,4 @@ $(gcc_targets) $(clang_targets):
 	cmake --build build-$@ -j --target $(BUILD_TARGETS) -- --quiet $(BUILD_ARGS)
 
 clean:
-	rm -rf build* test.txt /dev/shm/ulayfs_*
+	rm -rf build* test.txt /dev/shm/madfs_*

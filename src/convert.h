@@ -11,11 +11,11 @@
 #include "utils/persist.h"
 #include "utils/utils.h"
 
-namespace ulayfs::utility {
+namespace madfs::utility {
 
 class Converter {
  public:
-  // convert a normal file to a uLayFS file
+  // convert a normal file to a MadFS file
   // fd must be opened with both read and write permission
   static dram::File* convert_to(int fd, const char* pathname) {
     if (!try_acquire_flock(fd)) {
@@ -185,7 +185,7 @@ class Converter {
     ret = posix::munmap(new_region, virtual_size_aligned);
     PANIC_IF(ret, "Fail to munmap the new region");
 
-    // destroy everything about uLayFS on pmem
+    // destroy everything about MadFS on pmem
     ret = posix::fallocate(fd, FALLOC_FL_COLLAPSE_RANGE, 0,
                            BLOCK_IDX_TO_SIZE(new_begin_lidx));
     PANIC_IF(ret, "Fail to fallocate collapse the old region");
@@ -201,4 +201,4 @@ class Converter {
     return fd;
   }
 };
-}  // namespace ulayfs::utility
+}  // namespace madfs::utility

@@ -6,7 +6,7 @@
 
 #include "file/file.h"
 
-namespace ulayfs {
+namespace madfs {
 
 inline bool initialized = false;
 
@@ -27,4 +27,4 @@ static auto add_file(int fd, Args&&... args) {
   return files.emplace(
       fd, std::make_shared<dram::File>(fd, std::forward<Args>(args)...));
 }
-}  // namespace ulayfs
+}  // namespace madfs

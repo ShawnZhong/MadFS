@@ -3,13 +3,13 @@
 #include "lib/lib.h"
 #include "utils/timer.h"
 
-namespace ulayfs::debug {
+namespace madfs::debug {
 void print_file(int fd) {
   __msan_scoped_disable_interceptor_checks();
   if (auto file = get_file(fd)) {
     std::cerr << *file << "\n";
   } else {
-    std::cerr << "fd " << fd << " is not a uLayFS file. \n";
+    std::cerr << "fd " << fd << " is not a MadFS file. \n";
   }
 
   __msan_scoped_enable_interceptor_checks();
@@ -23,4 +23,4 @@ std::chrono::nanoseconds get_duration(Event event) {
 void clear_timer() { timer.clear(); }
 void print_timer() { timer.print(); }
 
-}  // namespace ulayfs::debug
+}  // namespace madfs::debug

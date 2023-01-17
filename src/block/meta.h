@@ -12,11 +12,11 @@
 #include "posix.h"
 #include "utils/utils.h"
 
-namespace ulayfs::dram {
+namespace madfs::dram {
 struct TxCursor;
 }
 
-namespace ulayfs::pmem {
+namespace madfs::pmem {
 
 /*
  * LogicalBlockIdx 0 -> MetaBlock; other blocks can be any type of blocks
@@ -218,7 +218,7 @@ class MetaBlock : public noncopyable {
     persist_fenced(tx_entries, sizeof(TxEntry) * NUM_INLINE_TX_ENTRY);
   }
 
-  friend struct ::ulayfs::dram::TxCursor;
+  friend struct ::madfs::dram::TxCursor;
 
   friend std::ostream& operator<<(std::ostream& out, const MetaBlock& block) {
     out << "MetaBlock: \n";
@@ -237,4 +237,4 @@ class MetaBlock : public noncopyable {
 static_assert(sizeof(MetaBlock) == BLOCK_SIZE,
               "MetaBlock must be of size BLOCK_SIZE");
 
-}  // namespace ulayfs::pmem
+}  // namespace madfs::pmem

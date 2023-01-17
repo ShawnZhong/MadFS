@@ -2,7 +2,7 @@
 
 #include <cstddef>
 
-namespace ulayfs {
+namespace madfs {
 enum class Event : std::size_t {
   READ,
   WRITE,
@@ -58,4 +58,4 @@ static constexpr Event disabled_events[] = {
     Event::TX_ENTRY_STORE,
 };
 
-}  // namespace ulayfs
+}  // namespace madfs

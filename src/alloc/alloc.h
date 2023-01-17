@@ -5,7 +5,7 @@
 #include "alloc/tx_block.h"
 #include "shm.h"
 
-namespace ulayfs::dram {
+namespace madfs::dram {
 class Allocator {
  public:
   BlockAllocator block;
@@ -19,4 +19,4 @@ class Allocator {
         log_entry(&block, mem_table) {}
 };
 
-}  // namespace ulayfs::dram
+}  // namespace madfs::dram
