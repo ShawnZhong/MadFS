@@ -16,8 +16,8 @@ void print_file(int fd) __attribute__((weak));
 size_t get_count(Event event) __attribute__((weak));
 size_t get_size(Event event) __attribute__((weak));
 std::chrono::nanoseconds get_duration(Event event) __attribute__((weak));
-void clear_counts() __attribute__((weak));
-void print_counter() __attribute__((weak));
+void clear_timer() __attribute__((weak));
+void print_timer() __attribute__((weak));
 }  // namespace debug
 
 static bool is_linked() { return debug::print_file != nullptr; }

@@ -10,7 +10,7 @@ const char* filepath = get_filepath();
 using ulayfs::BLOCK_SIZE;
 using ulayfs::NUM_INLINE_TX_ENTRY;
 using ulayfs::NUM_TX_ENTRY_PER_BLOCK;
-using ulayfs::debug::clear_counts;
+using ulayfs::debug::clear_timer;
 using ulayfs::debug::print_file;
 using ulayfs::utility::GarbageCollector;
 
@@ -49,7 +49,7 @@ void basic_test(BasicTestOpt opt) {
   if (print) std::cerr << *file;
   close(fd);
 
-  clear_counts();
+  clear_timer();
 
   {
     GarbageCollector garbage_collector(filepath);

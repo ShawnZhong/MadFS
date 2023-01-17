@@ -22,14 +22,14 @@ class ReadTx : public Tx {
   }
 
   ssize_t exec() {
+    static thread_local std::vector<LogicalBlockIdx> redo_image;
+
     timer.stop<Event::READ_TX_CTOR>();
 
     size_t first_block_offset = offset & (BLOCK_SIZE - 1);
     size_t first_block_size = BLOCK_SIZE - first_block_offset;
     if (first_block_size > count) first_block_size = count;
 
-    std::vector<LogicalBlockIdx>& redo_image = local_buf_image_lidxs;
-    redo_image.clear();
     redo_image.resize(num_blocks, 0);
 
     {

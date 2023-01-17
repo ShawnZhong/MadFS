@@ -1,3 +1,5 @@
+#define _FORTIFY_SOURCE 0
+
 #include <benchmark/benchmark.h>
 #include <sys/stat.h>
 
@@ -54,11 +56,12 @@ void bench(benchmark::State& state) {
           state.SkipWithError("file size is not 0");
         }
         prefill_file(fd, file_size);
+        sleep(1);  // wait for the background thread of SplitFS to finish
       }
     }
   }
 
-  if (ulayfs::is_linked()) ulayfs::debug::clear_counts();
+  if (ulayfs::is_linked()) ulayfs::debug::clear_timer();
 
   // run benchmark
   if constexpr (mode == Mode::APPEND) {
@@ -178,22 +181,14 @@ int main(int argc, char** argv) {
         ->UseRealTime();
   }
 
-  //  for (long theta_x100 = 0; theta_x100 <= 160; theta_x100 += 10) {
-  //    benchmark::RegisterBenchmark("zipf_4k", bench<Mode::ZIPF>)
-  //        ->Args({BLOCK_SIZE, theta_x100})
-  //        ->Threads(8)
+  //  for (const auto& [name, num_bytes] :
+  //       {std::pair{"append_4k", 4096}, std::pair{"append_2k", 2048}}) {
+  //    benchmark::RegisterBenchmark(name, bench<Mode::APPEND>)
+  //        ->Args({num_bytes})
+  //        ->DenseThreadRange(1, MAX_NUM_THREAD)
   //        ->Iterations(num_iter)
   //        ->UseRealTime();
   //  }
-
-  for (const auto& [name, num_bytes] :
-       {std::pair{"append_4k", 4096}, std::pair{"append_2k", 2048}}) {
-    benchmark::RegisterBenchmark(name, bench<Mode::APPEND>)
-        ->Args({num_bytes})
-        ->DenseThreadRange(1, MAX_NUM_THREAD)
-        ->Iterations(num_iter)
-        ->UseRealTime();
-  }
 
   benchmark::RunSpecifiedBenchmarks();
   return 0;

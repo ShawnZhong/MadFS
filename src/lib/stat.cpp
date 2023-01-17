@@ -3,7 +3,7 @@
 
 namespace ulayfs {
 
-int fstat_impl(int fd, struct stat* buf) {
+static int fstat_impl(int fd, struct stat* buf) {
   int rc = posix::fstat(fd, buf);
   if (unlikely(rc < 0)) {
     LOG_WARN("fstat failed for fd = %d: %m", fd);
@@ -20,7 +20,7 @@ int fstat_impl(int fd, struct stat* buf) {
   return 0;
 }
 
-int stat_impl(const char* pathname, struct stat* buf) {
+static int stat_impl(const char* pathname, struct stat* buf) {
   if (int rc = posix::stat(pathname, buf); unlikely(rc < 0)) {
     LOG_WARN("posix::stat(%s) = %d: %m", pathname, rc);
     return rc;

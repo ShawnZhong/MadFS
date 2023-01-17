@@ -76,10 +76,18 @@ class File {
     buf->st_size = static_cast<off_t>(blk_table.update_unsafe());
   }
 
-  /*
-   * Getters
-   */
-  [[nodiscard]] Allocator* get_local_allocator();
+  [[nodiscard]] Allocator* get_local_allocator() {
+    if (auto it = allocators.find(tid); it != allocators.end()) {
+      return &it->second;
+    }
+
+    auto [it, ok] = allocators.emplace(
+        std::piecewise_construct, std::forward_as_tuple(tid),
+        std::forward_as_tuple(&mem_table, &bitmap_mgr,
+                              shm_mgr.alloc_per_thread_data()));
+    PANIC_IF(!ok, "insert to thread-local allocators failed");
+    return &it->second;
+  }
 
   // try to open a file with checking whether the given file is in uLayFS format
   static bool try_open(int& fd, struct stat& stat_buf, const char* pathname,

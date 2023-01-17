@@ -8,6 +8,7 @@ enum class Event : std::size_t {
   WRITE,
   PREAD,
   PWRITE,
+  OPEN,
   OPEN_SYS,
   MMAP,
   CLOSE,

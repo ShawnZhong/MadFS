@@ -21,9 +21,6 @@ jobs:
       - name: micro_mt
         run: ./run micro_mt -b ${{matrix.build_type}} --size 16 --iter 10
 
-      - name: micro_meta
-        run: ./run micro_meta -b ${{matrix.build_type}} --iter 10
-
   leveldb:
     name: LevelDB
     runs-on: ubuntu-22.04
@@ -35,18 +32,18 @@ jobs:
 
       - name: leveldb_ycsb
         run: |
-          ./run leveldb_ycsb -- -f data/ycsb-1k/a-load.txt
-          ./run leveldb_ycsb -- -f data/ycsb-1k/a-run.txt
-          ./run leveldb_ycsb -- -f data/ycsb-1k/b-load.txt
-          ./run leveldb_ycsb -- -f data/ycsb-1k/b-run.txt
-          ./run leveldb_ycsb -- -f data/ycsb-1k/c-load.txt
-          ./run leveldb_ycsb -- -f data/ycsb-1k/c-run.txt
-          ./run leveldb_ycsb -- -f data/ycsb-1k/d-load.txt
-          ./run leveldb_ycsb -- -f data/ycsb-1k/d-run.txt
-          ./run leveldb_ycsb -- -f data/ycsb-1k/e-load.txt
-          ./run leveldb_ycsb -- -f data/ycsb-1k/e-run.txt
-          ./run leveldb_ycsb -- -f data/ycsb-1k/f-load.txt
-          ./run leveldb_ycsb -- -f data/ycsb-1k/f-run.txt
+          ./run leveldb_ycsb -- -f data/ycsb/a-load-1k.txt
+          ./run leveldb_ycsb -- -f data/ycsb/a-run-1k.txt
+          ./run leveldb_ycsb -- -f data/ycsb/b-load-1k.txt
+          ./run leveldb_ycsb -- -f data/ycsb/b-run-1k.txt
+          ./run leveldb_ycsb -- -f data/ycsb/c-load-1k.txt
+          ./run leveldb_ycsb -- -f data/ycsb/c-run-1k.txt
+          ./run leveldb_ycsb -- -f data/ycsb/d-load-1k.txt
+          ./run leveldb_ycsb -- -f data/ycsb/d-run-1k.txt
+          ./run leveldb_ycsb -- -f data/ycsb/e-load-1k.txt
+          ./run leveldb_ycsb -- -f data/ycsb/e-run-1k.txt
+          ./run leveldb_ycsb -- -f data/ycsb/f-load-1k.txt
+          ./run leveldb_ycsb -- -f data/ycsb/f-run-1k.txt
 
   tpcc:
     name: SQLite

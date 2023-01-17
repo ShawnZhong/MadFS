@@ -4,7 +4,7 @@ import logging
 from fs import ULAYFS
 from plot_gc import plot_gc
 from runner import Runner
-from utils import get_result_dir
+from utils import root_dir, get_timestamp
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger("bench_gc")
@@ -12,12 +12,11 @@ logger = logging.getLogger("bench_gc")
 
 def main():
     cmake_target = "micro_gc"
-    result_dir = get_result_dir(cmake_target)
+    result_dir = root_dir / "results" / "micro_gc" / "exp" / get_timestamp()
     runner = Runner(cmake_target, result_dir=result_dir)
     runner.build()
 
-    ulayfs = ULAYFS()
-    data_path = ulayfs.path / "test.txt"
+    data_path = ULAYFS().path / "test.txt"
     runner.run(prog_args=["--gc", "--io", "-f", data_path, "-o", result_dir / "gc"])
     runner.run(prog_args=["--io", "-f", data_path, "-o", result_dir / "io"])
 

@@ -69,7 +69,7 @@ class Runner:
             assert self.prog_path is not None
             cmd = [str(self.prog_path)]
 
-        if self.name in ["micro_meta", "micro_mt", "micro_st"]:
+        if self.name in ["micro_mt", "micro_st"]:
             cmd += [
                 f"--benchmark_counters_tabular=true",
                 f"--benchmark_out={self.result_dir / 'result.json'}",

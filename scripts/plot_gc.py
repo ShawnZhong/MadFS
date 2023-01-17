@@ -5,7 +5,7 @@ from pathlib import Path
 import numpy as np
 from matplotlib import pyplot as plt
 
-from plot import save_fig
+from plot_utils import save_fig
 from utils import root_dir, get_latest_result
 
 
@@ -37,7 +37,7 @@ def plot_gc(result_dir):
 
 if __name__ == "__main__":
     parser = ArgumentParser()
-    parser.add_argument("--result_dir", help="Directory with results", type=Path,
-                        default=get_latest_result(root_dir / "results" / f"bench_micro_gc"))
+    parser.add_argument("-r", "--result_dir", help="Directory with results", type=Path,
+                        default=get_latest_result(root_dir / "results" / "micro_gc" / "exp"))
     args = parser.parse_args()
     plot_gc(args.result_dir)

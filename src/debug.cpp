@@ -20,7 +20,7 @@ size_t get_size(Event event) { return timer.get_size(event); }
 std::chrono::nanoseconds get_duration(Event event) {
   return timer.get_duration(event);
 }
-void clear_counts() { timer.clear(); }
-void print_counter() { timer.print(); }
+void clear_timer() { timer.clear(); }
+void print_timer() { timer.print(); }
 
 }  // namespace ulayfs::debug

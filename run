@@ -3,7 +3,7 @@
 import argparse
 import logging
 
-from scripts.args import add_common_args, parse_args
+from scripts.args import add_common_args, parse_args, add_gbench_args, process_gbench_args
 from scripts.fs import available_fs
 from scripts.runner import Runner
 
@@ -17,9 +17,11 @@ if __name__ == "__main__":
         help="see .cpp files in `test` and `bench` for available targets",
     )
     add_common_args(parser)
+    add_gbench_args(parser)
     # set the default argument of fs to uLayFS
     parser.set_defaults(fs_names=["uLayFS"])
     args, run_config = parse_args(parser)
+    process_gbench_args(args, run_config)
 
     logger.info(f"args={args}, run_config={run_config}")
 

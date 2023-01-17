@@ -1,3 +1,5 @@
+#define _FORTIFY_SOURCE 0
+
 #include <benchmark/benchmark.h>
 
 #include "common.h"
@@ -45,7 +47,7 @@ void bench(benchmark::State& state) {
   if (fd < 0) state.SkipWithError("open failed");
   if constexpr (!is_append) {
     prefill_file(fd, num_bytes * num_iter);
-    //    sleep(1);  // wait for the background thread of SplitFS to finish
+    sleep(1);  // wait for the background thread of SplitFS to finish
   }
   close(fd);
 
@@ -139,7 +141,7 @@ int main(int argc, char** argv) {
   if (benchmark::ReportUnrecognizedArguments(argc, argv)) return 1;
 
   for (auto& bm : {
-           RegisterBenchmark("seq_read", bench<Mode::SEQ_READ>),
+           //           RegisterBenchmark("seq_read", bench<Mode::SEQ_READ>),
            RegisterBenchmark("seq_pread", bench<Mode::SEQ_PREAD>),
            RegisterBenchmark("rnd_pread", bench<Mode::RND_PREAD>),
        }) {
@@ -147,10 +149,11 @@ int main(int argc, char** argv) {
   }
 
   for (auto& bm : {
-           RegisterBenchmark("seq_write", bench<Mode::SEQ_WRITE>),
+           //           RegisterBenchmark("seq_write", bench<Mode::SEQ_WRITE>),
            RegisterBenchmark("seq_pwrite", bench<Mode::SEQ_PWRITE>),
            RegisterBenchmark("rnd_pwrite", bench<Mode::RND_PWRITE>),
-           RegisterBenchmark("append_write", bench<Mode::APPEND_WRITE>),
+           //           RegisterBenchmark("append_write",
+           //           bench<Mode::APPEND_WRITE>),
            RegisterBenchmark("append_pwrite", bench<Mode::APPEND_PWRITE>),
        }) {
     bm->RangeMultiplier(2)->Range(4096, MAX_SIZE)->Iterations(num_iter);
