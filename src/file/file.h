@@ -44,18 +44,14 @@ class File {
   pmem::MetaBlock* const meta;
   Lock lock;         // nop lock is used by default
   const char* path;  // only set at debug mode
-
- private:
-  int fd;
+  int fd;            // only used in destructor, can set to -1 to prevent close
   const bool can_read;
   const bool can_write;
 
+ private:
   // each thread tid has its local allocator
   // the allocator is a per-thread per-file data structure
   tbb::concurrent_unordered_map<pid_t, Allocator> allocators;
-
-  // transformer will have to do many dirty and inclusive operations
-  friend utility::Converter;
 
  public:
   File(int fd, const struct stat& stat, int flags, const char* pathname);
