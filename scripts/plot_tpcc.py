@@ -72,6 +72,12 @@ def plot_tpcc(result_dir):
     export_results(result_dir, df)
 
     def post_plot(ax, **kwargs):
+        _, ymax = ax.get_ylim()
+        ymax = (int(ymax / 2) + 1) * 2
+        tick_size = 2
+        ax.set_ylim([0, ymax])
+        ax.yaxis.set_major_locator(plt.MultipleLocator(tick_size))
+
         plt.xlabel("Transaction Type")
         plt.ylabel("Throughput (Kops/s)")
         plt.legend()

@@ -39,6 +39,18 @@ def plot_mt(result_dir):
             ax.yaxis.set_major_locator(plt.MultipleLocator(1))
             ax.set_ylim(bottom=0)
 
+            _, ymax = ax.get_ylim()
+            if "unif" in name:
+                ymax = (int(ymax / 4) + 1) * 4
+                tick_size = ymax / 4
+            else:
+                assert "zipf" in name
+                ymax = int(ymax / 1.5 + 1) * 1.5
+                tick_size = 0.5 if ymax < 2 else 1
+
+            ax.set_ylim([0, ymax])
+            ax.yaxis.set_major_locator(plt.MultipleLocator(tick_size))
+
             titles = {
                 "unif_0R": "100% Write",
                 "unif_50R": "50% Read + 50% Write",

@@ -59,6 +59,12 @@ def plot_ycsb(result_dir):
     export_results(result_dir, df)
 
     def post_plot(ax, **kwargs):
+        _, ymax = ax.get_ylim()
+        ymax = (int(ymax / 100) + 1) * 100
+        tick_size = 100
+        ax.set_ylim([0, ymax])
+        ax.yaxis.set_major_locator(plt.MultipleLocator(tick_size))
+
         plt.xlabel("Workload")
         plt.ylabel("Throughput (Kops/s)")
         plt.legend()
