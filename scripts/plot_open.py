@@ -71,7 +71,6 @@ def plot_open(result_dir):
     df.rename(columns=columns, inplace=True)
     df.sort_values(by="size", inplace=True, ascending=False)
 
-    print(df)
     ax = df.plot.barh(
         x="size",
         y=["Mmap", "Block Table", "Others"],

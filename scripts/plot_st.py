@@ -77,8 +77,6 @@ def plot_st(result_dir):
             name=name,
             result_dir=result_dir,
             post_plot=post_plot,
-            markers=("o", "^", "s", "D", "D"),
-            colors=("tab:blue", "tab:orange", "tab:green", "tab:red", "tab:pink"),
         )
 
 

@@ -102,7 +102,7 @@ def plot_single_bm(
     figsize=(2.5, 1.5),
     markers=("o", "^", "s", "D"),
     hatches=("//", "\\\\", "--", ".."),
-    colors=(None,),
+    colors=("C3", "C0", "C2", "C1"),
     separate_legend=True,
 ):
     plt.clf()
@@ -136,6 +136,7 @@ def plot_single_bm(
         ax.set_xticks(x)
         ax.set_xticklabels(df["x"].unique())
     else:
+        zorder = len(label_groups)
         for (label, group), marker, color in zip(label_groups, markers, colors):
             plt.plot(
                 group["x"],
@@ -144,7 +145,9 @@ def plot_single_bm(
                 marker=marker,
                 markersize=3,
                 color=color,
+                zorder=zorder,
             )
+            zorder -= 1
 
     if post_plot:
         post_plot(ax=ax, name=name, df=df)

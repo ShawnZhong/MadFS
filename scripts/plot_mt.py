@@ -71,7 +71,7 @@ def plot_mt(result_dir):
                 result_dir=result_dir,
                 post_plot=post_plot,
                 markers=("o", "v", ">", "<"),
-                colors=("tab:blue", "tab:cyan", "tab:purple", "tab:pink"),
+                colors=("tab:red", "tab:cyan", "tab:purple", "tab:pink"),
             )
         else:
             plot_single_bm(
