@@ -5,6 +5,7 @@ from argparse import ArgumentParser
 from pathlib import Path
 
 from matplotlib import pyplot as plt
+import matplotlib.ticker as ticker
 
 from plot_utils import read_files, parse_name, export_results, plot_single_bm
 from utils import get_latest_result, root_dir
@@ -33,23 +34,19 @@ def plot_mt(result_dir):
             ax.set_xlabel(xlabel, labelpad=0)
             ax.set_ylabel(ylabel, labelpad=0)
 
-            labels = benchmark["x"].unique()
-            plt.xticks(ticks=labels, labels=labels)
-            ax.xaxis.set_major_locator(plt.MaxNLocator(6))
-            ax.yaxis.set_major_locator(plt.MultipleLocator(1))
-            ax.set_ylim(bottom=0)
+            ax.set_xticks(['1', '4', '8', '12', '16'])
 
             _, ymax = ax.get_ylim()
-            if "unif" in name:
-                ymax = (int(ymax / 4) + 1) * 4
-                tick_size = ymax / 4
+            if ymax < 4:
+                ymax = (int(ymax / 0.5) + 1) * 0.5
+                tick_size = 0.5
             else:
-                assert "zipf" in name
-                ymax = int(ymax / 1.5 + 1) * 1.5
-                tick_size = 0.5 if ymax < 2 else 1
+                ymax = (int(ymax / 2) + 1) * 2
+                tick_size = 2
 
             ax.set_ylim([0, ymax])
             ax.yaxis.set_major_locator(plt.MultipleLocator(tick_size))
+            ax.yaxis.set_major_formatter('{x:.1f}')
 
             titles = {
                 "unif_0R": "100% Write",
