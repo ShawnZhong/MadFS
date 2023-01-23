@@ -5,6 +5,7 @@ import logging
 import re
 from pathlib import Path
 
+import matplotlib
 import numpy as np
 import pandas as pd
 from matplotlib import pyplot as plt
@@ -13,9 +14,13 @@ pd.options.display.max_rows = 100
 pd.options.display.max_columns = 100
 pd.options.display.width = None
 
+matplotlib.rcParams['pdf.fonttype'] = 42
+matplotlib.rcParams['ps.fonttype'] = 42
+
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger("plot")
 plt.set_loglevel("WARNING")
+logging.getLogger("fontTools.subset").setLevel(logging.WARNING)
 
 
 def get_sorted_subdirs(path):
