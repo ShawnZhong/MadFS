@@ -65,15 +65,16 @@ def plot_open(result_dir):
     df["Others"] = df["OPEN"] - df["MMAP"] - df["UPDATE"]
 
     columns = {
-        # "MMAP": "Memory Map",
+        "MMAP": "Mmap",
         "UPDATE": "Block Table",
     }
     df.rename(columns=columns, inplace=True)
     df.sort_values(by="size", inplace=True, ascending=False)
 
+    print(df)
     ax = df.plot.barh(
         x="size",
-        y=["MMAP", "Block Table", "Others"],
+        y=["Mmap", "Block Table", "Others"],
         stacked=True,
         legend=False,
         figsize=(5, 1),
@@ -92,8 +93,8 @@ def plot_open(result_dir):
     _, xmax = ax.get_xlim()
     xmax = (int(xmax / 1000) + 1) * 1000
     tick_size = 1000
-    ax.set_ylim([0, xmax])
-    ax.yaxis.set_major_locator(plt.MultipleLocator(tick_size))
+    ax.set_xlim([0, xmax])
+    ax.xaxis.set_major_locator(plt.MultipleLocator(tick_size))
 
     save_fig(ax.get_figure(), "result", result_dir)
 

@@ -5,7 +5,6 @@ from argparse import ArgumentParser
 from pathlib import Path
 
 from matplotlib import pyplot as plt
-import matplotlib.ticker as ticker
 
 from plot_utils import read_files, parse_name, export_results, plot_single_bm
 from utils import get_latest_result, root_dir
@@ -37,16 +36,22 @@ def plot_mt(result_dir):
             ax.set_xticks(['1', '4', '8', '12', '16'])
 
             _, ymax = ax.get_ylim()
-            if ymax < 4:
-                ymax = (int(ymax / 0.5) + 1) * 0.5
+            if ymax < 1.2:
+                tick_size = 0.3
+            elif ymax < 2.5:
                 tick_size = 0.5
+            elif ymax < 4:
+                tick_size = 1
             else:
-                ymax = (int(ymax / 2) + 1) * 2
                 tick_size = 2
 
+            ymax = (int(ymax / tick_size) + 1) * tick_size
             ax.set_ylim([0, ymax])
             ax.yaxis.set_major_locator(plt.MultipleLocator(tick_size))
-            ax.yaxis.set_major_formatter('{x:.1f}')
+            if tick_size >= 1:
+                ax.yaxis.set_major_formatter('  {x:.0f}')
+            else:
+                ax.yaxis.set_major_formatter('{x:.1f}')
 
             titles = {
                 "unif_0R": "100% Write",
@@ -65,7 +70,7 @@ def plot_mt(result_dir):
                 name=name,
                 result_dir=result_dir,
                 post_plot=post_plot,
-                markers=("o",),
+                markers=("o", "v", ">", "<"),
                 colors=("tab:blue", "tab:cyan", "tab:purple", "tab:pink"),
             )
         else:

@@ -7,7 +7,7 @@ from pathlib import Path
 import pandas as pd
 from matplotlib import pyplot as plt
 
-from plot_utils import get_sorted_subdirs, get_fs_name, export_results, plot_single_bm
+from plot_utils import get_sorted_subdirs, export_results, plot_single_bm
 from utils import get_latest_result, root_dir
 
 logging.basicConfig(level=logging.INFO)
@@ -30,7 +30,7 @@ def parse_file(path):
 def parse_results(result_dir):
     results = []
     for path in get_sorted_subdirs(result_dir):
-        fs_name = get_fs_name(path.name)
+        fs_name = path.name
 
         names = ["a-load", "a-run", "b-run", "c-run", "d-run", "e-load", "e-run", "f-run"]
 

@@ -19,21 +19,21 @@ plt.set_loglevel("WARNING")
 
 
 def get_sorted_subdirs(path):
-    from fs import all_fs
-
-    order = {k: i for i, k in enumerate(all_fs)}
+    weights = {
+        "MadFS": 1,
+        "ext4-DAX": 2,
+        "NOVA": 3,
+        "SplitFS": 4,
+        "OCC": 10,
+        "Spinlock": 20,
+        "Mutex": 30,
+        "Rwlock": 40,
+    }
 
     paths = list(Path(path).glob("*"))
     paths = [p for p in paths if p.is_dir()]
-    paths.sort(key=lambda x: order.get(x.name, 100))
+    paths.sort(key=lambda x: weights[x.name])
     return paths
-
-
-def get_fs_name(name):
-    names = {
-        "MadFS": "MadFS",
-    }
-    return names.get(name, name)
 
 
 def read_files(result_dir):
@@ -43,7 +43,7 @@ def read_files(result_dir):
     data = pd.DataFrame()
 
     for path in get_sorted_subdirs(result_dir):
-        fs_name = get_fs_name(path.name)
+        fs_name = path.name
         result_path = path / "result.json"
 
         if not result_path.exists():
@@ -69,10 +69,9 @@ def export_results(result_dir, data, name="result"):
             pt = pd.pivot_table(
                 benchmark, values="y", index="x", columns="label", sort=False
             )
-            madfs = get_fs_name("MadFS")
-            if madfs in pt.columns:
+            if "MadFS" in pt.columns:
                 for c in pt.columns:
-                    pt[f"{c}%"] = pt[c] / pt[madfs] * 100
+                    pt[f"{c}%"] = pt[c] / pt["MadFS"] * 100
             print(name)
             print(pt)
             print(name, file=f)

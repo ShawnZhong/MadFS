@@ -48,18 +48,19 @@ def plot_st(result_dir):
 
             _, ymax = ax.get_ylim()
             if ymax <= 1:
-                ymax = int(ymax * 5 + 1) / 5
                 tick_size = 0.2
             elif ymax <= 2.5:
-                ymax = int(ymax * 2 + 1) / 2
                 tick_size = 0.5
             else:
-                ymax = int(ymax) + 1
                 tick_size = 1.0
 
+            ymax = (int(ymax / tick_size) + 1) * tick_size
             ax.set_ylim([0, ymax])
             ax.yaxis.set_major_locator(plt.MultipleLocator(tick_size))
-            ax.yaxis.set_major_formatter('{x:.1f}')
+            if tick_size >= 1:
+                ax.yaxis.set_major_formatter('  {x:.0f}')
+            else:
+                ax.yaxis.set_major_formatter('{x:.1f}')
 
             titles = {
                 "seq_pread": "Sequential Read",
