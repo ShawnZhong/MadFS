@@ -8,7 +8,7 @@ from pathlib import Path
 import pandas as pd
 from matplotlib import pyplot as plt
 
-from plot_utils import export_results, plot_single_bm, get_sorted_subdirs, get_fs_name
+from plot_utils import export_results, plot_single_bm, get_sorted_subdirs
 from utils import get_latest_result, root_dir
 
 logger = logging.getLogger("plot_tpcc")
@@ -50,7 +50,7 @@ def parse_results(result_dir):
                     {
                         "x": name,
                         "y": num_tx / time_ms,
-                        "label": get_fs_name(fs_name),
+                        "label": fs_name,
                         "benchmark": "tpcc",
                     }
                 )
@@ -60,7 +60,7 @@ def parse_results(result_dir):
                 {
                     "x": "Mix",
                     "y": total_tx / total_time_ms,
-                    "label": get_fs_name(fs_name),
+                    "label": fs_name,
                     "benchmark": "tpcc",
                 }
             )
@@ -72,6 +72,12 @@ def plot_tpcc(result_dir):
     export_results(result_dir, df)
 
     def post_plot(ax, **kwargs):
+        _, ymax = ax.get_ylim()
+        ymax = (int(ymax / 2) + 1) * 2
+        tick_size = 2
+        ax.set_ylim([0, ymax])
+        ax.yaxis.set_major_locator(plt.MultipleLocator(tick_size))
+
         plt.xlabel("Transaction Type")
         plt.ylabel("Throughput (Kops/s)")
         plt.legend()

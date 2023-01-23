@@ -6,6 +6,7 @@ from pathlib import Path
 
 import numpy as np
 import pandas as pd
+from matplotlib import pyplot as plt
 
 from plot_utils import export_df, save_fig
 from utils import get_latest_result, root_dir
@@ -64,7 +65,7 @@ def plot_open(result_dir):
     df["Others"] = df["OPEN"] - df["MMAP"] - df["UPDATE"]
 
     columns = {
-        # "MMAP": "Memory Map",
+        "MMAP": "Mmap",
         "UPDATE": "Block Table",
     }
     df.rename(columns=columns, inplace=True)
@@ -72,7 +73,7 @@ def plot_open(result_dir):
 
     ax = df.plot.barh(
         x="size",
-        y=["MMAP", "Block Table", "Others"],
+        y=["Mmap", "Block Table", "Others"],
         stacked=True,
         legend=False,
         figsize=(5, 1),
@@ -88,6 +89,11 @@ def plot_open(result_dir):
         handletextpad=0.3,
         loc="upper right",
     )
+    _, xmax = ax.get_xlim()
+    xmax = (int(xmax / 1000) + 1) * 1000
+    tick_size = 1000
+    ax.set_xlim([0, xmax])
+    ax.xaxis.set_major_locator(plt.MultipleLocator(tick_size))
 
     save_fig(ax.get_figure(), "result", result_dir)
 

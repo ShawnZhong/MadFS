@@ -33,11 +33,25 @@ def plot_mt(result_dir):
             ax.set_xlabel(xlabel, labelpad=0)
             ax.set_ylabel(ylabel, labelpad=0)
 
-            labels = benchmark["x"].unique()
-            plt.xticks(ticks=labels, labels=labels)
-            ax.xaxis.set_major_locator(plt.MaxNLocator(6))
-            ax.yaxis.set_major_locator(plt.MultipleLocator(1))
-            ax.set_ylim(bottom=0)
+            ax.set_xticks(['1', '4', '8', '12', '16'])
+
+            _, ymax = ax.get_ylim()
+            if ymax < 1.2:
+                tick_size = 0.3
+            elif ymax < 2.5:
+                tick_size = 0.5
+            elif ymax < 4:
+                tick_size = 1
+            else:
+                tick_size = 2
+
+            ymax = (int(ymax / tick_size) + 1) * tick_size
+            ax.set_ylim([0, ymax])
+            ax.yaxis.set_major_locator(plt.MultipleLocator(tick_size))
+            if tick_size >= 1:
+                ax.yaxis.set_major_formatter('  {x:.0f}')
+            else:
+                ax.yaxis.set_major_formatter('{x:.1f}')
 
             titles = {
                 "unif_0R": "100% Write",
@@ -56,8 +70,8 @@ def plot_mt(result_dir):
                 name=name,
                 result_dir=result_dir,
                 post_plot=post_plot,
-                markers=("o",),
-                colors=("tab:blue", "tab:cyan", "tab:purple", "tab:pink"),
+                markers=("o", "v", ">", "<"),
+                colors=("tab:red", "tab:cyan", "tab:purple", "tab:pink"),
             )
         else:
             plot_single_bm(

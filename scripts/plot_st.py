@@ -46,8 +46,21 @@ def plot_st(result_dir):
             elif "read" in name:
                 ax.xaxis.set_major_locator(plt.MultipleLocator(2))
 
-            ax.yaxis.set_major_locator(plt.MaxNLocator(steps=[1, 5, 10]))
-            ax.set_ylim(bottom=0)
+            _, ymax = ax.get_ylim()
+            if ymax <= 1:
+                tick_size = 0.2
+            elif ymax <= 2.5:
+                tick_size = 0.5
+            else:
+                tick_size = 1.0
+
+            ymax = (int(ymax / tick_size) + 1) * tick_size
+            ax.set_ylim([0, ymax])
+            ax.yaxis.set_major_locator(plt.MultipleLocator(tick_size))
+            if tick_size >= 1:
+                ax.yaxis.set_major_formatter('  {x:.0f}')
+            else:
+                ax.yaxis.set_major_formatter('{x:.1f}')
 
             titles = {
                 "seq_pread": "Sequential Read",
@@ -64,8 +77,6 @@ def plot_st(result_dir):
             name=name,
             result_dir=result_dir,
             post_plot=post_plot,
-            markers=("o", "^", "s", "D", "D"),
-            colors=("tab:blue", "tab:orange", "tab:green", "tab:red", "tab:pink"),
         )
 
 
