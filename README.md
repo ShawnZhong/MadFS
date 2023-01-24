@@ -50,27 +50,42 @@
 
     - Initialize namespaces (optional)
       ```shell
-      sudo ndctl destroy-namespace all --region=region0 --force # remove existing namespaces
-      sudo ndctl create-namespace --region=region0 --size=20G   # create new namespace
-      ndctl list --region=0 --namespaces --human --idle         # list namespaces
+      # remove existing namespaces on region0
+      sudo ndctl destroy-namespace all --region=region0 --force 
+      # create new namespace `/dev/pmem0` on region0
+      sudo ndctl create-namespace --region=region0 --size=20G
+      # create new namespace `/dev/pmem0.1` on region0 for NOVA (optional)
+      sudo ndctl create-namespace --region=region0 --size=20G
+      # list all namespaces
+      ndctl list --region=0 --namespaces --human --idle
       ```
 
     - Use `/dev/pmem0` to mount ext4-DAX at `/mnt/pmem0-ext4-dax`
       ```shell
-      sudo mkfs.ext4 /dev/pmem0               # create filesystem
-      sudo mkdir -p /mnt/pmem0-ext4-dax       # create mount point
-      sudo mount -o dax /dev/pmem0 /mnt/pmem0-ext4-dax # mount filesystem
-      sudo chmod a+w /mnt/pmem0-ext4-dax      # make the mount point writable
-      mount -v | grep /mnt/pmem0-ext4-dax     # check mount status
+      # create filesystem
+      sudo mkfs.ext4 /dev/pmem0
+      # create mount point
+      sudo mkdir -p /mnt/pmem0-ext4-dax
+      # mount filesystem
+      sudo mount -o dax /dev/pmem0 /mnt/pmem0-ext4-dax
+      # make the mount point writable
+      sudo chmod a+w /mnt/pmem0-ext4-dax
+      # check mount status
+      mount -v | grep /mnt/pmem0-ext4-dax
       ```
 
     - Use `/dev/pmem0.1` to mount NOVA at `/mnt/pmem0-nova` (optional)
       ```shell
-      sudo modprobe nova                       # load NOVA module
-      sudo mkdir -p /mnt/pmem0-nova            # create mount point
-      sudo mount -t NOVA -o init -o data_cow  /dev/pmem0.1 /mnt/pmem0-nova # mount filesystem
-      sudo chmod a+w /mnt/pmem0-nova           # make the mount point writable
-      mount -v | grep /mnt/pmem0-nova          # check mount status
+      # load NOVA module
+      sudo modprobe nova
+      # create mount point
+      sudo mkdir -p /mnt/pmem0-nova
+      # mount filesystem
+      sudo mount -t NOVA -o init -o data_cow  /dev/pmem0.1 /mnt/pmem0-nova
+      # make the mount point writable
+      sudo chmod a+w /mnt/pmem0-nova           
+      # check mount status
+      mount -v | grep /mnt/pmem0-nova          
       ```
 
     - To unmount the filesystems, run
