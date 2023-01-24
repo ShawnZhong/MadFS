@@ -162,15 +162,14 @@ class SplitFS(Filesystem):
         return env
 
 
-all_bench_fs = {fs.name: fs for fs in [MADFS(), Ext4DAX(), NOVA(), SplitFS()]}
-all_extra_fs = {
+bench_fs = {
+    fs.name: fs
+    for fs in [MADFS(), Ext4DAX(), NOVA(), SplitFS()]
+    if fs.is_available()
+}
+extra_fs = {
     fs.name: fs
     for fs in [MADFS_OCC(), MADFS_SPINLOCK(), MADFS_MUTEX(), MADFS_RWLOCK()]
+    if fs.is_available()
 }
-all_fs = {**all_bench_fs, **all_extra_fs}
-
-bench_fs = {k: v for k, v in all_bench_fs.items() if v.is_available()}
-available_fs = {
-    **bench_fs,
-    **{k: v for k, v in all_extra_fs.items() if v.is_available()},
-}
+available_fs = {**bench_fs, **extra_fs}
