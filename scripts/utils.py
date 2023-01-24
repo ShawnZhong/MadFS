@@ -94,7 +94,10 @@ def system(cmd, log_path=None):
 
 
 def get_latest_result(path):
-    return max(path.glob("*"), default=None)
+    results = path.glob("*")
+    if not results:
+        raise ValueError(f"No results found in {path}")
+    return max(results, default=None)
 
 
 def get_timestamp():

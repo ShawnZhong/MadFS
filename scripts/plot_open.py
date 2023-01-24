@@ -1,5 +1,4 @@
 #!/usr/bin/env python3
-import logging
 import re
 from argparse import ArgumentParser
 from pathlib import Path
@@ -10,8 +9,6 @@ from matplotlib import pyplot as plt
 
 from plot_utils import export_df, save_fig
 from utils import get_latest_result, root_dir
-
-logger = logging.getLogger("plot_open")
 
 
 def parse_line(line):

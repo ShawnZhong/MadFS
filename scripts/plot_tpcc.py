@@ -1,6 +1,5 @@
 #!/usr/bin/env python3
 
-import logging
 import re
 from argparse import ArgumentParser
 from pathlib import Path
@@ -10,8 +9,6 @@ from matplotlib import pyplot as plt
 
 from plot_utils import export_results, plot_single_bm, get_sorted_subdirs
 from utils import get_latest_result, root_dir
-
-logger = logging.getLogger("plot_tpcc")
 
 name_mapping = {
     "New\nOrder": "neword",
@@ -28,7 +25,7 @@ def parse_results(result_dir):
         fs_name = path.name
         result_path = path / "start" / "prog.log"
         if not result_path.exists():
-            logger.warning(f"{result_path} does not exist")
+            print(f"{result_path} does not exist")
             continue
         with open(result_path, "r") as f:
             data = f.read()
