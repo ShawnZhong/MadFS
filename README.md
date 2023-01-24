@@ -12,21 +12,41 @@
   includes GCC 11.3.0, GCC 10.3.0, Clang 14.0.0, and Clang
   10.0.0.
 
-- Install dependencies and configure the system
+- <details>
+  <summary>Install dependencies and configure the system</summary>
 
-    ```shell
-    ./scripts/init --install_build_deps
-    ./scripts/init --install_dev_deps # optional
-    ./scripts/init --configure # run this after every reboot
-    ```
+    - Install build dependencies
 
-- To emulate a persistent memory device using DRAM, please follow the
-  guide [here][1].
+      ```shell
+      sudo apt update
+      sudo apt install -y cmake build-essential gcc-10 g++-10
+      ```
 
-  [1]: https://docs.pmem.io/persistent-memory/getting-started-guide/creating-development-environments/linux-environments/linux-memmap
+    - Install development dependencies (optional)
+
+      ```shell
+      # to run sanitizers and formatter
+      sudo apt install -y clang-10 libstdc++-10-dev clang-format-10
+      # for perf
+      sudo apt install -y linux-tools-common linux-tools-generic linux-tools-`uname -r`
+      # for managing persistent memory and NUMA
+      sudo apt install -y ndctl numactl
+      # for benchmarking
+      sudo apt install -y sqlite3
+      ```
+
+    - Configure the system
+
+      ```shell
+      ./scripts/init.py
+      ```
+  </details>
 
 - <details>
   <summary>Configure persistent memory</summary>
+
+    - To emulate a persistent memory device using DRAM, please follow the
+      guide [here](https://docs.pmem.io/persistent-memory/getting-started-guide/creating-development-environments/linux-environments/linux-memmap).
 
     - Initialize namespaces (optional)
       ```shell
@@ -58,6 +78,7 @@
       sudo umount /mnt/pmem0-ext4-dax
       sudo umount /mnt/pmem0-nova
       ```
+
   </details>
 
 ## Build and Run
@@ -87,37 +108,3 @@
   # build the MadFS shared library and tests
   make
   ```
-
-- Build and run a single test suite or benchmark suite
-
-  ```shell
-  # print help message
-  ./run
-  
-  # run smoke test in debug mode
-  ./run test_basic
-  
-  # run synchronization test with thread sanitizer
-  ./run test_sync tsan
-  
-  # run read/write test with pmemcheck
-  ./run test_rw pmemcheck --cmake_args="-DMADFS_TX_FLUSH_ONLY_FSYNC=ON"
-  
-  # profile 4K append with MadFS
-  ./run micro_mt profile --prog_args="--benchmark_filter='append/4096'"
-  
-  # profile multithreaded microbenchmark with kernel filesystem
-  ./run micro_mt profile --disable_madfs
-  ```
-
-- Environment variables
-    - `MADFS_NO_SHOW_CONFIG`: if defined, disable showing configuration when
-      the program starts
-
-    - `MADFS_LOG_FILE`: redirect log output to a file
-
-    - `MADFS_LOG_LEVEL`: set the numerical log level: 0 for printing all
-      messages, 1 for printing debug messages and above (default), and 4 for
-      suppressing everything. 
-
- 
