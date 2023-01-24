@@ -4,7 +4,7 @@ from pathlib import Path
 from typing import Optional, List
 
 from fs import MADFS, Filesystem, infer_numa_node
-from utils import get_timestamp, system, root_dir, get_cpulist
+from utils import get_timestamp, system, root_dir
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger("runner")
@@ -20,6 +20,15 @@ build_types = [
     "msan",
     "tsan",
 ]
+
+
+def get_cpulist(numa_node: int) -> List[int]:
+    result = []
+    text = Path(f"/sys/devices/system/node/node{numa_node}/cpulist").read_text()
+    for r in text.split(","):
+        start, end = r.split("-")
+        result += list(range(int(start), int(end) + 1))
+    return result
 
 
 class Runner:

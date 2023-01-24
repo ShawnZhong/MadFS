@@ -6,8 +6,8 @@ from pathlib import Path
 import pandas as pd
 from matplotlib import pyplot as plt
 
-from plot_utils import get_sorted_subdirs, export_results, plot_single_bm
-from utils import get_latest_result, root_dir
+from plot_utils import get_sorted_subdirs, export_results, plot_single_bm, get_latest_result
+from utils import root_dir
 
 
 def parse_file(path):

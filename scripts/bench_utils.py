@@ -1,10 +1,11 @@
 from fs import available_fs
+from init import init
 from runner import Runner
-from utils import system, init
+from utils import system
 
 
 def run_gbench(cmake_target, build_type, cmake_args, fs_names, run_config, result_dir):
-    init(configure=True)
+    init()
     for fs_name in fs_names:
         fs = available_fs[fs_name]
         runner = Runner(

@@ -2,7 +2,7 @@ import logging
 from pathlib import Path
 from typing import Optional
 
-from utils import root_dir, is_madfs_linked, system
+from utils import root_dir, system
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger("fs")
@@ -56,6 +56,25 @@ class Ext4DAX(Filesystem):
     @property
     def path(self) -> Optional[Path]:
         return _ext4_path
+
+
+def is_madfs_linked(prog_path: Path):
+    import subprocess
+    import re
+    import shutil
+
+    output = subprocess.check_output(["ldd", shutil.which(prog_path)]).decode("utf-8")
+    for line in output.splitlines():
+        match = re.match(r"\t(.*) => (.*) \(0x", line)
+        if match and match.group(1) == "libmadfs.so":
+            logger.info(
+                f"`{prog_path}` is already linked with MadFS ({match.group(2)})"
+            )
+            return True
+    logger.info(
+        f"`{prog_path}` is not linked with MadFS by default. Need to run with `env LD_PRELOAD=...`"
+    )
+    return False
 
 
 class MADFS(Ext4DAX):

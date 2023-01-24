@@ -7,8 +7,8 @@ from pathlib import Path
 import pandas as pd
 from matplotlib import pyplot as plt
 
-from plot_utils import export_results, plot_single_bm, get_sorted_subdirs
-from utils import get_latest_result, root_dir
+from plot_utils import export_results, plot_single_bm, get_sorted_subdirs, get_latest_result
+from utils import root_dir
 
 name_mapping = {
     "New\nOrder": "neword",

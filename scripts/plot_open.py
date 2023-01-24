@@ -7,8 +7,8 @@ import numpy as np
 import pandas as pd
 from matplotlib import pyplot as plt
 
-from plot_utils import export_df, save_fig
-from utils import get_latest_result, root_dir
+from plot_utils import export_df, save_fig, get_latest_result
+from utils import root_dir
 
 
 def parse_line(line):

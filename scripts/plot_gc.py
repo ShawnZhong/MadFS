@@ -5,8 +5,8 @@ from pathlib import Path
 import numpy as np
 from matplotlib import pyplot as plt
 
-from plot_utils import save_fig
-from utils import root_dir, get_latest_result
+from plot_utils import save_fig, get_latest_result
+from utils import root_dir
 
 
 def plot_cdf(x, bins):
