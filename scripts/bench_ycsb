@@ -6,9 +6,10 @@ import logging
 from args import add_common_args, parse_args
 from bench_utils import drop_cache
 from fs import available_fs
+from init import init
 from plot_ycsb import plot_ycsb
 from runner import Runner
-from utils import root_dir, system, get_timestamp, init
+from utils import root_dir, system, get_timestamp
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger("bench")
@@ -37,7 +38,7 @@ def prepare_files(size, workloads):
 
 
 def bench_ycsb(size, result_dir, build_type, cmake_args, fs_names, run_config):
-    init(configure=True)
+    init()
     workloads = ("a", "b", "c", "d", "e", "f")
     data_dir = prepare_files(size, workloads)
 

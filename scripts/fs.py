@@ -2,7 +2,7 @@ import logging
 from pathlib import Path
 from typing import Optional
 
-from utils import root_dir, is_madfs_linked, system
+from utils import root_dir, system
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger("fs")
@@ -56,6 +56,25 @@ class Ext4DAX(Filesystem):
     @property
     def path(self) -> Optional[Path]:
         return _ext4_path
+
+
+def is_madfs_linked(prog_path: Path):
+    import subprocess
+    import re
+    import shutil
+
+    output = subprocess.check_output(["ldd", shutil.which(prog_path)]).decode("utf-8")
+    for line in output.splitlines():
+        match = re.match(r"\t(.*) => (.*) \(0x", line)
+        if match and match.group(1) == "libmadfs.so":
+            logger.info(
+                f"`{prog_path}` is already linked with MadFS ({match.group(2)})"
+            )
+            return True
+    logger.info(
+        f"`{prog_path}` is not linked with MadFS by default. Need to run with `env LD_PRELOAD=...`"
+    )
+    return False
 
 
 class MADFS(Ext4DAX):
@@ -162,15 +181,14 @@ class SplitFS(Filesystem):
         return env
 
 
-all_bench_fs = {fs.name: fs for fs in [MADFS(), Ext4DAX(), NOVA(), SplitFS()]}
-all_extra_fs = {
+bench_fs = {
+    fs.name: fs
+    for fs in [MADFS(), Ext4DAX(), NOVA(), SplitFS()]
+    if fs.is_available()
+}
+extra_fs = {
     fs.name: fs
     for fs in [MADFS_OCC(), MADFS_SPINLOCK(), MADFS_MUTEX(), MADFS_RWLOCK()]
+    if fs.is_available()
 }
-all_fs = {**all_bench_fs, **all_extra_fs}
-
-bench_fs = {k: v for k, v in all_bench_fs.items() if v.is_available()}
-available_fs = {
-    **bench_fs,
-    **{k: v for k, v in all_extra_fs.items() if v.is_available()},
-}
+available_fs = {**bench_fs, **extra_fs}

@@ -176,3 +176,10 @@ def plot_single_bm(
 
 def parse_name(name, i):
     return re.split("[/:]", name)[i]
+
+
+def get_latest_result(path):
+    results = path.glob("*")
+    if not results:
+        raise ValueError(f"No results found in {path}")
+    return max(results, default=None)

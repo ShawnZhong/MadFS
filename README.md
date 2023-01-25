@@ -12,45 +12,80 @@
   includes GCC 11.3.0, GCC 10.3.0, Clang 14.0.0, and Clang
   10.0.0.
 
-- Install dependencies and configure the system
+- <details>
+  <summary>Install dependencies and configure the system</summary>
 
-    ```shell
-    ./scripts/init --install_build_deps
-    ./scripts/init --install_dev_deps # optional
-    ./scripts/init --configure # run this after every reboot
-    ```
+    - Install build dependencies
 
-- To emulate a persistent memory device using DRAM, please follow the
-  guide [here][1].
+      ```shell
+      sudo apt update
+      sudo apt install -y cmake build-essential gcc-10 g++-10
+      ```
 
-  [1]: https://docs.pmem.io/persistent-memory/getting-started-guide/creating-development-environments/linux-environments/linux-memmap
+    - Install development dependencies (optional)
+
+      ```shell
+      # to run sanitizers and formatter
+      sudo apt install -y clang-10 libstdc++-10-dev clang-format-10
+      # for perf
+      sudo apt install -y linux-tools-common linux-tools-generic linux-tools-`uname -r`
+      # for managing persistent memory and NUMA
+      sudo apt install -y ndctl numactl
+      # for benchmarking
+      sudo apt install -y sqlite3
+      ```
+
+    - Configure the system
+
+      ```shell
+      ./scripts/init.py
+      ```
+  </details>
 
 - <details>
   <summary>Configure persistent memory</summary>
 
+    - To emulate a persistent memory device using DRAM, please follow the
+      guide [here](https://docs.pmem.io/persistent-memory/getting-started-guide/creating-development-environments/linux-environments/linux-memmap).
+
     - Initialize namespaces (optional)
       ```shell
-      sudo ndctl destroy-namespace all --region=region0 --force # remove existing namespaces
-      sudo ndctl create-namespace --region=region0 --size=20G   # create new namespace
-      ndctl list --region=0 --namespaces --human --idle         # list namespaces
+      # remove existing namespaces on region0
+      sudo ndctl destroy-namespace all --region=region0 --force 
+      # create new namespace `/dev/pmem0` on region0
+      sudo ndctl create-namespace --region=region0 --size=20G
+      # create new namespace `/dev/pmem0.1` on region0 for NOVA (optional)
+      sudo ndctl create-namespace --region=region0 --size=20G
+      # list all namespaces
+      ndctl list --region=0 --namespaces --human --idle
       ```
 
     - Use `/dev/pmem0` to mount ext4-DAX at `/mnt/pmem0-ext4-dax`
       ```shell
-      sudo mkfs.ext4 /dev/pmem0               # create filesystem
-      sudo mkdir -p /mnt/pmem0-ext4-dax       # create mount point
-      sudo mount -o dax /dev/pmem0 /mnt/pmem0-ext4-dax # mount filesystem
-      sudo chmod a+w /mnt/pmem0-ext4-dax      # make the mount point writable
-      mount -v | grep /mnt/pmem0-ext4-dax     # check mount status
+      # create filesystem
+      sudo mkfs.ext4 /dev/pmem0
+      # create mount point
+      sudo mkdir -p /mnt/pmem0-ext4-dax
+      # mount filesystem
+      sudo mount -o dax /dev/pmem0 /mnt/pmem0-ext4-dax
+      # make the mount point writable
+      sudo chmod a+w /mnt/pmem0-ext4-dax
+      # check mount status
+      mount -v | grep /mnt/pmem0-ext4-dax
       ```
 
     - Use `/dev/pmem0.1` to mount NOVA at `/mnt/pmem0-nova` (optional)
       ```shell
-      sudo modprobe nova                       # load NOVA module
-      sudo mkdir -p /mnt/pmem0-nova            # create mount point
-      sudo mount -t NOVA -o init -o data_cow  /dev/pmem0.1 /mnt/pmem0-nova # mount filesystem
-      sudo chmod a+w /mnt/pmem0-nova           # make the mount point writable
-      mount -v | grep /mnt/pmem0-nova          # check mount status
+      # load NOVA module
+      sudo modprobe nova
+      # create mount point
+      sudo mkdir -p /mnt/pmem0-nova
+      # mount filesystem
+      sudo mount -t NOVA -o init -o data_cow  /dev/pmem0.1 /mnt/pmem0-nova
+      # make the mount point writable
+      sudo chmod a+w /mnt/pmem0-nova           
+      # check mount status
+      mount -v | grep /mnt/pmem0-nova          
       ```
 
     - To unmount the filesystems, run
@@ -58,6 +93,7 @@
       sudo umount /mnt/pmem0-ext4-dax
       sudo umount /mnt/pmem0-nova
       ```
+
   </details>
 
 ## Build and Run
@@ -87,37 +123,3 @@
   # build the MadFS shared library and tests
   make
   ```
-
-- Build and run a single test suite or benchmark suite
-
-  ```shell
-  # print help message
-  ./run
-  
-  # run smoke test in debug mode
-  ./run test_basic
-  
-  # run synchronization test with thread sanitizer
-  ./run test_sync tsan
-  
-  # run read/write test with pmemcheck
-  ./run test_rw pmemcheck --cmake_args="-DMADFS_TX_FLUSH_ONLY_FSYNC=ON"
-  
-  # profile 4K append with MadFS
-  ./run micro_mt profile --prog_args="--benchmark_filter='append/4096'"
-  
-  # profile multithreaded microbenchmark with kernel filesystem
-  ./run micro_mt profile --disable_madfs
-  ```
-
-- Environment variables
-    - `MADFS_NO_SHOW_CONFIG`: if defined, disable showing configuration when
-      the program starts
-
-    - `MADFS_LOG_FILE`: redirect log output to a file
-
-    - `MADFS_LOG_LEVEL`: set the numerical log level: 0 for printing all
-      messages, 1 for printing debug messages and above (default), and 4 for
-      suppressing everything. 
-
- 

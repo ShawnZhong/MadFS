@@ -5,16 +5,17 @@ import logging
 
 from args import add_common_args, parse_args
 from fs import available_fs
+from init import init
 from plot_tpcc import plot_tpcc
 from runner import Runner
-from utils import root_dir, system, get_timestamp, init
+from utils import root_dir, system, get_timestamp
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger("bench_tpcc")
 
 
 def bench_tpcc(result_dir, build_type, cmake_args, fs_names, run_config):
-    init(configure=True)
+    init()
     sql_path = root_dir / "data" / "tpcc.sql"
 
     if run_config["prog_args"]:

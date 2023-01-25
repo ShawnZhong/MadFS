@@ -1,15 +1,12 @@
 #!/usr/bin/env python3
 
-import logging
 from argparse import ArgumentParser
 from pathlib import Path
 
 from matplotlib import pyplot as plt
 
-from plot_utils import read_files, parse_name, export_results, plot_single_bm
-from utils import get_latest_result, root_dir
-
-logger = logging.getLogger("plot_mt")
+from plot_utils import read_files, parse_name, export_results, plot_single_bm, get_latest_result
+from utils import root_dir
 
 
 def plot_mt(result_dir):

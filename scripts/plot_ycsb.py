@@ -1,5 +1,4 @@
 #!/usr/bin/env python3
-import logging
 import re
 from argparse import ArgumentParser
 from pathlib import Path
@@ -7,11 +6,8 @@ from pathlib import Path
 import pandas as pd
 from matplotlib import pyplot as plt
 
-from plot_utils import get_sorted_subdirs, export_results, plot_single_bm
-from utils import get_latest_result, root_dir
-
-logging.basicConfig(level=logging.INFO)
-logger = logging.getLogger("plot_ycsb")
+from plot_utils import get_sorted_subdirs, export_results, plot_single_bm, get_latest_result
+from utils import root_dir
 
 
 def parse_file(path):
@@ -37,7 +33,7 @@ def parse_results(result_dir):
         for name in names:
             result_path = path / f"{name}.log"
             if not result_path.exists():
-                logger.warning(f"{result_path} does not exist")
+                print(f"{result_path} does not exist")
                 continue
             mops_per_sec = parse_file(result_path)
             w, t = name.split("-")
