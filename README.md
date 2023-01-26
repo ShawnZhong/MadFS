@@ -2,6 +2,7 @@
 
 [![workflow](https://github.com/shawnzhong/MadFS/actions/workflows/test.yml/badge.svg)](https://github.com/ShawnZhong/MadFS/actions/workflows/test.yml)
 [![workflow](https://github.com/shawnzhong/MadFS/actions/workflows/bench.yml/badge.svg)](https://github.com/ShawnZhong/MadFS/actions/workflows/bench.yml)
+[![workflow](https://github.com/shawnzhong/MadFS/actions/workflows/format.yml/badge.svg)](https://github.com/ShawnZhong/MadFS/actions/workflows/format.yml)
 
 ## Prerequisites
 
