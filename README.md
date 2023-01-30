@@ -4,14 +4,16 @@
 [![workflow](https://github.com/shawnzhong/MadFS/actions/workflows/bench.yml/badge.svg)](https://github.com/ShawnZhong/MadFS/actions/workflows/bench.yml)
 [![workflow](https://github.com/shawnzhong/MadFS/actions/workflows/format.yml/badge.svg)](https://github.com/ShawnZhong/MadFS/actions/workflows/format.yml)
 
-Source code for the paper published at FAST '23:
-
-"MadFS: Per-File Virtualization for Userspace Persistent Memory Filesystems" by
-Shawn Zhong, Chenhao Ye, Guanzhou Hu, Suyan Qu, Andrea Arpaci-Dusseau, Remzi
-Arpaci-Dusseau, and Michael Swift.
+Source code for the paper published at FAST '23: MadFS: Per-File Virtualization
+for Userspace Persistent Memory Filesystems.
 [FAST '23 Link](https://www.usenix.org/conference/fast23/presentation/zhong)
 
-## Paper Abstract
+**Authors:**
+
+Shawn Zhong, Chenhao Ye, Guanzhou Hu, Suyan Qu, Andrea Arpaci-Dusseau, Remzi
+Arpaci-Dusseau, and Michael Swift.
+
+**Abstract:**
 
 Persistent memory (PM) can be accessed directly from userspace without kernel
 involvement, but most PM filesystems still perform metadata operations in the
