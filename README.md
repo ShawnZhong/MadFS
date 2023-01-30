@@ -146,6 +146,7 @@ on LevelDB and 85% for TPC-C on SQLite compared to NOVA.
 
   ```
   ./scripts/run.py [test_basic|test_rc|test_sync|test_gc]
+  # See `./scripts/run.py --help` for more options
   ```
 
 -   <details> 
@@ -164,6 +165,8 @@ on LevelDB and 85% for TPC-C on SQLite compared to NOVA.
     
     # Profile a data point
     ./scripts/bench_st.py --filter="seq_pread/512" -f MadFS -b profile
+    
+    # See `./scripts/bench_st.py` --help for more options
     ```
     </details>
 
@@ -197,3 +200,35 @@ on LevelDB and 85% for TPC-C on SQLite compared to NOVA.
     ./scripts/bench_ycsb.py
     ```
     </details>
+
+## Directory Structure
+
+- [`src/`](src): Source code for the MadFS shared library
+
+    - [`src/lib/`](src/lib): Main entry point of the library
+
+    - [`src/file/`](src/file): Implementation of file operations
+
+    - [`src/tx/`](src/tx): Implementation of I/O transactions
+
+    - [`src/alloc/`](src/alloc): Allocation of blocks and log entries
+
+    - [`src/block/`](src/block): Implementation of different block types
+
+    - [`src/cursor/`](src/cursor): An iterator-like interface for reading log
+
+    - [`src/block/`](src/block): Implementation of different block types
+
+    - [`src/utils/`](src/utils): Utility functions
+
+- [`scripts/`](scripts): Scripts for building, running, and plotting benchmarks
+
+- [`bench/`](bench): Source code for benchmarks
+
+- [`test/`](test): Source code for tests
+
+- [`tools/`](tools): Source code for tools (e.g., gc, conversion, info)
+
+- [`cmake/`](cmake): CMake modules
+
+- [`data/`](data): Data files for benchmarks
