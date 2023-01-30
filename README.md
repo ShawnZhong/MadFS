@@ -146,7 +146,7 @@ on LevelDB and 85% for TPC-C on SQLite compared to NOVA.
   <details>
     <summary> Sample output </summary>
 
-    ```
+    ```yaml
     BuildOptions: 
         build type:
             name: release
