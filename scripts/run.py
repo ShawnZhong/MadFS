@@ -3,15 +3,15 @@
 import argparse
 import logging
 
-from scripts.args import add_common_args, parse_args, add_gbench_args, process_gbench_args
-from scripts.fs import available_fs
-from scripts.runner import Runner
+from args import add_common_args, parse_args, add_gbench_args, process_gbench_args
+from fs import available_fs
+from runner import Runner
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger("run")
 
 if __name__ == "__main__":
-    parser = argparse.ArgumentParser(description="Build and run tests or benchmarks")
+    parser = argparse.ArgumentParser(description="Build and run tests")
     parser.add_argument(
         "cmake_target",
         help="see .cpp files in `test` and `bench` for available targets",

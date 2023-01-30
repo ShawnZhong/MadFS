@@ -20,14 +20,14 @@ jobs:
         run: make ${{matrix.build_type}}
 
       - name: test_basic
-        run: ./run test_basic -b ${{matrix.build_type}}
+        run: ./scripts/run.py test_basic -b ${{matrix.build_type}}
 
       - name: test_rw
-        run: ./run test_rw -b ${{matrix.build_type}}
+        run: ./scripts/run.py test_rw -b ${{matrix.build_type}}
 
       - name: test_sync
-        run: ./run test_sync -b ${{matrix.build_type}}
+        run: ./scripts/run.py test_sync -b ${{matrix.build_type}}
 
       - name: test_gc
         if: ${{matrix.build_type}} != 'pmemcheck'
-        run: ./run test_gc -b ${{matrix.build_type}}
+        run: ./scripts/run.py test_gc -b ${{matrix.build_type}}

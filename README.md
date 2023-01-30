@@ -4,6 +4,35 @@
 [![workflow](https://github.com/shawnzhong/MadFS/actions/workflows/bench.yml/badge.svg)](https://github.com/ShawnZhong/MadFS/actions/workflows/bench.yml)
 [![workflow](https://github.com/shawnzhong/MadFS/actions/workflows/format.yml/badge.svg)](https://github.com/ShawnZhong/MadFS/actions/workflows/format.yml)
 
+Source code for the paper published at FAST '23:
+
+"MadFS: Per-File Virtualization for Userspace Persistent Memory Filesystems" by
+Shawn Zhong, Chenhao Ye, Guanzhou Hu, Suyan Qu, Andrea Arpaci-Dusseau, Remzi
+Arpaci-Dusseau, and Michael Swift.
+[FAST '23 Link](https://www.usenix.org/conference/fast23/presentation/zhong)
+
+## Paper Abstract
+
+Persistent memory (PM) can be accessed directly from userspace without kernel
+involvement, but most PM filesystems still perform metadata operations in the
+kernel for security and rely on the kernel for cross-process synchronization.
+
+We present per-file virtualization, where a virtualization layer implements a
+complete set of file functionalities, including metadata management, crash
+consistency, and concurrency control, in userspace. We observe that not all file
+metadata need to be maintained by the kernel and propose embedding insensitive
+metadata into the file for userspace management. For crash consistency,
+copy-on-write (CoW) benefits from the embedding of the block mapping since the
+mapping can be efficiently updated without kernel involvement. For cross-process
+synchronization, we introduce lock-free optimistic concurrency control (OCC) at
+user level, which tolerates process crashes and provides better scalability.
+
+Based on per-file virtualization, we implement MadFS, a library PM filesystem
+that maintains the embedded metadata as a compact log. Experimental results show
+that on concurrent workloads, MadFS achieves up to 3.6× the throughput of
+ext4-DAX. For real-world applications, MadFS provides up to 48% speedup for YCSB
+on LevelDB and 85% for TPC-C on SQLite compared to NOVA.
+
 ## Prerequisites
 
 - MadFS is developed on Ubuntu 20.04.3 LTS and Ubuntu 22.04.1 LTS. It should
@@ -102,6 +131,8 @@
 - Build the MadFS shared library
 
   ```shell
+  # Usage: make [release|debug|relwithdebinfo|profile|pmemcheck|asan|ubsan|msan|tsan]
+  #             [CMAKE_ARGS="-DKEY1=VAL1 -DKEY2=VAL2 ..."] 
   make BUILD_TARGETS="madfs"
   ```
 
@@ -111,16 +142,58 @@
   LD_PRELOAD=./build-release/libmadfs.so ./your_program
   ```
 
-## Development
+- Run tests
 
-- Build
-
-  ```shell
-  # usage: make [build_type] 
-  #             [CMAKE_ARGS="-DKEY1=VAL1 -DKEY2=VAL2 ..."] 
-  #             [BUILD_TARGETS="target1 target2 ..."] 
-  #             [BUILD_ARGS="..."]
-  
-  # build the MadFS shared library and tests
-  make
   ```
+  ./scripts/run.py [test_basic|test_rc|test_sync|test_gc]
+  ```
+
+-   <details> 
+    <summary>Run and plot single-threaded benchmarks </summary>
+
+    ```shell
+    ./scripts/bench_st.py --filter="seq_pread"
+    ./scripts/bench_st.py --filter="rnd_pread"
+    ./scripts/bench_st.py --filter="seq_pwrite"
+    ./scripts/bench_st.py --filter="rnd_pwrite"
+    ./scripts/bench_st.py --filter="cow"
+    ./scripts/bench_st.py --filter="append_pwrite"
+    
+    # Limit to set of file systems
+    ./scripts/bench_st.py -f MadFS SplitFS
+    
+    # Profile a data point
+    ./scripts/bench_st.py --filter="seq_pread/512" -f MadFS -b profile
+    ```
+    </details>
+
+-   <details>
+    <summary>Run and plot multi-threaded benchmarks</summary>
+
+    ```shell
+    ./scripts/bench_mt.py --filter="unif_0R"
+    ./scripts/bench_mt.py --filter="unif_50R"
+    ./scripts/bench_mt.py --filter="unif_95R"
+    ./scripts/bench_mt.py --filter="unif_100R"
+    ./scripts/bench_mt.py --filter="zipf_2k"
+    ./scripts/bench_mt.py --filter="zipf_4k"
+    ```
+    </details>
+
+-   <details>
+    <summary>Run and plot metadata benchmarks</summary>
+
+    ```shell
+    ./scripts/bench_open.py
+    ./scripts/bench_gc.py
+    ```
+    </details>
+
+-   <details>
+    <summary>Run and plot macrobenchmarks (SQLite and LevelDB) </summary>
+
+    ```shell
+    ./scripts/bench_tpcc.py
+    ./scripts/bench_ycsb.py
+    ```
+    </details>

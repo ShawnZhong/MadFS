@@ -16,10 +16,10 @@ jobs:
       - uses: actions/checkout@v2
 
       - name: micro_st
-        run: ./run micro_st -b ${{matrix.build_type}} --iter 10
+        run: ./scripts/run.py micro_st -b ${{matrix.build_type}} --iter 10
 
       - name: micro_mt
-        run: ./run micro_mt -b ${{matrix.build_type}} --size 16 --iter 10
+        run: ./scripts/run.py micro_mt -b ${{matrix.build_type}} --size 16 --iter 10
 
   leveldb:
     name: LevelDB
@@ -28,22 +28,22 @@ jobs:
       - uses: actions/checkout@v2
 
       - name: leveldb_tests
-        run: ./run leveldb_tests
+        run: ./scripts/run.py leveldb_tests
 
       - name: leveldb_ycsb
         run: |
-          ./run leveldb_ycsb -- -f data/ycsb/a-load-1k.txt
-          ./run leveldb_ycsb -- -f data/ycsb/a-run-1k.txt
-          ./run leveldb_ycsb -- -f data/ycsb/b-load-1k.txt
-          ./run leveldb_ycsb -- -f data/ycsb/b-run-1k.txt
-          ./run leveldb_ycsb -- -f data/ycsb/c-load-1k.txt
-          ./run leveldb_ycsb -- -f data/ycsb/c-run-1k.txt
-          ./run leveldb_ycsb -- -f data/ycsb/d-load-1k.txt
-          ./run leveldb_ycsb -- -f data/ycsb/d-run-1k.txt
-          ./run leveldb_ycsb -- -f data/ycsb/e-load-1k.txt
-          ./run leveldb_ycsb -- -f data/ycsb/e-run-1k.txt
-          ./run leveldb_ycsb -- -f data/ycsb/f-load-1k.txt
-          ./run leveldb_ycsb -- -f data/ycsb/f-run-1k.txt
+          ./scripts/run.py leveldb_ycsb -- -f data/ycsb/a-load-1k.txt
+          ./scripts/run.py leveldb_ycsb -- -f data/ycsb/a-run-1k.txt
+          ./scripts/run.py leveldb_ycsb -- -f data/ycsb/b-load-1k.txt
+          ./scripts/run.py leveldb_ycsb -- -f data/ycsb/b-run-1k.txt
+          ./scripts/run.py leveldb_ycsb -- -f data/ycsb/c-load-1k.txt
+          ./scripts/run.py leveldb_ycsb -- -f data/ycsb/c-run-1k.txt
+          ./scripts/run.py leveldb_ycsb -- -f data/ycsb/d-load-1k.txt
+          ./scripts/run.py leveldb_ycsb -- -f data/ycsb/d-run-1k.txt
+          ./scripts/run.py leveldb_ycsb -- -f data/ycsb/e-load-1k.txt
+          ./scripts/run.py leveldb_ycsb -- -f data/ycsb/e-run-1k.txt
+          ./scripts/run.py leveldb_ycsb -- -f data/ycsb/f-load-1k.txt
+          ./scripts/run.py leveldb_ycsb -- -f data/ycsb/f-run-1k.txt
 
   tpcc:
     name: SQLite
@@ -55,5 +55,5 @@ jobs:
         run: |
           LD_PRELOAD=./build-release/libmadfs.so \
             sqlite3 tpcc.db '.read data/tpcc.sql'
-          ./run tpcc_load -- -w 1
-          ./run tpcc_start -- -w 4 -c 1 -t 10
+          ./scripts/run.py tpcc_load -- -w 1
+          ./scripts/run.py tpcc_start -- -w 4 -c 1 -t 10
