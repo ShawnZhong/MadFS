@@ -143,6 +143,42 @@ on LevelDB and 85% for TPC-C on SQLite compared to NOVA.
   ```shell
   LD_PRELOAD=./build-release/libmadfs.so ./your_program
   ```
+  <details>
+    <summary> Sample output </summary>
+
+    ```
+    BuildOptions: 
+        build type:
+            name: release
+            debug: 0
+            use_pmemcheck: 0
+        hardware support:
+            clwb: 1
+            clflushopt: 1
+            avx512f: 1
+        features: 
+            map_sync: 1
+            map_populate: 1
+            tx_flush_only_fsync: 1
+            enable_timer: 0
+        concurrency control:
+            cc_occ: 1
+            cc_mutex: 0
+            cc_spinlock: 0
+            cc_rwlock: 0
+
+    RuntimeOptions:
+        show_config: 1
+        strict_offset_serial: 0
+        log_file: None
+        log_level: 1
+
+    # Your program output here
+    
+    MadFS unloaded
+    ```
+    </details>
+
 
 - Run tests
 
