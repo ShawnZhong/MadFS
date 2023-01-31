@@ -274,5 +274,5 @@ on LevelDB and 85% for TPC-C on SQLite compared to NOVA.
 
 ## Contact
 
-If you have any questions, feel free to open an issue or contact Shawn Zhong (
-first.last@wisc.edu). We are also happy to accept pull requests. 
+If you have any questions, feel free to open an issue or contact Shawn Zhong
+(`first.last@wisc.edu`). We are also happy to accept pull requests. 
