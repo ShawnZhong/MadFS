@@ -6,7 +6,8 @@
 
 Source code for the paper published at FAST '23: MadFS: Per-File Virtualization
 for Userspace Persistent Memory Filesystems.
-[FAST '23 Link](https://www.usenix.org/conference/fast23/presentation/zhong)
+[FAST '23 Link](https://www.usenix.org/conference/fast23/presentation/zhong).
+[GitHub Link](https://github.com/ShawnZhong/MadFS).
 
 **Authors:**
 
