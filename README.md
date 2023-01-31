@@ -270,3 +270,8 @@ on LevelDB and 85% for TPC-C on SQLite compared to NOVA.
 - [`cmake/`](cmake): CMake modules
 
 - [`data/`](data): Data files for benchmarks
+
+## Contact
+
+If you have any questions, feel free to open an issue or contact Shawn Zhong (
+first.last@wisc.edu). We are also happy to accept pull requests. 
