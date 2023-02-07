@@ -4,15 +4,12 @@
 [![workflow](https://github.com/shawnzhong/MadFS/actions/workflows/bench.yml/badge.svg)](https://github.com/ShawnZhong/MadFS/actions/workflows/bench.yml)
 [![workflow](https://github.com/shawnzhong/MadFS/actions/workflows/format.yml/badge.svg)](https://github.com/ShawnZhong/MadFS/actions/workflows/format.yml)
 
-Source code for the paper published at FAST '23: MadFS: Per-File Virtualization
-for Userspace Persistent Memory Filesystems.
+Source code for FAST '23 paper: _**MadFS: Per-File Virtualization for Userspace
+Persistent Memory Filesystems**_
+by Shawn Zhong, Chenhao Ye, Guanzhou Hu, Suyan Qu, Andrea Arpaci-Dusseau, Remzi
+Arpaci-Dusseau, and Michael Swift.
 [FAST '23 Link](https://www.usenix.org/conference/fast23/presentation/zhong).
 [GitHub Link](https://github.com/ShawnZhong/MadFS).
-
-**Authors:**
-
-Shawn Zhong, Chenhao Ye, Guanzhou Hu, Suyan Qu, Andrea Arpaci-Dusseau, Remzi
-Arpaci-Dusseau, and Michael Swift.
 
 **Abstract:**
 
@@ -35,6 +32,26 @@ that maintains the embedded metadata as a compact log. Experimental results show
 that on concurrent workloads, MadFS achieves up to 3.6× the throughput of
 ext4-DAX. For real-world applications, MadFS provides up to 48% speedup for YCSB
 on LevelDB and 85% for TPC-C on SQLite compared to NOVA.
+
+<details>
+<summary>BibTex</summary>
+
+```
+@inproceedings {285756,
+author = {Shawn Zhong and Chenhao Ye and Guanzhou Hu and Suyan Qu and Andrea Arpaci-Dusseau and Remzi Arpaci-Dusseau and Michael Swift},
+title = {{MadFS}: {Per-File} Virtualization for Userspace Persistent Memory Filesystems},
+booktitle = {21st USENIX Conference on File and Storage Technologies (FAST 23)},
+year = {2023},
+isbn = {978-1-939133-32-8},
+address = {Santa Clara, CA},
+pages = {265--280},
+url = {https://www.usenix.org/conference/fast23/presentation/zhong},
+publisher = {USENIX Association},
+month = feb,
+}
+```
+
+</details>
 
 ## Prerequisites
 
