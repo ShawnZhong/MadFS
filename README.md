@@ -12,7 +12,8 @@ Arpaci-Dusseau, Remzi Arpaci-Dusseau, and Michael Swift.
 [Paper](https://www.usenix.org/system/files/fast23-zhong.pdf).
 [Code](https://github.com/ShawnZhong/MadFS).
 
-**Abstract:**
+<details>
+<summary>Abstract</summary>
 
 Persistent memory (PM) can be accessed directly from userspace without kernel
 involvement, but most PM filesystems still perform metadata operations in the
@@ -33,6 +34,7 @@ that maintains the embedded metadata as a compact log. Experimental results show
 that on concurrent workloads, MadFS achieves up to 3.6× the throughput of
 ext4-DAX. For real-world applications, MadFS provides up to 48% speedup for YCSB
 on LevelDB and 85% for TPC-C on SQLite compared to NOVA.
+</details>
 
 <details>
 <summary>BibTex</summary>
