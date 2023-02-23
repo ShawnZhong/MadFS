@@ -6,10 +6,13 @@
 
 Source code for FAST '23 paper: _**MadFS: Per-File Virtualization for Userspace
 Persistent Memory Filesystems**_
-by Shawn Zhong, Chenhao Ye, Guanzhou Hu, Suyan Qu, Andrea Arpaci-Dusseau, Remzi
-Arpaci-Dusseau, and Michael Swift.
-[FAST '23 Link](https://www.usenix.org/conference/fast23/presentation/zhong).
-[GitHub Link](https://github.com/ShawnZhong/MadFS).
+by Shawn Zhong*, Chenhao Ye*, Guanzhou Hu, Suyan Qu, Andrea Arpaci-Dusseau,
+Remzi Arpaci-Dusseau, and Michael Swift.
+[FAST '23](https://www.usenix.org/conference/fast23/presentation/zhong).
+[Paper](https://www.usenix.org/system/files/fast23-zhong.pdf).
+[Code](https://github.com/ShawnZhong/MadFS).
+
+*Both authors contributed equally.
 
 **Abstract:**
 
