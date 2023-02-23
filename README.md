@@ -6,8 +6,8 @@
 
 Source code for FAST '23 paper: _**MadFS: Per-File Virtualization for Userspace
 Persistent Memory Filesystems**_
-by Shawn Zhong, Chenhao Ye (equal contribution), Guanzhou Hu, Suyan Qu, Andrea
-Arpaci-Dusseau, Remzi Arpaci-Dusseau, and Michael Swift.
+by Shawn Zhong\*, Chenhao Ye\*, Guanzhou Hu, Suyan Qu, Andrea
+Arpaci-Dusseau, Remzi Arpaci-Dusseau, and Michael Swift. (\*equal contribution.)
 [FAST '23](https://www.usenix.org/conference/fast23/presentation/zhong).
 [Paper](https://www.usenix.org/system/files/fast23-zhong.pdf).
 [Slides](https://www.usenix.org/sites/default/files/conference/protected-files/fast23_slides_zhong.pdf).
@@ -32,7 +32,7 @@ user level, which tolerates process crashes and provides better scalability.
 
 Based on per-file virtualization, we implement MadFS, a library PM filesystem
 that maintains the embedded metadata as a compact log. Experimental results show
-that on concurrent workloads, MadFS achieves up to 3.6× the throughput of
+that on concurrent workloads, MadFS achieves up to 3.6x the throughput of
 ext4-DAX. For real-world applications, MadFS provides up to 48% speedup for YCSB
 on LevelDB and 85% for TPC-C on SQLite compared to NOVA.
 </details>
