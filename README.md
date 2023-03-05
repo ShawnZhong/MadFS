@@ -10,6 +10,7 @@ by Shawn Zhong\*, Chenhao Ye\*, Guanzhou Hu, Suyan Qu, Andrea
 Arpaci-Dusseau, Remzi Arpaci-Dusseau, and Michael Swift. (\*equal contribution.)
 [FAST '23](https://www.usenix.org/conference/fast23/presentation/zhong).
 [Paper](https://www.usenix.org/system/files/fast23-zhong.pdf).
+[Video](https://www.youtube.com/watch?v=J60sTA3cwJo).
 [Slides](https://www.usenix.org/sites/default/files/conference/protected-files/fast23_slides_zhong.pdf).
 [Code](https://github.com/ShawnZhong/MadFS).
 
