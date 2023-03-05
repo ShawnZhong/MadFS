@@ -296,5 +296,4 @@ month = feb,
 
 ## Contact
 
-If you have any questions, feel free to open an issue or contact Shawn Zhong
-(`first.last@wisc.edu`). We are also happy to accept pull requests. 
+If you have any questions, feel free to open an issue or contact Shawn Zhong ([shawn.zhong@wisc.edu](mailto:shawn.zhong@wisc.edu)) and Chenhao Ye ([chenhaoy@cs.wisc.edu](mailto:chenhaoy@cs.wisc.edu)). We are also happy to accept pull requests. 
